@@ -72,7 +72,7 @@ Key features include:
     ```
 ## Contributions
 
-Contributions are welcome! Please review our [Contributing Guidelines](Contributing.md) and [Code of Conduct](Code_of_Conduct.md) before submitting pull requests. Your input is highly appreciated as we continuously work to enhance the ETL Core Engine.
+Contributions are welcome! Please review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests. Your input is highly appreciated as we continuously work to enhance the ETL Core Engine.
 
 ---
 

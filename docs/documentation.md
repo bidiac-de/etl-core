@@ -1,3 +1,3 @@
 # Documentation
 
-Docummentation will be added here soon :)
+Documentation will be added here soon :)
