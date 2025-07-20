@@ -1,2 +1,4 @@
 # abstract component class
-pass
+from abc import ABC
+class Component(ABC):
+    pass
