@@ -1,4 +1,3 @@
-import pytest
 
 def test_until_real_tests_are_written():
     # Placeholder test to ensure the test suite runs
