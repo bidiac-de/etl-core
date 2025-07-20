@@ -11,8 +11,6 @@ The ETL Core Engine is a modular Python-based tool that interprets JSON configur
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Development Setup](#development-setup)
-- [Usage](#usage)
-- [Troubleshooting](#troubleshooting)
 - [Contributions](#contributions)
 - [License](#license)
 
@@ -72,3 +70,16 @@ Key features include:
     ```bash
     pip install -r requirements.txt
     ```
+## Contributions
+
+Contributions are welcome! Please review our [Contributing Guidelines](Contributing.md) and [Code of Conduct](Code_of_Conduct.md) before submitting pull requests. Your input is highly appreciated as we continuously work to enhance the ETL Core Engine.
+
+---
+
+## License
+
+This project is licensed under the [AGPL](LICENSE).
+
+---
+
+Happy ETLing!
