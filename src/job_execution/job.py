@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Dict
+from datetime import datetime
 from src.components.dataclasses import MetaData
+
 
 
 class JobStatus(Enum):
@@ -15,15 +17,13 @@ class Job:
     Job Objects, created by the JobExecutionHandler
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict, user_id: int):
         self.id = config.get("JobID", "default_job_id")
         self.name = config.get("JobName", "default_job_name")
         self.status = JobStatus.PENDING.value
         self.config = config
-        self.metrics = []
         self.num_of_retries = config.get("NumOfRetries", 0)
-        self.metadata = MetaData()
-        # to-do: metadata anpassen
+        self.metadata = MetaData(datetime.now(),user_id)
         self.executions = []
         self.fileLogging = "FileLogging" in config
 
