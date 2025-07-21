@@ -76,15 +76,15 @@ class Component(ABC):
 
     @abstractmethod
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def process_bulk(self, data):
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def process_bigdata(self, chunk_iterable):
-        raise NotImplementedError
+        pass
 
     def save(self):
         # Persist logic

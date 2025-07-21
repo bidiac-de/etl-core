@@ -3,7 +3,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from ..base import Component
+from components.base import Component
 
 
 class DatabaseComponent(Component):
@@ -31,4 +31,19 @@ class DataOperationsComponent(Component):
 
     @abstractmethod
     def execute(self, data: Any) -> Any:
+        pass
+
+
+class DataOperationsComponent(Component):
+    def __init__(self):
+        super().__init__(name="DataOperationsComponent", comp_type="data_operations")
+
+
+    def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+            pass
+
+    def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        pass
+
+    def process_bigdata(self, chunk_iterable):
         pass
