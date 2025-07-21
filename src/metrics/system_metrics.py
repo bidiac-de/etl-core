@@ -1,34 +1,62 @@
 from datetime import datetime
+from typing import List, Optional
+import psutil
 
-class SystemMetricsHandler:
-    def __init__(self):
-        self.system_metrics = []
-
-    def get_all_system_metrics(self):
-        if self.system_metrics:
-            return self.system_metrics
-        return None
-
-    def get_latest_system_metrics(self):
-        if self.system_metrics:
-            return self.system_metrics[-1]
-        return None
-
-    def new_metrics_entry(self):
-        # insert system metrics scraping behavior here
-        self.system_metrics.append(SystemMetrics(0,0,0))
 
 class SystemMetrics:
     """
-    A class to represent system metrics.
+    A class to represent a snapshot of system performance metrics.
     """
-
-    def __init__(self,system_time: datetime,  cpu_usage: float, memory_usage: float, disk_usage: float):
-        self.system_time = system_time
+    def __init__(self, timestamp: datetime, cpu_usage: float, memory_usage: float, disk_usage: float):
+        self.timestamp = timestamp
         self.cpu_usage = cpu_usage
         self.memory_usage = memory_usage
         self.disk_usage = disk_usage
 
     def __repr__(self):
-        return (f"SystemMetrics(system_time={self.system_time}, cpu_usage={self.cpu_usage}, "
-                f"memory_usage={self.memory_usage}, disk_usage={self.disk_usage})")
+        return (
+            f"SystemMetrics(timestamp={self.timestamp!r}, cpu_usage={self.cpu_usage:.2f}%, "
+            f"memory_usage={self.memory_usage:.2f}%, disk_usage={self.disk_usage:.2f}%)"
+        )
+
+
+class SystemMetricsHandler:
+    """
+    A handler that collects and stores SystemMetrics entries.
+    """
+    def __init__(self):
+        self.system_metrics: List[SystemMetrics] = []
+        # Capture initial metrics at startup
+        self.new_metrics_entry()
+
+    def new_metrics_entry(self) -> SystemMetrics:
+        """
+        Captures current system metrics and stores them.
+        """
+        timestamp = datetime.now()
+        # CPU usage over a 1-second interval
+        cpu_usage = psutil.cpu_percent(interval=1)
+        # Memory usage percentage
+        memory = psutil.virtual_memory()
+        memory_usage = memory.percent
+        # Disk usage percentage for the root partition
+        disk = psutil.disk_usage('/')
+        disk_usage = disk.percent
+
+        metrics = SystemMetrics(timestamp, cpu_usage, memory_usage, disk_usage)
+        self.system_metrics.append(metrics)
+        return metrics
+
+    def get_all_system_metrics(self) -> Optional[List[SystemMetrics]]:
+        """
+        Returns all collected system metrics
+        """
+        return self.system_metrics if self.system_metrics else None
+
+    def get_latest_system_metrics(self) -> Optional[SystemMetrics]:
+        """
+        Returns the most recent system metrics entry
+        """
+        return self.system_metrics[-1] if self.system_metrics else None
+
+
