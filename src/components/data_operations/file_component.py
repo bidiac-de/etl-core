@@ -1,18 +1,33 @@
 from pathlib import Path
-from typing import List
-from typing import Any, Dict, List
+from typing import List, Dict, Any
 from components.base import Component
 
+
 class ColumnDefinition:
+    """Represents the definition of a column with name and datatype."""
     def __init__(self, name: str, dtype: str):
         self.name = name
         self.dtype = dtype
 
+
 class FileComponent(Component):
-    def __init__(self, filepath: Path, schemaDefinition: List[ColumnDefinition]):
-        super().__init__(name="FileComponent", comp_type="file")
+    """Abstract base class for file-based components like CSV, JSON, usw."""
+    def __init__(self,
+                 id: int,
+                 name: str,
+                 description: str,
+                 componentManager,
+                 filepath: Path,
+                 schema_definition: List[ColumnDefinition]):
+        super().__init__(
+            id=id,
+            name=name,
+            description=description,
+            comp_type="file",
+            componentManager=componentManager
+        )
         self.filepath = filepath
-        self.schemaDefinition = schemaDefinition
+        self.schema_definition = schema_definition
 
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         pass
