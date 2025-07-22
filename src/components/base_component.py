@@ -4,7 +4,6 @@ from typing import Optional, Any
 from datetime import datetime
 from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.base_receiver import Receiver
-from src.metrics.base_metrics import Metrics
 from src.components.dataclasses import MetaData, Layout
 from pydantic import BaseModel, Field
 
@@ -50,6 +49,7 @@ class Component(ABC):
         self.receiver = receiver
         self.layout = Layout(x_coord, y_coord)
         self.metadata = MetaData(created_at, created_by)
+        self.metrics = None
 
     def add_next(self, nxt: "Component"):
         """

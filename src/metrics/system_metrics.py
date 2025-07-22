@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
+import os
+import shutil
 import psutil
 
 
@@ -49,9 +51,9 @@ class SystemMetricsHandler:
         # Memory usage percentage
         memory = psutil.virtual_memory()
         memory_usage = memory.percent
-        # Disk usage percentage for the root partition
-        disk = psutil.disk_usage("/")
-        disk_usage = disk.percent
+        # Disk usage percentage for the cwd
+        total, used, free = shutil.disk_usage(os.getcwd())
+        disk_usage = used / total * 100
 
         metrics = SystemMetrics(timestamp, cpu_usage, memory_usage, disk_usage)
         self.system_metrics.append(metrics)

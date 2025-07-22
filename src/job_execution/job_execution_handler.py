@@ -12,7 +12,8 @@ import datetime
 import concurrent.futures
 import logging
 
-log_dir = Path("etl-core/logs")
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+log_dir = BASE_DIR / "logs"
 log_path = log_dir / "execution.log"
 logger = logging.getLogger("job.ExecutionHandler")
 logger.setLevel(logging.DEBUG)
@@ -41,7 +42,7 @@ class JobExecutionHandler:
         """
         self.component_registry = component_registry
         self.job_information_handler = JobInformationHandler(
-            filepath=Path("etl-core/logs"), job_name="no_job_assigned"
+            filepath=Path(log_dir), job_name="no_job_assigned"
         )
         self.system_metrics_handler = SystemMetricsHandler()
 
