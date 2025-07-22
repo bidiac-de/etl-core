@@ -1,5 +1,5 @@
 from src.job_execution.job_execution_handler import JobStatus
-from src.metrics.base import Metrics
+from src.metrics.base_metrics import Metrics
 from datetime import datetime, timedelta
 
 class JobMetrics(Metrics):

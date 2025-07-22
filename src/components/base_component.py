@@ -3,8 +3,8 @@ from abc import ABC
 from enum import Enum
 from typing import List, Optional, Any
 from src.strategies.base_strategy import ExecutionStrategy
-from src.receivers.base import Receiver
-from src.metrics.base import Metrics
+from src.receivers.base_receiver import Receiver
+from src.metrics.base_metrics import Metrics
 from src.components.dataclasses import MetaData, Layout
 
 

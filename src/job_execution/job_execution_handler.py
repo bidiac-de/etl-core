@@ -1,7 +1,7 @@
 from typing import Dict,Any
 from pathlib import Path
 from src.job_execution.job import Job, JobStatus, JobExecution
-from src.components.base import Component, RuntimeState
+from src.components.base_component import Component, RuntimeState
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy

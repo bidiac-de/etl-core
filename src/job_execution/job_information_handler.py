@@ -6,9 +6,9 @@ class JobInformationHandler:
     """
     Handles job information and metrics for optional logging
     """
-    def __init__(self, filepath:Path):
+    def __init__(self, filepath:Path, job_name: str):
         self.metrics_handler = MetricsHandler()
-        self.logging_handler = LoggingHandler(filepath)
+        self.logging_handler = LoggingHandler(filepath, job_name)
 
 class MetricsHandler:
     """
@@ -33,7 +33,7 @@ class LoggingHandler:
         # Build the logfile path
         log_path = Path(base_path) / f"{job_name}.log"
 
-        # Create (or get) a named logger for this job
+        # Create or get a named logger for this job
         self.logger = logging.getLogger(f"job.{job_name}")
         self.logger.setLevel(logging.DEBUG)
 
