@@ -6,9 +6,6 @@ from src.components.base_component import Component, RuntimeState
 from src.components.schemas import ComponentInfo
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
-from src.strategies.bulk_strategy import BulkExecutionStrategy
-from src.strategies.row_strategy import RowExecutionStrategy
 from src.metrics.job_metrics import JobMetrics
 
 import datetime
@@ -55,112 +52,102 @@ class JobExecutionHandler:
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         self.job_information_handler.logging_handler.update_job_name(job.name)
-        """
-        Execute a job with support for parallel processing.
-        """
-        try:
-            job.status = JobStatus.RUNNING.value
-            job.started_at = datetime.datetime.now()
-            exception_count = 0
+        retry_attempts = 0
 
-            components = self.build_components(job.config)
+        while retry_attempts <= job.num_of_retries:
+            try:
+                job.status = JobStatus.RUNNING.value
+                job.started_at = datetime.datetime.now()
+                exception_count = 0
 
-            # Find root components (components with no predecessors)
-            roots = [c for c in components.values() if not c.prev_components]
+                components = self.build_components(job.config)
+                roots = [c for c in components.values() if not c.prev_components]
 
-            # Initialize component states
-            pending_components = set(components.values())
-            completed_components = set()
+                pending_components = set(components.values())
+                completed_components = set()
+                failed_components = set()
+                skipped_components = set()
 
-            # Use ThreadPoolExecutor for parallel execution
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Start with root components
-                futures = {}
-                for root in roots:
-                    futures[executor.submit(self._execute_component, root, None)] = root
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {}
+                    for root in roots:
+                        futures[executor.submit(self._execute_component, root, None)] = root
 
-                # Process components as they complete
-                while futures:
-                    done, _ = concurrent.futures.wait(
-                        futures,
-                        return_when=concurrent.futures.FIRST_COMPLETED
-                    )
+                    while futures:
+                        done, _ = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
 
-                    for future in done:
-                        component = futures.pop(future)
-                        try:
-                            result = future.result()
-                        except Exception:
-                            exception_count += 1
+                        for future in done:
+                            component = futures.pop(future)
+                            try:
+                                result = future.result()
+                                component.status = RuntimeState.SUCCESS
+                            except Exception:
+                                exception_count += 1
+                                failed_components.add(component)
+                                component.status = RuntimeState.FAILED
 
-                        # Mark as completed
-                        pending_components.remove(component)
-                        completed_components.add(component)
+                            pending_components.discard(component)
+                            completed_components.add(component)
 
-                        # Find next components to execute
-                        for next_component in component.next_components:
-                            # Check if all prerequisites are completed
-                            prerequisites_met = all(
-                                prev in completed_components
-                                for prev in next_component.prev_components
-                            )
+                            for next_component in component.next_components:
+                                if next_component in completed_components or next_component in skipped_components:
+                                    continue
 
-                            if prerequisites_met and next_component in pending_components:
-                                # Submit next component for execution
-                                futures[executor.submit(
-                                    self._execute_component, next_component, result
-                                )] = next_component
+                                # Check if any predecessor failed or was skipped
+                                if any(p.status in {RuntimeState.FAILED, RuntimeState.SKIPPED} for p in
+                                       next_component.prev_components):
+                                    next_component.status = RuntimeState.SKIPPED
+                                    skipped_components.add(next_component)
+                                    pending_components.discard(next_component)
+                                    continue
 
-            # Update job status
-            job.status = JobStatus.COMPLETED.value
-            job.completed_at = datetime.datetime.now()
+                                # Check if all predecessors are completed
+                                prerequisites_met = all(
+                                    p in completed_components for p in next_component.prev_components)
+                                if prerequisites_met and next_component in pending_components:
+                                    futures[
+                                        executor.submit(self._execute_component, next_component, result)] = next_component
 
-            # Build and record JobMetrics:
-            job_processing_time = job.completed_at - job.started_at
-            lines_processed = sum(c.metrics.lines_received for c in components.values())
-            throughput = (lines_processed / job_processing_time.total_seconds()
-                          if job_processing_time.total_seconds() > 0 else 0.0)
+                # Mark job as completed or failed based on state
+                if failed_components or skipped_components:
+                    raise RuntimeError("One or more components failed or were skipped due to dependency failure.")
 
-            jm = JobMetrics(
-                started_at=job.started_at,
-                processing_time=job_processing_time,
-                error_count=exception_count,
-                throughput=throughput,
-                job_status=job.status
-            )
-            # store in handler
-            self.job_information_handler.metrics_handler.add_job_metrics(job.id, jm)
+                job.status = JobStatus.COMPLETED.value
+                job.completed_at = datetime.datetime.now()
+                job_processing_time = job.completed_at - job.started_at
+                lines_processed = sum(c.metrics.lines_received for c in components.values())
+                throughput = lines_processed / job_processing_time.total_seconds() if job_processing_time.total_seconds() > 0 else 0.0
 
-            # Build and record each components metrics:
-            for cname, comp in components.items():
-                self.job_information_handler.metrics_handler.add_component_metrics(
-                    job.id,
-                    cname,
-                    comp.metrics
+                jm = JobMetrics(
+                    started_at=job.started_at,
+                    processing_time=job_processing_time,
+                    error_count=exception_count,
+                    throughput=throughput,
+                    job_status=job.status
                 )
 
-            # Optionally log all metrics to file
-            if job.fileLogging:
-                self.job_information_handler.logging_handler.log(jm)
-                for _, cmetrics in self.job_information_handler.metrics_handler.component_metrics[job.id]:
-                    self.job_information_handler.logging_handler.log(cmetrics)
+                self.job_information_handler.metrics_handler.add_job_metrics(job.id, jm)
+                for cname, comp in components.items():
+                    self.job_information_handler.metrics_handler.add_component_metrics(job.id, cname, comp.metrics)
 
-            # preserve JobExecution object
-            job_metrics = jm
-            component_metrics = {
-                cname: comp.metrics
-                for cname, comp in components.items()
-            }
-            job.executions.append(JobExecution(job, job_metrics, component_metrics))
+                if job.fileLogging:
+                    self.job_information_handler.logging_handler.log(jm)
+                    for _, cmetrics in self.job_information_handler.metrics_handler.component_metrics[job.id]:
+                        self.job_information_handler.logging_handler.log(cmetrics)
 
-            return job
+                job.executions.append(
+                    JobExecution(job, jm, {cname: comp.metrics for cname, comp in components.items()}))
+                return job
 
-        except Exception as e:
-            logger.exception(f"Job execution failed: {str(e)}")
-            job.status = JobStatus.FAILED.value
-            job.completed_at = datetime.datetime.now()
-            job.error = str(e)
-            return job
+            except Exception as e:
+                retry_attempts += 1
+                logger.warning(f"Attempt {retry_attempts} for job '{job.name}' failed: {e}")
+                if retry_attempts > job.num_of_retries:
+                    logger.exception(f"Job execution failed after {retry_attempts} attempts: {str(e)}")
+                    job.status = JobStatus.FAILED.value
+                    job.completed_at = datetime.datetime.now()
+                    job.error = str(e)
+                    return job
 
     def _execute_component(self, component: Component, data: Any) -> Any:
         """

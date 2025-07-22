@@ -16,6 +16,7 @@ class RuntimeState(Enum):
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
 
 class Component(ABC):
     def __init__(
