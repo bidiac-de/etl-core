@@ -6,12 +6,20 @@ class Layout:
     Layout class to define the position of a component
     """
 
-    def __init__(self, x_coordinate: float, y_coordinate,):
+    def __init__(
+        self,
+        x_coordinate: float,
+        y_coordinate,
+    ):
         self.x_coordinate = x_coordinate
         self.y_coordinate = y_coordinate
 
     def __repr__(self):
-        return f"Layout(x_coordinate={self.x_coordinate}, y_coordinate={self.y_coordinate})"
+        return (
+            f"Layout(x_coordinate={self.x_coordinate}"
+            f", y_coordinate={self.y_coordinate})"
+        )
+
 
 class MetaData:
     """

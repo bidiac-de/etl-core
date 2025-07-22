@@ -4,13 +4,17 @@ from datetime import datetime
 from src.components.dataclasses import MetaData
 
 
-
 class JobStatus(Enum):
+    """
+    Enum representing the status of a job.
+    """
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
 
 class Job:
     """
@@ -23,12 +27,17 @@ class Job:
         self.status = JobStatus.PENDING.value
         self.config = config
         self.num_of_retries = config.get("NumOfRetries", 0)
-        self.metadata = MetaData(datetime.now(),user_id)
+        self.metadata = MetaData(datetime.now(), user_id)
         self.executions = []
         self.fileLogging = "FileLogging" in config
 
+
 class JobExecution:
-    def __init__(self,job: Job, job_metrics, component_metrics: []):
+    """
+    class to encapsulate the execution details of a job.
+    """
+
+    def __init__(self, job: Job, job_metrics, component_metrics: []):
         self.job = job
         self.job_metrics = job_metrics
         self.component_metrics = component_metrics

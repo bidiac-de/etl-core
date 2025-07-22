@@ -5,9 +5,16 @@ import psutil
 
 class SystemMetrics:
     """
-    A class to represent a snapshot of system performance metrics.
+    class to represent a snapshot of system performance metrics
     """
-    def __init__(self, timestamp: datetime, cpu_usage: float, memory_usage: float, disk_usage: float):
+
+    def __init__(
+        self,
+        timestamp: datetime,
+        cpu_usage: float,
+        memory_usage: float,
+        disk_usage: float,
+    ):
         self.timestamp = timestamp
         self.cpu_usage = cpu_usage
         self.memory_usage = memory_usage
@@ -15,15 +22,18 @@ class SystemMetrics:
 
     def __repr__(self):
         return (
-            f"SystemMetrics(timestamp={self.timestamp!r}, cpu_usage={self.cpu_usage:.2f}%, "
-            f"memory_usage={self.memory_usage:.2f}%, disk_usage={self.disk_usage:.2f}%)"
+            f"SystemMetrics(timestamp={self.timestamp!r}, "
+            f"cpu_usage={self.cpu_usage:.2f}%, "
+            f"memory_usage={self.memory_usage:.2f}%, "
+            f"disk_usage={self.disk_usage:.2f}%)"
         )
 
 
 class SystemMetricsHandler:
     """
-    A handler that collects and stores SystemMetrics entries.
+    Handler that collects and stores SystemMetrics entries
     """
+
     def __init__(self):
         self.system_metrics: List[SystemMetrics] = []
         # Capture initial metrics at startup
@@ -31,7 +41,7 @@ class SystemMetricsHandler:
 
     def new_metrics_entry(self) -> SystemMetrics:
         """
-        Captures current system metrics and stores them.
+        Captures current system metrics and stores them
         """
         timestamp = datetime.now()
         # CPU usage over a 1-second interval
@@ -40,7 +50,7 @@ class SystemMetricsHandler:
         memory = psutil.virtual_memory()
         memory_usage = memory.percent
         # Disk usage percentage for the root partition
-        disk = psutil.disk_usage('/')
+        disk = psutil.disk_usage("/")
         disk_usage = disk.percent
 
         metrics = SystemMetrics(timestamp, cpu_usage, memory_usage, disk_usage)
@@ -58,5 +68,3 @@ class SystemMetricsHandler:
         Returns the most recent system metrics entry
         """
         return self.system_metrics[-1] if self.system_metrics else None
-
-

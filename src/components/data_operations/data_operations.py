@@ -1,4 +1,3 @@
-# base class for data operations
 from src.components.base_component import Component
 
 

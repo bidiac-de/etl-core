@@ -10,11 +10,19 @@ class FilterComponent(DataOperationComponent):
     """
 
     def execute(self, data, **kwargs):
+        """
+        Execute the filter operation on the provided data.
+        """
         pass
 
 
 class FilterComponentSchema(BaseComponentSchema):
+    """
+    Schema for FilterComponent
+    """
+
     type: Literal["filter"]
     filter_value: Any = Field(..., description="value filter is comparing against")
-    operator: Literal["equals", "not_equals", "greater_than", "less_than"] \
-        = Field(..., description="comparison operator for the filter")
+    operator: Literal["equals", "not_equals", "greater_than", "less_than"] = Field(
+        ..., description="comparison operator for the filter"
+    )
