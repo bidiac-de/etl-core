@@ -1,7 +1,9 @@
 from typing import Dict,Any
 from pathlib import Path
+
 from src.job_execution.job import Job, JobStatus, JobExecution
 from src.components.base_component import Component, RuntimeState
+from src.components.schemas import ComponentInfo
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
@@ -36,7 +38,7 @@ class JobExecutionHandler:
     """
     def __init__(self, component_registry: Dict[str, type]):
         """
-        :param component_registry: dict with all existing component types
+        :param component_registry: dict with all existing concrete component types
         """
         self.component_registry = component_registry
         self.job_information_handler = JobInformationHandler(filepath= Path("etl-core/logs"))
@@ -187,29 +189,26 @@ class JobExecutionHandler:
         components = {}
 
         # Create components
-        for comp_config in config.get("components", []):
-            component_type = comp_config.get("type")
-            component_name = comp_config.get("name")
+        for comp_config in config["components"]:
+            info = ComponentInfo.parse_obj(comp_config)
+            comp_type = info.type
 
-            if component_type not in self.component_registry:
-                raise ValueError(f"Unknown component type: {component_type}")
+            if comp_type not in self.component_registry:
+                raise ValueError(f"Unknown component type: {comp_type}")
 
-            strategy_name = comp_config.get("strategy")
-            match strategy_name:
-                case "bigdata":
-                    strategy = BigDataExecutionStrategy()
-                case "row":
-                    strategy = RowExecutionStrategy()
-                case _:
-                    strategy = BulkExecutionStrategy()
+            component_class = self.component_registry[comp_type]
+            # Create the component instance by unpacking the info dict
+            component = component_class( **info.dict())
 
-            component_class = self.component_registry[component_type]
-            component = component_class(
-                config=comp_config.get("config", {}),
-                strategy=strategy
-            )
+            components[info.name] = component
 
-            components[component_name] = component
+        # build component relationships
+        for comp_conf in config["components"]:
+            src = components[comp_conf["name"]]
+            for next_comp in comp_conf.get("next", []):
+                src.add_next(components[next_comp])
+                components[next_comp].add_prev(src)
+
 
 
         return components
