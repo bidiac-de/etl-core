@@ -41,7 +41,7 @@ class JobExecutionHandler:
         :param component_registry: dict with all existing concrete component types
         """
         self.component_registry = component_registry
-        self.job_information_handler = JobInformationHandler(filepath= Path("etl-core/logs"))
+        self.job_information_handler = JobInformationHandler(filepath= Path("etl-core/logs"), job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
 
     def create_job(self, config: Dict, user_id: int):
@@ -54,6 +54,7 @@ class JobExecutionHandler:
         return Job(config,user_id)
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
+        self.job_information_handler.logging_handler.update_job_name(job.name)
         """
         Execute a job with support for parallel processing.
         """
