@@ -253,6 +253,5 @@ class JobExecutionHandler:
             src = components[comp_conf["name"]]
             for next_comp in comp_conf.get("next", []):
                 src.add_next(components[next_comp])
-                components[next_comp].add_prev(src)
 
         return components

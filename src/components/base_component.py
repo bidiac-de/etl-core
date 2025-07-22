@@ -34,7 +34,6 @@ class Component(ABC):
         comp_type: str,
         strategy: Optional[ExecutionStrategy] = None,
         receiver: Optional[Receiver] = None,
-        metrics: Optional[Metrics] = None,
         x_coord: float = 0.0,
         y_coord: float = 0.0,
         created_by: int = 0,
@@ -49,7 +48,6 @@ class Component(ABC):
         self.status = RuntimeState.PENDING.value
         self.strategy = strategy
         self.receiver = receiver
-        self.metrics = metrics
         self.layout = Layout(x_coord, y_coord)
         self.metadata = MetaData(created_at, created_by)
 
