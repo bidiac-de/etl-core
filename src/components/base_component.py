@@ -1,18 +1,18 @@
 from abc import ABC
 from enum import Enum
-from typing import Optional, Any
+from typing import Optional,List, Any
 from datetime import datetime
+
 from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.base_receiver import Receiver
 from src.components.dataclasses import MetaData, Layout
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class RuntimeState(Enum):
     """
     Runtime state of a component during execution
     """
-
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
@@ -20,17 +20,39 @@ class RuntimeState(Enum):
     SKIPPED = "SKIPPED"
 
 
-class Component(ABC):
+class Component(BaseModel, ABC):
     """
     Base class for all components in the system
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True,extra="ignore",)
+    id: int
+    name: str
+    description: str
+    type: str
+    x_coord: float
+    y_coord: float
+    created_by: int
+    created_at: datetime
+
+    strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
+    receiver: Optional[Receiver] = Field(default=None, exclude=True)
+    next_components: List["Component"] = Field(default_factory=list, exclude=True)
+    prev_components: List["Component"] = Field(default_factory=list, exclude=True)
+    status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
+    layout: Layout = Field(
+        default_factory=lambda: Layout(0.0, 0.0), exclude=True
+    )
+    metadata: MetaData = Field(
+        default_factory=lambda: MetaData(datetime.now(), 0), exclude=True
+    )
+    metrics: Any = Field(default=None, exclude=True)
 
     def __init__(
         self,
         id: int,
         name: str,
-        description: str,
         comp_type: str,
+        description: str = "",
         strategy: Optional[ExecutionStrategy] = None,
         receiver: Optional[Receiver] = None,
         x_coord: float = 0.0,
@@ -38,18 +60,13 @@ class Component(ABC):
         created_by: int = 0,
         created_at: datetime = datetime.now(),
     ):
-        self.id = id
-        self.name = name
-        self.description = description
-        self.type = comp_type
-        self.next_components = []
-        self.prev_components = []
-        self.status = RuntimeState.PENDING.value
+        super().__init__(id=id, name=name, description=description, type=comp_type,
+                         x_coord=x_coord,y_coord=y_coord, created_by=created_by,
+                         created_at=created_at)
         self.strategy = strategy
         self.receiver = receiver
         self.layout = Layout(x_coord, y_coord)
         self.metadata = MetaData(created_at, created_by)
-        self.metrics = None
 
     def add_next(self, nxt: "Component"):
         """
@@ -76,21 +93,3 @@ class Component(ABC):
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
         return self.strategy.execute(self, data)
-
-
-class BaseComponentSchema(BaseModel):
-    """
-    Base schema for components in the system
-    """
-
-    id: str
-    name: str
-    description: str = ""
-    # discriminator for component type
-    type: str
-    x_coord: float
-    y_coord: float
-    created_by: int = Field(..., description="ID of the user who created the component")
-    created_at: datetime = Field(
-        ..., description="Timestamp when the component was created"
-    )

@@ -7,7 +7,7 @@ def test_create_job_with_complete_config():
     """
     A fully specified config yields matching Job fields
     """
-    handler = JobExecutionHandler(component_registry={})
+    handler = JobExecutionHandler()
     config = {
         "JobID": "123",
         "JobName": "TestJob",
@@ -32,7 +32,7 @@ def test_create_job_with_partial_config():
     """
     Omitting keys falls back to defaults
     """
-    handler = JobExecutionHandler(component_registry={})
+    handler = JobExecutionHandler()
     config = {}
     user_id = 7
 
@@ -50,6 +50,6 @@ def test_create_job_with_invalid_config_type():
     """
     Passing a non‐dict config should raise an AttributeError
     """
-    handler = JobExecutionHandler(component_registry={})
+    handler = JobExecutionHandler()
     with pytest.raises(AttributeError):
         handler.create_job(None, 1)

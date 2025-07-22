@@ -3,7 +3,7 @@ from pathlib import Path
 
 from src.job_execution.job import Job, JobStatus, JobExecution
 from src.components.base_component import Component, RuntimeState
-from src.components.schemas import ComponentInfo
+from src.components.registry import component_registry
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.metrics.job_metrics import JobMetrics
@@ -36,9 +36,9 @@ class JobExecutionHandler:
     Preserves command pattern while supporting parallel execution.
     """
 
-    def __init__(self, component_registry: Dict[str, type]):
+    def __init__(self):
         """
-        :param component_registry: dict with all existing concrete component types
+        Initialize the JobExecutionHandler with the component registry and logging.
         """
         self.component_registry = component_registry
         self.job_information_handler = JobInformationHandler(
@@ -237,17 +237,16 @@ class JobExecutionHandler:
 
         # Create components
         for comp_config in config["components"]:
-            info = ComponentInfo.parse_obj(comp_config)
-            comp_type = info.type
-
+            comp_type = comp_config["type"]
+            comp_name = comp_config["name"]
             if comp_type not in self.component_registry:
                 raise ValueError(f"Unknown component type: {comp_type}")
 
-            component_class = self.component_registry[comp_type]
+            component_class = component_registry[comp_type]
             # Create the component instance by unpacking the info dict
-            component = component_class(**info.dict())
+            component = component_class(**comp_config)
 
-            components[info.name] = component
+            components[comp_name] = component
 
         # build component relationships
         for comp_conf in config["components"]:
