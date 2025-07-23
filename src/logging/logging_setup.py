@@ -3,6 +3,7 @@ import yaml
 import logging
 import logging.config
 
+
 def setup_logging(
     default_path="logging_config.yaml",
     default_level=logging.INFO,

@@ -39,7 +39,6 @@ class LoggingHandler:
         self.logger = logging.getLogger(f"job.{job_name}")
         self.logger.setLevel(logging.DEBUG)
 
-
     def log(self, information) -> None:
         """
         log a metric object at INFO level

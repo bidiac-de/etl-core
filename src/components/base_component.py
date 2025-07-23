@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import Enum
-from typing import Optional,List, Any
+from typing import Optional, List, Any
 from datetime import datetime
 
 from src.strategies.base_strategy import ExecutionStrategy
@@ -13,6 +13,7 @@ class RuntimeState(Enum):
     """
     Runtime state of a component during execution
     """
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
@@ -24,7 +25,11 @@ class Component(BaseModel, ABC):
     """
     Base class for all components in the system
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True,extra="ignore",)
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
     id: int
     name: str
     description: str
@@ -39,9 +44,7 @@ class Component(BaseModel, ABC):
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
     status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
-    layout: Layout = Field(
-        default_factory=lambda: Layout(0.0, 0.0), exclude=True
-    )
+    layout: Layout = Field(default_factory=lambda: Layout(0.0, 0.0), exclude=True)
     metadata: MetaData = Field(
         default_factory=lambda: MetaData(datetime.now(), 0), exclude=True
     )
@@ -60,9 +63,16 @@ class Component(BaseModel, ABC):
         created_by: int = 0,
         created_at: datetime = datetime.now(),
     ):
-        super().__init__(id=id, name=name, description=description, type=comp_type,
-                         x_coord=x_coord,y_coord=y_coord, created_by=created_by,
-                         created_at=created_at)
+        super().__init__(
+            id=id,
+            name=name,
+            description=description,
+            type=comp_type,
+            x_coord=x_coord,
+            y_coord=y_coord,
+            created_by=created_by,
+            created_at=created_at,
+        )
         self.strategy = strategy
         self.receiver = receiver
         self.layout = Layout(x_coord, y_coord)
