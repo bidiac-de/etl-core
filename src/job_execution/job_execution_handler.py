@@ -1,9 +1,8 @@
 from typing import Dict, Any
-from pathlib import Path
 
+from src.components.registry import component_registry
 from src.job_execution.job import Job, JobStatus, JobExecution
 from src.components.base_component import Component, RuntimeState
-from src.components.registry import component_registry
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.metrics.job_metrics import JobMetrics
@@ -12,22 +11,7 @@ import datetime
 import concurrent.futures
 import logging
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-log_dir = BASE_DIR / "logs"
-log_path = log_dir / "execution.log"
 logger = logging.getLogger("job.ExecutionHandler")
-logger.setLevel(logging.DEBUG)
-
-if not any(
-    isinstance(h, logging.FileHandler) and h.baseFilename == str(log_path)
-    for h in logger.handlers
-):
-    fh = logging.FileHandler(log_path, mode="a", encoding="utf-8")
-    fmt = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    fh.setFormatter(fmt)
-    logger.addHandler(fh)
 
 
 class JobExecutionHandler:
@@ -42,8 +26,7 @@ class JobExecutionHandler:
         """
         self.component_registry = component_registry
         self.job_information_handler = JobInformationHandler(
-            filepath=Path(log_dir), job_name="no_job_assigned"
-        )
+            job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
 
     def create_job(self, config: Dict, user_id: int):

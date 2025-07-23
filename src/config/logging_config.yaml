@@ -1,0 +1,28 @@
+version: 1
+disable_existing_loggers: False
+
+formatters:
+  standard:
+    format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+
+  file:
+    class: logging.FileHandler
+    filename: "etl_core.log"
+    level: DEBUG
+    formatter: standard
+
+loggers:
+  "":
+    handlers: ["console", "file"]
+    level: INFO
+    propagate: False
+  "etl_core.components":
+    handlers: ["file"]
+    level: DEBUG
+    propagate: False
