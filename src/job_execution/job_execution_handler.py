@@ -41,11 +41,12 @@ class JobExecutionHandler:
         """
         self.job_information_handler.logging_handler.update_job_name(job.name)
         retry_attempts = 0
+        job_execution = JobExecution(job=job, status=JobStatus.RUNNING.value)
+        job.executions.append(job_execution)
+        started_at = datetime.datetime.now()
 
         while retry_attempts <= job.num_of_retries:
             try:
-                job.status = JobStatus.RUNNING.value
-                job.started_at = datetime.datetime.now()
                 exception_count = 0
 
                 components = job.components
@@ -127,8 +128,8 @@ class JobExecutionHandler:
                         "due to dependency failure."
                     )
 
-                job.status = JobStatus.COMPLETED.value
-                job.completed_at = datetime.datetime.now()
+                status = JobStatus.COMPLETED.value
+                completed_at = datetime.datetime.now()
                 job_processing_time = job.completed_at - job.started_at
                 lines_processed = sum(
                     c.metrics.lines_received for c in components.values()
@@ -140,11 +141,11 @@ class JobExecutionHandler:
                 )
 
                 jm = JobMetrics(
-                    started_at=job.started_at,
+                    started_at=started_at,
                     processing_time=job_processing_time,
                     error_count=exception_count,
                     throughput=throughput,
-                    job_status=job.status,
+                    job_status=status,
                 )
 
                 self.job_information_handler.metrics_handler.add_job_metrics(job.id, jm)
@@ -163,13 +164,13 @@ class JobExecutionHandler:
                     ]:
                         self.job_information_handler.logging_handler.log(cmetrics)
 
-                job.executions.append(
-                    JobExecution(
-                        job,
-                        jm,
-                        {cname: comp.metrics for cname, comp in components.items()},
-                    )
-                )
+                job_execution.job_metrics = jm
+                job_execution.component_metrics = [
+                    (cname, comp.metrics)
+                    for cname, comp in components.items()
+                ]
+                job_execution.status = status
+                job_execution.completed_at = completed_at
                 return job
 
             except Exception as e:
@@ -182,9 +183,9 @@ class JobExecutionHandler:
                         f"Job execution failed after "
                         f"{retry_attempts} attempts: {str(e)}"
                     )
-                    job.status = JobStatus.FAILED.value
-                    job.completed_at = datetime.datetime.now()
-                    job.error = str(e)
+                    job_execution.status = JobStatus.FAILED.value
+                    job_execution.completed_at = datetime.datetime.now()
+                    job_execution.error = str(e)
                     return job
 
     def _execute_component(self, component: Component, data: Any) -> Any:
