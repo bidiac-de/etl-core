@@ -1,5 +1,5 @@
 pre-commit
-pytest
+pytest-pythonpath
 pytest-cov
 fastapi
 pydantic >=2.0

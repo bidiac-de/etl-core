@@ -62,7 +62,7 @@ class Job(BaseModel):
         for cconf in self.config.get("components", []):
             comp_name = cconf["name"]
             comp_type = cconf["comp_type"]
-            if comp_type not in self.component_registry:
+            if comp_type not in component_registry:
                 raise ValueError(f"Unknown component type: {comp_type}")
 
             component_class = component_registry[comp_type]
