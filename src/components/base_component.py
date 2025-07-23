@@ -62,6 +62,7 @@ class Component(BaseModel, ABC):
         y_coord: float = 0.0,
         created_by: int = 0,
         created_at: datetime = datetime.now(),
+        **kwargs: Any,
     ):
         super().__init__(
             id=id,

@@ -1,15 +1,14 @@
-from typing import Dict, Any
+import datetime
+import logging
+import concurrent.futures
+from typing import Any
 
-from src.components.registry import component_registry
-from src.job_execution.job import Job, JobStatus, JobExecution
+from src.job_execution.job import Job, JobStatus
 from src.components.base_component import Component, RuntimeState
+from src.job_execution.job import JobExecution
+from src.metrics.job_metrics import JobMetrics
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
-from src.metrics.job_metrics import JobMetrics
-
-import datetime
-import concurrent.futures
-import logging
 
 logger = logging.getLogger("job.ExecutionHandler")
 
@@ -24,12 +23,10 @@ class JobExecutionHandler:
         """
         Initialize the JobExecutionHandler with the component registry and logging.
         """
-        self.component_registry = component_registry
-        self.job_information_handler = JobInformationHandler(
-            job_name="no_job_assigned")
+        self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
 
-    def create_job(self, config: Dict, user_id: int):
+    def create_job(self, config: dict, user_id: int):
         """
         Create a job based on the provided config.
         :param config: Configuration dictionary for the job, derived from JSON.
@@ -51,13 +48,13 @@ class JobExecutionHandler:
                 job.started_at = datetime.datetime.now()
                 exception_count = 0
 
-                components = self.build_components(job.config)
+                components = job.components
                 roots = [c for c in components.values() if not c.prev_components]
 
-                pending_components = set(components.values())
-                completed_components = set()
-                failed_components = set()
-                skipped_components = set()
+                pending_components = list(components.values())
+                completed_components = []
+                failed_components = []
+                skipped_components = []
 
                 with concurrent.futures.ThreadPoolExecutor(
                     max_workers=max_workers
@@ -80,11 +77,12 @@ class JobExecutionHandler:
                                 component.status = RuntimeState.SUCCESS
                             except Exception:
                                 exception_count += 1
-                                failed_components.add(component)
+                                failed_components.append(component)
                                 component.status = RuntimeState.FAILED
 
-                            pending_components.discard(component)
-                            completed_components.add(component)
+                            if component in pending_components:
+                                pending_components.remove(component)
+                            completed_components.append(component)
 
                             for next_component in component.next_components:
                                 if (
@@ -100,8 +98,9 @@ class JobExecutionHandler:
                                     for p in next_component.prev_components
                                 ):
                                     next_component.status = RuntimeState.SKIPPED
-                                    skipped_components.add(next_component)
-                                    pending_components.discard(next_component)
+                                    skipped_components.append(next_component)
+                                    if next_component in pending_components:
+                                        pending_components.remove(next_component)
                                     continue
 
                                 # Check if all predecessors are completed
@@ -154,7 +153,7 @@ class JobExecutionHandler:
                         job.id, cname, comp.metrics
                     )
 
-                if job.fileLogging:
+                if job.file_logging:
                     self.job_information_handler.logging_handler.log(jm)
                     for (
                         _,
@@ -211,30 +210,3 @@ class JobExecutionHandler:
             logger.exception(f"Component {component.name} failed: {str(e)}")
             component.status = RuntimeState.FAILED
             raise
-
-    def build_components(self, config: Dict):
-        """
-        Build and connects components from the provided job configuration
-        """
-        components = {}
-
-        # Create components
-        for comp_config in config["components"]:
-            comp_type = comp_config["type"]
-            comp_name = comp_config["name"]
-            if comp_type not in self.component_registry:
-                raise ValueError(f"Unknown component type: {comp_type}")
-
-            component_class = component_registry[comp_type]
-            # Create the component instance by unpacking the info dict
-            component = component_class(**comp_config)
-
-            components[comp_name] = component
-
-        # build component relationships
-        for comp_conf in config["components"]:
-            src = components[comp_conf["name"]]
-            for next_comp in comp_conf.get("next", []):
-                src.add_next(components[next_comp])
-
-        return components

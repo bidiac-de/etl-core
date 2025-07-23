@@ -9,15 +9,15 @@ class FilterComponent(DataOperationComponent):
     """
     Component for filtering data based on a condition.
     """
+
     type: Literal["filter"]
     filter_value: Any = Field(..., description="value filter is comparing against")
     operator: Literal["equals", "not_equals", "greater_than", "less_than"] = Field(
         ..., description="comparison operator for the filter"
     )
+
     def execute(self, data, **kwargs):
         """
         Execute the filter operation on the provided data.
         """
         pass
-
-
