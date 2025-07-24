@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -33,7 +32,6 @@ class Component(ABC):
         type: str,
         strategy: Optional[ExecutionStrategy] = None,
         receiver: Optional[Receiver] = None,
-        metrics: Optional[ComponentMetrics] = None,
         layout: Optional[Layout] = None,
         metadata: Optional[MetaData] = None,
     ):
@@ -44,11 +42,7 @@ class Component(ABC):
         self.status = RuntimeState.PENDING.value
         self.strategy = strategy
         self.receiver = receiver
-        self.metrics = metrics or ComponentMetrics(
-            started_at=datetime.now(),
-            processing_time=timedelta(0),
-            error_count=0
-        )
+        self.metrics = None
         self.layout = layout
         self.metadata = metadata
         self.prev_components: List["Component"] = []
