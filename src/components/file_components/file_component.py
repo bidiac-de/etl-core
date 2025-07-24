@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import List, Dict, Any
-from src.components.base import Component
+from src.components.base_components import Component
 from src.components.column_definition import ColumnDefinition
 
 

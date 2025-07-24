@@ -1,6 +1,6 @@
 # base class for database operations
 from typing import List
-from components.base import Component
+from components.base_components import Component
 from src.components.column_definition import ColumnDefinition
 
 

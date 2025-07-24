@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from src.components.base import Component
+from src.components.base_components import Component
 
 
 class DataOperationsComponent(Component):
