@@ -49,3 +49,4 @@ class DatabaseComponent(Component):
         print("[DatabaseComponent] processing big data stream")
         return list(chunk_iterable)
 
+
