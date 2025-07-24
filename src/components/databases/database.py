@@ -4,7 +4,7 @@ from components.base import Component
 from src.components.column_definition import ColumnDefinition
 
 class Credentials:
-    def _init_(self, user: str, password: str, host: str, port: int):
+    def __init__(self, user: str, password: str, host: str, port: int):
         self.user = user
         self.password = password
         self.host = host
@@ -18,7 +18,7 @@ class ConnectionHandler:
         print("[ConnectionHandler] Disconnecting")
 
 class DatabaseComponent(Component):
-    def _init_(
+    def __init__(
             self,
             id: int,
             name: str,
@@ -27,7 +27,7 @@ class DatabaseComponent(Component):
             connection_handler: ConnectionHandler,
             schema_definition: List[ColumnDefinition]
     ):
-        super()._init_(
+        super().__init__(
             id=id,
             name=name,
             description=description,

@@ -1,11 +1,11 @@
 from pathlib import Path
 from typing import List, Dict, Any
-from components.base import Component
+from src.components.base import Component
 from src.components.column_definition import ColumnDefinition
 
 
 class FileComponent(Component):
-    """Abstract base class for file-based components like CSV, JSON, usw."""
+    """Abstract base class for file-based components like CSV, JSON, etc."""
     def __init__(self,
                  id: int,
                  name: str,

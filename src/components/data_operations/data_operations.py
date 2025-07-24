@@ -1,7 +1,6 @@
-# base class for data operations abstract classes hierrein
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
-from components.base import Component
+from src.components.base import Component
 
 
 class DataOperationsComponent(Component):
