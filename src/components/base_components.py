@@ -52,12 +52,12 @@ class Component(ABC):
     def add_next(self, nxt: "Component"):
         """Connects this component to its successor."""
         self.next_components.append(nxt)
-        nxt.prev_components.append(self)
+
 
     def add_prev(self, prev: "Component"):
         """Connects this component to its predecessor."""
         self.prev_components.append(prev)
-        prev.next_components.append(self)
+
 
     def execute(self, data: Any, **kwargs) -> Any:
         """
