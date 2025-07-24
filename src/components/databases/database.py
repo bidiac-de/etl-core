@@ -3,6 +3,7 @@ from typing import List
 from components.base import Component
 from src.components.column_definition import ColumnDefinition
 
+
 class Credentials:
     def __init__(self, user: str, password: str, host: str, port: int):
         self.user = user
@@ -10,12 +11,14 @@ class Credentials:
         self.host = host
         self.port = port
 
+
 class ConnectionHandler:
     def connect(self):
         print("[ConnectionHandler] Connecting to database")
 
     def disconnect(self):
         print("[ConnectionHandler] Disconnecting")
+
 
 class DatabaseComponent(Component):
     def __init__(
@@ -48,4 +51,3 @@ class DatabaseComponent(Component):
     def process_bigdata(self, chunk_iterable):
         print("[DatabaseComponent] processing big data stream")
         return list(chunk_iterable)
-

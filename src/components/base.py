@@ -10,6 +10,7 @@ from src.components.dataclasses import Layout, MetaData
 
 class RuntimeState(Enum):
     """Defines the runtime status of a component."""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
@@ -24,16 +25,16 @@ class Component(ABC):
     """
 
     def __init__(
-            self,
-            id: int,
-            name: str,
-            description: str,
-            type: str,
-            strategy: Optional[ExecutionStrategy] = None,
-            receiver: Optional[Receiver] = None,
-            metrics: Optional[ComponentMetrics] = None,
-            layout: Optional[Layout] = None,
-            metadata: Optional[MetaData] = None,
+        self,
+        id: int,
+        name: str,
+        description: str,
+        type: str,
+        strategy: Optional[ExecutionStrategy] = None,
+        receiver: Optional[Receiver] = None,
+        metrics: Optional[ComponentMetrics] = None,
+        layout: Optional[Layout] = None,
+        metadata: Optional[MetaData] = None,
     ):
         self.id = id
         self.name = name
