@@ -1,6 +1,7 @@
 # base class for database operations
 from typing import List
 from components.base import Component
+from src.components.column_definition import ColumnDefinition
 
 class Credentials:
     def _init_(self, user: str, password: str, host: str, port: int):
@@ -15,11 +16,6 @@ class ConnectionHandler:
 
     def disconnect(self):
         print("[ConnectionHandler] Disconnecting")
-
-class ColumnDefinition:
-    def _init_(self, name: str, data_type: str):
-        self.name = name
-        self.data_type = data_type
 
 class DatabaseComponent(Component):
     def _init_(

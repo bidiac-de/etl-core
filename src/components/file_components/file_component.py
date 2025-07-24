@@ -1,13 +1,7 @@
 from pathlib import Path
 from typing import List, Dict, Any
 from components.base import Component
-
-
-class ColumnDefinition:
-    """Represents the definition of a column with name and datatype."""
-    def __init__(self, name: str, dtype: str):
-        self.name = name
-        self.dtype = dtype
+from src.components.column_definition import ColumnDefinition
 
 
 class FileComponent(Component):
