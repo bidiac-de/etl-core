@@ -5,7 +5,7 @@ from src.components.column_definition import ColumnDefinition
 
 
 class FileComponent(Component):
-    """Abstract base class for file-based components like CSV, JSON, usw."""
+    """Abstract base class for file-based components like CSV, JSON, etc."""
 
     def __init__(
         self,
