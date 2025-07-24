@@ -40,7 +40,7 @@ class Component(ABC):
         self.name = name
         self.description = description
         self.type = type
-        self.status = RuntimeState.PENDING
+        self.status = RuntimeState.PENDING.value
         self.strategy = strategy
         self.receiver = receiver
         self.metrics = metrics or ComponentMetrics()
