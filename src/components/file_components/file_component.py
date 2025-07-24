@@ -25,12 +25,3 @@ class FileComponent(Component):
         )
         self.filepath = filepath
         self.schema_definition = schema_definition
-
-    def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        pass
-
-    def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        pass
-
-    def process_bigdata(self, chunk_iterable):
-        pass
