@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from src.metrics.component_metrics import ComponentMetrics
 
-class ProcessMetrics(ComponentMetrics):
+class DataOperationsMetrics(ComponentMetrics):
     """
     A class that offers metrics for data processing components.
     """
@@ -23,7 +23,7 @@ class ProcessMetrics(ComponentMetrics):
         return f"{base}, lines_processed={self.lines_processed})"
 
 
-class FilterMetrics(ProcessMetrics):
+class FilterMetrics(DataOperationsMetrics):
     """
     A class that offers metrics for filter operations.
     """
