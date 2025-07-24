@@ -3,17 +3,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from components.base import Component
 
-class DatabaseComponent(Component):
-    """Abstract base class for database components."""
-
-    @abstractmethod
-    def connect(self):
-        pass
-
-    @abstractmethod
-    def disconnect(self):
-        pass
-
 
 class DataOperationsComponent(Component):
     """Concrete data operations component, e.g. filter, map, transform."""
