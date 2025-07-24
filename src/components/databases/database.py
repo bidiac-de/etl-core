@@ -22,19 +22,16 @@ class ConnectionHandler:
 
 class DatabaseComponent(Component):
     def __init__(
-            self,
-            id: int,
-            name: str,
-            description: str,
-            credentials: Credentials,
-            connection_handler: ConnectionHandler,
-            schema_definition: List[ColumnDefinition]
+        self,
+        id: int,
+        name: str,
+        description: str,
+        credentials: Credentials,
+        connection_handler: ConnectionHandler,
+        schema_definition: List[ColumnDefinition],
     ):
         super().__init__(
-            id=id,
-            name=name,
-            description=description,
-            comp_type="database"
+            id=id, name=name, description=description, comp_type="database"
         )
         self.credentials = credentials
         self.connectionHandler = connection_handler
