@@ -7,4 +7,3 @@ class WriteReceiver:
 
     def write_bigdata(self, file_path: str, data_generator):
         raise NotImplementedError()
-
