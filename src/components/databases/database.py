@@ -2,22 +2,10 @@
 from typing import List
 from components.base_components import Component
 from src.components.column_definition import ColumnDefinition
+from connection_handler import ConnectionHandler
+from src.context.credentials import Credentials
 
 
-class Credentials:
-    def __init__(self, user: str, password: str, host: str, port: int):
-        self.user = user
-        self.password = password
-        self.host = host
-        self.port = port
-
-
-class ConnectionHandler:
-    def connect(self):
-        print("[ConnectionHandler] Connecting to database")
-
-    def disconnect(self):
-        print("[ConnectionHandler] Disconnecting")
 
 
 class DatabaseComponent(Component):

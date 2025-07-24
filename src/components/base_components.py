@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.base_receiver import Receiver
+from src.context.context_provider import IContextProvider
+
 from src.metrics.component_metrics import ComponentMetrics
 from src.components.dataclasses import Layout, MetaData
 
@@ -34,6 +36,8 @@ class Component(ABC):
         receiver: Optional[Receiver] = None,
         layout: Optional[Layout] = None,
         metadata: Optional[MetaData] = None,
+        contexts: Optional[List[IContextProvider]] = None,
+
     ):
         self.id = id
         self.name = name
@@ -47,6 +51,7 @@ class Component(ABC):
         self.metadata = metadata
         self.prev_components: List["Component"] = []
         self.next_components: List["Component"] = []
+        self.contexts: List[IContextProvider] = contexts or []
 
     def add_next(self, nxt: "Component"):
         """Connects this component to its successor."""
