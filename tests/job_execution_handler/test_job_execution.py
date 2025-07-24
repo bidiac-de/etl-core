@@ -38,12 +38,12 @@ def test_execute_job_single_test_component():
     job = handler.create_job(config, user_id=1)
     result = handler.execute_job(job, max_workers=1)
 
-    assert result.status == JobStatus.COMPLETED.value
     assert len(result.executions) == 1
 
     exec_record = result.executions[0]
     comp_metrics = exec_record.component_metrics["test1"]
     assert comp_metrics.lines_received == 1
+    assert exec_record.status == JobStatus.COMPLETED.value
 
 
 def test_execute_job_chain_components_file_logging(caplog):
@@ -89,12 +89,12 @@ def test_execute_job_chain_components_file_logging(caplog):
     result = handler.execute_job(job, max_workers=1)
 
     # should complete successfully
-    assert result.status == JobStatus.COMPLETED.value
     assert result.file_logging is True
 
     # single JobExecution entry
     assert len(result.executions) == 1
     exec_record = result.executions[0]
+    assert exec_record.status == JobStatus.COMPLETED.value
 
     # both components ran and metrics recorded
     metrics = exec_record.component_metrics
@@ -123,7 +123,7 @@ def test_execute_job_failing_and_skipped_components():
             {
                 "id": 1,
                 "name": "comp1",
-                "comp_type": "failtest",         # our failing component
+                "comp_type": "failtest",  # our failing component
                 "description": "will fail",
                 "x_coord": 0.0,
                 "y_coord": 0.0,
@@ -134,7 +134,7 @@ def test_execute_job_failing_and_skipped_components():
             {
                 "id": 2,
                 "name": "comp2",
-                "comp_type": "test",             # normal TestComponent
+                "comp_type": "test",  # normal TestComponent
                 "description": "should be skipped",
                 "x_coord": 1.0,
                 "y_coord": 1.0,
@@ -148,13 +148,16 @@ def test_execute_job_failing_and_skipped_components():
     result = handler.execute_job(job, max_workers=1)
 
     # Job-level assertions
-    assert result.status == JobStatus.FAILED.value
-    assert result.error is not None
-    assert "One or more components failed" in result.error
-    assert len(result.executions) == 0
+    assert len(result.executions) == 1
+    exec_record = result.executions[0]
+    assert exec_record.status == JobStatus.FAILED.value
+    assert exec_record.error is not None
+    assert "One or more components failed" in exec_record.error
 
     # Component-level assertions
     comp1 = job.components["comp1"]
     comp2 = job.components["comp2"]
     assert comp1.status == RuntimeState.FAILED, "comp1 should have FAILED status"
-    assert comp2.status == RuntimeState.SKIPPED, "comp2 should be SKIPPED due to dependency"
+    assert (
+        comp2.status == RuntimeState.SKIPPED
+    ), "comp2 should be SKIPPED due to dependency"

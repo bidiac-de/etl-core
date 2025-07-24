@@ -1,5 +1,4 @@
-from enum import Enum
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt
@@ -7,18 +6,7 @@ from src.components.base_component import Component
 from src.components.registry import component_registry
 from src.metrics.base_metrics import Metrics
 from src.metrics.job_metrics import JobMetrics
-
-
-class JobStatus(Enum):
-    """
-    Enum representing the status of a job.
-    """
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
+from src.job_execution.job_status import JobStatus
 
 
 class Job(BaseModel):
@@ -69,6 +57,7 @@ class Job(BaseModel):
             comps[comp_name] = component
 
         self.components = comps
+
     def _connect_components(self) -> None:
         """
         Connect components based on the configuration
@@ -79,19 +68,21 @@ class Job(BaseModel):
                 if nxt_name not in self.components:
                     raise ValueError(f"Unknown next‐component: {nxt_name}")
                 src.add_next(self.components[nxt_name])
+                self.components[nxt_name].add_prev(src)
 
 
 class JobExecution:
     """
-    class to encapsulate the execution details of a job.
+    class to encapsulate the execution details of a job
     """
+
     job: Job
     completed_at: datetime = None
     job_metrics: JobMetrics = None
     status: str = JobStatus.PENDING.value
     error: str = None
-    component_metrics: List[(str, Metrics)]
-    def __init__(self, job:Job,
-                 status: str = JobStatus.PENDING.value):
+    component_metrics: Dict[str, Metrics]
+
+    def __init__(self, job: Job, status: str = JobStatus.PENDING.value):
         self.job = job
         self.status = status

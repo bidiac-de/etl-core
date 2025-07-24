@@ -1,6 +1,6 @@
 import pytest
 from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.job_execution.job import Job, JobStatus
+from src.job_execution.job import Job
 
 
 def test_create_job_with_complete_config():
@@ -21,7 +21,6 @@ def test_create_job_with_complete_config():
     assert isinstance(job, Job)
     assert job.id == "123"
     assert job.name == "TestJob"
-    assert job.status == JobStatus.PENDING.value
     assert job.num_of_retries == 3
     assert job.metadata.created_by == user_id
     assert job.executions == []
@@ -40,7 +39,6 @@ def test_create_job_with_partial_config():
 
     assert job.id == "default_job_id"
     assert job.name == "default_job_name"
-    assert job.status == JobStatus.PENDING.value
     assert job.num_of_retries == 0
     assert job.executions == []
     assert job.file_logging is False
@@ -103,7 +101,5 @@ def test_create_job_with_invalid_component_class():
         ],
     }
 
-    with pytest.raises(
-        ValueError, match="Unknown component type: non_existent"
-    ):
+    with pytest.raises(ValueError, match="Unknown component type: non_existent"):
         handler.create_job(config, user_id=1)

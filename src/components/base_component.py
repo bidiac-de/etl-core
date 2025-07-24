@@ -85,7 +85,6 @@ class Component(BaseModel, ABC):
         :param nxt: The next component to add
         """
         self.next_components.append(nxt)
-        nxt.prev_components.append(self)
 
     def add_prev(self, prev: "Component"):
         """
@@ -93,7 +92,6 @@ class Component(BaseModel, ABC):
         :param prev: The previous component to add
         """
         self.prev_components.append(prev)
-        prev.next_components.append(self)
 
     def execute(self, data, **kwargs) -> Any:
         """

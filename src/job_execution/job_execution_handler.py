@@ -130,7 +130,7 @@ class JobExecutionHandler:
 
                 status = JobStatus.COMPLETED.value
                 completed_at = datetime.datetime.now()
-                job_processing_time = job.completed_at - job.started_at
+                job_processing_time = completed_at - started_at
                 lines_processed = sum(
                     c.metrics.lines_received for c in components.values()
                 )
@@ -165,10 +165,9 @@ class JobExecutionHandler:
                         self.job_information_handler.logging_handler.log(cmetrics)
 
                 job_execution.job_metrics = jm
-                job_execution.component_metrics = [
-                    (cname, comp.metrics)
-                    for cname, comp in components.items()
-                ]
+                job_execution.component_metrics = {
+                    cname: comp.metrics for cname, comp in components.items()
+                }
                 job_execution.status = status
                 job_execution.completed_at = completed_at
                 return job

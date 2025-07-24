@@ -8,6 +8,7 @@ class TestComponent(Component):
         self.metrics = type("TestMetrics", (), {"lines_received": 1})()
         return data  # or return "test_output"
 
+
 @register_component("failtest")
 class FailTestComponent(TestComponent):
     def execute(self, data, **kwargs):
