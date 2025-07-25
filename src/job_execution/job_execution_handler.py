@@ -122,10 +122,10 @@ class JobExecutionHandler:
                                     ] = next_component
 
                 # Mark job as completed or failed based on state
-                if failed_components or skipped_components:
+                if failed_components:
                     raise RuntimeError(
-                        "One or more components failed or were skipped "
-                        "due to dependency failure."
+                        "One or more components failed due to dependency failure. "
+                        "Depending components were skipped."
                     )
 
                 status = JobStatus.COMPLETED.value
