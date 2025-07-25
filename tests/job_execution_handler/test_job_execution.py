@@ -1,11 +1,11 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.job_execution.job import JobStatus
 import src.job_execution.job as job_module
-from tests.job_execution_handler.testcomponent import TestComponent
+from src.components.stubcomponents import StubComponent
 from src.components.base_component import RuntimeState
 
 # ensure Job._build_components() can find TestComponent
-job_module.TestComponent = TestComponent
+job_module.TestComponent = StubComponent
 
 
 def test_execute_job_single_test_component():

@@ -57,7 +57,7 @@ def test_create_job_with_test_component():
     handler = JobExecutionHandler()
     config = {
         "JobID": "test_1",
-        "JobName": "JobWithTestComponent",
+        "JobName": "JobWithStubComponent",
         "NumOfRetries": 0,
         "FileLogging": False,
         "components": [
@@ -76,7 +76,7 @@ def test_create_job_with_test_component():
 
     job = handler.create_job(config, user_id=42)
     assert "test1" in job.components
-    assert job.components["test1"].__class__.__name__ == "TestComponent"
+    assert job.components["test1"].__class__.__name__ == "StubComponent"
     assert job.components["test1"].status == "PENDING"
 
 

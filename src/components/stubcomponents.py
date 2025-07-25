@@ -3,14 +3,14 @@ from src.components.registry import register_component
 
 
 @register_component("test")
-class TestComponent(Component):
+class StubComponent(Component):
     def execute(self, data, **kwargs):
         self.metrics = type("TestMetrics", (), {"lines_received": 1})()
-        return data  # or return "test_output"
+        return data
 
 
 @register_component("failtest")
-class FailTestComponent(TestComponent):
+class FailStubComponent(StubComponent):
     def execute(self, data, **kwargs):
         raise RuntimeError("kaboom-chain")
 
