@@ -161,3 +161,32 @@ def test_execute_job_failing_and_skipped_components():
     assert (
         comp2.status == RuntimeState.SKIPPED
     ), "comp2 should be SKIPPED due to dependency"
+
+def test_retry_logic_and_metrics(tmp_path):
+    handler = JobExecutionHandler()
+    config = {
+        "JobID": "retry_1",
+        "JobName": "RetryOnceJob",
+        "NumOfRetries": 1,
+        "FileLogging": False,
+        "components": [
+            {
+                "id": 1,
+                "name": "c1",
+                "comp_type": "stub_fail_once",
+                "description": "",
+                "x_coord": 0.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+            }
+        ],
+    }
+    job = handler.create_job(config, user_id=1)
+    result = handler.execute_job(job, max_workers=1)
+
+    # Should retry once, then succeed
+    exec_record = result.executions[0]
+    assert exec_record.status == JobStatus.COMPLETED.value
+    # lines_received comes from second execution
+    assert exec_record.component_metrics["c1"].lines_received == 2

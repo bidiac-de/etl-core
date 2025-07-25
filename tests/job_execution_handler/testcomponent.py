@@ -13,3 +13,14 @@ class TestComponent(Component):
 class FailTestComponent(TestComponent):
     def execute(self, data, **kwargs):
         raise RuntimeError("kaboom-chain")
+
+@register_component("stub_fail_once")
+class StubFailOnce(Component):
+    _called = False
+
+    def execute(self, data, **kwargs):
+        if not StubFailOnce._called:
+            StubFailOnce._called = True
+            raise RuntimeError("fail first time")
+        self.metrics = type("M", (), {"lines_received": 2})()
+        return "recovered"
