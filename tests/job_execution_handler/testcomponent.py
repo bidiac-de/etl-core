@@ -14,6 +14,7 @@ class FailTestComponent(TestComponent):
     def execute(self, data, **kwargs):
         raise RuntimeError("kaboom-chain")
 
+
 @register_component("stub_fail_once")
 class StubFailOnce(Component):
     _called = False

@@ -3,7 +3,7 @@ from enum import Enum
 
 class JobStatus(Enum):
     """
-    Enum representing the status of a job.
+    Enum representing the status of a job
     """
 
     PENDING = "pending"

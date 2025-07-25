@@ -162,6 +162,7 @@ def test_execute_job_failing_and_skipped_components():
         comp2.status == RuntimeState.SKIPPED
     ), "comp2 should be SKIPPED due to dependency"
 
+
 def test_retry_logic_and_metrics(tmp_path):
     handler = JobExecutionHandler()
     config = {

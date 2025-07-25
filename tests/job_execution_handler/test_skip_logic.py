@@ -63,6 +63,7 @@ def test_branch_skip_fan_out(tmp_path):
     assert job.components["child1"].status == RuntimeState.SKIPPED
     assert job.components["child2"].status == RuntimeState.SKIPPED
 
+
 def test_branch_skip_fan_in(tmp_path):
     """
     Fan-in skip:

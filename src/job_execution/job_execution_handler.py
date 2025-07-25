@@ -15,23 +15,23 @@ logger = logging.getLogger("job.ExecutionHandler")
 
 class JobExecutionHandler:
     """
-    Handles the execution of ETL jobs by managing component execution.
-    Preserves command pattern while supporting parallel execution.
+    Handles the execution of ETL jobs by managing component execution
+    Preserves command pattern while supporting parallel execution
     """
 
     def __init__(self):
         """
-        Initialize the JobExecutionHandler with the component registry and logging.
+        Initialize the JobExecutionHandler with the component registry and logging
         """
         self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
 
     def create_job(self, config: dict, user_id: int):
         """
-        Create a job based on the provided config.
-        :param config: Configuration dictionary for the job, derived from JSON.
-        :param user_id: ID of the user creating the job.
-        :return: An instance of the job class.
+        Create a job based on the provided config
+        :param config: Configuration dictionary for the job, derived from JSON
+        :param user_id: ID of the user creating the job
+        :return: An instance of the job class
         """
         return Job(config, user_id)
 
@@ -191,9 +191,9 @@ class JobExecutionHandler:
         """
         Execute a single component
         !!note: will only work when component is a concrete class !!
-        :param component: The component to execute.
-        :param data: Input data for the component.
-        :return: Result of the component execution.
+        :param component: The component to execute
+        :param data: Input data for the component
+        :return: Result of the component execution
         """
         try:
             logger.info(f"Executing component: {component.name}")

@@ -31,7 +31,7 @@ class MetricsHandler:
 class LoggingHandler:
     """
     Configures Python logging to write everything to a job-specific logfile,
-    and allows the job name to be updated at runtime.
+    and allows the job name to be updated at runtime
     """
 
     def __init__(self, job_name: str):

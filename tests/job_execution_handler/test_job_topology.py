@@ -2,6 +2,7 @@ from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.job_execution.job import JobStatus
 from src.components.base_component import RuntimeState
 
+
 def test_fan_out_topology():
     """
     root --> [child1, child2]
@@ -58,6 +59,7 @@ def test_fan_out_topology():
     for name in metrics:
         assert job.components[name].status == RuntimeState.SUCCESS
         assert metrics[name].lines_received == 1
+
 
 def test_fan_in_topology():
     """
@@ -116,6 +118,7 @@ def test_fan_in_topology():
     for name in metrics:
         assert job.components[name].status == RuntimeState.SUCCESS
         assert metrics[name].lines_received == 1
+
 
 def test_diamond_topology():
     """
