@@ -1,3 +1,4 @@
+from src.metrics.stub_metrics import StubMetrics
 from src.components.base_component import Component
 from src.components.registry import register_component
 
@@ -5,7 +6,7 @@ from src.components.registry import register_component
 @register_component("test")
 class StubComponent(Component):
     def execute(self, data, **kwargs):
-        self.metrics = type("TestMetrics", (), {"lines_received": 1})()
+        self.metrics = StubMetrics(lines_received=1)
         return data
 
 
@@ -23,5 +24,5 @@ class StubFailOnce(Component):
         if not StubFailOnce._called:
             StubFailOnce._called = True
             raise RuntimeError("fail first time")
-        self.metrics = type("M", (), {"lines_received": 2})()
+        self.metrics = StubMetrics(lines_received=2)
         return "recovered"
