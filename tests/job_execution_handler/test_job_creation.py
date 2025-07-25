@@ -46,7 +46,7 @@ def test_create_job_with_partial_config():
 
 def test_create_job_with_invalid_config_type():
     """
-    Passing a non‐dict config should raise an AttributeError
+    Passing a non-dict config should raise an AttributeError
     """
     handler = JobExecutionHandler()
     with pytest.raises(AttributeError):

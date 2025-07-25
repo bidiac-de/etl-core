@@ -66,7 +66,7 @@ class Job(BaseModel):
             src = self.components[cconf["name"]]
             for nxt_name in cconf.get("next", []):
                 if nxt_name not in self.components:
-                    raise ValueError(f"Unknown next‐component: {nxt_name}")
+                    raise ValueError(f"Unknown next-component: {nxt_name}")
                 src.add_next(self.components[nxt_name])
                 self.components[nxt_name].add_prev(src)
 
