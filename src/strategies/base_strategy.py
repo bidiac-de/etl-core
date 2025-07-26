@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
-from src.components.base import Component
+from src.components.base_components import Component
 
 
 class ExecutionStrategy(ABC):
