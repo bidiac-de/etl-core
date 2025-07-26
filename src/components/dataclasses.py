@@ -1,18 +1,15 @@
 from datetime import datetime
 
+from pydantic import BaseModel, Field
 
-class Layout:
+
+class Layout(BaseModel):
     """
     Layout class to define the position of a component
     """
 
-    def __init__(
-        self,
-        x_coordinate: float,
-        y_coordinate: float,
-    ):
-        self.x_coordinate = x_coordinate
-        self.y_coordinate = y_coordinate
+    x_coordinate: float = Field(..., alias="x_coord")
+    y_coordinate: float = Field(..., alias="y_coord")
 
     def __repr__(self):
         return (

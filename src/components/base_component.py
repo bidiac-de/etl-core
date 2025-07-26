@@ -34,8 +34,7 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     type: str
-    x_coord: float
-    y_coord: float
+    layout: Layout = Field(default_factory=lambda: Layout(x_coord=0.0, y_coord=0.0))
     created_by: int
     created_at: datetime
 
@@ -44,7 +43,6 @@ class Component(BaseModel, ABC):
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
     status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
-    layout: Layout = Field(default_factory=lambda: Layout(0.0, 0.0), exclude=True)
     metadata: MetaData = Field(
         default_factory=lambda: MetaData(datetime.now(), 0), exclude=True
     )
@@ -58,8 +56,7 @@ class Component(BaseModel, ABC):
         description: str = "",
         strategy: Optional[ExecutionStrategy] = None,
         receiver: Optional[Receiver] = None,
-        x_coord: float = 0.0,
-        y_coord: float = 0.0,
+        layout: Layout = Layout(x_coord=0.0, y_coord=0.0),
         created_by: int = 0,
         created_at: datetime = datetime.now(),
         **kwargs: Any,
@@ -69,14 +66,12 @@ class Component(BaseModel, ABC):
             name=name,
             description=description,
             type=comp_type,
-            x_coord=x_coord,
-            y_coord=y_coord,
+            layout=layout,
             created_by=created_by,
             created_at=created_at,
         )
         self.strategy = strategy
         self.receiver = receiver
-        self.layout = Layout(x_coord, y_coord)
         self.metadata = MetaData(created_at, created_by)
 
     def add_next(self, nxt: "Component"):
