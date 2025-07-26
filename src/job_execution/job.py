@@ -31,7 +31,7 @@ class Job(BaseModel):
             name=config.get("JobName", "default_job_name"),
             config=config,
             num_of_retries=config.get("NumOfRetries", 0),
-            metadata=MetaData(datetime.now(), user_id),
+            metadata=MetaData(created_at=datetime.now(), created_by=user_id),
             file_logging=config.get("FileLogging", False),
         )
         self._build_components()

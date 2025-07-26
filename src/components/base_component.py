@@ -43,9 +43,7 @@ class Component(BaseModel, ABC):
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
     status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
-    metadata: MetaData = Field(
-        default_factory=lambda: MetaData(datetime.now(), 0), exclude=True
-    )
+    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
     metrics: Any = Field(default=None, exclude=True)
 
     def __init__(
@@ -72,7 +70,7 @@ class Component(BaseModel, ABC):
         )
         self.strategy = strategy
         self.receiver = receiver
-        self.metadata = MetaData(created_at, created_by)
+        self.metadata = MetaData(created_at=created_at, created_by=created_by)
 
     def add_next(self, nxt: "Component"):
         """
