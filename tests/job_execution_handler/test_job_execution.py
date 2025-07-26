@@ -152,7 +152,10 @@ def test_execute_job_failing_and_skipped_components():
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.FAILED.value
     assert exec_record.error is not None
-    assert "One or more components failed" in exec_record.error
+    assert (
+        "One or more components failed due to dependency failure. "
+        "Depending components were skipped"
+    ) in exec_record.error
 
     # Component-level assertions
     comp1 = job.components["comp1"]

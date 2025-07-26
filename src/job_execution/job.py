@@ -29,7 +29,6 @@ class Job(BaseModel):
         super().__init__(
             id=config.get("JobID", "default_job_id"),
             name=config.get("JobName", "default_job_name"),
-            status=JobStatus.PENDING.value,
             config=config,
             num_of_retries=config.get("NumOfRetries", 0),
             metadata=MetaData(datetime.now(), user_id),
