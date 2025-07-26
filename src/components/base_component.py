@@ -2,11 +2,15 @@ from abc import ABC
 from enum import Enum
 from typing import Optional, List, Any
 from datetime import datetime
+from abc import abstractmethod
 
 from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.base_receiver import Receiver
 from src.components.dataclasses import MetaData, Layout
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from src.strategies.row_strategy import RowExecutionStrategy
+from src.strategies.bulk_strategy import BulkExecutionStrategy
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 
 
 class RuntimeState(Enum):
@@ -21,6 +25,16 @@ class RuntimeState(Enum):
     SKIPPED = "SKIPPED"
 
 
+class StrategyType(Enum):
+    """
+    Enum for different strategy types
+    """
+
+    ROW = "row"
+    BULK = "bulk"
+    BIGDATA = "bigdata"
+
+
 class Component(BaseModel, ABC):
     """
     Base class for all components in the system
@@ -33,44 +47,34 @@ class Component(BaseModel, ABC):
     id: int
     name: str
     description: str
-    type: str
-    layout: Layout = Field(default_factory=lambda: Layout(x_coord=0.0, y_coord=0.0))
+    comp_type: str
     created_by: int
     created_at: datetime
+    x_coord: float = Field(default=0.0)
+    y_coord: float = Field(default=0.0)
+    strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
 
-    strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
-    receiver: Optional[Receiver] = Field(default=None, exclude=True)
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
     status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
-    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
     metrics: Any = Field(default=None, exclude=True)
 
-    def __init__(
-        self,
-        id: int,
-        name: str,
-        comp_type: str,
-        description: str = "",
-        strategy: Optional[ExecutionStrategy] = None,
-        receiver: Optional[Receiver] = None,
-        layout: Layout = Layout(x_coord=0.0, y_coord=0.0),
-        created_by: int = 0,
-        created_at: datetime = datetime.now(),
-        **kwargs: Any,
-    ):
-        super().__init__(
-            id=id,
-            name=name,
-            description=description,
-            type=comp_type,
-            layout=layout,
-            created_by=created_by,
-            created_at=created_at,
-        )
-        self.strategy = strategy
-        self.receiver = receiver
-        self.metadata = MetaData(created_at=created_at, created_by=created_by)
+    # these need to be created in the concrete component classes
+    strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
+    receiver: Optional[Receiver] = Field(default=None, exclude=True)
+    layout: Optional[Layout] = Field(default=None, exclude=True)
+    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    @abstractmethod
+    def build_objects(cls, values: dict) -> dict:
+        """
+        Each concrete component must implement this method to:
+        - construct strategy, receiver, layout, and metadata
+        - modify and return the values dict
+        """
+        raise NotImplementedError
 
     def add_next(self, nxt: "Component"):
         """
@@ -95,3 +99,17 @@ class Component(BaseModel, ABC):
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
         return self.strategy.execute(self, data)
+
+
+def get_strategy(strategy_type: str) -> ExecutionStrategy:
+    """
+    Factory function to get the appropriate execution strategy based on the type.
+    """
+    if strategy_type == "row":
+        return RowExecutionStrategy()
+    elif strategy_type == "bulk":
+        return BulkExecutionStrategy()
+    elif strategy_type == "bigdata":
+        return BigDataExecutionStrategy()
+    else:
+        raise ValueError(f"Unknown strategy type: {strategy_type}")
