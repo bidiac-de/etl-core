@@ -2,12 +2,18 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.strategies.base_strategy import ExecutionStrategy
+#from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.receiver import Receiver
 from src.context.context_provider import IContextProvider
 
 from src.metrics.component_metrics import ComponentMetrics
 from src.components.dataclasses import Layout, MetaData
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.strategies.base_strategy import ExecutionStrategy
+
 
 
 class RuntimeState(Enum):
@@ -32,11 +38,12 @@ class Component(ABC):
         name: str,
         description: str,
         type: str,
-        strategy: Optional[ExecutionStrategy] = None,
+        strategy: Optional["ExecutionStrategy"] = None,
         receiver: Optional[Receiver] = None,
         layout: Optional[Layout] = None,
         metadata: Optional[MetaData] = None,
         contexts: Optional[List[IContextProvider]] = None,
+        componentManager: Optional[Any] = None
 
     ):
         self.id = id
@@ -52,6 +59,7 @@ class Component(ABC):
         self.prev_components: List["Component"] = []
         self.next_components: List["Component"] = []
         self.contexts: List[IContextProvider] = contexts or []
+        self.componentManager = componentManager
 
     def add_next(self, nxt: "Component"):
         """Connects this component to its successor."""

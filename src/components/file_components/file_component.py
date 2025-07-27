@@ -8,13 +8,13 @@ class FileComponent(Component):
     """Abstract base class for file-based components like CSV, JSON, etc."""
 
     def __init__(
-        self,
-        id: int,
-        name: str,
-        description: str,
-        componentManager,
-        filepath: Path,
-        schema_definition: List[ColumnDefinition],
+            self,
+            id: int,
+            name: str,
+            description: str,
+            componentManager,
+            filepath: Path,
+            schema_definition: List[ColumnDefinition],
     ):
         super().__init__(
             id=id,
