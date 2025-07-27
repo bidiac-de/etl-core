@@ -1,13 +1,18 @@
 from src.receivers.csv_receiver import CSVReceiver
 from typing import Dict, Any, List, Generator
+from src.components.data_operations.csv.csv_component import Delimiter
 import csv
 import os
 
 class WriteCSV(CSVReceiver):
-    def __init__(self, filepath: str, fieldnames: List[str], **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, filepath: str, fieldnames: List[str], id: int, name: str, description: str, componentManager: Any, separator: Delimiter = Delimiter.COMMA):
+        self.id = id
+        self.name = name
+        self.description = description
+        self.componentManager = componentManager
         self.filepath = filepath
         self.fieldnames = fieldnames
+        self.separator = separator
 
     def _get_writer(self):
         file_exists = os.path.exists(self.filepath)
