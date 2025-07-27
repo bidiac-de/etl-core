@@ -20,7 +20,7 @@ class FileComponent(Component):
             id=id,
             name=name,
             description=description,
-            comp_type="file",
+            type="file",
             componentManager=componentManager,
         )
         self.filepath = filepath

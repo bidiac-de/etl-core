@@ -1,8 +1,8 @@
 # base class for database operations
 from typing import List
-from components.base_components import Component
+from src.components.base_components import Component
 from src.components.column_definition import ColumnDefinition
-from connection_handler import ConnectionHandler
+from src.components.databases.connection_handler import ConnectionHandler
 from src.context.credentials import Credentials
 
 
@@ -19,7 +19,7 @@ class DatabaseComponent(Component):
         schema_definition: List[ColumnDefinition],
     ):
         super().__init__(
-            id=id, name=name, description=description, comp_type="database"
+            id=id, name=name, description=description, type="database"
         )
         self.credentials = credentials
         self.connectionHandler = connection_handler

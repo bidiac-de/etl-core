@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.strategies.base_strategy import ExecutionStrategy
-from src.receivers.base_receiver import Receiver
+from src.receivers.receiver import Receiver
 from src.context.context_provider import IContextProvider
 
 from src.metrics.component_metrics import ComponentMetrics
