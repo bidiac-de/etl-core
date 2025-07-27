@@ -53,6 +53,7 @@ class Component(BaseModel, ABC):
     x_coord: float = Field(default=0.0)
     y_coord: float = Field(default=0.0)
     strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
+    next: Optional[List[int]] = None
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)

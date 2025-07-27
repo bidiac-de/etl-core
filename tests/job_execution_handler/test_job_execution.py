@@ -42,7 +42,7 @@ def test_execute_job_single_test_component():
     assert len(result.executions) == 1
 
     exec_record = result.executions[0]
-    comp_metrics = exec_record.component_metrics["test1"]
+    comp_metrics = exec_record.component_metrics[1]
     assert comp_metrics.lines_received == 1
     assert exec_record.status == JobStatus.COMPLETED.value
 
@@ -72,7 +72,7 @@ def test_execute_job_chain_components_file_logging(caplog):
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2024-01-01T00:00:00",
-                "next": ["comp2"],
+                "next": [2],
             },
             {
                 "id": 2,
@@ -101,9 +101,9 @@ def test_execute_job_chain_components_file_logging(caplog):
 
     # both components ran and metrics recorded
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {"comp1", "comp2"}
-    assert metrics["comp1"].lines_received == 1
-    assert metrics["comp2"].lines_received == 1
+    assert set(metrics.keys()) == {1, 2}
+    assert metrics[1].lines_received == 1
+    assert metrics[2].lines_received == 1
 
 
 def test_execute_job_failing_and_skipped_components():
@@ -133,7 +133,7 @@ def test_execute_job_failing_and_skipped_components():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2024-01-01T00:00:00",
-                "next": ["comp2"],
+                "next": [2],
             },
             {
                 "id": 2,
@@ -163,8 +163,8 @@ def test_execute_job_failing_and_skipped_components():
     ) in exec_record.error
 
     # Component-level assertions
-    comp1 = job.components["comp1"]
-    comp2 = job.components["comp2"]
+    comp1 = job.components[1]
+    comp2 = job.components[2]
     assert comp1.status == RuntimeState.FAILED, "comp1 should have FAILED status"
     assert (
         comp2.status == RuntimeState.SKIPPED
@@ -199,4 +199,4 @@ def test_retry_logic_and_metrics(tmp_path):
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     # lines_received comes from second execution
-    assert exec_record.component_metrics["c1"].lines_received == 2
+    assert exec_record.component_metrics[1].lines_received == 2

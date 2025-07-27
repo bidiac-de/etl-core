@@ -25,7 +25,7 @@ def test_fan_out_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["child1", "child2"],
+                "next": [2, 3],
             },
             {
                 "id": 2,
@@ -57,7 +57,7 @@ def test_fan_out_topology():
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {"root", "child1", "child2"}
+    assert set(metrics.keys()) == {1, 2, 3}
 
     for name in metrics:
         assert job.components[name].status == RuntimeState.SUCCESS
@@ -86,7 +86,7 @@ def test_fan_in_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["c"],
+                "next": [3],
             },
             {
                 "id": 2,
@@ -98,7 +98,7 @@ def test_fan_in_topology():
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["c"],
+                "next": [3],
             },
             {
                 "id": 3,
@@ -119,7 +119,7 @@ def test_fan_in_topology():
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {"a", "b", "c"}
+    assert set(metrics.keys()) == {1, 2, 3}
 
     for name in metrics:
         assert job.components[name].status == RuntimeState.SUCCESS
@@ -148,7 +148,7 @@ def test_diamond_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["a", "b"],
+                "next": [2, 3],
             },
             {
                 "id": 2,
@@ -160,7 +160,7 @@ def test_diamond_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["c"],
+                "next": [4],
             },
             {
                 "id": 3,
@@ -172,7 +172,7 @@ def test_diamond_topology():
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["c"],
+                "next": [4],
             },
             {
                 "id": 4,
@@ -193,7 +193,7 @@ def test_diamond_topology():
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {"root", "a", "b", "c"}
+    assert set(metrics.keys()) == {1, 2, 3, 4}
 
     for name in metrics:
         assert job.components[name].status == RuntimeState.SUCCESS

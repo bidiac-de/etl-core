@@ -26,7 +26,7 @@ def test_branch_skip_fan_out(tmp_path):
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["child1", "child2"],
+                "next": [2, 3],
             },
             {
                 "id": 2,
@@ -62,9 +62,9 @@ def test_branch_skip_fan_out(tmp_path):
     assert "One or more components failed" in exec_record.error
 
     # Component statuses
-    assert job.components["root"].status == RuntimeState.FAILED
-    assert job.components["child1"].status == RuntimeState.SKIPPED
-    assert job.components["child2"].status == RuntimeState.SKIPPED
+    assert job.components[1].status == RuntimeState.FAILED
+    assert job.components[2].status == RuntimeState.SKIPPED
+    assert job.components[3].status == RuntimeState.SKIPPED
 
 
 def test_branch_skip_fan_in(tmp_path):
@@ -90,7 +90,7 @@ def test_branch_skip_fan_in(tmp_path):
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["join"],
+                "next": [3],
             },
             {
                 "id": 2,
@@ -102,7 +102,7 @@ def test_branch_skip_fan_in(tmp_path):
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": ["join"],
+                "next": [3],
             },
             {
                 "id": 3,
@@ -126,6 +126,6 @@ def test_branch_skip_fan_in(tmp_path):
     assert "One or more components failed" in exec_record.error
 
     # ok_root ran, fail_root failed, join skipped
-    assert job.components["ok_root"].status == RuntimeState.SUCCESS
-    assert job.components["fail_root"].status == RuntimeState.FAILED
-    assert job.components["join"].status == RuntimeState.SKIPPED
+    assert job.components[1].status == RuntimeState.SUCCESS
+    assert job.components[2].status == RuntimeState.FAILED
+    assert job.components[3].status == RuntimeState.SKIPPED

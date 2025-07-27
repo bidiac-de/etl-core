@@ -23,7 +23,7 @@ class Job(BaseModel):
     metadata: MetaData = Field(default=None, exclude=True)
     executions: List[Any] = Field(default_factory=list, exclude=True)
     file_logging: bool = Field(default=False)
-    components: Dict[str, Component] = Field(default_factory=dict, exclude=True)
+    components: Dict[int, Component] = Field(default_factory=dict, exclude=True)
 
     def __init__(self, config: Dict, user_id: int):
         super().__init__(
@@ -41,11 +41,11 @@ class Job(BaseModel):
         """
         Instantiate every component named in config
         """
-        comps: Dict[str, Component] = {}
+        comps: Dict[int, Component] = {}
 
         # build components
         for cconf in self.config.get("components", []):
-            comp_name = cconf["name"]
+            comp_id = cconf["id"]
             comp_type = cconf["comp_type"]
             if comp_type not in component_registry:
                 raise ValueError(f"Unknown component type: {comp_type}")
@@ -53,7 +53,7 @@ class Job(BaseModel):
             component_class = component_registry[comp_type]
             component = component_class(**cconf)
 
-            comps[comp_name] = component
+            comps[comp_id] = component
 
         self.components = comps
 
@@ -62,12 +62,12 @@ class Job(BaseModel):
         Connect components based on the configuration
         """
         for cconf in self.config.get("components", []):
-            src = self.components[cconf["name"]]
-            for nxt_name in cconf.get("next", []):
-                if nxt_name not in self.components:
-                    raise ValueError(f"Unknown next-component: {nxt_name}")
-                src.add_next(self.components[nxt_name])
-                self.components[nxt_name].add_prev(src)
+            src = self.components[cconf["id"]]
+            for nxt_id in cconf.get("next", []):
+                if nxt_id not in self.components:
+                    raise ValueError(f"Unknown next-component: {nxt_id}")
+                src.add_next(self.components[nxt_id])
+                self.components[nxt_id].add_prev(src)
 
 
 class JobExecution:
