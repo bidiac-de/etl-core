@@ -1,5 +1,7 @@
 import logging
 from src.metrics.job_metrics import JobMetrics
+import datetime
+from pathlib import Path
 
 
 class JobInformationHandler:
@@ -30,26 +32,55 @@ class MetricsHandler:
 
 class LoggingHandler:
     """
-    Configures Python logging to write everything to a job-specific logfile,
-    and allows the job name to be updated at runtime
+    Writes all logs for one job into its own sub-dir under logs/,
+    and creates a fresh timestamped file on each execution
     """
 
-    def __init__(self, job_name: str):
-        # create or get a named logger
+    def __init__(
+        self,
+        job_name: str,
+        base_log_dir: Path = Path("logs"),
+    ):
+        self.base_log_dir = base_log_dir
+        self.job_name = job_name
         self.logger = logging.getLogger(f"job.{job_name}")
         self.logger.setLevel(logging.DEBUG)
+        self._configure_handler()
+
+    def _configure_handler(self) -> None:
+        """
+        (Re)configure the FileHandler for current execution
+        """
+        # ensure base/job directory exists
+        job_dir = self.base_log_dir / self.job_name
+        job_dir.mkdir(parents=True, exist_ok=True)
+
+        # timestamped logfile so each run is separate
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = job_dir / f"{ts}.log"
+
+        fh = logging.FileHandler(log_path)
+        fh.setLevel(logging.DEBUG)
+        fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        fh.setFormatter(fmt)
+
+        # clear out old handlers so we don't double-log
+        for h in list(self.logger.handlers):
+            self.logger.removeHandler(h)
+
+        self.logger.addHandler(fh)
 
     def log(self, information) -> None:
         """
-        log a metric object at INFO level
+        Log a metric object at INFO level
         """
         self.logger.info("%r", information)
 
     def update_job_name(self, new_job_name: str) -> None:
         """
-        Switch this handler to a new job name and logfile
+        Switch to a new job name (and log directory) and start a new file
         """
-
-        # reassign logger name & level
+        self.job_name = new_job_name
         self.logger = logging.getLogger(f"job.{new_job_name}")
         self.logger.setLevel(logging.DEBUG)
+        self._configure_handler()

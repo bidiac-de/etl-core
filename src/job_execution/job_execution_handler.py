@@ -29,34 +29,61 @@ class JobExecutionHandler:
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         """
         Execute a given job, specified by the job object
+        Components only start when all predecessors have succeeded.
         """
+        # high-level start log
+        logger.info("Starting execution of job '%s'", job.name)
+        # update file handler context
         self.job_information_handler.logging_handler.update_job_name(job.name)
+        file_logger = self.job_information_handler.logging_handler.logger
+
         retry_attempts = 0
         job_execution = JobExecution(job=job, status=JobStatus.RUNNING.value)
         job.executions.append(job_execution)
         started_at = datetime.datetime.now()
+        job_execution.started_at = started_at
+
+        # initialize component metrics container
+        job_execution.component_metrics = {}
 
         while retry_attempts <= job.num_of_retries:
             try:
-                exception_count = 0
+                logger.debug("Attempt %d for job '%s'", retry_attempts + 1, job.name)
+                file_logger.debug(
+                    "Starting attempt %d for job '%s'", retry_attempts + 1, job.name
+                )
 
+                exception_count = 0
                 components = job.components
                 roots = [c for c in components.values() if not c.prev_components]
 
-                pending_components = list(components.values())
-                completed_components = []
-                failed_components = []
-                skipped_components = []
+                # track states by component ID
+                succeeded_ids = set()
+                failed_ids = set()
+                skipped_ids = set()
+                pending_ids = set(components.keys())
+
+                logger.info(
+                    "Job '%s': %d root components to schedule", job.name, len(roots)
+                )
+                file_logger.debug("Root components: %s", [c.name for c in roots])
 
                 with concurrent.futures.ThreadPoolExecutor(
                     max_workers=max_workers
                 ) as executor:
-                    futures = {}
+                    futures: dict[concurrent.futures.Future, Component] = {}
+
+                    # schedule root components
                     for root in roots:
+                        file_logger.debug(
+                            "Submitting root component '%s' to executor", root.name
+                        )
                         futures[
                             executor.submit(self._execute_component, root, None)
                         ] = root
+                        pending_ids.discard(root.id)
 
+                    # process as components finish
                     while futures:
                         done, _ = concurrent.futures.wait(
                             futures, return_when=concurrent.futures.FIRST_COMPLETED
@@ -64,101 +91,127 @@ class JobExecutionHandler:
 
                         for future in done:
                             component = futures.pop(future)
+                            cid = component.id
                             try:
                                 result = future.result()
                                 component.status = RuntimeState.SUCCESS
+                                succeeded_ids.add(cid)
+                                file_logger.debug(
+                                    "Component '%s' SUCCESS", component.name
+                                )
                             except Exception:
                                 exception_count += 1
-                                failed_components.append(component)
                                 component.status = RuntimeState.FAILED
-
-                            if component in pending_components:
-                                pending_components.remove(component)
-                            completed_components.append(component)
-
-                            for next_component in component.next_components:
-                                if (
-                                    next_component in completed_components
-                                    or next_component in skipped_components
-                                ):
-                                    continue
-
-                                # Check if any predecessor failed or was skipped
-                                if any(
-                                    p.status
-                                    in {RuntimeState.FAILED, RuntimeState.SKIPPED}
-                                    for p in next_component.prev_components
-                                ):
-                                    next_component.status = RuntimeState.SKIPPED
-                                    skipped_components.append(next_component)
-                                    if next_component in pending_components:
-                                        pending_components.remove(next_component)
-                                    continue
-
-                                # Check if all predecessors are completed
-                                prerequisites_met = all(
-                                    p in completed_components
-                                    for p in next_component.prev_components
+                                failed_ids.add(cid)
+                                file_logger.error(
+                                    "Component '%s' FAILED",
+                                    component.name,
+                                    exc_info=True,
                                 )
-                                if (
-                                    prerequisites_met
-                                    and next_component in pending_components
-                                ):
+
+                            # store individual metrics
+                            job_execution.component_metrics[cid] = component.metrics
+
+                            # evaluate successors
+                            for nxt in component.next_components:
+                                nid = nxt.id
+                                if nid in succeeded_ids | failed_ids | skipped_ids:
+                                    continue
+                                # check if all predecessors succeeded
+                                prev_ids = {p.id for p in nxt.prev_components}
+                                if prev_ids.issubset(succeeded_ids):
+                                    file_logger.debug(
+                                        "All predecessors passed for '%s'", nxt.name
+                                    )
                                     futures[
                                         executor.submit(
-                                            self._execute_component,
-                                            next_component,
-                                            result,
+                                            self._execute_component, nxt, result
                                         )
-                                    ] = next_component
+                                    ] = nxt
+                                    pending_ids.discard(nid)
 
-                # Mark job as completed or failed based on state
-                if failed_components:
-                    raise RuntimeError(
-                        "One or more components failed due to dependency failure. "
-                        "Depending components were skipped."
-                    )
+                                # check if any predecessor failed or was skipped
+                                elif prev_ids & (failed_ids | skipped_ids):
+                                    nxt.status = RuntimeState.SKIPPED
+                                    skipped_ids.add(nid)
+                                    pending_ids.discard(nid)
+                                    file_logger.warning(
+                                        "Component '%s' set to SKIPPED", nxt.name
+                                    )
 
+                                # predecessors still pending
+                                else:
+                                    file_logger.debug(
+                                        "Component '%s' has pending predecessors",
+                                        nxt.name,
+                                    )
+
+                # after executor
+                logger.info(
+                    "Execution summary for job '%s': %d succeeded,"
+                    " %d failed, %d skipped",
+                    job.name,
+                    len(succeeded_ids),
+                    len(failed_ids),
+                    len(skipped_ids),
+                )
+                file_logger.debug("Succeeded IDs: %s", succeeded_ids)
+                file_logger.debug("Failed IDs: %s", failed_ids)
+                file_logger.debug("Skipped IDs: %s", skipped_ids)
+
+                if failed_ids:
+                    msg = "One or more components failed; dependent components skipped"
+                    logger.error(msg)
+                    file_logger.error(msg)
+                    raise RuntimeError(msg)
+
+                # finalize job success
                 status = JobStatus.COMPLETED.value
                 completed_at = datetime.datetime.now()
-                job_processing_time = completed_at - started_at
-                lines_processed = sum(
-                    c.metrics.lines_received for c in components.values()
-                )
+                job_time = completed_at - started_at
+                lines = sum(c.metrics.lines_received for c in components.values())
                 throughput = (
-                    lines_processed / job_processing_time.total_seconds()
-                    if job_processing_time.total_seconds() > 0
+                    lines / job_time.total_seconds()
+                    if job_time.total_seconds() > 0
                     else 0.0
                 )
 
                 jm = JobMetrics(
                     started_at=started_at,
-                    processing_time=job_processing_time,
+                    processing_time=job_time,
                     error_count=exception_count,
                     throughput=throughput,
                     job_status=status,
                 )
 
+                logger.info(
+                    "Job '%s' completed in %s with throughput %.2f "
+                    "lines/s and %d errors",
+                    job.name,
+                    job_time,
+                    throughput,
+                    exception_count,
+                )
+                file_logger.debug("JobMetrics: %s", jm)
+
+                # record metrics
                 self.job_information_handler.metrics_handler.add_job_metrics(job.id, jm)
                 for cname, comp in components.items():
                     self.job_information_handler.metrics_handler.add_component_metrics(
                         job.id, cname, comp.metrics
                     )
 
+                # optional file logging of metrics
                 if job.file_logging:
                     self.job_information_handler.logging_handler.log(jm)
                     for (
-                        _,
-                        cmetrics,
+                        cm
                     ) in self.job_information_handler.metrics_handler.component_metrics[
                         job.id
                     ]:
-                        self.job_information_handler.logging_handler.log(cmetrics)
+                        self.job_information_handler.logging_handler.log(cm)
 
                 job_execution.job_metrics = jm
-                job_execution.component_metrics = {
-                    cname: comp.metrics for cname, comp in components.items()
-                }
                 job_execution.status = status
                 job_execution.completed_at = completed_at
                 return job
@@ -166,12 +219,17 @@ class JobExecutionHandler:
             except Exception as e:
                 retry_attempts += 1
                 logger.warning(
-                    f"Attempt {retry_attempts} for job '{job.name}' failed: {e}"
+                    "Attempt %d for job '%s' failed: %s", retry_attempts, job.name, e
+                )
+                file_logger.warning(
+                    "Attempt %d failed with error: %s", retry_attempts, e
                 )
                 if retry_attempts > job.num_of_retries:
                     logger.exception(
-                        f"Job execution failed after "
-                        f"{retry_attempts} attempts: {str(e)}"
+                        "Job '%s' failed after %d attempts", job.name, retry_attempts
+                    )
+                    file_logger.exception(
+                        "Final failure after %d attempts", retry_attempts
                     )
                     job_execution.status = JobStatus.FAILED.value
                     job_execution.completed_at = datetime.datetime.now()
