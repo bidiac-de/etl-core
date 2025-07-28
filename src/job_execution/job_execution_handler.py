@@ -27,232 +27,210 @@ class JobExecutionHandler:
         self.system_metrics_handler = SystemMetricsHandler()
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
-        """
-        Execute a given job, specified by the job object
-        Components only start when all predecessors have succeeded.
-        """
-        # high-level start log
         logger.info("Starting execution of job '%s'", job.name)
-        # update file handler context
         self.job_information_handler.logging_handler.update_job_name(job.name)
         file_logger = self.job_information_handler.logging_handler.logger
 
-        retry_attempts = 0
-        job_execution = JobExecution(job=job, status=JobStatus.RUNNING.value)
-        job.executions.append(job_execution)
-        started_at = datetime.datetime.now()
-        job_execution.started_at = started_at
-        job_execution.job_metrics = JobMetrics(
-            started_at=started_at, processing_time=0, error_count=0
-        )
+        retry = 0
+        execution = self._init_job_execution(job)
 
-        # initialize component metrics container
-        job_execution.component_metrics = {}
-
-        while retry_attempts <= job.num_of_retries:
+        while True:
             try:
-                logger.debug("Attempt %d for job '%s'", retry_attempts + 1, job.name)
-                file_logger.debug(
-                    "Starting attempt %d for job '%s'", retry_attempts + 1, job.name
-                )
-
-                exception_count = 0
-                total_lines_processed = 0
-                components = job.components
-                roots = [c for c in components.values() if not c.prev_components]
-
-                # track states by component ID
-                succeeded_ids = set()
-                failed_ids = set()
-                skipped_ids = set()
-                pending_ids = set(components.keys())
-
-                logger.info(
-                    "Job '%s': %d root components to schedule", job.name, len(roots)
-                )
-                file_logger.debug("Root components: %s", [c.name for c in roots])
-
-                with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=max_workers
-                ) as executor:
-                    futures: dict[concurrent.futures.Future, Component] = {}
-
-                    # schedule root components
-                    for root in roots:
-                        file_logger.debug(
-                            "Submitting root component '%s' to executor", root.name
-                        )
-                        futures[
-                            executor.submit(self._execute_component, root, None)
-                        ] = root
-                        pending_ids.discard(root.id)
-
-                    # process as components finish
-                    while futures:
-                        done, _ = concurrent.futures.wait(
-                            futures, return_when=concurrent.futures.FIRST_COMPLETED
-                        )
-
-                        for future in done:
-                            component = futures.pop(future)
-                            cid = component.id
-                            try:
-                                result = future.result()
-                                component.status = RuntimeState.SUCCESS
-                                succeeded_ids.add(cid)
-                                file_logger.debug(
-                                    "Component '%s' SUCCESS", component.name
-                                )
-                                try:
-                                    job_execution.component_metrics[cid] = (
-                                        component.metrics
-                                    )
-                                    total_lines_processed += (
-                                        component.metrics.lines_received
-                                    )
-                                    job_execution.processing_time = (
-                                        datetime.datetime.now() - started_at
-                                    )
-                                    job_execution.job_metrics.calc_throughput(
-                                        total_lines_processed
-                                    )
-                                except AttributeError:
-                                    file_logger.warning(
-                                        "Component '%s' has no metrics set",
-                                        component.name,
-                                    )
-
-                            except Exception:
-                                exception_count += 1
-                                component.status = RuntimeState.FAILED
-                                failed_ids.add(cid)
-                                file_logger.error(
-                                    "Component '%s' FAILED",
-                                    component.name,
-                                    exc_info=True,
-                                )
-
-                            # evaluate successors
-                            for nxt in component.next_components:
-                                nid = nxt.id
-                                if nid in succeeded_ids | failed_ids | skipped_ids:
-                                    continue
-                                # check if all predecessors succeeded
-                                prev_ids = {p.id for p in nxt.prev_components}
-                                if prev_ids.issubset(succeeded_ids):
-                                    file_logger.debug(
-                                        "All predecessors passed for '%s'", nxt.name
-                                    )
-                                    futures[
-                                        executor.submit(
-                                            self._execute_component, nxt, result
-                                        )
-                                    ] = nxt
-                                    pending_ids.discard(nid)
-
-                                # check if any predecessor failed or was skipped
-                                elif prev_ids & (failed_ids | skipped_ids):
-                                    nxt.status = RuntimeState.SKIPPED
-                                    skipped_ids.add(nid)
-                                    pending_ids.discard(nid)
-                                    file_logger.warning(
-                                        "Component '%s' set to SKIPPED", nxt.name
-                                    )
-
-                                # predecessors still pending
-                                else:
-                                    file_logger.debug(
-                                        "Component '%s' has pending predecessors",
-                                        nxt.name,
-                                    )
-
-                # after executor
-                # any components still pending must be downstream
-                # of a skipped/failed node → skip them
-                for pid in list(pending_ids):
-                    comp = components[pid]
-                    comp.status = RuntimeState.SKIPPED
-                    skipped_ids.add(pid)
-                    file_logger.warning(
-                        "Component '%s' set to SKIPPED (no runnable path)", comp.name
-                    )
-                pending_ids.clear()
-                logger.info(
-                    "Execution summary for job '%s': %d succeeded,"
-                    " %d failed, %d skipped",
-                    job.name,
-                    len(succeeded_ids),
-                    len(failed_ids),
-                    len(skipped_ids),
-                )
-                file_logger.debug("Succeeded IDs: %s", succeeded_ids)
-                file_logger.debug("Failed IDs: %s", failed_ids)
-                file_logger.debug("Skipped IDs: %s", skipped_ids)
-
-                if failed_ids:
-                    msg = "One or more components failed; dependent components skipped"
-                    logger.error(msg)
-                    file_logger.error(msg)
-                    raise RuntimeError(msg)
-
-                # finalize job success
-                job_time = datetime.datetime.now() - started_at
-                job_execution.job_metrics.processing_time = job_time
-                job_execution.job_metrics.error_count = retry_attempts
-                job_execution.job_metrics.status = JobStatus.COMPLETED.value
-
-                logger.info(
-                    "Job '%s' completed in %s with %d errors",
-                    job.name,
-                    job_time,
-                    exception_count,
-                )
-                file_logger.debug("JobMetrics: %s", job_execution.job_metrics)
-
-                # add metrics to job information handler
-                self.job_information_handler.metrics_handler.add_job_metrics(
-                    job.id, job_execution.job_metrics
-                )
-                for c_id, comp in components.items():
-                    self.job_information_handler.metrics_handler.add_component_metrics(
-                        job.id, c_id, comp.metrics
-                    )
-
-                # optional file logging of metrics
-                if job.file_logging:
-                    self.job_information_handler.logging_handler.log(
-                        job_execution.job_metrics
-                    )
-                    for (
-                        cm
-                    ) in self.job_information_handler.metrics_handler.component_metrics[
-                        job.id
-                    ]:
-                        self.job_information_handler.logging_handler.log(cm)
-
-                job_execution.status = JobStatus.COMPLETED.value
+                file_logger.debug("Attempt %d for job '%s'", retry + 1, job.name)
+                self._run_attempt(job, execution, max_workers, file_logger)
                 return job
-
-            except Exception as e:
-                retry_attempts += 1
-                job_execution.job_metrics.error_count = retry_attempts
-                logger.warning(
-                    "Attempt %d for job '%s' failed: %s", retry_attempts, job.name, e
-                )
-                file_logger.warning(
-                    "Attempt %d failed with error: %s", retry_attempts, e
-                )
-                if retry_attempts > job.num_of_retries:
-                    logger.exception(
-                        "Job '%s' failed after %d attempts", job.name, retry_attempts
-                    )
-                    file_logger.exception(
-                        "Final failure after %d attempts", retry_attempts
-                    )
-                    job_execution.status = JobStatus.FAILED.value
-                    job_execution.job_metrics.status = JobStatus.FAILED.value
-                    job_execution.error = str(e)
+            except Exception as exc:
+                retry += 1
+                execution.job_metrics.error_count = retry
+                logger.warning("Attempt %d failed: %s", retry, exc)
+                file_logger.warning("Attempt %d failed: %s", retry, exc)
+                if retry > job.num_of_retries:
+                    self._finalize_failure(job, execution, exc, file_logger)
                     return job
+
+    def _init_job_execution(self, job: Job) -> JobExecution:
+        exec_obj = JobExecution(job=job, status=JobStatus.RUNNING.value)
+        job.executions.append(exec_obj)
+        start = datetime.datetime.now()
+        exec_obj.started_at = start
+        exec_obj.job_metrics = JobMetrics(
+            started_at=start, processing_time=0, error_count=0
+        )
+        exec_obj.component_metrics = {}
+        return exec_obj
+
+    def _run_attempt(
+        self,
+        job: Job,
+        execution: JobExecution,
+        max_workers: int,
+        file_logger: logging.Logger,
+    ) -> None:
+        components = job.components
+        pending = set(components.keys())
+        succeeded, failed, skipped = set(), set(), set()
+
+        roots = [c for c in components.values() if not c.prev_components]
+        file_logger.debug("Root components: %s", [c.name for c in roots])
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = self._submit_roots(roots, executor, pending, file_logger)
+
+            while futures:
+                done, _ = concurrent.futures.wait(
+                    futures, return_when=concurrent.futures.FIRST_COMPLETED
+                )
+                for fut in done:
+                    comp = futures.pop(fut)
+                    self._handle_future(
+                        fut,
+                        comp,
+                        execution,
+                        succeeded,
+                        failed,
+                        skipped,
+                        pending,
+                        file_logger,
+                    )
+                    self._schedule_next(
+                        comp,
+                        executor,
+                        futures,
+                        succeeded,
+                        failed,
+                        skipped,
+                        pending,
+                        file_logger,
+                    )
+
+        self._mark_unrunnable(components, pending, skipped, file_logger)
+        self._finalize_success(job, execution, succeeded, failed, skipped)
+
+    def _submit_roots(
+        self,
+        roots: list[Component],
+        executor: concurrent.futures.ThreadPoolExecutor,
+        pending: set,
+        file_logger: logging.Logger,
+    ) -> dict[concurrent.futures.Future, Component]:
+        futures = {}
+        for comp in roots:
+            file_logger.debug("Submitting root '%s'", comp.name)
+            fut = executor.submit(self._execute_component, comp, None)
+            futures[fut] = comp
+            pending.discard(comp.id)
+        return futures
+
+    def _handle_future(
+        self,
+        fut: concurrent.futures.Future,
+        comp: Component,
+        execution: JobExecution,
+        succeeded: set,
+        failed: set,
+        skipped: set,
+        pending: set,
+        file_logger: logging.Logger,
+    ) -> None:
+        try:
+            fut.result()
+            comp.status = RuntimeState.SUCCESS
+            succeeded.add(comp.id)
+            self._update_metrics(comp, execution)
+        except Exception:
+            comp.status = RuntimeState.FAILED
+            failed.add(comp.id)
+            file_logger.error("Component '%s' FAILED", comp.name, exc_info=True)
+
+    def _update_metrics(
+        self,
+        comp: Component,
+        execution: JobExecution,
+    ) -> None:
+        try:
+            metrics = comp.metrics
+            execution.component_metrics[comp.id] = metrics
+            total = sum(m.lines_received for m in execution.component_metrics.values())
+            elapsed = datetime.datetime.now() - execution.job_metrics.started_at
+            execution.processing_time = elapsed
+            execution.job_metrics.calc_throughput(total)
+        except Exception:
+            pass
+
+    def _schedule_next(
+        self,
+        comp: Component,
+        executor: concurrent.futures.ThreadPoolExecutor,
+        futures: dict[concurrent.futures.Future, Component],
+        succeeded: set,
+        failed: set,
+        skipped: set,
+        pending: set,
+        file_logger: logging.Logger,
+    ) -> None:
+        for nxt in comp.next_components:
+            if nxt.id in succeeded | failed | skipped:
+                continue
+            prev_ids = {p.id for p in nxt.prev_components}
+            if prev_ids.issubset(succeeded):
+                file_logger.debug("Submitting '%s'", nxt.name)
+                fut = executor.submit(self._execute_component, nxt, None)
+                futures[fut] = nxt
+                pending.discard(nxt.id)
+            elif prev_ids & (failed | skipped):
+                nxt.status = RuntimeState.SKIPPED
+                skipped.add(nxt.id)
+                pending.discard(nxt.id)
+                file_logger.warning("Component '%s' SKIPPED", nxt.name)
+
+    def _mark_unrunnable(
+        self,
+        components: dict[str, Component],
+        pending: set,
+        skipped: set,
+        file_logger: logging.Logger,
+    ) -> None:
+        for pid in list(pending):
+            comp = components[pid]
+            comp.status = RuntimeState.SKIPPED
+            skipped.add(pid)
+            file_logger.warning("Component '%s' SKIPPED (no runnable path)", comp.name)
+
+    def _finalize_success(
+        self,
+        job: Job,
+        execution: JobExecution,
+        succeeded: set,
+        failed: set,
+        skipped: set,
+    ) -> None:
+        if failed:
+            raise RuntimeError(
+                "One or more components failed; dependent components skipped"
+            )
+        duration = datetime.datetime.now() - execution.job_metrics.started_at
+        execution.job_metrics.processing_time = duration
+        execution.job_metrics.error_count = 0
+        execution.job_metrics.status = JobStatus.COMPLETED.value
+        self.job_information_handler.metrics_handler.add_job_metrics(
+            job.id, execution.job_metrics
+        )
+        for cid, comp in job.components.items():
+            self.job_information_handler.metrics_handler.add_component_metrics(
+                job.id, cid, comp.metrics
+            )
+        execution.status = JobStatus.COMPLETED.value
+
+    def _finalize_failure(
+        self,
+        job: Job,
+        execution: JobExecution,
+        exc: Exception,
+        file_logger: logging.Logger,
+    ) -> None:
+        execution.status = JobStatus.FAILED.value
+        execution.job_metrics.status = JobStatus.FAILED.value
+        execution.error = str(exc)
 
     def _execute_component(self, component: Component, data: Any) -> Any:
         """
