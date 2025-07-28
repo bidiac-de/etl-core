@@ -42,6 +42,9 @@ class JobExecutionHandler:
         job.executions.append(job_execution)
         started_at = datetime.datetime.now()
         job_execution.started_at = started_at
+        job_execution.job_metrics = JobMetrics(
+            started_at=started_at, processing_time=0, error_count=0
+        )
 
         # initialize component metrics container
         job_execution.component_metrics = {}
@@ -54,6 +57,7 @@ class JobExecutionHandler:
                 )
 
                 exception_count = 0
+                total_lines_processed = 0
                 components = job.components
                 roots = [c for c in components.values() if not c.prev_components]
 
@@ -99,6 +103,25 @@ class JobExecutionHandler:
                                 file_logger.debug(
                                     "Component '%s' SUCCESS", component.name
                                 )
+                                try:
+                                    job_execution.component_metrics[cid] = (
+                                        component.metrics
+                                    )
+                                    total_lines_processed += (
+                                        component.metrics.lines_received
+                                    )
+                                    job_execution.processing_time = (
+                                        datetime.datetime.now() - started_at
+                                    )
+                                    job_execution.job_metrics.calc_throughput(
+                                        total_lines_processed
+                                    )
+                                except AttributeError:
+                                    file_logger.warning(
+                                        "Component '%s' has no metrics set",
+                                        component.name,
+                                    )
+
                             except Exception:
                                 exception_count += 1
                                 component.status = RuntimeState.FAILED
@@ -108,9 +131,6 @@ class JobExecutionHandler:
                                     component.name,
                                     exc_info=True,
                                 )
-
-                            # store individual metrics
-                            job_execution.component_metrics[cid] = component.metrics
 
                             # evaluate successors
                             for nxt in component.next_components:
@@ -176,44 +196,33 @@ class JobExecutionHandler:
                     raise RuntimeError(msg)
 
                 # finalize job success
-                status = JobStatus.COMPLETED.value
-                completed_at = datetime.datetime.now()
-                job_time = completed_at - started_at
-                lines = sum(c.metrics.lines_received for c in components.values())
-                throughput = (
-                    lines / job_time.total_seconds()
-                    if job_time.total_seconds() > 0
-                    else 0.0
-                )
-
-                jm = JobMetrics(
-                    started_at=started_at,
-                    processing_time=job_time,
-                    error_count=exception_count,
-                    throughput=throughput,
-                    job_status=status,
-                )
+                job_time = datetime.datetime.now() - started_at
+                job_execution.job_metrics.processing_time = job_time
+                job_execution.job_metrics.error_count = retry_attempts
+                job_execution.job_metrics.status = JobStatus.COMPLETED.value
 
                 logger.info(
-                    "Job '%s' completed in %s with throughput %.2f "
-                    "lines/s and %d errors",
+                    "Job '%s' completed in %s with %d errors",
                     job.name,
                     job_time,
-                    throughput,
                     exception_count,
                 )
-                file_logger.debug("JobMetrics: %s", jm)
+                file_logger.debug("JobMetrics: %s", job_execution.job_metrics)
 
-                # record metrics
-                self.job_information_handler.metrics_handler.add_job_metrics(job.id, jm)
-                for cname, comp in components.items():
+                # add metrics to job information handler
+                self.job_information_handler.metrics_handler.add_job_metrics(
+                    job.id, job_execution.job_metrics
+                )
+                for c_id, comp in components.items():
                     self.job_information_handler.metrics_handler.add_component_metrics(
-                        job.id, cname, comp.metrics
+                        job.id, c_id, comp.metrics
                     )
 
                 # optional file logging of metrics
                 if job.file_logging:
-                    self.job_information_handler.logging_handler.log(jm)
+                    self.job_information_handler.logging_handler.log(
+                        job_execution.job_metrics
+                    )
                     for (
                         cm
                     ) in self.job_information_handler.metrics_handler.component_metrics[
@@ -221,13 +230,12 @@ class JobExecutionHandler:
                     ]:
                         self.job_information_handler.logging_handler.log(cm)
 
-                job_execution.job_metrics = jm
-                job_execution.status = status
-                job_execution.completed_at = completed_at
+                job_execution.status = JobStatus.COMPLETED.value
                 return job
 
             except Exception as e:
                 retry_attempts += 1
+                job_execution.job_metrics.error_count = retry_attempts
                 logger.warning(
                     "Attempt %d for job '%s' failed: %s", retry_attempts, job.name, e
                 )
@@ -242,7 +250,7 @@ class JobExecutionHandler:
                         "Final failure after %d attempts", retry_attempts
                     )
                     job_execution.status = JobStatus.FAILED.value
-                    job_execution.completed_at = datetime.datetime.now()
+                    job_execution.job_metrics.status = JobStatus.FAILED.value
                     job_execution.error = str(e)
                     return job
 

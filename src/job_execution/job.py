@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
@@ -101,7 +101,6 @@ class JobExecution:
     """
 
     job: Job
-    completed_at: Optional[datetime] = None
     job_metrics: JobMetrics = None
     status: str = JobStatus.PENDING.value
     error: str = None

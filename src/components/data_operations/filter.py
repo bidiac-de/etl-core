@@ -30,6 +30,7 @@ class FilterComponent(DataOperationComponent):
         values["metadata"] = MetaData(
             created_at=values["created_at"], created_by=values["created_by"]
         )
+        values["metrics"] = ()
 
         return values
 

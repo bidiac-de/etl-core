@@ -6,6 +6,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from src.components.dataclasses import MetaData, Layout
+from src.metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 from src.strategies.base_strategy import ExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
@@ -92,15 +93,26 @@ class Component(BaseModel, ABC):
         """
         self.prev_components.append(prev)
 
+    # !! dont override in regular components
     def execute(self, data, **kwargs) -> Any:
         """
 
         :param data: the data to be processed by the component
         :return: result of the component execution
         """
+        self.create_metric_object()
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
         return self.strategy.execute(self, data)
+
+    @abstractmethod
+    def create_metric_object(self):
+        """
+        Create a fresh metrics object for the component
+        """
+        self.metrics = (
+            ComponentMetrics()
+        )  # needs to be changed, if specialized metrics are implemented
 
 
 def get_strategy(strategy_type: str) -> ExecutionStrategy:

@@ -1,16 +1,30 @@
-from src.metrics.stub_metrics import StubMetrics
+from src.metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.components.registry import register_component
 from src.components.dataclasses import Layout, MetaData
 from src.components.base_component import get_strategy
 from src.receivers.base_receiver import Receiver
+from datetime import datetime
 
 
 @register_component("test")
 class StubComponent(Component):
     def execute(self, data, **kwargs):
-        self.metrics = StubMetrics(lines_received=1)
+        self.create_metric_object()
+        self.metrics.lines_received = 1
         return data
+
+    def create_metric_object(self):
+        """
+        Create a fresh metrics object for the component
+        """
+        self.metrics = ComponentMetrics(
+            started_at=datetime.now(),
+            processing_time=0,
+            error_count=0,
+            lines_received=0,
+            lines_forwarded=0,
+        )
 
     @classmethod
     def build_objects(cls, values):
@@ -30,6 +44,7 @@ class StubComponent(Component):
 @register_component("failtest")
 class FailStubComponent(StubComponent):
     def execute(self, data, **kwargs):
+        self.create_metric_object()
         raise RuntimeError("fail stubcomponent failed")
 
     @classmethod
@@ -52,11 +67,24 @@ class StubFailOnce(Component):
     _called = False
 
     def execute(self, data, **kwargs):
+        self.create_metric_object()
         if not StubFailOnce._called:
             StubFailOnce._called = True
             raise RuntimeError("fail first time")
-        self.metrics = StubMetrics(lines_received=2)
+        self.metrics.lines_received = 1
         return "recovered"
+
+    def create_metric_object(self):
+        """
+        Create a fresh metrics object for the component
+        """
+        self.metrics = ComponentMetrics(
+            started_at=datetime.now(),
+            processing_time=0,
+            error_count=0,
+            lines_received=0,
+            lines_forwarded=0,
+        )
 
     @classmethod
     def build_objects(cls, values):

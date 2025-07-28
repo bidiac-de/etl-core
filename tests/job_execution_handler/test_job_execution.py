@@ -209,7 +209,7 @@ def test_retry_logic_and_metrics(tmp_path):
     assert exec_record.status == JobStatus.COMPLETED.value
     # lines_received comes from second execution
     comp = get_by_temp_id(job.components, 1)
-    assert exec_record.component_metrics[comp.id].lines_received == 2
+    assert exec_record.component_metrics[comp.id].lines_received == 1
 
 
 def test_execute_job_linear_chain():

@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 from pydantic import Field
 
 from src.job_execution.job_status import JobStatus
@@ -11,9 +9,15 @@ class JobMetrics(Metrics):
     A class to represent job metrics.
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
     throughput: float = 0.0
     status: str = Field(default=JobStatus.COMPLETED.value)
+
+    def calc_throughput(self, total_lines: int):
+        self.throughput = (
+            total_lines / self.processing_time.total_seconds()
+            if (self.processing_time.total_seconds() > 0)
+            else 0.0
+        )
 
     def __repr__(self) -> str:
         return (
