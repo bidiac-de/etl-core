@@ -7,7 +7,6 @@ from src.receivers.write_receiver import WriteReceiver
 import pandas as pd
 import dask.dataframe as dd
 
-
 class CSVReceiver(ReadReceiver, WriteReceiver):
     def __init__(self, filepath: Path):
         self.filepath = filepath
@@ -75,7 +74,7 @@ class CSVReceiver(ReadReceiver, WriteReceiver):
             data.to_csv(path, index=False)
         elif isinstance(data, dd.DataFrame):
             data.to_csv(str(path), single_file=True, index=False)
-        else:  # Generator
+        else:
             first_row = next(data, None)
             if not first_row:
                 return
