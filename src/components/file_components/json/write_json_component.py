@@ -27,6 +27,7 @@ class WriteJSON(JSON):
             schema_definition
         )
 
+
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         JSONReceiver().write_row(row, filepath=self.filepath)
         return row

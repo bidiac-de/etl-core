@@ -5,8 +5,9 @@ from typing import Any, Dict, List
 from src.components.file_components.json.json_component import JSON
 from src.receivers.files.json_receiver import JSONReceiver
 from src.components.column_definition import ColumnDefinition
+from src.components.registry import register_component
 
-
+@register_component("read_json")
 class ReadJSON(JSON):
     """Component that reads data from a JSON file."""
 
@@ -27,6 +28,7 @@ class ReadJSON(JSON):
             filepath,
             schema_definition
         )
+
 
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return JSONReceiver().read_row(filepath=self.filepath)
