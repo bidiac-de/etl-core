@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from src.components.data_operations.json.read_json_component import ReadJSON
+from components.file_components.json.read_json_component import ReadJSON
 from src.components.data_operations.json.write_json_component import WriteJSON
 from src.components.column_definition import ColumnDefinition, DataType
 

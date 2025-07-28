@@ -1,9 +1,8 @@
 # write_json_component.py
-import json
 from pathlib import Path
 from typing import Any, Dict, List
-from src.components.data_operations.json.json_component import JSON
-from src.receivers.json_receiver import JSONReceiver
+from src.components.file_components.json.json_component import JSON
+from receivers.files.json_receiver import JSONReceiver
 from src.components.column_definition import ColumnDefinition
 
 

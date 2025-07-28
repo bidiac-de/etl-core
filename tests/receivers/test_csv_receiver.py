@@ -2,7 +2,7 @@ import csv
 import pytest
 from pathlib import Path
 from typing import List, Dict
-from src.receivers.csv_receiver import CSVReceiver
+from receivers.files.csv_receiver import CSVReceiver
 
 
 @pytest.fixture
