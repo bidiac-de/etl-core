@@ -1,15 +1,19 @@
 import csv
 from pathlib import Path
 from typing import Dict, Any, List, Generator, Union
-from src.receivers.read_database_receiver import ReadDatabaseReceiver
-from src.receivers.write_database_receiver import WriteDatabaseReceiver
+
+from tensorflow.python.ops.gen_io_ops import ReadFile
+
+from src.receivers.read_file_receiver import ReadFileReceiver
+from src.receivers.write_file_receiver import WriteFileReceiver
 
 import pandas as pd
 import dask.dataframe as dd
 
-class CSVReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
+class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
     def __init__(self, filepath: Path):
         self.filepath = filepath
+
 
     def read_row(self, filepath: Path = None) -> Dict[str, Any]:
         """Reads a single row from the CSV file."""
