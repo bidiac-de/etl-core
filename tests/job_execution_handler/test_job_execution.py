@@ -1,5 +1,4 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.job_execution.job import JobStatus
 from src.components.base_component import RuntimeState
 from tests.helpers import get_by_temp_id
 import src.job_execution.job as job_module
@@ -49,7 +48,7 @@ def test_execute_job_single_test_component():
     comp = get_by_temp_id(job.components, 1)
     comp_metrics = exec_record.component_metrics[comp.id]
     assert comp_metrics.lines_received == 1
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
 
 
 def test_execute_job_chain_components_file_logging(caplog):
@@ -103,7 +102,7 @@ def test_execute_job_chain_components_file_logging(caplog):
     # single JobExecution entry
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
 
     # both components ran and metrics recorded
     metrics = exec_record.component_metrics
@@ -164,10 +163,10 @@ def test_execute_job_failing_and_skipped_components():
     # Job-level assertions
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.FAILED.value
+    assert exec_record.status == RuntimeState.FAILED.value
     assert exec_record.error is not None
     assert (
-        "One or more components failed; dependent components skipped"
+        "One or more components failed; dependent components cancelled"
     ) in exec_record.error
 
     # Component-level assertions
@@ -175,7 +174,7 @@ def test_execute_job_failing_and_skipped_components():
     comp2 = get_by_temp_id(job.components, 2)
     assert comp1.status == RuntimeState.FAILED, "comp1 should have FAILED status"
     assert (
-        comp2.status == RuntimeState.SKIPPED
+        comp2.status == RuntimeState.CANCELLED
     ), "comp2 should be SKIPPED due to dependency"
 
 
@@ -206,7 +205,7 @@ def test_retry_logic_and_metrics(tmp_path):
 
     # Should retry once, then succeed
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
     # lines_received comes from second execution
     comp = get_by_temp_id(job.components, 1)
     assert exec_record.component_metrics[comp.id].lines_received == 1
@@ -285,7 +284,7 @@ def test_execute_job_linear_chain():
     # Should be a single successful execution
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
 
     # Every component should have run once and completed
     metrics = exec_record.component_metrics

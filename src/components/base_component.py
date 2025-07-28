@@ -23,7 +23,7 @@ class RuntimeState(Enum):
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
-    SKIPPED = "SKIPPED"
+    CANCELLED = "CANCELLED"
 
 
 class StrategyType(Enum):

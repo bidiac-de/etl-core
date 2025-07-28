@@ -1,5 +1,4 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.job_execution.job import JobStatus
 from src.components.base_component import RuntimeState
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
@@ -63,7 +62,7 @@ def test_fan_out_topology():
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
     metrics = exec_record.component_metrics
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
@@ -128,7 +127,7 @@ def test_fan_in_topology():
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
     metrics = exec_record.component_metrics
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
@@ -205,7 +204,7 @@ def test_diamond_topology():
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
-    assert exec_record.status == JobStatus.COMPLETED.value
+    assert exec_record.status == RuntimeState.SUCCESS.value
     metrics = exec_record.component_metrics
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids

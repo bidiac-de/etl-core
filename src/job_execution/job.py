@@ -6,7 +6,7 @@ from src.components.base_component import Component
 from src.components.registry import component_registry
 from src.metrics.base_metrics import Metrics
 from src.metrics.job_metrics import JobMetrics
-from src.job_execution.job_status import JobStatus
+from src.components.base_component import RuntimeState
 from uuid import uuid4
 
 
@@ -102,10 +102,10 @@ class JobExecution:
 
     job: Job
     job_metrics: JobMetrics = None
-    status: str = JobStatus.PENDING.value
+    status: str = RuntimeState.PENDING.value
     error: str = None
     component_metrics: Dict[str, Metrics]
 
-    def __init__(self, job: Job, status: str = JobStatus.PENDING.value):
+    def __init__(self, job: Job, status: str = RuntimeState.PENDING.value):
         self.job = job
         self.status = status

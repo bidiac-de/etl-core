@@ -3,7 +3,7 @@ import logging
 import concurrent.futures
 from typing import Any
 
-from src.job_execution.job import Job, JobStatus
+from src.job_execution.job import Job
 from src.components.base_component import Component, RuntimeState
 from src.job_execution.job import JobExecution
 from src.metrics.job_metrics import JobMetrics
@@ -49,7 +49,7 @@ class JobExecutionHandler:
                     return job
 
     def _init_job_execution(self, job: Job) -> JobExecution:
-        exec_obj = JobExecution(job=job, status=JobStatus.RUNNING.value)
+        exec_obj = JobExecution(job=job, status=RuntimeState.RUNNING.value)
         job.executions.append(exec_obj)
         start = datetime.datetime.now()
         exec_obj.started_at = start
@@ -68,7 +68,7 @@ class JobExecutionHandler:
     ) -> None:
         components = job.components
         pending = set(components.keys())
-        succeeded, failed, skipped = set(), set(), set()
+        succeeded, failed, cancelled = set(), set(), set()
 
         roots = [c for c in components.values() if not c.prev_components]
         file_logger.debug("Root components: %s", [c.name for c in roots])
@@ -88,7 +88,7 @@ class JobExecutionHandler:
                         execution,
                         succeeded,
                         failed,
-                        skipped,
+                        cancelled,
                         pending,
                         file_logger,
                     )
@@ -98,13 +98,13 @@ class JobExecutionHandler:
                         futures,
                         succeeded,
                         failed,
-                        skipped,
+                        cancelled,
                         pending,
                         file_logger,
                     )
 
-        self._mark_unrunnable(components, pending, skipped, file_logger)
-        self._finalize_success(job, execution, succeeded, failed, skipped)
+        self._mark_unrunnable(components, pending, cancelled, file_logger)
+        self._finalize_success(job, execution, succeeded, failed, cancelled)
 
     def _submit_roots(
         self,
@@ -128,7 +128,7 @@ class JobExecutionHandler:
         execution: JobExecution,
         succeeded: set,
         failed: set,
-        skipped: set,
+        cancelled: set,
         pending: set,
         file_logger: logging.Logger,
     ) -> None:
@@ -164,12 +164,12 @@ class JobExecutionHandler:
         futures: dict[concurrent.futures.Future, Component],
         succeeded: set,
         failed: set,
-        skipped: set,
+        cancelled: set,
         pending: set,
         file_logger: logging.Logger,
     ) -> None:
         for nxt in comp.next_components:
-            if nxt.id in succeeded | failed | skipped:
+            if nxt.id in succeeded | failed | cancelled:
                 continue
             prev_ids = {p.id for p in nxt.prev_components}
             if prev_ids.issubset(succeeded):
@@ -177,24 +177,26 @@ class JobExecutionHandler:
                 fut = executor.submit(self._execute_component, nxt, None)
                 futures[fut] = nxt
                 pending.discard(nxt.id)
-            elif prev_ids & (failed | skipped):
-                nxt.status = RuntimeState.SKIPPED
-                skipped.add(nxt.id)
+            elif prev_ids & (failed | cancelled):
+                nxt.status = RuntimeState.CANCELLED
+                cancelled.add(nxt.id)
                 pending.discard(nxt.id)
-                file_logger.warning("Component '%s' SKIPPED", nxt.name)
+                file_logger.warning("Component '%s' CANCELLED", nxt.name)
 
     def _mark_unrunnable(
         self,
         components: dict[str, Component],
         pending: set,
-        skipped: set,
+        cancelled: set,
         file_logger: logging.Logger,
     ) -> None:
         for pid in list(pending):
             comp = components[pid]
-            comp.status = RuntimeState.SKIPPED
-            skipped.add(pid)
-            file_logger.warning("Component '%s' SKIPPED (no runnable path)", comp.name)
+            comp.status = RuntimeState.CANCELLED
+            cancelled.add(pid)
+            file_logger.warning(
+                "Component '%s' CANCELLED (no runnable path)", comp.name
+            )
 
     def _finalize_success(
         self,
@@ -202,16 +204,16 @@ class JobExecutionHandler:
         execution: JobExecution,
         succeeded: set,
         failed: set,
-        skipped: set,
+        cancelled: set,
     ) -> None:
         if failed:
             raise RuntimeError(
-                "One or more components failed; dependent components skipped"
+                "One or more components failed; dependent components cancelled"
             )
         duration = datetime.datetime.now() - execution.job_metrics.started_at
         execution.job_metrics.processing_time = duration
         execution.job_metrics.error_count = 0
-        execution.job_metrics.status = JobStatus.COMPLETED.value
+        execution.job_metrics.status = RuntimeState.SUCCESS.value
         self.job_information_handler.metrics_handler.add_job_metrics(
             job.id, execution.job_metrics
         )
@@ -219,7 +221,7 @@ class JobExecutionHandler:
             self.job_information_handler.metrics_handler.add_component_metrics(
                 job.id, cid, comp.metrics
             )
-        execution.status = JobStatus.COMPLETED.value
+        execution.status = RuntimeState.SUCCESS.value
 
     def _finalize_failure(
         self,
@@ -228,8 +230,8 @@ class JobExecutionHandler:
         exc: Exception,
         file_logger: logging.Logger,
     ) -> None:
-        execution.status = JobStatus.FAILED.value
-        execution.job_metrics.status = JobStatus.FAILED.value
+        execution.status = RuntimeState.FAILED.value
+        execution.job_metrics.status = RuntimeState.FAILED.value
         execution.error = str(exc)
 
     def _execute_component(self, component: Component, data: Any) -> Any:
