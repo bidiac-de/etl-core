@@ -27,13 +27,12 @@ class ReadJSON(JSON):
             filepath,
             schema_definition
         )
-        self.receiver = JSONReceiver(filepath)
 
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        return self.receiver.read_row()
+        return JSONReceiver().read_row(filepath=self.filepath)
 
     def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return self.receiver.read_bulk()
+        return JSONReceiver().read_bulk(filepath=self.filepath)
 
     def process_bigdata(self, chunk_iterable):
-        return self.receiver.read_bigdata()
+        JSONReceiver().read_bigdata(filepath=self.filepath)

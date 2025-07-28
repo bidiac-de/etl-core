@@ -1,13 +1,13 @@
 import csv
 from pathlib import Path
 from typing import Dict, Any, List, Generator, Union
-from src.receivers.read_receiver import ReadReceiver
-from src.receivers.write_receiver import WriteReceiver
+from src.receivers.read_database_receiver import ReadDatabaseReceiver
+from src.receivers.write_database_receiver import WriteDatabaseReceiver
 
 import pandas as pd
 import dask.dataframe as dd
 
-class CSVReceiver(ReadReceiver, WriteReceiver):
+class CSVReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
     def __init__(self, filepath: Path):
         self.filepath = filepath
 

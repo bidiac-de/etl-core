@@ -26,17 +26,16 @@ class WriteJSON(JSON):
             filepath,
             schema_definition
         )
-        self.receiver = JSONReceiver(filepath)
 
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        self.receiver.write_row(row)
+        JSONReceiver().write_row(row, filepath=self.filepath)
         return row
 
     def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        self.receiver.write_bulk(data)
+        JSONReceiver().write_bulk(data, filepath=self.filepath)
         return data
 
     def process_bigdata(self, chunk_iterable):
-        self.receiver.write_bigdata(chunk_iterable)
+        JSONReceiver().write_bigdata(chunk_iterable, filepath=self.filepath)
         return chunk_iterable
 

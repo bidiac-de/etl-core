@@ -1,10 +1,9 @@
-# src/receivers/write_receiver.py
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Generator
 from src.receivers.receiver import Receiver
 
 
-class WriteReceiver(Receiver, ABC):
+class WriteDatabaseReceiver(Receiver, ABC):
     """Abstract receiver for writing data."""
 
     def __init__(self, id: int = 0):
