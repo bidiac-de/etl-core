@@ -144,3 +144,151 @@ def test_branch_skip_fan_in(tmp_path):
     assert comp2.status == RuntimeState.FAILED
     comp3 = get_by_temp_id(job.components, 3)
     assert comp3.status == RuntimeState.SKIPPED
+
+
+def test_chain_skip_linear():
+    """
+    Chain skip:
+      failtest --> middle --> leaf
+    comp1 should FAIL, and both middle/leaf should be SKIPPED.
+    """
+    handler = JobExecutionHandler()
+    config = {
+        "job_name": "ChainSkipJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
+            {
+                "temp_id": 1,
+                "name": "root",
+                "comp_type": "failtest",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 0.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [2],
+            },
+            {
+                "temp_id": 2,
+                "name": "middle",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 1.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [3],
+            },
+            {
+                "temp_id": 3,
+                "name": "leaf",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 2.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+            },
+        ],
+    }
+
+    job = Job(**config)
+    result = handler.execute_job(job, max_workers=1)
+
+    exec_record = result.executions[0]
+    assert exec_record.status == JobStatus.FAILED.value
+    assert "One or more components failed" in exec_record.error
+
+    comp1 = get_by_temp_id(job.components, 1)
+    comp2 = get_by_temp_id(job.components, 2)
+    comp3 = get_by_temp_id(job.components, 3)
+    assert comp1.status == RuntimeState.FAILED
+    assert comp2.status == RuntimeState.SKIPPED
+    assert comp3.status == RuntimeState.SKIPPED
+
+
+def test_skip_diamond():
+    """
+    skip due to skipped predecessor:
+      a --> b / c -->d
+    d should be SKIPPED since one predecessor was skipped.
+    """
+    handler = JobExecutionHandler()
+    config = {
+        "job_name": "SkipDiamondJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
+            {
+                "temp_id": 1,
+                "name": "a",
+                "comp_type": "failtest",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 0.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [2],
+            },
+            {
+                "temp_id": 2,
+                "name": "b",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 1.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [4],
+            },
+            {
+                "temp_id": 3,
+                "name": "c",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 0.0,
+                "y_coord": 1.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [4],
+            },
+            {
+                "temp_id": 4,
+                "name": "d",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 1.0,
+                "y_coord": 0.5,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+            },
+        ],
+    }
+
+    job = Job(**config)
+    result = handler.execute_job(job, max_workers=2)
+
+    exec_record = result.executions[0]
+    assert exec_record.status == JobStatus.FAILED.value
+    assert "One or more components failed" in exec_record.error
+
+    comp1 = get_by_temp_id(job.components, 1)
+    comp2 = get_by_temp_id(job.components, 2)
+    comp3 = get_by_temp_id(job.components, 3)
+    comp4 = get_by_temp_id(job.components, 4)
+    assert comp1.status == RuntimeState.FAILED
+    assert comp2.status == RuntimeState.SKIPPED
+    assert comp3.status == RuntimeState.SUCCESS
+    assert comp4.status == RuntimeState.SKIPPED
