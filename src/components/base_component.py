@@ -1,4 +1,4 @@
-from abc import ABC,abstractmethod
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, List, Any
 from datetime import datetime
@@ -11,7 +11,6 @@ from src.strategies.base_strategy import ExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
-
 
 
 class RuntimeState(Enum):
