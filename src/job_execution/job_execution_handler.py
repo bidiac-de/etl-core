@@ -147,6 +147,16 @@ class JobExecutionHandler:
                                     )
 
                 # after executor
+                # any components still pending must be downstream
+                # of a skipped/failed node → skip them
+                for pid in list(pending_ids):
+                    comp = components[pid]
+                    comp.status = RuntimeState.SKIPPED
+                    skipped_ids.add(pid)
+                    file_logger.warning(
+                        "Component '%s' set to SKIPPED (no runnable path)", comp.name
+                    )
+                pending_ids.clear()
                 logger.info(
                     "Execution summary for job '%s': %d succeeded,"
                     " %d failed, %d skipped",
