@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+from uuid import uuid4
 
 
 class Layout(BaseModel):
@@ -8,6 +9,7 @@ class Layout(BaseModel):
     Layout class to define the position of a component
     """
 
+    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
     x_coordinate: float = Field(..., alias="x_coord")
     y_coordinate: float = Field(..., alias="y_coord")
 
@@ -24,6 +26,7 @@ class MetaData(BaseModel):
     a job or a component
     """
 
+    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: Optional[datetime] = None
     created_by: int = 0

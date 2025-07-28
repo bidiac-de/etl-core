@@ -1,6 +1,14 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.job_execution.job import JobStatus
 from src.components.base_component import RuntimeState
+from tests.helpers import get_by_temp_id
+import src.job_execution.job as job_module
+from src.components.stubcomponents import StubComponent
+from src.job_execution.job import Job
+from datetime import datetime
+
+# ensure Job._build_components() can find TestComponent
+job_module.TestComponent = StubComponent
 
 
 def test_branch_skip_fan_out(tmp_path):
@@ -11,13 +19,14 @@ def test_branch_skip_fan_out(tmp_path):
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "skip_fan_out",
-        "JobName": "SkipFanOutJob",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "job_name": "SkipFanOutJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "root",
                 "comp_type": "failtest",  # will throw
                 "strategy_type": "row",
@@ -29,7 +38,7 @@ def test_branch_skip_fan_out(tmp_path):
                 "next": [2, 3],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "child1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -40,7 +49,7 @@ def test_branch_skip_fan_out(tmp_path):
                 "created_at": "2025-01-01T00:00:00",
             },
             {
-                "id": 3,
+                "temp_id": 3,
                 "name": "child2",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -53,7 +62,7 @@ def test_branch_skip_fan_out(tmp_path):
         ],
     }
 
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=2)
 
     # Job should end FAILED due to the initial failure
@@ -62,9 +71,11 @@ def test_branch_skip_fan_out(tmp_path):
     assert "One or more components failed" in exec_record.error
 
     # Component statuses
-    assert job.components[1].status == RuntimeState.FAILED
-    assert job.components[2].status == RuntimeState.SKIPPED
-    assert job.components[3].status == RuntimeState.SKIPPED
+    comp1 = get_by_temp_id(job.components, 1)
+    assert comp1.status == RuntimeState.FAILED
+    for temp, expected in ((2, RuntimeState.SKIPPED), (3, RuntimeState.SKIPPED)):
+        comp = get_by_temp_id(job.components, temp)
+        assert comp.status == expected
 
 
 def test_branch_skip_fan_in(tmp_path):
@@ -75,13 +86,14 @@ def test_branch_skip_fan_in(tmp_path):
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "skip_fan_in",
-        "JobName": "SkipFanInJob",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "job_name": "SkipFanInJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "ok_root",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -93,7 +105,7 @@ def test_branch_skip_fan_in(tmp_path):
                 "next": [3],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "fail_root",
                 "comp_type": "failtest",
                 "strategy_type": "row",
@@ -105,7 +117,7 @@ def test_branch_skip_fan_in(tmp_path):
                 "next": [3],
             },
             {
-                "id": 3,
+                "temp_id": 3,
                 "name": "join",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -118,7 +130,7 @@ def test_branch_skip_fan_in(tmp_path):
         ],
     }
 
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
@@ -126,6 +138,9 @@ def test_branch_skip_fan_in(tmp_path):
     assert "One or more components failed" in exec_record.error
 
     # ok_root ran, fail_root failed, join skipped
-    assert job.components[1].status == RuntimeState.SUCCESS
-    assert job.components[2].status == RuntimeState.FAILED
-    assert job.components[3].status == RuntimeState.SKIPPED
+    comp1 = get_by_temp_id(job.components, 1)
+    assert comp1.status == RuntimeState.SUCCESS
+    comp2 = get_by_temp_id(job.components, 2)
+    assert comp2.status == RuntimeState.FAILED
+    comp3 = get_by_temp_id(job.components, 3)
+    assert comp3.status == RuntimeState.SKIPPED

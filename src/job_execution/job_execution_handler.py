@@ -26,15 +26,6 @@ class JobExecutionHandler:
         self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
 
-    def create_job(self, config: dict, user_id: int):
-        """
-        Create a job based on the provided config
-        :param config: Configuration dictionary for the job, derived from JSON
-        :param user_id: ID of the user creating the job
-        :return: An instance of the job class
-        """
-        return Job(config, user_id)
-
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         """
         Execute a given job, specified by the job object

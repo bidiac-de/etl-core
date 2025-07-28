@@ -1,8 +1,11 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.job_execution.job import JobStatus
+from src.components.base_component import RuntimeState
+from tests.helpers import get_by_temp_id
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
-from src.components.base_component import RuntimeState
+from src.job_execution.job import Job
+from datetime import datetime
 
 # ensure Job._build_components() can find TestComponent
 job_module.TestComponent = StubComponent
@@ -17,13 +20,14 @@ def test_execute_job_single_test_component():
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "exec_1",
-        "JobName": "ExecuteTestComponent",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "name": "ExecuteTestComponent",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "test1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -36,13 +40,14 @@ def test_execute_job_single_test_component():
         ],
     }
 
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=1)
 
     assert len(result.executions) == 1
 
     exec_record = result.executions[0]
-    comp_metrics = exec_record.component_metrics[1]
+    comp = get_by_temp_id(job.components, 1)
+    comp_metrics = exec_record.component_metrics[comp.id]
     assert comp_metrics.lines_received == 1
     assert exec_record.status == JobStatus.COMPLETED.value
 
@@ -57,13 +62,14 @@ def test_execute_job_chain_components_file_logging(caplog):
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "chain_1",
-        "JobName": "ChainJob",
-        "NumOfRetries": 0,
-        "FileLogging": True,  # exercise the file_logging path
-        "components": [
+        "job_name": "ChainJob",
+        "num_of_retries": 0,
+        "file_logging": True,  # exercise the file_logging path
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "comp1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -75,7 +81,7 @@ def test_execute_job_chain_components_file_logging(caplog):
                 "next": [2],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "comp2",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -88,7 +94,7 @@ def test_execute_job_chain_components_file_logging(caplog):
         ],
     }
 
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=1)
 
     # should complete successfully
@@ -101,9 +107,11 @@ def test_execute_job_chain_components_file_logging(caplog):
 
     # both components ran and metrics recorded
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {1, 2}
-    assert metrics[1].lines_received == 1
-    assert metrics[2].lines_received == 1
+    comp1 = get_by_temp_id(job.components, 1)
+    comp2 = get_by_temp_id(job.components, 2)
+    assert set(metrics.keys()) == {comp1.id, comp2.id}
+    assert metrics[comp1.id].lines_received == 1
+    assert metrics[comp2.id].lines_received == 1
 
 
 def test_execute_job_failing_and_skipped_components():
@@ -118,13 +126,14 @@ def test_execute_job_failing_and_skipped_components():
 
     handler = JobExecutionHandler()
     config = {
-        "JobID": "fail_chain",
-        "JobName": "ChainErrorJob",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "job_name": "ChainErrorJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "comp1",
                 "comp_type": "failtest",  # our failing component
                 "strategy_type": "row",
@@ -136,7 +145,7 @@ def test_execute_job_failing_and_skipped_components():
                 "next": [2],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "comp2",
                 "comp_type": "test",  # normal TestComponent
                 "strategy_type": "row",
@@ -149,7 +158,7 @@ def test_execute_job_failing_and_skipped_components():
         ],
     }
 
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=1)
 
     # Job-level assertions
@@ -163,8 +172,8 @@ def test_execute_job_failing_and_skipped_components():
     ) in exec_record.error
 
     # Component-level assertions
-    comp1 = job.components[1]
-    comp2 = job.components[2]
+    comp1 = get_by_temp_id(job.components, 1)
+    comp2 = get_by_temp_id(job.components, 2)
     assert comp1.status == RuntimeState.FAILED, "comp1 should have FAILED status"
     assert (
         comp2.status == RuntimeState.SKIPPED
@@ -174,13 +183,14 @@ def test_execute_job_failing_and_skipped_components():
 def test_retry_logic_and_metrics(tmp_path):
     handler = JobExecutionHandler()
     config = {
-        "JobID": "retry_1",
-        "JobName": "RetryOnceJob",
-        "NumOfRetries": 1,
-        "FileLogging": False,
-        "components": [
+        "job_name": "RetryOnceJob",
+        "num_of_retries": 1,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "c1",
                 "comp_type": "stub_fail_once",
                 "strategy_type": "row",
@@ -192,11 +202,12 @@ def test_retry_logic_and_metrics(tmp_path):
             }
         ],
     }
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=1)
 
     # Should retry once, then succeed
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     # lines_received comes from second execution
-    assert exec_record.component_metrics[1].lines_received == 2
+    comp = get_by_temp_id(job.components, 1)
+    assert exec_record.component_metrics[comp.id].lines_received == 2

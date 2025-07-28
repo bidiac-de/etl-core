@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Optional, List, Any
 from datetime import datetime
 from abc import abstractmethod
+from uuid import uuid4
 
 from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.base_receiver import Receiver
@@ -44,7 +45,8 @@ class Component(BaseModel, ABC):
         arbitrary_types_allowed=True,
         extra="ignore",
     )
-    id: int
+    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
+    temp_id: int  # also has to be unique, responsibility of the caller to ensure
     name: str
     description: str
     comp_type: str

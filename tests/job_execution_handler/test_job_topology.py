@@ -1,6 +1,13 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.job_execution.job import JobStatus
 from src.components.base_component import RuntimeState
+import src.job_execution.job as job_module
+from src.components.stubcomponents import StubComponent
+from src.job_execution.job import Job
+from datetime import datetime
+
+# ensure Job._build_components() can find TestComponent
+job_module.TestComponent = StubComponent
 
 
 def test_fan_out_topology():
@@ -10,13 +17,14 @@ def test_fan_out_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "fan_out",
-        "JobName": "FanOutJob",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "job_name": "FanOutJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "root",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -28,7 +36,7 @@ def test_fan_out_topology():
                 "next": [2, 3],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "child1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -39,7 +47,7 @@ def test_fan_out_topology():
                 "created_at": "2025-01-01T00:00:00",
             },
             {
-                "id": 3,
+                "temp_id": 3,
                 "name": "child2",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -51,17 +59,19 @@ def test_fan_out_topology():
             },
         ],
     }
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {1, 2, 3}
+    expected_ids = {c.id for c in job.components.values()}
+    assert set(metrics.keys()) == expected_ids
 
-    for name in metrics:
-        assert job.components[name].status == RuntimeState.SUCCESS
-        assert metrics[name].lines_received == 1
+    for uuid in metrics:
+        comp = job.components[uuid]
+        assert comp.status == RuntimeState.SUCCESS
+        assert metrics[uuid].lines_received == 1
 
 
 def test_fan_in_topology():
@@ -71,13 +81,14 @@ def test_fan_in_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "fan_in",
-        "JobName": "FanInJob",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "job_name": "FanInJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "a",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -89,7 +100,7 @@ def test_fan_in_topology():
                 "next": [3],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "b",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -101,7 +112,7 @@ def test_fan_in_topology():
                 "next": [3],
             },
             {
-                "id": 3,
+                "temp_id": 3,
                 "name": "c",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -113,17 +124,19 @@ def test_fan_in_topology():
             },
         ],
     }
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {1, 2, 3}
+    expected_ids = {c.id for c in job.components.values()}
+    assert set(metrics.keys()) == expected_ids
 
-    for name in metrics:
-        assert job.components[name].status == RuntimeState.SUCCESS
-        assert metrics[name].lines_received == 1
+    for uuid in metrics:
+        comp = job.components[uuid]
+        assert comp.status == RuntimeState.SUCCESS
+        assert metrics[uuid].lines_received == 1
 
 
 def test_diamond_topology():
@@ -133,13 +146,14 @@ def test_diamond_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "JobID": "diamond",
-        "JobName": "DiamondJob",
-        "NumOfRetries": 0,
-        "FileLogging": False,
-        "components": [
+        "job_name": "DiamondJob",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
             {
-                "id": 1,
+                "temp_id": 1,
                 "name": "root",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -151,7 +165,7 @@ def test_diamond_topology():
                 "next": [2, 3],
             },
             {
-                "id": 2,
+                "temp_id": 2,
                 "name": "a",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -163,7 +177,7 @@ def test_diamond_topology():
                 "next": [4],
             },
             {
-                "id": 3,
+                "temp_id": 3,
                 "name": "b",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -175,7 +189,7 @@ def test_diamond_topology():
                 "next": [4],
             },
             {
-                "id": 4,
+                "temp_id": 4,
                 "name": "c",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -187,14 +201,16 @@ def test_diamond_topology():
             },
         ],
     }
-    job = handler.create_job(config, user_id=1)
+    job = Job(**config)
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
     assert exec_record.status == JobStatus.COMPLETED.value
     metrics = exec_record.component_metrics
-    assert set(metrics.keys()) == {1, 2, 3, 4}
+    expected_ids = {c.id for c in job.components.values()}
+    assert set(metrics.keys()) == expected_ids
 
-    for name in metrics:
-        assert job.components[name].status == RuntimeState.SUCCESS
-        assert metrics[name].lines_received == 1
+    for uuid in metrics:
+        comp = job.components[uuid]
+        assert comp.status == RuntimeState.SUCCESS
+        assert metrics[uuid].lines_received == 1
