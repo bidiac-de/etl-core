@@ -210,3 +210,86 @@ def test_retry_logic_and_metrics(tmp_path):
     # lines_received comes from second execution
     comp = get_by_temp_id(job.components, 1)
     assert exec_record.component_metrics[comp.id].lines_received == 2
+
+
+def test_execute_job_linear_chain():
+    """
+    A job with four chained TestComponents should:
+      - run to COMPLETED
+      - record exactly one JobExecution
+      - record metrics for all four components
+      - mark all components COMPLETED
+    """
+    handler = JobExecutionHandler()
+    config = {
+        "job_name": "LinearChain",
+        "num_of_retries": 0,
+        "file_logging": False,
+        "created_by": 42,
+        "created_at": datetime.now(),
+        "component_configs": [
+            {
+                "temp_id": 1,
+                "name": "c1",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 0.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [2],
+            },
+            {
+                "temp_id": 2,
+                "name": "c2",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 1.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [3],
+            },
+            {
+                "temp_id": 3,
+                "name": "c3",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 2.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+                "next": [4],
+            },
+            {
+                "temp_id": 4,
+                "name": "c4",
+                "comp_type": "test",
+                "strategy_type": "row",
+                "description": "",
+                "x_coord": 3.0,
+                "y_coord": 0.0,
+                "created_by": 1,
+                "created_at": "2025-01-01T00:00:00",
+            },
+        ],
+    }
+
+    job = Job(**config)
+    # Allow up to 4 workers, but dependencies enforce sequential execution
+    result = handler.execute_job(job, max_workers=4)
+
+    # Should be a single successful execution
+    assert len(result.executions) == 1
+    exec_record = result.executions[0]
+    assert exec_record.status == JobStatus.COMPLETED.value
+
+    # Every component should have run once and completed
+    metrics = exec_record.component_metrics
+    for tid in range(1, 5):
+        comp = get_by_temp_id(job.components, tid)
+        assert metrics[comp.id].lines_received == 1
+        assert comp.status == RuntimeState.SUCCESS
