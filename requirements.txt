@@ -2,4 +2,4 @@ pre-commit
 pytest-pythonpath
 pytest-cov
 fastapi
-pydantic >=2.0
+pydantic == v2.5.3

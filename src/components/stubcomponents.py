@@ -30,7 +30,7 @@ class StubComponent(Component):
 @register_component("failtest")
 class FailStubComponent(StubComponent):
     def execute(self, data, **kwargs):
-        raise RuntimeError("kaboom-chain")
+        raise RuntimeError("fail stubcomponent failed")
 
     @classmethod
     def build_objects(cls, values):
