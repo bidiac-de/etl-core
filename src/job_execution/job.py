@@ -3,10 +3,10 @@ from datetime import datetime
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
 from src.components.base_component import Component
-from src.components.registry import component_registry
-from src.metrics.base_metrics import Metrics
+from src.components.component_registry import component_registry
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
-from src.components.base_component import RuntimeState
+from src.components.runtime_state import RuntimeState
 from uuid import uuid4
 
 
@@ -104,7 +104,7 @@ class JobExecution:
     job_metrics: JobMetrics = None
     status: str = RuntimeState.PENDING.value
     error: str = None
-    component_metrics: Dict[str, Metrics]
+    component_metrics: Dict[str, ComponentMetrics]
 
     def __init__(self, job: Job, status: str = RuntimeState.PENDING.value):
         self.job = job

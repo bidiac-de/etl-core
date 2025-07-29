@@ -1,5 +1,5 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.components.base_component import RuntimeState
+from src.components.runtime_state import RuntimeState
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
 from src.job_execution.job import Job
@@ -69,8 +69,8 @@ def test_fan_out_topology():
 
     for uuid in metrics:
         comp = job.components[uuid]
-        assert comp.status == RuntimeState.SUCCESS
-        assert metrics[uuid].lines_received == 1
+        assert metrics[comp.id].status == RuntimeState.SUCCESS
+        assert metrics[comp.id].lines_received == 1
 
 
 def test_fan_in_topology():
@@ -134,8 +134,8 @@ def test_fan_in_topology():
 
     for uuid in metrics:
         comp = job.components[uuid]
-        assert comp.status == RuntimeState.SUCCESS
-        assert metrics[uuid].lines_received == 1
+        assert metrics[comp.id].status == RuntimeState.SUCCESS
+        assert metrics[comp.id].lines_received == 1
 
 
 def test_diamond_topology():
@@ -211,5 +211,5 @@ def test_diamond_topology():
 
     for uuid in metrics:
         comp = job.components[uuid]
-        assert comp.status == RuntimeState.SUCCESS
-        assert metrics[uuid].lines_received == 1
+        assert metrics[comp.id].status == RuntimeState.SUCCESS
+        assert metrics[comp.id].lines_received == 1

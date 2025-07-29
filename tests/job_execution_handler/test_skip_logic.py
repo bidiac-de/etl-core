@@ -1,5 +1,5 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.components.base_component import RuntimeState
+from src.components.runtime_state import RuntimeState
 from tests.helpers import get_by_temp_id
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
@@ -66,15 +66,16 @@ def test_branch_skip_fan_out(tmp_path):
 
     # Job should end FAILED due to the initial failure
     exec_record = result.executions[0]
+    metrics = exec_record.component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
     # Component statuses
     comp1 = get_by_temp_id(job.components, 1)
-    assert comp1.status == RuntimeState.FAILED
+    assert metrics[comp1.id].status == RuntimeState.FAILED
     for temp, expected in ((2, RuntimeState.CANCELLED), (3, RuntimeState.CANCELLED)):
         comp = get_by_temp_id(job.components, temp)
-        assert comp.status == expected
+        assert metrics[comp.id].status == expected
 
 
 def test_branch_skip_fan_in(tmp_path):
@@ -133,16 +134,17 @@ def test_branch_skip_fan_in(tmp_path):
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
+    metrics = exec_record.component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
     # ok_root ran, fail_root failed, join skipped
     comp1 = get_by_temp_id(job.components, 1)
-    assert comp1.status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS
     comp2 = get_by_temp_id(job.components, 2)
-    assert comp2.status == RuntimeState.FAILED
+    assert metrics[comp2.id].status == RuntimeState.FAILED
     comp3 = get_by_temp_id(job.components, 3)
-    assert comp3.status == RuntimeState.CANCELLED
+    assert metrics[comp3.id].status == RuntimeState.CANCELLED
 
 
 def test_chain_skip_linear():
@@ -201,15 +203,16 @@ def test_chain_skip_linear():
     result = handler.execute_job(job, max_workers=1)
 
     exec_record = result.executions[0]
+    metrics = exec_record.component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
     comp1 = get_by_temp_id(job.components, 1)
     comp2 = get_by_temp_id(job.components, 2)
     comp3 = get_by_temp_id(job.components, 3)
-    assert comp1.status == RuntimeState.FAILED
-    assert comp2.status == RuntimeState.CANCELLED
-    assert comp3.status == RuntimeState.CANCELLED
+    assert metrics[comp1.id].status == RuntimeState.FAILED
+    assert metrics[comp2.id].status == RuntimeState.CANCELLED
+    assert metrics[comp3.id].status == RuntimeState.CANCELLED
 
 
 def test_skip_diamond():
@@ -280,6 +283,7 @@ def test_skip_diamond():
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
+    metrics = exec_record.component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
@@ -287,7 +291,7 @@ def test_skip_diamond():
     comp2 = get_by_temp_id(job.components, 2)
     comp3 = get_by_temp_id(job.components, 3)
     comp4 = get_by_temp_id(job.components, 4)
-    assert comp1.status == RuntimeState.FAILED
-    assert comp2.status == RuntimeState.CANCELLED
-    assert comp3.status == RuntimeState.SUCCESS
-    assert comp4.status == RuntimeState.CANCELLED
+    assert metrics[comp1.id].status == RuntimeState.FAILED
+    assert metrics[comp2.id].status == RuntimeState.CANCELLED
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp4.id].status == RuntimeState.CANCELLED

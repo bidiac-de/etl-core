@@ -1,30 +1,17 @@
-from src.metrics.component_metrics import ComponentMetrics
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
-from src.components.registry import register_component
+from src.components.component_registry import register_component
 from src.components.dataclasses import Layout, MetaData
 from src.components.base_component import get_strategy
 from src.receivers.base_receiver import Receiver
-from datetime import datetime
+from typing import Any, List, Dict
 
 
 @register_component("test")
 class StubComponent(Component):
-    def execute(self, data, **kwargs):
-        self.create_metric_object()
-        self.metrics.lines_received = 1
+    def execute(self, data, metrics, **kwargs):
+        metrics.lines_received = 1
         return data
-
-    def create_metric_object(self):
-        """
-        Create a fresh metrics object for the component
-        """
-        self.metrics = ComponentMetrics(
-            started_at=datetime.now(),
-            processing_time=0,
-            error_count=0,
-            lines_received=0,
-            lines_forwarded=0,
-        )
 
     @classmethod
     def build_objects(cls, values):
@@ -40,11 +27,29 @@ class StubComponent(Component):
 
         return values
 
+    def process_row(
+        self, row: dict[str, Any], metrics: "ComponentMetrics"
+    ) -> dict[str, Any]:
+        """
+        placeholder method, not implemented in this stub component
+        """
+
+    def process_bulk(
+        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+    ) -> List[Dict[str, Any]]:
+        """
+        placeholder method, not implemented in this stub component
+        """
+
+    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+        """
+        placeholder method, not implemented in this stub component
+        """
+
 
 @register_component("failtest")
 class FailStubComponent(StubComponent):
-    def execute(self, data, **kwargs):
-        self.create_metric_object()
+    def execute(self, data, metrics: ComponentMetrics, **kwargs) -> Any:
         raise RuntimeError("fail stubcomponent failed")
 
     @classmethod
@@ -66,25 +71,12 @@ class FailStubComponent(StubComponent):
 class StubFailOnce(Component):
     _called = False
 
-    def execute(self, data, **kwargs):
-        self.create_metric_object()
+    def execute(self, data, metrics, **kwargs):
         if not StubFailOnce._called:
             StubFailOnce._called = True
             raise RuntimeError("fail first time")
-        self.metrics.lines_received = 1
+        metrics.lines_received = 1
         return "recovered"
-
-    def create_metric_object(self):
-        """
-        Create a fresh metrics object for the component
-        """
-        self.metrics = ComponentMetrics(
-            started_at=datetime.now(),
-            processing_time=0,
-            error_count=0,
-            lines_received=0,
-            lines_forwarded=0,
-        )
 
     @classmethod
     def build_objects(cls, values):
@@ -99,6 +91,25 @@ class StubFailOnce(Component):
         )
 
         return values
+
+    def process_row(
+        self, row: dict[str, Any], metrics: "ComponentMetrics"
+    ) -> dict[str, Any]:
+        """
+        placeholder method, not implemented in this stub component
+        """
+
+    def process_bulk(
+        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+    ) -> List[Dict[str, Any]]:
+        """
+        placeholder method, not implemented in this stub component
+        """
+
+    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+        """
+        placeholder method, not implemented in this stub component
+        """
 
 
 class StubReceiver(Receiver):

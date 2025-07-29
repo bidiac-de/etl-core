@@ -4,11 +4,14 @@ import concurrent.futures
 from typing import Any
 
 from src.job_execution.job import Job
-from src.components.base_component import Component, RuntimeState
+from src.components.base_component import Component
+from src.components.runtime_state import RuntimeState
 from src.job_execution.job import JobExecution
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
+from src.metrics.metrics_registry import get_metrics_class
 
 logger = logging.getLogger("job.ExecutionHandler")
 
@@ -67,6 +70,14 @@ class JobExecutionHandler:
         file_logger: logging.Logger,
     ) -> None:
         components = job.components
+        for comp in components.values():
+            MetricsCls = get_metrics_class(comp.comp_type)
+            metrics = MetricsCls(
+                started_at=datetime.datetime.now(),
+                processing_time=datetime.timedelta(0),
+                error_count=0,
+            )
+            execution.component_metrics[comp.id] = metrics
         pending = set(components.keys())
         succeeded, failed, cancelled = set(), set(), set()
 
@@ -74,7 +85,9 @@ class JobExecutionHandler:
         file_logger.debug("Root components: %s", [c.name for c in roots])
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = self._submit_roots(roots, executor, pending, file_logger)
+            futures = self._submit_roots(
+                roots, executor, pending, file_logger, execution
+            )
 
             while futures:
                 done, _ = concurrent.futures.wait(
@@ -101,9 +114,10 @@ class JobExecutionHandler:
                         cancelled,
                         pending,
                         file_logger,
+                        execution,
                     )
 
-        self._mark_unrunnable(components, pending, cancelled, file_logger)
+        self._mark_unrunnable(components, pending, cancelled, file_logger, execution)
         self._finalize_success(job, execution, succeeded, failed, cancelled)
 
     def _submit_roots(
@@ -112,11 +126,13 @@ class JobExecutionHandler:
         executor: concurrent.futures.ThreadPoolExecutor,
         pending: set,
         file_logger: logging.Logger,
+        execution: JobExecution,
     ) -> dict[concurrent.futures.Future, Component]:
         futures = {}
         for comp in roots:
             file_logger.debug("Submitting root '%s'", comp.name)
-            fut = executor.submit(self._execute_component, comp, None)
+            metrics = execution.component_metrics[comp.id]
+            fut = executor.submit(self._execute_component, comp, None, metrics)
             futures[fut] = comp
             pending.discard(comp.id)
         return futures
@@ -134,11 +150,10 @@ class JobExecutionHandler:
     ) -> None:
         try:
             fut.result()
-            comp.status = RuntimeState.SUCCESS
             succeeded.add(comp.id)
             self._update_metrics(comp, execution)
         except Exception:
-            comp.status = RuntimeState.FAILED
+            execution.component_metrics[comp.id].status = RuntimeState.FAILED
             failed.add(comp.id)
             file_logger.error("Component '%s' FAILED", comp.name, exc_info=True)
 
@@ -148,8 +163,6 @@ class JobExecutionHandler:
         execution: JobExecution,
     ) -> None:
         try:
-            metrics = comp.metrics
-            execution.component_metrics[comp.id] = metrics
             total = sum(m.lines_received for m in execution.component_metrics.values())
             elapsed = datetime.datetime.now() - execution.job_metrics.started_at
             execution.processing_time = elapsed
@@ -167,18 +180,20 @@ class JobExecutionHandler:
         cancelled: set,
         pending: set,
         file_logger: logging.Logger,
+        execution: JobExecution,
     ) -> None:
         for nxt in comp.next_components:
             if nxt.id in succeeded | failed | cancelled:
                 continue
             prev_ids = {p.id for p in nxt.prev_components}
+            metrics = execution.component_metrics[nxt.id]
             if prev_ids.issubset(succeeded):
                 file_logger.debug("Submitting '%s'", nxt.name)
-                fut = executor.submit(self._execute_component, nxt, None)
+                fut = executor.submit(self._execute_component, nxt, None, metrics)
                 futures[fut] = nxt
                 pending.discard(nxt.id)
             elif prev_ids & (failed | cancelled):
-                nxt.status = RuntimeState.CANCELLED
+                metrics.status = RuntimeState.CANCELLED
                 cancelled.add(nxt.id)
                 pending.discard(nxt.id)
                 file_logger.warning("Component '%s' CANCELLED", nxt.name)
@@ -189,10 +204,12 @@ class JobExecutionHandler:
         pending: set,
         cancelled: set,
         file_logger: logging.Logger,
+        execution: JobExecution,
     ) -> None:
         for pid in list(pending):
             comp = components[pid]
-            comp.status = RuntimeState.CANCELLED
+            metrics = execution.component_metrics[pid]
+            metrics.status = RuntimeState.CANCELLED
             cancelled.add(pid)
             file_logger.warning(
                 "Component '%s' CANCELLED (no runnable path)", comp.name
@@ -219,7 +236,7 @@ class JobExecutionHandler:
         )
         for cid, comp in job.components.items():
             self.job_information_handler.metrics_handler.add_component_metrics(
-                job.id, cid, comp.metrics
+                job.id, cid, execution.component_metrics[cid]
             )
         execution.status = RuntimeState.SUCCESS.value
 
@@ -234,7 +251,9 @@ class JobExecutionHandler:
         execution.job_metrics.status = RuntimeState.FAILED.value
         execution.error = str(exc)
 
-    def _execute_component(self, component: Component, data: Any) -> Any:
+    def _execute_component(
+        self, component: Component, data: Any, metrics: ComponentMetrics
+    ) -> Any:
         """
         Execute a single component
         !!note: will only work when component is a concrete class !!
@@ -244,16 +263,15 @@ class JobExecutionHandler:
         """
         try:
             logger.info(f"Executing component: {component.name}")
-            component.status = RuntimeState.RUNNING
+            metrics.status = RuntimeState.RUNNING
 
-            # Execute the component
-            result = component.execute(data)
+            result = component.execute(data, metrics)
 
-            component.status = RuntimeState.SUCCESS
+            metrics.status = RuntimeState.SUCCESS
             logger.info(f"Component {component.name} completed successfully")
             return result
 
         except Exception as e:
             logger.exception(f"Component {component.name} failed: {str(e)}")
-            component.status = RuntimeState.FAILED
+            metrics.status = RuntimeState.FAILED
             raise

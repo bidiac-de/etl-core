@@ -1,6 +1,3 @@
-from pydantic import Field
-
-from src.components.base_component import RuntimeState
 from src.metrics.base_metrics import Metrics
 
 
@@ -10,7 +7,6 @@ class JobMetrics(Metrics):
     """
 
     throughput: float = 0.0
-    status: str = Field(default=RuntimeState.SUCCESS.value)
 
     def calc_throughput(self, total_lines: int):
         self.throughput = (

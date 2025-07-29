@@ -1,29 +1,17 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from src.components.dataclasses import MetaData, Layout
-from src.metrics.component_metrics import ComponentMetrics
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 from src.strategies.base_strategy import ExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
-
-
-class RuntimeState(Enum):
-    """
-    Runtime state of a component during execution
-    """
-
-    PENDING = "PENDING"
-    RUNNING = "RUNNING"
-    SUCCESS = "SUCCESS"
-    FAILED = "FAILED"
-    CANCELLED = "CANCELLED"
 
 
 class StrategyType(Enum):
@@ -59,7 +47,6 @@ class Component(BaseModel, ABC):
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
-    status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
     metrics: Any = Field(default=None, exclude=True)
 
     # these need to be created in the concrete component classes
@@ -93,26 +80,32 @@ class Component(BaseModel, ABC):
         """
         self.prev_components.append(prev)
 
-    # !! dont override in regular components
-    def execute(self, data, **kwargs) -> Any:
+    def execute(self, data, metrics: ComponentMetrics, **kwargs) -> Any:
         """
 
         :param data: the data to be processed by the component
+        :param metrics: a ComponentMetrics instance constructed by the execution handler
         :return: result of the component execution
         """
-        self.create_metric_object()
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
-        return self.strategy.execute(self, data)
+        return self.strategy.execute(self, data, metrics)
 
     @abstractmethod
-    def create_metric_object(self):
-        """
-        Create a fresh metrics object for the component
-        """
-        self.metrics = (
-            ComponentMetrics()
-        )  # needs to be changed, if specialized metrics are implemented
+    def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def process_bulk(
+        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+    ) -> List[Dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+        raise NotImplementedError
 
 
 def get_strategy(strategy_type: str) -> ExecutionStrategy:

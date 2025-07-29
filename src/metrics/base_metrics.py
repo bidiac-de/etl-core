@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+from src.components.runtime_state import RuntimeState
 
 
 class Metrics(BaseModel, ABC):
@@ -11,6 +12,7 @@ class Metrics(BaseModel, ABC):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
+    status: str = Field(default=RuntimeState.PENDING.value)
     started_at: datetime
     processing_time: timedelta
     error_count: int

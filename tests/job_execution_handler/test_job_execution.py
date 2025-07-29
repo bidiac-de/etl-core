@@ -1,5 +1,5 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.components.base_component import RuntimeState
+from src.components.runtime_state import RuntimeState
 from tests.helpers import get_by_temp_id
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
@@ -48,10 +48,11 @@ def test_execute_job_single_test_component():
     comp = get_by_temp_id(job.components, 1)
     comp_metrics = exec_record.component_metrics[comp.id]
     assert comp_metrics.lines_received == 1
+    assert comp_metrics.status == RuntimeState.SUCCESS
     assert exec_record.status == RuntimeState.SUCCESS.value
 
 
-def test_execute_job_chain_components_file_logging(caplog):
+def test_execute_job_chain_components_file_logging():
     """
     A job with two chained TestComponents should:
       - run to COMPLETED
@@ -110,7 +111,9 @@ def test_execute_job_chain_components_file_logging(caplog):
     comp2 = get_by_temp_id(job.components, 2)
     assert set(metrics.keys()) == {comp1.id, comp2.id}
     assert metrics[comp1.id].lines_received == 1
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS
     assert metrics[comp2.id].lines_received == 1
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS
 
 
 def test_execute_job_failing_and_skipped_components():
@@ -172,13 +175,17 @@ def test_execute_job_failing_and_skipped_components():
     # Component-level assertions
     comp1 = get_by_temp_id(job.components, 1)
     comp2 = get_by_temp_id(job.components, 2)
-    assert comp1.status == RuntimeState.FAILED, "comp1 should have FAILED status"
+    comp1_metrics = exec_record.component_metrics[comp1.id]
+    comp2_metrics = exec_record.component_metrics[comp2.id]
     assert (
-        comp2.status == RuntimeState.CANCELLED
+        comp1_metrics.status == RuntimeState.FAILED
+    ), "comp1 should have FAILED status"
+    assert (
+        comp2_metrics.status == RuntimeState.CANCELLED
     ), "comp2 should be SKIPPED due to dependency"
 
 
-def test_retry_logic_and_metrics(tmp_path):
+def test_retry_logic_and_metrics():
     handler = JobExecutionHandler()
     config = {
         "job_name": "RetryOnceJob",
@@ -291,4 +298,4 @@ def test_execute_job_linear_chain():
     for tid in range(1, 5):
         comp = get_by_temp_id(job.components, tid)
         assert metrics[comp.id].lines_received == 1
-        assert comp.status == RuntimeState.SUCCESS
+        assert metrics[comp.id].status == RuntimeState.SUCCESS

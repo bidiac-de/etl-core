@@ -84,7 +84,6 @@ def test_create_job_with_test_component():
     job = Job(**config)
     comp = get_by_temp_id(job.components, 1)
     assert comp.__class__.__name__ == "StubComponent"
-    assert comp.status == "PENDING"
 
 
 def test_create_job_with_invalid_component_class():
