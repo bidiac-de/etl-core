@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import Enum
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 from abc import abstractmethod
 
@@ -69,6 +69,7 @@ class Component(BaseModel, ABC):
     @model_validator(mode="before")
     @classmethod
     @abstractmethod
+
     def build_objects(cls, values: dict) -> dict:
         """
         Each concrete component must implement this method to:
@@ -100,6 +101,22 @@ class Component(BaseModel, ABC):
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
         return self.strategy.execute(self, data)
+
+    @abstractmethod
+    def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a single row of data."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process multiple rows of data."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def process_bigdata(self, chunk_iterable: Any) -> Any:
+        """Process data in a streaming/big data fashion."""
+        raise NotImplementedError
+
 
 
 def get_strategy(strategy_type: str) -> ExecutionStrategy:
