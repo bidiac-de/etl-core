@@ -12,9 +12,9 @@ job_module.TestComponent = StubComponent
 
 def test_branch_skip_fan_out(tmp_path):
     """
-    Fan-out skip:
+    Fan-out cancellation:
       failtest --> [child1, child2]
-    comp1 should FAIL, and both child1/child2 should be SKIPPED.
+    comp1 should FAIL, and both child1/child2 should be CANCELLED.
     """
     handler = JobExecutionHandler()
     config = {
@@ -25,7 +25,7 @@ def test_branch_skip_fan_out(tmp_path):
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "root",
                 "comp_type": "failtest",  # will throw
                 "strategy_type": "row",
@@ -34,10 +34,10 @@ def test_branch_skip_fan_out(tmp_path):
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [2, 3],
+                "next": ["b", "c"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "child1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -48,7 +48,7 @@ def test_branch_skip_fan_out(tmp_path):
                 "created_at": "2025-01-01T00:00:00",
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "child2",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -71,18 +71,19 @@ def test_branch_skip_fan_out(tmp_path):
     assert "One or more components failed" in exec_record.error
 
     # Component statuses
-    comp1 = get_by_temp_id(job.components, 1)
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     assert metrics[comp1.id].status == RuntimeState.FAILED
-    for temp, expected in ((2, RuntimeState.CANCELLED), (3, RuntimeState.CANCELLED)):
-        comp = get_by_temp_id(job.components, temp)
-        assert metrics[comp.id].status == expected
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    assert metrics[comp2.id].status == RuntimeState.CANCELLED
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
+    assert metrics[comp3.id].status == RuntimeState.CANCELLED
 
 
 def test_branch_skip_fan_in(tmp_path):
     """
-    Fan-in skip:
+    Fan-in cancellation:
       [ok_root, fail_root] --> join
-    ok_root succeeds, fail_root fails, so join should be SKIPPED.
+    ok_root succeeds, fail_root fails, so join should be CANCELLED.
     """
     handler = JobExecutionHandler()
     config = {
@@ -93,7 +94,7 @@ def test_branch_skip_fan_in(tmp_path):
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "ok_root",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -102,10 +103,10 @@ def test_branch_skip_fan_in(tmp_path):
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [3],
+                "next": ["c"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "fail_root",
                 "comp_type": "failtest",
                 "strategy_type": "row",
@@ -114,10 +115,10 @@ def test_branch_skip_fan_in(tmp_path):
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [3],
+                "next": ["c"],
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "join",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -139,19 +140,19 @@ def test_branch_skip_fan_in(tmp_path):
     assert "One or more components failed" in exec_record.error
 
     # ok_root ran, fail_root failed, join skipped
-    comp1 = get_by_temp_id(job.components, 1)
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     assert metrics[comp1.id].status == RuntimeState.SUCCESS
-    comp2 = get_by_temp_id(job.components, 2)
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
     assert metrics[comp2.id].status == RuntimeState.FAILED
-    comp3 = get_by_temp_id(job.components, 3)
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
     assert metrics[comp3.id].status == RuntimeState.CANCELLED
 
 
 def test_chain_skip_linear():
     """
-    Chain skip:
+    Chain cancellation:
       failtest --> middle --> leaf
-    comp1 should FAIL, and both middle/leaf should be SKIPPED.
+    comp1 should FAIL, and both middle/leaf should be CANCELLED.
     """
     handler = JobExecutionHandler()
     config = {
@@ -162,7 +163,7 @@ def test_chain_skip_linear():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "root",
                 "comp_type": "failtest",
                 "strategy_type": "row",
@@ -171,10 +172,10 @@ def test_chain_skip_linear():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [2],
+                "next": ["b"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "middle",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -183,10 +184,10 @@ def test_chain_skip_linear():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [3],
+                "next": ["c"],
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "leaf",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -207,9 +208,9 @@ def test_chain_skip_linear():
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
-    comp1 = get_by_temp_id(job.components, 1)
-    comp2 = get_by_temp_id(job.components, 2)
-    comp3 = get_by_temp_id(job.components, 3)
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
     assert metrics[comp1.id].status == RuntimeState.FAILED
     assert metrics[comp2.id].status == RuntimeState.CANCELLED
     assert metrics[comp3.id].status == RuntimeState.CANCELLED
@@ -217,9 +218,9 @@ def test_chain_skip_linear():
 
 def test_skip_diamond():
     """
-    skip due to skipped predecessor:
+    cancellation due to cancelled predecessor:
       a --> b / c -->d
-    d should be SKIPPED since one predecessor was skipped.
+    d should be CANCELLED since one predecessor was cancelled.
     """
     handler = JobExecutionHandler()
     config = {
@@ -230,7 +231,7 @@ def test_skip_diamond():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "a",
                 "comp_type": "failtest",
                 "strategy_type": "row",
@@ -239,10 +240,10 @@ def test_skip_diamond():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [2],
+                "next": ["b", "c"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "b",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -251,10 +252,10 @@ def test_skip_diamond():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [4],
+                "next": ["d"],
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "c",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -263,10 +264,10 @@ def test_skip_diamond():
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [4],
+                "next": ["d"],
             },
             {
-                "temp_id": 4,
+                "id": "d",
                 "name": "d",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -287,11 +288,11 @@ def test_skip_diamond():
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
-    comp1 = get_by_temp_id(job.components, 1)
-    comp2 = get_by_temp_id(job.components, 2)
-    comp3 = get_by_temp_id(job.components, 3)
-    comp4 = get_by_temp_id(job.components, 4)
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
+    comp4 = get_by_temp_id(job.components, job._temp_map.get("d"))
     assert metrics[comp1.id].status == RuntimeState.FAILED
     assert metrics[comp2.id].status == RuntimeState.CANCELLED
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].status == RuntimeState.CANCELLED
     assert metrics[comp4.id].status == RuntimeState.CANCELLED

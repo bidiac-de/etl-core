@@ -68,7 +68,7 @@ def test_create_job_with_test_component():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "test1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -82,7 +82,7 @@ def test_create_job_with_test_component():
     }
 
     job = Job(**config)
-    comp = get_by_temp_id(job.components, 1)
+    comp = get_by_temp_id(job.components, job._temp_map.get("a"))
     assert comp.__class__.__name__ == "StubComponent"
 
 
@@ -95,7 +95,6 @@ def test_create_job_with_invalid_component_class():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
                 "name": "invalid1",
                 "comp_type": "non_existent",
                 "strategy_type": "row",

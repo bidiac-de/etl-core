@@ -63,7 +63,7 @@ class Job(BaseModel):
         comps: Dict[str, Component] = {}
 
         # map of temporary IDs to internal ids
-        self._temp_map: Dict[int, str] = {}
+        self._temp_map: Dict[str, str] = {}
 
         for cconf in self.config.get("component_configs", []):
             comp_type = cconf["comp_type"]
@@ -71,26 +71,33 @@ class Job(BaseModel):
                 raise ValueError(f"Unknown component type: {comp_type}")
 
             component_class = component_registry[comp_type]
-            component = component_class(**cconf)
+            if "id" in cconf:
+                user_prov_id = cconf["id"]
+                component = component_class(**cconf)
 
-            comps[component.id] = component
-            self._temp_map[component.temp_id] = component.id
+                internal_id = str(uuid4())
+                component.id = internal_id
+
+                comps[component.id] = component
+                self._temp_map[user_prov_id] = component.id
+            else:
+                component = component_class(**cconf)
+                comps[component.id] = component
 
         self.components = comps
 
     def _connect_components(self) -> None:
         """
-        Connect components based on the configuration
+        Connect components based on the list of next components
         """
-        for cconf in self.config.get("component_configs", []):
-            src_uuid = self._temp_map.get(cconf["temp_id"])
-            src = self.components[src_uuid]
-            for nxt_temp_id in cconf.get("next", []):
-                dest_uuid = self._temp_map.get(nxt_temp_id)
-                if dest_uuid not in self.components:
-                    raise ValueError(f"Unknown next-component: {nxt_temp_id}")
+        for component in self.components.values():
+            src = self.components[component.id]
+            for nxt_user_prov_id in component.next:
+                dest_internal = self._temp_map.get(nxt_user_prov_id)
+                if dest_internal not in self.components:
+                    raise ValueError(f"Unknown next-component: {nxt_user_prov_id}")
 
-                dest = self.components[dest_uuid]
+                dest = self.components[dest_internal]
                 src.add_next(dest)
                 dest.add_prev(src)
 

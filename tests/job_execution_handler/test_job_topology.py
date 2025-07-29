@@ -4,6 +4,7 @@ import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
 from src.job_execution.job import Job
 from datetime import datetime
+from tests.helpers import get_by_temp_id
 
 # ensure Job._build_components() can find TestComponent
 job_module.TestComponent = StubComponent
@@ -23,7 +24,7 @@ def test_fan_out_topology():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "root",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -32,10 +33,10 @@ def test_fan_out_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [2, 3],
+                "next": ["b", "c"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "child1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -46,7 +47,7 @@ def test_fan_out_topology():
                 "created_at": "2025-01-01T00:00:00",
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "child2",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -67,10 +68,15 @@ def test_fan_out_topology():
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
 
-    for uuid in metrics:
-        comp = job.components[uuid]
-        assert metrics[comp.id].status == RuntimeState.SUCCESS
-        assert metrics[comp.id].lines_received == 1
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].lines_received == 1
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+    assert metrics[comp2.id].lines_received == 1
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].lines_received == 1
 
 
 def test_fan_in_topology():
@@ -87,7 +93,7 @@ def test_fan_in_topology():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "a",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -96,10 +102,10 @@ def test_fan_in_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [3],
+                "next": ["c"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "b",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -108,10 +114,10 @@ def test_fan_in_topology():
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [3],
+                "next": ["c"],
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "c",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -132,10 +138,15 @@ def test_fan_in_topology():
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
 
-    for uuid in metrics:
-        comp = job.components[uuid]
-        assert metrics[comp.id].status == RuntimeState.SUCCESS
-        assert metrics[comp.id].lines_received == 1
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].lines_received == 1
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+    assert metrics[comp2.id].lines_received == 1
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].lines_received == 1
 
 
 def test_diamond_topology():
@@ -152,7 +163,7 @@ def test_diamond_topology():
         "created_at": datetime.now(),
         "component_configs": [
             {
-                "temp_id": 1,
+                "id": "a",
                 "name": "root",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -161,10 +172,10 @@ def test_diamond_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [2, 3],
+                "next": ["b", "c"],
             },
             {
-                "temp_id": 2,
+                "id": "b",
                 "name": "a",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -173,10 +184,10 @@ def test_diamond_topology():
                 "y_coord": 0.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [4],
+                "next": ["d"],
             },
             {
-                "temp_id": 3,
+                "id": "c",
                 "name": "b",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -185,10 +196,10 @@ def test_diamond_topology():
                 "y_coord": 1.0,
                 "created_by": 1,
                 "created_at": "2025-01-01T00:00:00",
-                "next": [4],
+                "next": ["d"],
             },
             {
-                "temp_id": 4,
+                "id": "d",
                 "name": "c",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -209,7 +220,15 @@ def test_diamond_topology():
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
 
-    for uuid in metrics:
-        comp = job.components[uuid]
-        assert metrics[comp.id].status == RuntimeState.SUCCESS
-        assert metrics[comp.id].lines_received == 1
+    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].lines_received == 1
+    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+    assert metrics[comp2.id].lines_received == 1
+    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].lines_received == 1
+    comp4 = get_by_temp_id(job.components, job._temp_map.get("d"))
+    assert metrics[comp4.id].status == RuntimeState.SUCCESS
+    assert metrics[comp4.id].lines_received == 1
