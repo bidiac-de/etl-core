@@ -15,7 +15,8 @@ from src.metrics.component_metrics import ComponentMetrics
 class ReadCSV(CSV):
     """Component that reads data from a CSV file."""
 
-    type: Literal["read_csv"]
+    #type: #Literal["read_csv"]
+    type: Literal["read_csv"] = Field(default="read_csv")
     filepath: Path = Field(..., description="Path to the CSV file")
     separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
     schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for CSV columns")

@@ -15,7 +15,8 @@ from src.metrics.component_metrics import ComponentMetrics
 class WriteCSV(CSV):
     """Component that writes data to a CSV file."""
 
-    type: Literal["write_csv"]
+    #type: #Literal["write_csv"]
+    type: Literal["write_csv"] = Field(default="write_csv")
     filepath: Path = Field(..., description="Path to the CSV file")
     separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
     schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for CSV columns")

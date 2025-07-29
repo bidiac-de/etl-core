@@ -1,23 +1,20 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, List, Any, Dict
 from datetime import datetime
-from abc import abstractmethod
+
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from src.strategies.base_strategy import ExecutionStrategy
 from src.receivers.base_receiver import Receiver
 from src.components.dataclasses import MetaData, Layout
-from pydantic import BaseModel, Field, ConfigDict, model_validator
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 
 
 class RuntimeState(Enum):
-    """
-    Runtime state of a component during execution
-    """
-
+    """Runtime state of a component during execution"""
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
@@ -25,11 +22,8 @@ class RuntimeState(Enum):
     SKIPPED = "SKIPPED"
 
 
-class StrategyType(Enum):
-    """
-    Enum for different strategy types
-    """
-
+class StrategyType(str, Enum):
+    """Enum for different strategy types"""
     ROW = "row"
     BULK = "bulk"
     BIGDATA = "bigdata"
@@ -37,13 +31,14 @@ class StrategyType(Enum):
 
 class Component(BaseModel, ABC):
     """
-    Base class for all components in the system
+    Base class for all components in the system.
     """
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
     )
+
     id: int
     name: str
     description: str
@@ -52,7 +47,7 @@ class Component(BaseModel, ABC):
     created_at: datetime
     x_coord: float = Field(default=0.0)
     y_coord: float = Field(default=0.0)
-    strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
+    strategy_type: StrategyType = Field(default=StrategyType.ROW)
     next: Optional[List[int]] = None
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
@@ -60,69 +55,52 @@ class Component(BaseModel, ABC):
     status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
     metrics: Any = Field(default=None, exclude=True)
 
-    # these need to be created in the concrete component classes
     strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
     receiver: Optional[Receiver] = Field(default=None, exclude=True)
     layout: Optional[Layout] = Field(default=None, exclude=True)
-    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
+    metadata: MetaData = Field(default_factory=MetaData, exclude=True)
 
     @model_validator(mode="before")
     @classmethod
-    @abstractmethod
-
     def build_objects(cls, values: dict) -> dict:
-        """
-        Each concrete component must implement this method to:
-        - construct strategy, receiver, layout, and metadata
-        - modify and return the values dict
-        """
-        raise NotImplementedError
+        """Default factory for layout, strategy and metadata"""
+        values.setdefault("layout", Layout(
+            x_coord=values.get("x_coord", 0.0),
+            y_coord=values.get("y_coord", 0.0),
+        ))
+        values.setdefault("strategy", get_strategy(str(values.get("strategy_type", "row"))))
+        values.setdefault("metadata", MetaData(
+            created_at=values.get("created_at", datetime.now()),
+            created_by=values.get("created_by", 0),
+        ))
+        return values
 
     def add_next(self, nxt: "Component"):
-        """
-        Add a next component to the current component
-        :param nxt: The next component to add
-        """
         self.next_components.append(nxt)
 
     def add_prev(self, prev: "Component"):
-        """
-        Add a previous component to the current component
-        :param prev: The previous component to add
-        """
         self.prev_components.append(prev)
 
     def execute(self, data, **kwargs) -> Any:
-        """
-
-        :param data: the data to be processed by the component
-        :return: result of the component execution
-        """
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
         return self.strategy.execute(self, data)
 
     @abstractmethod
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a single row of data."""
         raise NotImplementedError
 
     @abstractmethod
     def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process multiple rows of data."""
         raise NotImplementedError
 
     @abstractmethod
     def process_bigdata(self, chunk_iterable: Any) -> Any:
-        """Process data in a streaming/big data fashion."""
         raise NotImplementedError
 
 
-
 def get_strategy(strategy_type: str) -> ExecutionStrategy:
-    """
-    Factory function to get the appropriate execution strategy based on the type.
-    """
+    """Factory function to get the appropriate execution strategy based on the type."""
     if strategy_type == "row":
         return RowExecutionStrategy()
     elif strategy_type == "bulk":
