@@ -5,7 +5,7 @@ from src.metrics.base_metrics import Metrics
 
 class ComponentMetrics(Metrics):
     """
-    Metrics for stub Components
+    Metrics for Components, to be collected during execution
     """
 
     lines_received: int = Field(default=0)
