@@ -2,8 +2,6 @@ import csv
 from pathlib import Path
 from typing import Dict, Any, List, Generator, Union
 
-from tensorflow.python.ops.gen_io_ops import ReadFile
-
 from src.receivers.read_file_receiver import ReadFileReceiver
 from src.receivers.write_file_receiver import WriteFileReceiver
 

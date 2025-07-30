@@ -7,7 +7,7 @@ from src.components.column_definition import ColumnDefinition
 from src.components.dataclasses import Layout, MetaData
 from src.components.base_components import get_strategy
 from src.components.registry import register_component
-from receivers.files.csv_receiver import CSVReceiver
+from src.receivers.files.csv_receiver import CSVReceiver
 from src.metrics.component_metrics import ComponentMetrics
 
 
