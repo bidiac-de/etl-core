@@ -26,12 +26,8 @@ class FilterComponent(DataOperationComponent):
         """
         Build dependent objects for the stub component
         """
-        values["layout"] = Layout(x_coord=values["x_coord"], y_coord=values["y_coord"])
         values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = FilterReceiver()
-        values["metadata"] = MetaData(
-            created_at=values["created_at"], created_by=values["created_by"]
-        )
 
         return values
 

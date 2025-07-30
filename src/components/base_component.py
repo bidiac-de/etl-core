@@ -14,7 +14,7 @@ from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
 
 
-class StrategyType(Enum):
+class StrategyType(str , Enum):
     """
     Enum for different strategy types
     """
@@ -37,12 +37,10 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     comp_type: str
-    created_by: int
-    created_at: datetime
-    x_coord: float = Field(default=0.0)
-    y_coord: float = Field(default=0.0)
     strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
-    next: Optional[List[str]] = []
+    next: [List[str]] = []
+    layout: [Layout] = Field(default_factory=lambda: Layout())
+    metadata: MetaData = Field(default_factory=lambda: MetaData())
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
@@ -51,8 +49,6 @@ class Component(BaseModel, ABC):
     # these need to be created in the concrete component classes
     strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
     receiver: Optional[Receiver] = Field(default=None, exclude=True)
-    layout: Optional[Layout] = Field(default=None, exclude=True)
-    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -60,7 +56,7 @@ class Component(BaseModel, ABC):
     def build_objects(cls, values: dict) -> dict:
         """
         Each concrete component must implement this method to:
-        - construct strategy, receiver, layout, and metadata
+        - construct strategy and receiver
         - modify and return the values dict
         """
         raise NotImplementedError
