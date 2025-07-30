@@ -1,5 +1,4 @@
 from typing import Dict, Any, List
-from datetime import datetime
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
 from src.components.base_component import Component
@@ -12,23 +11,21 @@ from uuid import uuid4
 
 class Job(BaseModel):
     """
-    Job Objects, created by the JobExecutionHandler
+    Job Objects
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
-    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
+    id: str = Field(default_factory=lambda: str(uuid4()),description="set by constructor", exclude=True)
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
-    created_by: int
-    created_at: datetime = Field(default_factory=datetime.now)
     component_configs: List[Dict[str, Any]] = Field(default_factory=list)
 
     config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     # runtime-objects
-    metadata: MetaData = Field(default=None, exclude=True)
+    metadata: MetaData = Field(default_factory=lambda: MetaData())
     executions: List[Any] = Field(default_factory=list, exclude=True)
 
     components: Dict[str, Component] = Field(default_factory=dict, exclude=True)
@@ -45,13 +42,8 @@ class Job(BaseModel):
     @model_validator(mode="after")
     def _build_objects(self) -> "Job":
         """
-        After Pydantic has set all fields, build and connect components.
+        After Pydantic has set all fields, build and connect components
         """
-        # build and connect just as before
-        self.metadata = MetaData(
-            created_by=self.created_by,
-            created_at=self.created_at,
-        )
         self._build_components()
         self._connect_components()
         return self
