@@ -32,5 +32,5 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
     def write_bigdata(self, ddf: dd.DataFrame, filepath: Path):
         """Writes a Dask DataFrame to JSON (into folder of partitions)."""
-        ddf.to_json(str(filepath), orient="records", force_ascii=False, indent=2)
+        ddf.to_json(str(filepath / "part-*.json"), orient="records", lines=True, force_ascii=False)
 
