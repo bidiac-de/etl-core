@@ -17,8 +17,10 @@ def test_create_job_with_complete_config():
         "name": "TestJob",
         "num_of_retries": 3,
         "file_logging": True,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        }
     }
 
     job = Job(**config)
@@ -64,8 +66,10 @@ def test_create_job_with_test_component():
         "name": "JobWithStubComponent",
         "num_of_retries": 0,
         "FileLogging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -73,10 +77,6 @@ def test_create_job_with_test_component():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "test dummy",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 42,
-                "created_at": "2024-01-01T00:00:00",
             }
         ],
     }
@@ -91,18 +91,16 @@ def test_create_job_with_invalid_component_class():
         "name": "InvalidComponentJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 1,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "name": "invalid1",
                 "comp_type": "non_existent",
                 "strategy_type": "row",
                 "description": "should fail",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             }
         ],
     }

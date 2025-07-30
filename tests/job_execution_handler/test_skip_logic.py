@@ -21,8 +21,10 @@ def test_branch_skip_fan_out(tmp_path):
         "job_name": "SkipFanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -30,10 +32,6 @@ def test_branch_skip_fan_out(tmp_path):
                 "comp_type": "failtest",  # will throw
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["b", "c"],
             },
             {
@@ -42,10 +40,6 @@ def test_branch_skip_fan_out(tmp_path):
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
             {
                 "id": "c",
@@ -53,10 +47,6 @@ def test_branch_skip_fan_out(tmp_path):
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }
@@ -90,8 +80,10 @@ def test_branch_skip_fan_in(tmp_path):
         "job_name": "SkipFanInJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -99,10 +91,6 @@ def test_branch_skip_fan_in(tmp_path):
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["c"],
             },
             {
@@ -111,10 +99,6 @@ def test_branch_skip_fan_in(tmp_path):
                 "comp_type": "failtest",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["c"],
             },
             {
@@ -123,10 +107,6 @@ def test_branch_skip_fan_in(tmp_path):
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.5,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }
@@ -159,8 +139,10 @@ def test_chain_skip_linear():
         "job_name": "ChainSkipJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -168,10 +150,6 @@ def test_chain_skip_linear():
                 "comp_type": "failtest",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["b"],
             },
             {
@@ -180,10 +158,6 @@ def test_chain_skip_linear():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["c"],
             },
             {
@@ -192,10 +166,6 @@ def test_chain_skip_linear():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 2.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }
@@ -227,8 +197,10 @@ def test_skip_diamond():
         "job_name": "SkipDiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -236,10 +208,6 @@ def test_skip_diamond():
                 "comp_type": "failtest",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["b", "c"],
             },
             {
@@ -248,10 +216,6 @@ def test_skip_diamond():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["d"],
             },
             {
@@ -260,10 +224,6 @@ def test_skip_diamond():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["d"],
             },
             {
@@ -272,10 +232,6 @@ def test_skip_diamond():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.5,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }

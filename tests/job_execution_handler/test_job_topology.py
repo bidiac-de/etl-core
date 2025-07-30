@@ -20,8 +20,10 @@ def test_fan_out_topology():
         "job_name": "FanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -29,10 +31,6 @@ def test_fan_out_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["b", "c"],
             },
             {
@@ -41,10 +39,6 @@ def test_fan_out_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
             {
                 "id": "c",
@@ -52,10 +46,6 @@ def test_fan_out_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }
@@ -89,8 +79,10 @@ def test_fan_in_topology():
         "job_name": "FanInJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -98,10 +90,6 @@ def test_fan_in_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["c"],
             },
             {
@@ -110,10 +98,6 @@ def test_fan_in_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["c"],
             },
             {
@@ -122,10 +106,6 @@ def test_fan_in_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.5,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }
@@ -159,8 +139,10 @@ def test_diamond_topology():
         "job_name": "DiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -168,10 +150,6 @@ def test_diamond_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["b", "c"],
             },
             {
@@ -180,10 +158,6 @@ def test_diamond_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["d"],
             },
             {
@@ -192,10 +166,6 @@ def test_diamond_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["d"],
             },
             {
@@ -204,10 +174,6 @@ def test_diamond_topology():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 2.0,
-                "y_coord": 0.5,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }

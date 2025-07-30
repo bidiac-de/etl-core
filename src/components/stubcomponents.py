@@ -18,12 +18,8 @@ class StubComponent(Component):
         """
         Build dependent objects for the stub component
         """
-        values["layout"] = Layout(x_coord=values["x_coord"], y_coord=values["y_coord"])
         values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
-        values["metadata"] = MetaData(
-            created_at=values["created_at"], created_by=values["created_by"]
-        )
 
         return values
 
@@ -57,12 +53,8 @@ class FailStubComponent(StubComponent):
         """
         Build dependent objects for the failstub component
         """
-        values["layout"] = Layout(x_coord=values["x_coord"], y_coord=values["y_coord"])
         values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
-        values["metadata"] = MetaData(
-            created_at=values["created_at"], created_by=values["created_by"]
-        )
 
         return values
 
@@ -83,12 +75,8 @@ class StubFailOnce(Component):
         """
         Build dependent objects for the stub component
         """
-        values["layout"] = Layout(x_coord=values["x_coord"], y_coord=values["y_coord"])
         values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
-        values["metadata"] = MetaData(
-            created_at=values["created_at"], created_by=values["created_by"]
-        )
 
         return values
 

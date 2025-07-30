@@ -22,8 +22,10 @@ def test_execute_job_single_test_component():
         "name": "ExecuteTestComponent",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -31,10 +33,6 @@ def test_execute_job_single_test_component():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "a test comp",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             }
         ],
     }
@@ -65,8 +63,10 @@ def test_execute_job_chain_components_file_logging():
         "job_name": "ChainJob",
         "num_of_retries": 0,
         "file_logging": True,  # exercise the file_logging path
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -74,10 +74,6 @@ def test_execute_job_chain_components_file_logging():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "first",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
                 "next": ["b"],
             },
             {
@@ -86,10 +82,6 @@ def test_execute_job_chain_components_file_logging():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "second",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             },
         ],
     }
@@ -131,8 +123,10 @@ def test_execute_job_failing_and_cancelled_components():
         "job_name": "ChainErrorJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -140,10 +134,6 @@ def test_execute_job_failing_and_cancelled_components():
                 "comp_type": "failtest",  # our failing component
                 "strategy_type": "row",
                 "description": "will fail",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
                 "next": ["b"],
             },
             {
@@ -152,10 +142,6 @@ def test_execute_job_failing_and_cancelled_components():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "should be cancelled",
-                "x_coord": 1.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             },
         ],
     }
@@ -191,8 +177,10 @@ def test_retry_logic_and_metrics():
         "job_name": "RetryOnceJob",
         "num_of_retries": 1,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -200,10 +188,6 @@ def test_retry_logic_and_metrics():
                 "comp_type": "stub_fail_once",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             }
         ],
     }
@@ -231,8 +215,10 @@ def test_execute_job_linear_chain():
         "job_name": "LinearChain",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
         "component_configs": [
             {
                 "id": "a",
@@ -240,10 +226,6 @@ def test_execute_job_linear_chain():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["b"],
             },
             {
@@ -252,10 +234,6 @@ def test_execute_job_linear_chain():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["c"],
             },
             {
@@ -264,10 +242,6 @@ def test_execute_job_linear_chain():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 2.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
                 "next": ["d"],
             },
             {
@@ -276,10 +250,6 @@ def test_execute_job_linear_chain():
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 3.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }

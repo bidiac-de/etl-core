@@ -10,8 +10,8 @@ class Layout(BaseModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
-    x_coordinate: float = Field(..., alias="x_coord")
-    y_coordinate: float = Field(..., alias="y_coord")
+    x_coordinate: float = Field(default = 0, alias="x_coord")
+    y_coordinate: float = Field(default = 0, alias="y_coord")
 
     def __repr__(self):
         return (
