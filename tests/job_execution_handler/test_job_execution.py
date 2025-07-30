@@ -44,7 +44,7 @@ def test_execute_job_single_test_component():
 
     exec_record = result.executions[0]
     comp = get_by_temp_id(job.components, job._temp_map.get("a"))
-    comp_metrics = exec_record.component_metrics[comp.id]
+    comp_metrics = exec_record.attempts[0].component_metrics[comp.id]
     assert comp_metrics.lines_received == 1
     assert comp_metrics.status == RuntimeState.SUCCESS
     assert exec_record.status == RuntimeState.SUCCESS.value
@@ -98,7 +98,7 @@ def test_execute_job_chain_components_file_logging():
     assert exec_record.status == RuntimeState.SUCCESS.value
 
     # both components ran and metrics recorded
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
     assert set(metrics.keys()) == {comp1.id, comp2.id}
@@ -161,8 +161,8 @@ def test_execute_job_failing_and_cancelled_components():
     # Component-level assertions
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
-    comp1_metrics = exec_record.component_metrics[comp1.id]
-    comp2_metrics = exec_record.component_metrics[comp2.id]
+    comp1_metrics = exec_record.attempts[0].component_metrics[comp1.id]
+    comp2_metrics = exec_record.attempts[0].component_metrics[comp2.id]
     assert (
         comp1_metrics.status == RuntimeState.FAILED
     ), "comp1 should have FAILED status"
@@ -196,10 +196,11 @@ def test_retry_logic_and_metrics():
 
     # Should retry once, then succeed
     exec_record = result.executions[0]
+    assert len(exec_record.attempts) == 2
     assert exec_record.status == RuntimeState.SUCCESS.value
     # lines_received comes from second execution
     comp = get_by_temp_id(job.components, job._temp_map.get("a"))
-    assert exec_record.component_metrics[comp.id].lines_received == 1
+    assert exec_record.attempts[1].component_metrics[comp.id].lines_received == 1
 
 
 def test_execute_job_linear_chain():
@@ -264,7 +265,7 @@ def test_execute_job_linear_chain():
     assert exec_record.status == RuntimeState.SUCCESS.value
 
     # Every component should have run once and completed
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     assert metrics[comp1.id].lines_received == 1
     assert metrics[comp1.id].status == RuntimeState.SUCCESS

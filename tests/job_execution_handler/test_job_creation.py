@@ -20,7 +20,7 @@ def test_create_job_with_complete_config():
         "metadata": {
             "created_by": 42,
             "created_at": datetime.now(),
-        }
+        },
     }
 
     job = Job(**config)

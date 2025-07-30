@@ -56,7 +56,7 @@ def test_branch_skip_fan_out(tmp_path):
 
     # Job should end FAILED due to the initial failure
     exec_record = result.executions[0]
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
@@ -115,7 +115,7 @@ def test_branch_skip_fan_in(tmp_path):
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
@@ -174,7 +174,7 @@ def test_chain_skip_linear():
     result = handler.execute_job(job, max_workers=1)
 
     exec_record = result.executions[0]
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 
@@ -240,7 +240,7 @@ def test_skip_diamond():
     result = handler.execute_job(job, max_workers=2)
 
     exec_record = result.executions[0]
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
     assert "One or more components failed" in exec_record.error
 

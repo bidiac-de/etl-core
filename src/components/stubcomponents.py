@@ -1,10 +1,10 @@
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.components.component_registry import register_component
-from src.components.dataclasses import Layout, MetaData
 from src.components.base_component import get_strategy
 from src.receivers.base_receiver import Receiver
 from typing import Any, List, Dict
+from pydantic import PrivateAttr
 
 
 @register_component("test")
@@ -61,24 +61,23 @@ class FailStubComponent(StubComponent):
 
 @register_component("stub_fail_once")
 class StubFailOnce(Component):
-    _called = False
-
-    def execute(self, data, metrics, **kwargs):
-        if not StubFailOnce._called:
-            StubFailOnce._called = True
-            raise RuntimeError("fail first time")
-        metrics.lines_received = 1
-        return "recovered"
+    # a per‐instance flag, initialized to False
+    _called: bool = PrivateAttr(default=False)
 
     @classmethod
     def build_objects(cls, values):
-        """
-        Build dependent objects for the stub component
-        """
         values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
-
         return values
+
+    def execute(self, data, metrics, **kwargs):
+        # on the very first call of this instance, throw…
+        if not self._called:
+            self._called = True
+            raise RuntimeError("fail first time")
+        # …and on the retry, succeed:
+        metrics.lines_received = 1
+        return "recovered"
 
     def process_row(
         self, row: dict[str, Any], metrics: "ComponentMetrics"

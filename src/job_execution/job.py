@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, Any, List
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
@@ -16,7 +17,11 @@ class Job(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
-    id: str = Field(default_factory=lambda: str(uuid4()),description="set by constructor", exclude=True)
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="set by constructor",
+        exclude=True,
+    )
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
@@ -101,10 +106,34 @@ class JobExecution:
 
     job: Job
     job_metrics: JobMetrics = None
+    started_at: datetime = None
     status: str = RuntimeState.PENDING.value
     error: str = None
-    component_metrics: Dict[str, ComponentMetrics]
+    attempts: List["ExecutionAttempt"]
 
-    def __init__(self, job: Job, status: str = RuntimeState.PENDING.value):
+    def __init__(
+        self,
+        job: Job,
+        status: str = RuntimeState.PENDING.value,
+        started_at: datetime = None,
+    ):
         self.job = job
         self.status = status
+        self.started_at = started_at
+        self.job_metrics = JobMetrics(
+            started_at=started_at, processing_time=0, error_count=0
+        )
+        self.attempts = []
+
+
+class ExecutionAttempt:
+    """
+    class to encapsulate the execution attempt details of a job
+    """
+
+    attempt_number: int = 0
+    component_metrics: Dict[str, ComponentMetrics]
+
+    def __init__(self, attempt_number: int = 0):
+        self.attempt_number = attempt_number
+        self.component_metrics = {}

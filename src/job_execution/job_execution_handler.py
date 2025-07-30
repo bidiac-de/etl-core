@@ -3,12 +3,11 @@ import logging
 import concurrent.futures
 from typing import Any
 
-from src.job_execution.job import Job
+from src.job_execution.job import Job, ExecutionAttempt
 from src.components.base_component import Component
 from src.components.runtime_state import RuntimeState
 from src.job_execution.job import JobExecution
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.metrics.job_metrics import JobMetrics
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.metrics.metrics_registry import get_metrics_class
@@ -30,54 +29,56 @@ class JobExecutionHandler:
         self.system_metrics_handler = SystemMetricsHandler()
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
+        start = datetime.datetime.now()
         logger.info("Starting execution of job '%s'", job.name)
         self.job_information_handler.logging_handler.update_job_name(job.name)
         file_logger = self.job_information_handler.logging_handler.logger
 
-        retry = 0
-        execution = self._init_job_execution(job)
+        execution = JobExecution(
+            job=job, status=RuntimeState.RUNNING.value, started_at=start
+        )
+        job.executions.append(execution)
 
-        while True:
+        total_attempts = job.num_of_retries + 1
+        for attempt_index in range(total_attempts):
+            attempt = ExecutionAttempt(attempt_number=attempt_index + 1)
+            execution.attempts.append(attempt)
+            components = job.components
+            for comp in components.values():
+                MetricsCls = get_metrics_class(comp.comp_type)
+                metrics = MetricsCls(
+                    started_at=datetime.datetime.now(),
+                    processing_time=datetime.timedelta(0),
+                    error_count=0,
+                )
+                attempt.component_metrics[comp.id] = metrics
+            file_logger.debug("Attempt %d for job '%s'", attempt_index + 1, job.name)
             try:
-                file_logger.debug("Attempt %d for job '%s'", retry + 1, job.name)
-                self._run_attempt(job, execution, max_workers, file_logger)
+                self._run_attempt(
+                    job, execution, attempt, components, max_workers, file_logger
+                )
+                # Success: no exception, stop retrying
+                execution.status = RuntimeState.SUCCESS.value
                 return job
             except Exception as exc:
-                retry += 1
-                execution.job_metrics.error_count = retry
-                logger.warning("Attempt %d failed: %s", retry, exc)
-                file_logger.warning("Attempt %d failed: %s", retry, exc)
-                if retry > job.num_of_retries:
+                logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
+                file_logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
+                # If this was the last allowed attempt, finalize as failure
+                if attempt_index == job.num_of_retries:
                     self._finalize_failure(job, execution, exc, file_logger)
                     return job
 
-    def _init_job_execution(self, job: Job) -> JobExecution:
-        exec_obj = JobExecution(job=job, status=RuntimeState.RUNNING.value)
-        job.executions.append(exec_obj)
-        start = datetime.datetime.now()
-        exec_obj.started_at = start
-        exec_obj.job_metrics = JobMetrics(
-            started_at=start, processing_time=0, error_count=0
-        )
-        exec_obj.component_metrics = {}
-        return exec_obj
+        return job
 
     def _run_attempt(
         self,
         job: Job,
         execution: JobExecution,
+        attempt: ExecutionAttempt,
+        components: dict[str, Component],
         max_workers: int,
         file_logger: logging.Logger,
     ) -> None:
-        components = job.components
-        for comp in components.values():
-            MetricsCls = get_metrics_class(comp.comp_type)
-            metrics = MetricsCls(
-                started_at=datetime.datetime.now(),
-                processing_time=datetime.timedelta(0),
-                error_count=0,
-            )
-            execution.component_metrics[comp.id] = metrics
         pending = set(components.keys())
         succeeded, failed, cancelled = set(), set(), set()
 
@@ -85,9 +86,7 @@ class JobExecutionHandler:
         file_logger.debug("Root components: %s", [c.name for c in roots])
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = self._submit_roots(
-                roots, executor, pending, file_logger, execution
-            )
+            futures = self._submit_roots(roots, executor, pending, file_logger, attempt)
 
             while futures:
                 done, _ = concurrent.futures.wait(
@@ -99,6 +98,7 @@ class JobExecutionHandler:
                         fut,
                         comp,
                         execution,
+                        attempt,
                         succeeded,
                         failed,
                         cancelled,
@@ -115,10 +115,13 @@ class JobExecutionHandler:
                         pending,
                         file_logger,
                         execution,
+                        attempt,
                     )
 
-        self._mark_unrunnable(components, pending, cancelled, file_logger, execution)
-        self._finalize_success(job, execution, succeeded, failed, cancelled)
+        self._mark_unrunnable(
+            components, pending, cancelled, file_logger, execution, attempt
+        )
+        self._finalize_success(job, execution, attempt, succeeded, failed, cancelled)
 
     def _submit_roots(
         self,
@@ -126,12 +129,12 @@ class JobExecutionHandler:
         executor: concurrent.futures.ThreadPoolExecutor,
         pending: set,
         file_logger: logging.Logger,
-        execution: JobExecution,
+        attempt: ExecutionAttempt,
     ) -> dict[concurrent.futures.Future, Component]:
         futures = {}
         for comp in roots:
             file_logger.debug("Submitting root '%s'", comp.name)
-            metrics = execution.component_metrics[comp.id]
+            metrics = attempt.component_metrics[comp.id]
             fut = executor.submit(self._execute_component, comp, None, metrics)
             futures[fut] = comp
             pending.discard(comp.id)
@@ -142,6 +145,7 @@ class JobExecutionHandler:
         fut: concurrent.futures.Future,
         comp: Component,
         execution: JobExecution,
+        attempt: ExecutionAttempt,
         succeeded: set,
         failed: set,
         cancelled: set,
@@ -151,9 +155,9 @@ class JobExecutionHandler:
         try:
             fut.result()
             succeeded.add(comp.id)
-            self._update_metrics(comp, execution)
+            self._update_metrics(comp, execution, attempt)
         except Exception:
-            execution.component_metrics[comp.id].status = RuntimeState.FAILED
+            attempt.component_metrics[comp.id].status = RuntimeState.FAILED
             failed.add(comp.id)
             file_logger.error("Component '%s' FAILED", comp.name, exc_info=True)
 
@@ -161,11 +165,12 @@ class JobExecutionHandler:
         self,
         comp: Component,
         execution: JobExecution,
+        attempt: ExecutionAttempt,
     ) -> None:
         try:
-            total = sum(m.lines_received for m in execution.component_metrics.values())
+            total = sum(m.lines_received for m in attempt.component_metrics.values())
             elapsed = datetime.datetime.now() - execution.job_metrics.started_at
-            execution.processing_time = elapsed
+            attempt.processing_time = elapsed
             execution.job_metrics.calc_throughput(total)
         except Exception:
             pass
@@ -181,12 +186,13 @@ class JobExecutionHandler:
         pending: set,
         file_logger: logging.Logger,
         execution: JobExecution,
+        attempt: ExecutionAttempt,
     ) -> None:
         for nxt in comp.next_components:
             if nxt.id in succeeded | failed | cancelled:
                 continue
             prev_ids = {p.id for p in nxt.prev_components}
-            metrics = execution.component_metrics[nxt.id]
+            metrics = attempt.component_metrics[nxt.id]
             if prev_ids.issubset(succeeded):
                 file_logger.debug("Submitting '%s'", nxt.name)
                 fut = executor.submit(self._execute_component, nxt, None, metrics)
@@ -205,10 +211,11 @@ class JobExecutionHandler:
         cancelled: set,
         file_logger: logging.Logger,
         execution: JobExecution,
+        attempt: ExecutionAttempt,
     ) -> None:
         for pid in list(pending):
             comp = components[pid]
-            metrics = execution.component_metrics[pid]
+            metrics = attempt.component_metrics[pid]
             metrics.status = RuntimeState.CANCELLED
             cancelled.add(pid)
             file_logger.warning(
@@ -219,6 +226,7 @@ class JobExecutionHandler:
         self,
         job: Job,
         execution: JobExecution,
+        attempt: ExecutionAttempt,
         succeeded: set,
         failed: set,
         cancelled: set,
@@ -236,7 +244,7 @@ class JobExecutionHandler:
         )
         for cid, comp in job.components.items():
             self.job_information_handler.metrics_handler.add_component_metrics(
-                job.id, cid, execution.component_metrics[cid]
+                job.id, cid, attempt.component_metrics[cid]
             )
         execution.status = RuntimeState.SUCCESS.value
 

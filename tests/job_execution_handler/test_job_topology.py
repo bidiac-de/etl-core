@@ -54,7 +54,7 @@ def test_fan_out_topology():
 
     exec_record = result.executions[0]
     assert exec_record.status == RuntimeState.SUCCESS.value
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
 
@@ -114,7 +114,7 @@ def test_fan_in_topology():
 
     exec_record = result.executions[0]
     assert exec_record.status == RuntimeState.SUCCESS.value
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
 
@@ -182,7 +182,7 @@ def test_diamond_topology():
 
     exec_record = result.executions[0]
     assert exec_record.status == RuntimeState.SUCCESS.value
-    metrics = exec_record.component_metrics
+    metrics = exec_record.attempts[0].component_metrics
     expected_ids = {c.id for c in job.components.values()}
     assert set(metrics.keys()) == expected_ids
 
