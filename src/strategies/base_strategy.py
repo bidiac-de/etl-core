@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Any
-from src.components.base_components import Component
+#from src.components.base_components import Component
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.components.base_components import Component
 
 class ExecutionStrategy(ABC):
     @abstractmethod

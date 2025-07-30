@@ -1,9 +1,12 @@
 import json
+
+import pandas as pd
 import pytest
 from pathlib import Path
 from components.file_components.json.read_json_component import ReadJSON
-from src.components.data_operations.json.write_json_component import WriteJSON
+from src.components.file_components.json.write_json_component import WriteJSON
 from src.components.column_definition import ColumnDefinition, DataType
+from datetime import datetime
 
 
 @pytest.fixture
@@ -36,13 +39,15 @@ def test_readjson_bulk(sample_json_file, schema_definition):
         description="Test ReadJSON",
         componentManager=None,
         filepath=sample_json_file,
-        schema_definition=schema_definition
+        schema_definition=schema_definition,
+        created_by=2,
+        created_at=datetime.now()
     )
     data = reader.process_bulk([])
-    assert isinstance(data, list)
+    assert isinstance(data, pd.DataFrame)
     assert len(data) == 2
-    assert data[0]["name"] == "Alice"
-
+    records = data.to_dict(orient="records")
+    assert records[0]["name"] == "Alice"
 
 def test_readjson_row(sample_json_file, schema_definition):
     """Tests reading a single row using ReadJSON."""
@@ -52,7 +57,9 @@ def test_readjson_row(sample_json_file, schema_definition):
         description="Test ReadJSON",
         componentManager=None,
         filepath=sample_json_file,
-        schema_definition=schema_definition
+        schema_definition=schema_definition,
+        created_by=2,
+        created_at=datetime.now()
     )
     row = reader.process_row({})
     assert isinstance(row, dict)
@@ -68,13 +75,17 @@ def test_writejson_and_readback(tmp_path, schema_definition):
         description="Test WriteJSON",
         componentManager=None,
         filepath=file_path,
-        schema_definition=schema_definition
+        schema_definition=schema_definition,
+        created_by=2,
+        created_at=datetime.now()
     )
 
-    test_data = [
+    import pandas as pd  # falls noch nicht oben
+
+    test_data = pd.DataFrame([
         {"id": 10, "name": "Charlie"},
         {"id": 11, "name": "Diana"}
-    ]
+    ])
 
     writer.process_bulk(test_data)
 
@@ -85,11 +96,13 @@ def test_writejson_and_readback(tmp_path, schema_definition):
         description="Test ReadJSON",
         componentManager=None,
         filepath=file_path,
-        schema_definition=schema_definition
+        schema_definition=schema_definition,
+        created_by=2,
+        created_at=datetime.now()
     )
     read_data = reader.process_bulk([])
     assert len(read_data) == 2
-    assert read_data[0]["name"] == "Charlie"
+    assert read_data.iloc[0]["name"] == "Charlie"
 
 
 def test_writejson_row(tmp_path, schema_definition):
@@ -101,7 +114,9 @@ def test_writejson_row(tmp_path, schema_definition):
         description="Test Write Row",
         componentManager=None,
         filepath=file_path,
-        schema_definition=schema_definition
+        schema_definition=schema_definition,
+        created_by=2,
+        created_at=datetime.now()
     )
     row = {"id": 99, "name": "SingleRow"}
     writer.process_row(row)

@@ -1,4 +1,4 @@
-from base_strategy import ExecutionStrategy
+from src.strategies.base_strategy import ExecutionStrategy
 
 
 class BulkExecutionStrategy(ExecutionStrategy):

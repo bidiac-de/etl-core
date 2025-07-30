@@ -9,24 +9,6 @@ from src.components.column_definition import ColumnDefinition
 class WriteJSON(JSON):
     """Component that writes data to a JSON file."""
 
-    def __init__(
-            self,
-            id,
-            name,
-            description,
-            componentManager,
-            filepath: Path,
-            schema_definition: List[ColumnDefinition]
-    ):
-        super().__init__(
-            id,
-            name,
-            description,
-            componentManager,
-            filepath,
-            schema_definition
-        )
-
 
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         JSONReceiver().write_row(row, filepath=self.filepath)

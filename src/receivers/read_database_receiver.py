@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Generator
-from src.receivers.receiver import Receiver
+from src.receivers.base_receiver import Receiver
 
 
 class ReadDatabaseReceiver(Receiver, ABC):

@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Generator
 from pathlib import Path
-from src.receivers.receiver import Receiver
+from src.receivers.base_receiver import Receiver
 
 
 class ReadFileReceiver(Receiver, ABC):

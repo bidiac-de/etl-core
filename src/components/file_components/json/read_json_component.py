@@ -11,25 +11,6 @@ from src.components.registry import register_component
 class ReadJSON(JSON):
     """Component that reads data from a JSON file."""
 
-    def __init__(
-            self,
-            id,
-            name,
-            description,
-            componentManager,
-            filepath: Path,
-            schema_definition: List[ColumnDefinition]
-    ):
-        super().__init__(
-            id,
-            name,
-            description,
-            componentManager,
-            filepath,
-            schema_definition
-        )
-
-
     def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return JSONReceiver().read_row(filepath=self.filepath)
 
