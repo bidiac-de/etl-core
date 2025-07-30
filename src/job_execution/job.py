@@ -8,6 +8,7 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from src.components.runtime_state import RuntimeState
 from uuid import uuid4
+import logging
 
 
 class Job(BaseModel):
@@ -110,20 +111,20 @@ class JobExecution:
     status: str = RuntimeState.PENDING.value
     error: str = None
     attempts: List["ExecutionAttempt"]
+    roots: List[Component] = []
+    file_logger: logging.Logger = None
 
-    def __init__(
-        self,
-        job: Job,
-        status: str = RuntimeState.PENDING.value,
-        started_at: datetime = None,
-    ):
+    def __init__(self, job: Job):
         self.job = job
-        self.status = status
-        self.started_at = started_at
-        self.job_metrics = JobMetrics(
-            started_at=started_at, processing_time=0, error_count=0
-        )
+        self.job_metrics = JobMetrics()
         self.attempts = []
+
+    def set_started(self):
+        """
+        Set the started_at time and reset processing_time.
+        """
+        self.started_at = datetime.now()
+        self.status = RuntimeState.RUNNING.value
 
 
 class ExecutionAttempt:
@@ -137,3 +138,7 @@ class ExecutionAttempt:
     def __init__(self, attempt_number: int = 0):
         self.attempt_number = attempt_number
         self.component_metrics = {}
+        self.pending: set[str] = set()
+        self.succeeded: set[str] = set()
+        self.failed: set[str] = set()
+        self.cancelled: set[str] = set()
