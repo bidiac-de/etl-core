@@ -11,7 +11,6 @@ from src.job_execution.job import JobExecution
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
-from src.metrics.metrics_registry import get_metrics_class
 
 logger = logging.getLogger("job.ExecutionHandler")
 
@@ -38,28 +37,14 @@ class JobExecutionHandler:
             )
             return job
 
-        execution = JobExecution(job=job, number_of_attempts=job.num_of_retries + 1)
-        self.running_executions.append(execution)
-        self.job_information_handler.logging_handler.update_job_name(job.name)
-        execution.file_logger = self.job_information_handler.logging_handler.logger
-        job.executions.append(execution)
-        self._local.execution = execution
-        logger.info("Starting execution of job '%s'", job.name)
+        execution = JobExecution(
+            job=job, number_of_attempts=job.num_of_retries + 1, handler=self
+        )
 
         for attempt_index in range(execution.number_of_attempts):
-            attempt = ExecutionAttempt(attempt_number=attempt_index + 1)
+            attempt = ExecutionAttempt(attempt_number=attempt_index + 1, job=job)
             execution.attempts.append(attempt)
             self._local.attempt = attempt
-            components = job.components
-
-            # initialize metrics for each component
-            for comp in components.values():
-                MetricsCls = get_metrics_class(comp.comp_type)
-                metrics = MetricsCls(
-                    processing_time=datetime.timedelta(0),
-                    error_count=0,
-                )
-                attempt.component_metrics[comp.id] = metrics
 
             execution.file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name

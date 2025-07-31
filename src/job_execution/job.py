@@ -7,6 +7,10 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from uuid import uuid4
 import logging
+from datetime import timedelta
+from src.metrics.metrics_registry import get_metrics_class
+
+logger = logging.getLogger("job.ExecutionHandler")
 
 if TYPE_CHECKING:
     from src.job_execution.job_execution_handler import JobExecutionHandler
@@ -116,13 +120,22 @@ class JobExecution:
     attempts: List["ExecutionAttempt"]
     file_logger: logging.Logger = None
 
-    def __init__(self, job: Job, number_of_attempts: int):
+    def __init__(
+        self, job: Job, number_of_attempts: int, handler: "JobExecutionHandler" = None
+    ):
         self.job = job
         self.job_metrics = JobMetrics()
         self.attempts = []
         if number_of_attempts < 1:
             raise ValueError("number_of_attempts must be at least 1")
         self._number_of_attempts = number_of_attempts
+
+        handler.running_executions.append(self)
+        handler.job_information_handler.logging_handler.update_job_name(self.job.name)
+        self.file_logger = handler.job_information_handler.logging_handler.logger
+        self.job.executions.append(self)
+        handler._local.execution = self
+        logger.info("Starting execution of job '%s'", self.job.name)
 
     @property
     def number_of_attempts(self) -> int:
@@ -150,7 +163,7 @@ class ExecutionAttempt:
     component_metrics: Dict[str, ComponentMetrics]
     error: str = None
 
-    def __init__(self, attempt_number: int = 0):
+    def __init__(self, attempt_number: int = 0, job: Job = None):
         if attempt_number < 1:
             raise ValueError("number_of_attempts must be at least 1")
         self._attempt_number = attempt_number
@@ -159,6 +172,16 @@ class ExecutionAttempt:
         self.succeeded: set[str] = set()
         self.failed: set[str] = set()
         self.cancelled: set[str] = set()
+        components = job.components
+
+        # initialize metrics for each component
+        for comp in components.values():
+            MetricsCls = get_metrics_class(comp.comp_type)
+            metrics = MetricsCls(
+                processing_time=timedelta(0),
+                error_count=0,
+            )
+            self.component_metrics[comp.id] = metrics
 
     def run_attempt(
         self,
