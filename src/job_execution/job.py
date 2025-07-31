@@ -161,7 +161,7 @@ class ExecutionAttempt:
 
     _attempt_number: int = 0
     component_metrics: Dict[str, ComponentMetrics]
-    error: str = None
+    _error: str = None
 
     def __init__(self, attempt_number: int = 0, job: Job = None):
         if attempt_number < 1:
@@ -239,3 +239,13 @@ class ExecutionAttempt:
         if not isinstance(value, int) or value < 1:
             raise ValueError("attempt_number must be a non-negative integer ≥ 1")
         self._attempt_number = value
+
+    @property
+    def error(self) -> str | None:
+        return self._error
+
+    @error.setter
+    def error(self, value: str) -> None:
+        if not isinstance(value, str):
+            raise ValueError("error must be a string")
+        self._error = value
