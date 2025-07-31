@@ -58,7 +58,7 @@ def test_branch_skip_fan_out(tmp_path):
     exec_record = result.executions[0]
     metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
-    assert "One or more components failed" in exec_record.error
+    assert "One or more components failed" in exec_record.attempts[0].error
 
     # Component statuses
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
@@ -117,7 +117,7 @@ def test_branch_skip_fan_in(tmp_path):
     exec_record = result.executions[0]
     metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
-    assert "One or more components failed" in exec_record.error
+    assert "One or more components failed" in exec_record.attempts[0].error
 
     # ok_root ran, fail_root failed, join skipped
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
@@ -176,7 +176,7 @@ def test_chain_skip_linear():
     exec_record = result.executions[0]
     metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
-    assert "One or more components failed" in exec_record.error
+    assert "One or more components failed" in exec_record.attempts[0].error
 
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
@@ -242,7 +242,7 @@ def test_skip_diamond():
     exec_record = result.executions[0]
     metrics = exec_record.attempts[0].component_metrics
     assert exec_record.status == RuntimeState.FAILED.value
-    assert "One or more components failed" in exec_record.error
+    assert "One or more components failed" in exec_record.attempts[0].error
 
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
     comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))

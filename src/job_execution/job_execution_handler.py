@@ -33,7 +33,9 @@ class JobExecutionHandler:
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         if any(exec_.job == job for exec_ in self.running_executions):
-            logger.warning("Job '%s' is already running; skipping new execution", job.name)
+            logger.warning(
+                "Job '%s' is already running; skipping new execution", job.name
+            )
             return job
         execution = JobExecution(job=job)
         self.running_executions.append(execution)
@@ -227,7 +229,7 @@ class JobExecutionHandler:
     ) -> None:
         self._local.execution.status = RuntimeState.FAILED.value
         self._local.execution.job_metrics.status = RuntimeState.FAILED.value
-        self._local.execution.error = str(exc)
+        self._local.attempt.error = str(exc)
         self.running_executions.remove(self._local.execution)
 
     def _execute_component(

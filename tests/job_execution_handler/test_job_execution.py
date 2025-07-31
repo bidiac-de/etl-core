@@ -153,10 +153,10 @@ def test_execute_job_failing_and_cancelled_components():
     assert len(result.executions) == 1
     exec_record = result.executions[0]
     assert exec_record.status == RuntimeState.FAILED.value
-    assert exec_record.error is not None
+    assert exec_record.attempts[0].error is not None
     assert (
         "One or more components failed; dependent components cancelled"
-    ) in exec_record.error
+    ) in exec_record.attempts[0].error
 
     # Component-level assertions
     comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))

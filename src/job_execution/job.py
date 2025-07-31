@@ -114,7 +114,6 @@ class JobExecution:
     job_metrics: JobMetrics = None
     started_at: datetime = None
     status: str = RuntimeState.PENDING.value
-    error: str = None
     attempts: List["ExecutionAttempt"]
     file_logger: logging.Logger = None
 
@@ -138,6 +137,7 @@ class ExecutionAttempt:
 
     attempt_number: int = 0
     component_metrics: Dict[str, ComponentMetrics]
+    error: str = None
 
     def __init__(self, attempt_number: int = 0):
         self.attempt_number = attempt_number
