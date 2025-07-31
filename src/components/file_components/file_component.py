@@ -1,9 +1,8 @@
 from pathlib import Path
 from typing import List, Any, Optional
 from pydantic import Field, model_validator
-from src.components.base_components import Component, get_strategy
+from src.components.base_components import Component
 from src.components.column_definition import ColumnDefinition
-from src.components.dataclasses import Layout, MetaData
 from abc import ABC
 
 
