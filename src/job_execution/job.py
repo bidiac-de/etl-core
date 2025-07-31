@@ -146,12 +146,14 @@ class ExecutionAttempt:
     class to encapsulate the execution attempt details of a job
     """
 
-    attempt_number: int = 0
+    _attempt_number: int = 0
     component_metrics: Dict[str, ComponentMetrics]
     error: str = None
 
     def __init__(self, attempt_number: int = 0):
-        self.attempt_number = attempt_number
+        if attempt_number < 1:
+            raise ValueError("number_of_attempts must be at least 1")
+        self._attempt_number = attempt_number
         self.component_metrics = {}
         self.pending: set[str] = set()
         self.succeeded: set[str] = set()
@@ -201,3 +203,16 @@ class ExecutionAttempt:
 
         handler._mark_unrunnable()
         handler._finalize_success(job)
+
+    @property
+    def attempt_number(self) -> int:
+        return self._attempt_number
+
+    @attempt_number.setter
+    def attempt_number(self, value: int) -> None:
+        """
+        Set a new limit on execution attempts.
+        """
+        if not isinstance(value, int) or value < 1:
+            raise ValueError("attempt_number must be a non-negative integer ≥ 1")
+        self._attempt_number = value
