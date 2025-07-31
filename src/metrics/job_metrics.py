@@ -32,7 +32,10 @@ class JobMetrics(Metrics):
         now = datetime.now()
         elapsed = now - self.started_at
         self.processing_time = elapsed
-        self.throughput = total / elapsed.total_seconds() if elapsed.total_seconds() > 0 else 0.0
+        self.throughput = (
+            total / elapsed.total_seconds() if elapsed.total_seconds() > 0 else 0.0
+        )
+
     def __repr__(self) -> str:
         return (
             f"JobMetrics(id={self.id!r}, started_at={self.started_at!r}, "

@@ -7,8 +7,10 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from uuid import uuid4
 import logging
+
 if TYPE_CHECKING:
     from src.job_execution.job_execution_handler import JobExecutionHandler
+
 
 class Job(BaseModel):
     """
@@ -114,10 +116,29 @@ class JobExecution:
     attempts: List["ExecutionAttempt"]
     file_logger: logging.Logger = None
 
-    def __init__(self, job: Job):
+    def __init__(self, job: Job, number_of_attempts: int):
         self.job = job
         self.job_metrics = JobMetrics()
         self.attempts = []
+        if number_of_attempts < 1:
+            raise ValueError("number_of_attempts must be at least 1")
+        self._number_of_attempts = number_of_attempts
+
+    @property
+    def number_of_attempts(self) -> int:
+        """
+        How many execution attempts will be made for this job.
+        """
+        return self._number_of_attempts
+
+    @number_of_attempts.setter
+    def number_of_attempts(self, value: int) -> None:
+        """
+        Set a new limit on execution attempts.
+        """
+        if not isinstance(value, int) or value < 1:
+            raise ValueError("number_of_attempts must be a non-negative integer ≥ 1")
+        self._number_of_attempts = value
 
 
 class ExecutionAttempt:
@@ -138,10 +159,10 @@ class ExecutionAttempt:
         self.cancelled: set[str] = set()
 
     def run_attempt(
-            self,
-            job: Job,
-            handler: "JobExecutionHandler",
-            max_workers: int,
+        self,
+        job: Job,
+        handler: "JobExecutionHandler",
+        max_workers: int,
     ) -> None:
         """
         Execute this attempt: schedule components in parallel and handle execution.

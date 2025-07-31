@@ -38,18 +38,15 @@ class JobExecutionHandler:
             )
             return job
 
-        execution = JobExecution(job=job)
+        execution = JobExecution(job=job, number_of_attempts=job.num_of_retries + 1)
         self.running_executions.append(execution)
         self.job_information_handler.logging_handler.update_job_name(job.name)
-        execution.file_logger = (
-            self.job_information_handler.logging_handler.logger
-        )
+        execution.file_logger = self.job_information_handler.logging_handler.logger
         job.executions.append(execution)
         self._local.execution = execution
         logger.info("Starting execution of job '%s'", job.name)
 
-        total_attempts = job.num_of_retries + 1
-        for attempt_index in range(total_attempts):
+        for attempt_index in range(execution.number_of_attempts):
             attempt = ExecutionAttempt(attempt_number=attempt_index + 1)
             execution.attempts.append(attempt)
             self._local.attempt = attempt
@@ -76,7 +73,8 @@ class JobExecutionHandler:
                 execution.file_logger.warning(
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
-                if attempt_index == job.num_of_retries:
+                if attempt_index == execution.number_of_attempts - 1:
+                    # Final attempt failed, finalize the job execution
                     self._finalize_failure(exc)
                     return job
 
