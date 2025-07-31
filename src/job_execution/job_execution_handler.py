@@ -39,10 +39,6 @@ class JobExecutionHandler:
         self.job_information_handler.logging_handler.update_job_name(job.name)
         execution.file_logger = self.job_information_handler.logging_handler.logger
 
-        # Determine root components and save on execution
-        roots = [c for c in job.components.values() if not c.prev_components]
-        execution.roots = roots
-
         total_attempts = job.num_of_retries + 1
         for attempt_index in range(total_attempts):
             attempt = ExecutionAttempt(attempt_number=attempt_index + 1)
@@ -95,7 +91,7 @@ class JobExecutionHandler:
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             # submit initial ready components (roots)
             futures: dict[concurrent.futures.Future, Component] = {}
-            for comp in self._local.execution.roots:
+            for comp in job.root_components:
                 self._local.execution.file_logger.debug("Submitting '%s'", comp.name)
                 metrics = self._local.attempt.component_metrics[comp.id]
                 fut = executor.submit(

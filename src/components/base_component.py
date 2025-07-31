@@ -86,15 +86,11 @@ class Component(BaseModel, ABC):
         return self.strategy.execute(self, data, metrics)
 
     @abstractmethod
-    def process_row(
-        self,*args: Any, **kwargs: Any
-    ) -> Dict[str, Any]:
+    def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bulk(
-        self, *args: Any, **kwargs: Any
-    ) -> List[Dict[str, Any]]:
+    def process_bulk(self, *args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
     @abstractmethod

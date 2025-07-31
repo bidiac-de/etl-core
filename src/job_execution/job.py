@@ -35,6 +35,7 @@ class Job(BaseModel):
     executions: List[Any] = Field(default_factory=list, exclude=True)
 
     components: Dict[str, Component] = Field(default_factory=dict, exclude=True)
+    root_components: List[Component] = Field(default_factory=list, exclude=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -99,6 +100,10 @@ class Job(BaseModel):
                 src.add_next(dest)
                 dest.add_prev(src)
 
+        self.root_components = [
+            c for c in self.components.values() if not c.prev_components
+        ]
+
 
 class JobExecution:
     """
@@ -111,7 +116,6 @@ class JobExecution:
     status: str = RuntimeState.PENDING.value
     error: str = None
     attempts: List["ExecutionAttempt"]
-    roots: List[Component] = []
     file_logger: logging.Logger = None
 
     def __init__(self, job: Job):
