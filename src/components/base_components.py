@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, List, Any, Dict
 from datetime import datetime
+from uuid import uuid4
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -31,49 +32,41 @@ class StrategyType(str, Enum):
 
 class Component(BaseModel, ABC):
     """
-    Base class for all components in the system.
+    Base class for all components in the system
     """
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
     )
-
-    id: int
+    id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     description: str
     comp_type: str
-    created_by: int
-    created_at: datetime
-    x_coord: float = Field(default=0.0)
-    y_coord: float = Field(default=0.0)
-    strategy_type: StrategyType = Field(default=StrategyType.ROW)
-    next: Optional[List[int]] = None
+    strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
+    next: [List[str]] = []
+    layout: [Layout] = Field(default_factory=lambda: Layout())
+    metadata: MetaData = Field(default_factory=lambda: MetaData())
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
-    status: str = Field(default=RuntimeState.PENDING.value, exclude=True)
     metrics: Any = Field(default=None, exclude=True)
 
+    # these need to be created in the concrete component classes
     strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
     receiver: Optional[Receiver] = Field(default=None, exclude=True)
-    layout: Optional[Layout] = Field(default=None, exclude=True)
-    metadata: MetaData = Field(default_factory=MetaData, exclude=True)
 
     @model_validator(mode="before")
     @classmethod
+    @abstractmethod
     def build_objects(cls, values: dict) -> dict:
-        """Default factory for layout, strategy and metadata"""
-        values.setdefault("layout", Layout(
-            x_coord=values.get("x_coord", 0.0),
-            y_coord=values.get("y_coord", 0.0),
-        ))
-        values.setdefault("strategy", get_strategy(str(values.get("strategy_type", "row"))))
-        values.setdefault("metadata", MetaData(
-            created_at=values.get("created_at", datetime.now()),
-            created_by=values.get("created_by", 0),
-        ))
-        return values
+        """
+        Each concrete component must implement this method to:
+        - construct strategy and receiver
+        - modify and return the values dict
+        """
+        raise NotImplementedError
+
 
     def add_next(self, nxt: "Component"):
         self.next_components.append(nxt)
@@ -86,18 +79,20 @@ class Component(BaseModel, ABC):
             raise ValueError(f"No strategy set for component {self.name}")
         return self.strategy.execute(self, data)
 
+
     @abstractmethod
-    def process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def process_row(
+            self,*args: Any, **kwargs: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bulk(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def process_bulk(
+            self, *args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, chunk_iterable: Any) -> Any:
+    def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
-
 
 def get_strategy(strategy_type: str) -> ExecutionStrategy:
     """Factory function to get the appropriate execution strategy based on the type."""
