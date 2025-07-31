@@ -32,12 +32,12 @@ class JobExecutionHandler:
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         execution = JobExecution(job=job)
+        self.job_information_handler.logging_handler.update_job_name(job.name)
+        execution.file_logger = self.job_information_handler.logging_handler.logger
         job.executions.append(execution)
         self._local.execution = execution
         execution.set_started()
         logger.info("Starting execution of job '%s'", job.name)
-        self.job_information_handler.logging_handler.update_job_name(job.name)
-        execution.file_logger = self.job_information_handler.logging_handler.logger
 
         total_attempts = job.num_of_retries + 1
         for attempt_index in range(total_attempts):
