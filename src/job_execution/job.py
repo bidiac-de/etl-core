@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, TYPE_CHECKING
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
 from src.components.base_component import Component
@@ -7,7 +7,8 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from uuid import uuid4
 import logging
-
+if TYPE_CHECKING:
+    from src.job_execution.job_execution_handler import JobExecutionHandler
 
 class Job(BaseModel):
     """
@@ -135,3 +136,47 @@ class ExecutionAttempt:
         self.succeeded: set[str] = set()
         self.failed: set[str] = set()
         self.cancelled: set[str] = set()
+
+    def run_attempt(
+            self,
+            job: Job,
+            handler: "JobExecutionHandler",
+            max_workers: int,
+    ) -> None:
+        """
+        Execute this attempt: schedule components in parallel and handle execution.
+        """
+        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+
+        # initialize tracking sets
+        self.pending = set(job.components.keys())
+
+        execution = handler._local.execution
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures: dict = {}
+            # submit initial ready components (roots)
+            for comp in job.root_components:
+                execution.file_logger.debug("Submitting '%s'", comp.name)
+                metrics = self.component_metrics[comp.id]
+                fut = executor.submit(
+                    handler._execute_component,
+                    comp,
+                    None,
+                    metrics,
+                )
+                futures[fut] = comp
+                self.pending.discard(comp.id)
+
+            while futures:
+                done, _ = wait(
+                    futures,
+                    return_when=FIRST_COMPLETED,
+                )
+                for fut in done:
+                    comp = futures.pop(fut)
+                    handler._handle_future(fut, comp)
+                    handler._schedule_next(comp, executor, futures)
+
+        handler._mark_unrunnable()
+        handler._finalize_success(job)

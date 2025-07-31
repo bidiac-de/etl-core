@@ -37,10 +37,13 @@ class JobExecutionHandler:
                 "Job '%s' is already running; skipping new execution", job.name
             )
             return job
+
         execution = JobExecution(job=job)
         self.running_executions.append(execution)
         self.job_information_handler.logging_handler.update_job_name(job.name)
-        execution.file_logger = self.job_information_handler.logging_handler.logger
+        execution.file_logger = (
+            self.job_information_handler.logging_handler.logger
+        )
         job.executions.append(execution)
         self._local.execution = execution
         logger.info("Starting execution of job '%s'", job.name)
@@ -62,72 +65,22 @@ class JobExecutionHandler:
                 attempt.component_metrics[comp.id] = metrics
 
             execution.file_logger.debug(
-                "Attempt %d for job '%s'",
-                attempt_index + 1,
-                job.name,
+                "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
-                self._run_attempt(
-                    job,
-                    max_workers,
-                )
-                # Success: no exception, stop retrying
+                attempt.run_attempt(job, self, max_workers)
                 execution.job_metrics.status = RuntimeState.SUCCESS.value
                 return job
             except Exception as exc:
                 logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
-                self._local.execution.file_logger.warning(
+                execution.file_logger.warning(
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
-                # If this was the last allowed attempt, finalize as failure
                 if attempt_index == job.num_of_retries:
                     self._finalize_failure(exc)
                     return job
 
         return job
-
-    def _run_attempt(
-        self,
-        job: Job,
-        max_workers: int,
-    ) -> None:
-        # initialize tracking sets on attempt, reset each retry
-        self._local.attempt.pending = set(job.components.keys())
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # submit initial ready components (roots)
-            futures: dict[concurrent.futures.Future, Component] = {}
-            for comp in job.root_components:
-                self._local.execution.file_logger.debug("Submitting '%s'", comp.name)
-                metrics = self._local.attempt.component_metrics[comp.id]
-                fut = executor.submit(
-                    self._execute_component,
-                    comp,
-                    None,
-                    metrics,
-                )
-                futures[fut] = comp
-                self._local.attempt.pending.discard(comp.id)
-
-            while futures:
-                done, _ = concurrent.futures.wait(
-                    futures,
-                    return_when=concurrent.futures.FIRST_COMPLETED,
-                )
-                for fut in done:
-                    comp = futures.pop(fut)
-                    self._handle_future(
-                        fut,
-                        comp,
-                    )
-                    self._schedule_next(
-                        comp,
-                        executor,
-                        futures,
-                    )
-
-        self._mark_unrunnable()
-        self._finalize_success(job)
 
     def _handle_future(
         self,
@@ -137,28 +90,15 @@ class JobExecutionHandler:
         try:
             fut.result()
             self._local.attempt.succeeded.add(comp.id)
-            self._update_job_metrics()
+            self._local.execution.job_metrics.update_metrics(
+                self._local.attempt.component_metrics
+            )
         except Exception:
             self._local.attempt.component_metrics[comp.id].status = RuntimeState.FAILED
             self._local.attempt.failed.add(comp.id)
             self._local.execution.file_logger.error(
                 "Component '%s' FAILED", comp.name, exc_info=True
             )
-
-    def _update_job_metrics(
-        self,
-    ) -> None:
-        try:
-            total = sum(
-                m.lines_received for m in self._local.attempt.component_metrics.values()
-            )
-            elapsed = (
-                datetime.datetime.now() - self._local.execution.job_metrics.started_at
-            )
-            self._local.attempt.processing_time = elapsed
-            self._local.execution.job_metrics.calc_throughput(total)
-        except Exception:
-            pass
 
     def _schedule_next(
         self,
