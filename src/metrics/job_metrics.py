@@ -1,10 +1,17 @@
 from src.metrics.base_metrics import Metrics
+from datetime import datetime
+from src.components.runtime_state import RuntimeState
 
 
 class JobMetrics(Metrics):
     """
     A class to represent job metrics.
     """
+
+    def __init__(self):
+        super().__init__()
+        self.started_at = datetime.now()
+        self.status = RuntimeState.RUNNING.value
 
     throughput: float = 0.0
 

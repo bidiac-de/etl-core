@@ -47,7 +47,7 @@ def test_execute_job_single_test_component():
     comp_metrics = exec_record.attempts[0].component_metrics[comp.id]
     assert comp_metrics.lines_received == 1
     assert comp_metrics.status == RuntimeState.SUCCESS
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
 
 
 def test_execute_job_chain_components_file_logging():
@@ -95,7 +95,7 @@ def test_execute_job_chain_components_file_logging():
     # single JobExecution entry
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
 
     # both components ran and metrics recorded
     metrics = exec_record.attempts[0].component_metrics
@@ -152,7 +152,7 @@ def test_execute_job_failing_and_cancelled_components():
     # Job-level assertions
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.FAILED.value
+    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
     assert exec_record.attempts[0].error is not None
     assert (
         "One or more components failed; dependent components cancelled"
@@ -197,7 +197,7 @@ def test_retry_logic_and_metrics():
     # Should retry once, then succeed
     exec_record = result.executions[0]
     assert len(exec_record.attempts) == 2
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
     # lines_received comes from second execution
     comp = get_by_temp_id(job.components, job._temp_map.get("a"))
     assert exec_record.attempts[1].component_metrics[comp.id].lines_received == 1
@@ -262,7 +262,7 @@ def test_execute_job_linear_chain():
     # Should be a single successful execution
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
 
     # Every component should have run once and completed
     metrics = exec_record.attempts[0].component_metrics

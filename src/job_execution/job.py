@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Dict, Any, List
 from src.components.dataclasses import MetaData
 from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
@@ -6,7 +5,6 @@ from src.components.base_component import Component
 from src.components.component_registry import component_registry
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
-from src.components.runtime_state import RuntimeState
 from uuid import uuid4
 import logging
 
@@ -112,8 +110,6 @@ class JobExecution:
 
     job: Job
     job_metrics: JobMetrics = None
-    started_at: datetime = None
-    status: str = RuntimeState.PENDING.value
     attempts: List["ExecutionAttempt"]
     file_logger: logging.Logger = None
 
@@ -121,13 +117,6 @@ class JobExecution:
         self.job = job
         self.job_metrics = JobMetrics()
         self.attempts = []
-
-    def set_started(self):
-        """
-        Set the started_at time and reset processing_time.
-        """
-        self.started_at = datetime.now()
-        self.status = RuntimeState.RUNNING.value
 
 
 class ExecutionAttempt:

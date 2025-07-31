@@ -43,7 +43,6 @@ class JobExecutionHandler:
         execution.file_logger = self.job_information_handler.logging_handler.logger
         job.executions.append(execution)
         self._local.execution = execution
-        execution.set_started()
         logger.info("Starting execution of job '%s'", job.name)
 
         total_attempts = job.num_of_retries + 1
@@ -73,7 +72,7 @@ class JobExecutionHandler:
                     max_workers,
                 )
                 # Success: no exception, stop retrying
-                execution.status = RuntimeState.SUCCESS.value
+                execution.job_metrics.status = RuntimeState.SUCCESS.value
                 return job
             except Exception as exc:
                 logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
@@ -210,7 +209,9 @@ class JobExecutionHandler:
             raise RuntimeError(
                 "One or more components failed; dependent components cancelled"
             )
-        duration = datetime.datetime.now() - self._local.execution.started_at
+        duration = (
+            datetime.datetime.now() - self._local.execution.job_metrics.started_at
+        )
         self._local.execution.job_metrics.processing_time = duration
         self._local.execution.job_metrics.status = RuntimeState.SUCCESS.value
         self.job_information_handler.metrics_handler.add_job_metrics(
@@ -220,14 +221,12 @@ class JobExecutionHandler:
             self.job_information_handler.metrics_handler.add_component_metrics(
                 job.id, cid, self._local.attempt.component_metrics[cid]
             )
-        self._local.execution.status = RuntimeState.SUCCESS.value
         self.running_executions.remove(self._local.execution)
 
     def _finalize_failure(
         self,
         exc: Exception,
     ) -> None:
-        self._local.execution.status = RuntimeState.FAILED.value
         self._local.execution.job_metrics.status = RuntimeState.FAILED.value
         self._local.attempt.error = str(exc)
         self.running_executions.remove(self._local.execution)
