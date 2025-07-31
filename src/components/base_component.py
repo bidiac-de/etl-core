@@ -87,18 +87,18 @@ class Component(BaseModel, ABC):
 
     @abstractmethod
     def process_row(
-        self, row: Dict[str, Any], metrics: ComponentMetrics
+        self,*args: Any, **kwargs: Any
     ) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
     def process_bulk(
-        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+        self, *args: Any, **kwargs: Any
     ) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+    def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
