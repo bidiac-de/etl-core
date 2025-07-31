@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Generator, Union
 
 from src.receivers.read_file_receiver import ReadFileReceiver
 from src.receivers.write_file_receiver import WriteFileReceiver
+from src.metrics.component_metrics import ComponentMetrics
 
 import pandas as pd
 import dask.dataframe as dd
@@ -13,14 +14,14 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         self.filepath = filepath
 
 
-    def read_row(self, filepath: Path = None) -> Dict[str, Any]:
+    def read_row(self, metrics: ComponentMetrics, filepath: Path = None) -> Dict[str, Any]:
         """Reads a single row from the CSV file."""
         path = filepath or self.filepath
         with open(path, newline='', encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             return next(reader, {})
 
-    def read_bulk(self, filepath: Path = None) -> List[Dict[str, Any]]:
+    def read_bulk(self,metrics: ComponentMetrics, filepath: Path = None) -> List[Dict[str, Any]]:
         """Reads all rows from the CSV file into a list of dicts."""
         path = filepath or self.filepath
         with open(path, newline='', encoding="utf-8") as csvfile:
@@ -29,6 +30,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
 
     def read_bigdata(
             self,
+            metrics: ComponentMetrics,
             filepath: Path = None,
             use_dask: bool = False,
             blocksize: str = "16MB"
@@ -44,7 +46,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
             for _, row in chunk.iterrows():
                 yield row.to_dict()
 
-    def write_row(self, row: Dict[str, Any], filepath: Path = None):
+    def write_row(self,metrics: ComponentMetrics, row: Dict[str, Any], filepath: Path = None):
         """Writes a single row to the CSV file."""
         path = filepath or self.filepath
         file_exists = Path(path).exists()
@@ -54,7 +56,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
                 writer.writeheader()
             writer.writerow(row)
 
-    def write_bulk(self, data: List[Dict[str, Any]], filepath: Path = None):
+    def write_bulk(self,metrics: ComponentMetrics,  data: List[Dict[str, Any]], filepath: Path = None):
         """Writes a list of rows to the CSV file."""
         if not data:
             return
@@ -66,6 +68,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
 
     def write_bigdata(
             self,
+            metrics: ComponentMetrics,
             data: Union[pd.DataFrame, dd.DataFrame, Generator[Dict[str, Any], None, None]],
             filepath: Path = None
     ):
