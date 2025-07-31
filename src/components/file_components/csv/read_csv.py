@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any, Dict, List, Generator, Literal
 from pydantic import Field
+
+from components.file_components.csv.csv_base_field import CSVBaseFields
 from src.components.file_components.csv.csv_component import CSV, Delimiter
 from src.components.column_definition import ColumnDefinition
 from src.components.dataclasses import Layout, MetaData
@@ -11,17 +13,12 @@ from src.metrics.component_metrics import ComponentMetrics
 
 
 
+
 @register_component("read_csv")
-class ReadCSV(CSV):
+class ReadCSV( CSVBaseFields):
     """Component that reads data from a CSV file."""
 
     type: Literal["read_csv"] = Field(default="read_csv")
-    filepath: Path = Field(..., description="Path to the CSV file")
-    separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
-    schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for CSV columns")
-
-    metrics: ComponentMetrics = None
-    receiver: CSVReceiver = None
 
     @classmethod
     def build_objects(cls, values):
@@ -29,7 +26,7 @@ class ReadCSV(CSV):
         values.setdefault("layout", Layout())
 
         values["strategy"] = get_strategy(values["strategy_type"])
-        values["receiver"] = CSVReceiver(filepath=values["filepath"])
+        values["receiver"] = CSVReceiver()
         values.setdefault("metadata", MetaData())
         return values
 
