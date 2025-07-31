@@ -28,10 +28,15 @@ class JobExecutionHandler:
         """
         self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
+        self.running_executions: list[JobExecution] = []
         self._local = threading.local()
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
+        if any(exec_.job == job for exec_ in self.running_executions):
+            logger.warning("Job '%s' is already running; skipping new execution", job.name)
+            return job
         execution = JobExecution(job=job)
+        self.running_executions.append(execution)
         self.job_information_handler.logging_handler.update_job_name(job.name)
         execution.file_logger = self.job_information_handler.logging_handler.logger
         job.executions.append(execution)
@@ -214,6 +219,7 @@ class JobExecutionHandler:
                 job.id, cid, self._local.attempt.component_metrics[cid]
             )
         self._local.execution.status = RuntimeState.SUCCESS.value
+        self.running_executions.remove(self._local.execution)
 
     def _finalize_failure(
         self,
@@ -222,6 +228,7 @@ class JobExecutionHandler:
         self._local.execution.status = RuntimeState.FAILED.value
         self._local.execution.job_metrics.status = RuntimeState.FAILED.value
         self._local.execution.error = str(exc)
+        self.running_executions.remove(self._local.execution)
 
     def _execute_component(
         self, component: Component, data: Any, metrics: ComponentMetrics
