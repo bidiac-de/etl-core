@@ -4,6 +4,8 @@ from typing import Any, Dict, List
 from pydantic import Field, ConfigDict
 from src.components.file_components.file_component import FileComponent
 from src.metrics.component_metrics import ComponentMetrics
+from src.components.column_definition import ColumnDefinition
+from src.receivers.files.csv_receiver import CSVReceiver
 
 
 class Delimiter(str, Enum):
@@ -22,6 +24,9 @@ class CSV(FileComponent, ABC):
     )
 
     separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
+    schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for CSV columns")
+    metrics: ComponentMetrics = None
+    receiver: CSVReceiver = None
 
     @abstractmethod
     def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:

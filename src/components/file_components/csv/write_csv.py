@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Generator, Literal
 from pydantic import Field
 
-from components.file_components.csv.csv_base_field import CSVBaseFields
 from src.components.file_components.csv.csv_component import CSV, Delimiter
 from src.components.column_definition import ColumnDefinition
 from src.components.dataclasses import Layout, MetaData
@@ -12,11 +11,8 @@ from src.receivers.files.csv_receiver import CSVReceiver
 from src.metrics.component_metrics import ComponentMetrics
 
 
-
-
-
 @register_component("write_csv")
-class WriteCSV(CSVBaseFields):
+class WriteCSV(CSV):
     """Component that writes data to a CSV file."""
 
     type: Literal["write_csv"] = Field(default="write_csv")
