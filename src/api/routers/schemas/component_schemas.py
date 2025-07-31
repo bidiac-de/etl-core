@@ -34,6 +34,6 @@ def get_component_schema(comp_type: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Unknown component {comp_type!r}")
 
     # Generate the schema, using default Pydantic behavior
-    schema: dict = cls.model_json_schema()
+    schema: dict = cls.model_json_schema(ref_template="/dataclasses/{model}")
 
     return schema

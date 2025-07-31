@@ -17,4 +17,4 @@ def get_job_schema() -> dict:
     """
     Return the JSON Schema of the Job model as understood by Pydantic
     """
-    return Job.model_json_schema()
+    return Job.model_json_schema(ref_template="/dataclasses/{model}")

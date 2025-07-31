@@ -14,9 +14,7 @@ def get_layout_schema() -> dict:
     """
     Return the JSON Schema for the Layout model, without nested $defs.
     """
-    return Layout.model_json_schema(
-        ref_template="/dataclasses/layout"
-    )
+    return Layout.model_json_schema()
 
 
 @router.get(
@@ -29,4 +27,4 @@ def get_metadata_schema() -> dict:
     """
     Return the JSON Schema for the MetaData model, without nested $defs.
     """
-    return MetaData.model_json_schema(ref_template="/dataclasses/metadata")
+    return MetaData.model_json_schema()
