@@ -34,16 +34,6 @@ def get_component_schema(comp_type: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Unknown component {comp_type!r}")
 
     # Generate the schema, using default Pydantic behavior
-    schema: dict = cls.model_json_schema()  # type: ignore[attr-defined]
-
-    # Remove fields you marked exclude=True in your model
-    for fld in ("next_components", "prev_components"):
-        schema.get("properties", {}).pop(fld, None)
-        # also remove from 'required' if present
-        if "required" in schema:
-            schema["required"] = [f for f in schema["required"] if f != fld]
-
-    # If Pydantic inlined a $defs block you no longer need, drop it
-    schema.pop("$defs", None)
+    schema: dict = cls.model_json_schema()
 
     return schema

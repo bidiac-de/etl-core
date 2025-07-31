@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional, List, Any, Dict
 from datetime import datetime
 from uuid import uuid4
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, PrivateAttr
 
 from src.components.dataclasses import MetaData, Layout
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -42,8 +42,8 @@ class Component(BaseModel, ABC):
     layout: [Layout] = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
 
-    next_components: List["Component"] = Field(default_factory=list, exclude=True)
-    prev_components: List["Component"] = Field(default_factory=list, exclude=True)
+    _next_components: List["Component"] = PrivateAttr(default_factory=list)
+    _prev_components: List["Component"] = PrivateAttr(default_factory=list)
     metrics: Any = Field(default=None, exclude=True)
 
     # these need to be created in the concrete component classes
