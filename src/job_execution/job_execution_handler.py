@@ -1,4 +1,3 @@
-
 import datetime
 import logging
 import concurrent.futures
@@ -42,14 +41,13 @@ class JobExecutionHandler:
         )
 
         for attempt_index in range(execution.number_of_attempts):
-            attempt = ExecutionAttempt(attempt_number=attempt_index + 1, job=job)
-            execution.attempts.append(attempt)
+            attempt = execution.create_attempt()
 
             execution.file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
-                attempt.run_attempt(execution, max_workers)
+                attempt.run_attempt(max_workers)
                 execution.job_metrics.status = RuntimeState.SUCCESS.value
                 return job
             except Exception as exc:  # pylint: disable=broad-except
@@ -105,9 +103,7 @@ class JobExecutionHandler:
                 metrics.status = RuntimeState.CANCELLED
                 attempt.cancelled.add(nxt.id)
                 attempt.pending.discard(nxt.id)
-                execution.file_logger.warning(
-                    "Component '%s' CANCELLED", nxt.name
-                )
+                execution.file_logger.warning("Component '%s' CANCELLED", nxt.name)
 
     def _mark_unrunnable(
         self,

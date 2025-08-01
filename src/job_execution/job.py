@@ -20,6 +20,7 @@ class Job(BaseModel):
     """
     Job Objects
     """
+
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     id: str = Field(
@@ -93,6 +94,7 @@ class JobExecution:
     """
     Encapsulates the execution details of a job
     """
+
     job: Job
     job_metrics: JobMetrics = None
     attempts: List["ExecutionAttempt"]
@@ -118,6 +120,15 @@ class JobExecution:
         self.job.executions.append(self)
         logger.info("Starting execution of job '%s'", job.name)
 
+    def create_attempt(self) -> "ExecutionAttempt":
+        """
+        Create and register a new execution attempt.
+        """
+        attempt_number = len(self.attempts) + 1
+        attempt = ExecutionAttempt(attempt_number=attempt_number, execution=self)
+        self.attempts.append(attempt)
+        return attempt
+
     @property
     def number_of_attempts(self) -> int:
         return self._number_of_attempts
@@ -133,14 +144,21 @@ class ExecutionAttempt:
     """
     Encapsulates the details of a single execution attempt
     """
+
     _attempt_number: int = 0
     component_metrics: Dict[str, ComponentMetrics]
     _error: str | None = None
 
-    def __init__(self, attempt_number: int = 0, job: Job = None):
+    def __init__(
+        self,
+        attempt_number: int,
+        execution: JobExecution,
+    ) -> None:
         if attempt_number < 1:
             raise ValueError("attempt_number must be at least 1")
         self._attempt_number = attempt_number
+        self.execution = execution
+        job = execution.job
         self.component_metrics = {}
         self.pending: set[str] = set()
         self.succeeded: set[str] = set()
@@ -154,7 +172,6 @@ class ExecutionAttempt:
 
     def run_attempt(
         self,
-        execution: JobExecution,
         max_workers: int,
     ) -> None:
         """
@@ -162,6 +179,7 @@ class ExecutionAttempt:
         """
         from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
+        execution = self.execution
         job = execution.job
         handler = execution.handler
 
@@ -181,9 +199,7 @@ class ExecutionAttempt:
                 for fut in done:
                     comp = futures.pop(fut)
                     handler._handle_future(fut, comp, self, execution)
-                    handler._schedule_next(
-                        comp, executor, futures, self, execution
-                    )
+                    handler._schedule_next(comp, executor, futures, self, execution)
 
         handler._mark_unrunnable(self, execution)
         handler._finalize_success(execution, self)
