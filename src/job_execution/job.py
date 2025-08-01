@@ -96,14 +96,6 @@ class Job(BaseModel):
 
         return self
 
-    @field_validator("id", mode="before")
-    @classmethod
-    def validate_id(cls, value):
-        """
-        Id is read-only and should not be set manually
-        """
-        raise ValueError("Id is read-only and should not be set manually.")
-
     @field_validator("name", mode="before")
     @classmethod
     def validate_name(cls, value: str) -> str:
