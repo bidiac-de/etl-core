@@ -33,9 +33,7 @@ class Job(BaseModel):
         arbitrary_types_allowed=True, extra="ignore", validate_assignment=True
     )
 
-    _id: str = PrivateAttr(
-        default_factory=lambda: str(uuid4())
-    )
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
