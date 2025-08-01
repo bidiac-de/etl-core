@@ -29,8 +29,8 @@ class Job(BaseModel):
         exclude=True,
     )
     name: str = Field(default="default_job_name")
-    num_of_retries: NonNegativeInt = Field(alias="num_of_retries", default=0)
-    file_logging: bool = Field(alias="file_logging", default=False)
+    num_of_retries: NonNegativeInt = Field(default=0)
+    file_logging: bool = Field(default=False)
     component_configs: List[Dict[str, Any]] = Field(default_factory=list)
 
     config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
