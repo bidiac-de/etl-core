@@ -29,8 +29,8 @@ class Job(BaseModel):
         exclude=True,
     )
     name: str = Field(default="default_job_name")
-    num_of_retries: NonNegativeInt = Field(default=0)
-    file_logging: bool = Field(default=False)
+    num_of_retries: NonNegativeInt = Field(alias="num_of_retries", default=0)
+    file_logging: bool = Field(alias="file_logging", default=False)
     component_configs: List[Dict[str, Any]] = Field(default_factory=list)
 
     config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
@@ -95,10 +95,10 @@ class JobExecution:
     Encapsulates the execution details of a job
     """
 
-    job: Job
-    job_metrics: JobMetrics = None
-    attempts: List["ExecutionAttempt"]
-    file_logger: logging.Logger = None
+    _job: Job
+    _job_metrics: JobMetrics = None
+    _attempts: List["ExecutionAttempt"]
+    _file_logger: logging.Logger = None
 
     def __init__(
         self,
@@ -106,9 +106,9 @@ class JobExecution:
         number_of_attempts: int,
         handler: "JobExecutionHandler",
     ):
-        self.job = job
-        self.job_metrics = JobMetrics()
-        self.attempts = []
+        self._job = job
+        self._job_metrics = JobMetrics()
+        self._attempts = []
         if number_of_attempts < 1:
             raise ValueError("number_of_attempts must be at least 1")
         self._number_of_attempts = number_of_attempts
@@ -116,7 +116,7 @@ class JobExecution:
         self.handler = handler
         handler.running_executions.append(self)
         handler.job_information_handler.logging_handler.update_job_name(job.name)
-        self.file_logger = handler.job_information_handler.logging_handler.logger
+        self._file_logger = handler.job_information_handler.logging_handler.logger
         self.job.executions.append(self)
         logger.info("Starting execution of job '%s'", job.name)
 
@@ -130,23 +130,31 @@ class JobExecution:
         return attempt
 
     @property
+    def job_metrics(self) -> JobMetrics:
+        return self._job_metrics
+
+    @property
     def number_of_attempts(self) -> int:
         return self._number_of_attempts
 
-    @number_of_attempts.setter
-    def number_of_attempts(self, value: int) -> None:
-        if not isinstance(value, int) or value < 1:
-            raise ValueError("number_of_attempts must be a non-negative integer ≥ 1")
-        self._number_of_attempts = value
+    @property
+    def job(self) -> Job:
+        return self._job
 
+    @property
+    def attempts(self) -> List["ExecutionAttempt"]:
+        return self._attempts
+
+    @property
+    def file_logger(self) -> logging.Logger:
+        return self._file_logger
 
 class ExecutionAttempt:
     """
     Encapsulates the details of a single execution attempt
     """
-
     _attempt_number: int = 0
-    component_metrics: Dict[str, ComponentMetrics]
+    _component_metrics: Dict[str, ComponentMetrics]
     _error: str | None = None
 
     def __init__(
@@ -159,7 +167,7 @@ class ExecutionAttempt:
         self._attempt_number = attempt_number
         self.execution = execution
         job = execution.job
-        self.component_metrics = {}
+        self._component_metrics = {}
         self.pending: set[str] = set()
         self.succeeded: set[str] = set()
         self.failed: set[str] = set()
@@ -168,7 +176,7 @@ class ExecutionAttempt:
         for comp in job.components.values():
             MetricsCls = get_metrics_class(comp.comp_type)
             metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
-            self.component_metrics[comp.id] = metrics
+            self._component_metrics[comp.id] = metrics
 
     def run_attempt(
         self,
@@ -190,7 +198,7 @@ class ExecutionAttempt:
             for comp in job.root_components:
                 execution.file_logger.debug("Submitting '%s'", comp.name)
                 metrics = self.component_metrics[comp.id]
-                fut = executor.submit(handler._execute_component, comp, None, metrics)
+                fut = executor.submit(handler.execute_component, comp, None, metrics)
                 futures[fut] = comp
                 self.pending.discard(comp.id)
 
@@ -198,21 +206,15 @@ class ExecutionAttempt:
                 done, _ = wait(futures, return_when=FIRST_COMPLETED)
                 for fut in done:
                     comp = futures.pop(fut)
-                    handler._handle_future(fut, comp, self, execution)
-                    handler._schedule_next(comp, executor, futures, self, execution)
+                    handler.handle_future(fut, comp, self, execution)
+                    handler.schedule_next(comp, executor, futures, self, execution)
 
-        handler._mark_unrunnable(self, execution)
-        handler._finalize_success(execution, self)
+        handler.mark_unrunnable(self, execution)
+        handler.finalize_success(execution, self)
 
     @property
     def attempt_number(self) -> int:
         return self._attempt_number
-
-    @attempt_number.setter
-    def attempt_number(self, value: int) -> None:
-        if not isinstance(value, int) or value < 1:
-            raise ValueError("attempt_number must be a non-negative integer ≥ 1")
-        self._attempt_number = value
 
     @property
     def error(self) -> str | None:
@@ -223,3 +225,8 @@ class ExecutionAttempt:
         if not isinstance(value, str):
             raise ValueError("error must be a string")
         self._error = value
+
+    @property
+    def component_metrics(self) -> Dict[str, ComponentMetrics]:
+        return self._component_metrics
+

@@ -14,10 +14,10 @@ class JobMetrics(Metrics):
         self.started_at = datetime.now()
         self.status = RuntimeState.RUNNING.value
 
-    throughput: float = 0.0
+    _throughput: float = 0.0
 
     def calc_throughput(self, total_lines: int):
-        self.throughput = (
+        self._throughput = (
             total_lines / self.processing_time.total_seconds()
             if (self.processing_time.total_seconds() > 0)
             else 0.0
@@ -32,9 +32,11 @@ class JobMetrics(Metrics):
         now = datetime.now()
         elapsed = now - self.started_at
         self.processing_time = elapsed
-        self.throughput = (
-            total / elapsed.total_seconds() if elapsed.total_seconds() > 0 else 0.0
-        )
+        self.calc_throughput(total_lines=total)
+
+    @property
+    def throughput(self) -> float:
+        return self._throughput
 
     def __repr__(self) -> str:
         return (

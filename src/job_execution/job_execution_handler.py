@@ -56,12 +56,12 @@ class JobExecutionHandler:
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
                 if attempt_index == execution.number_of_attempts - 1:
-                    self._finalize_failure(exc, execution, attempt)
+                    self.finalize_failure(exc, execution, attempt)
                     return job
 
         return job
 
-    def _handle_future(
+    def handle_future(
         self,
         fut: concurrent.futures.Future,
         comp: Component,
@@ -79,7 +79,7 @@ class JobExecutionHandler:
                 "Component '%s' FAILED", comp.name, exc_info=True
             )
 
-    def _schedule_next(
+    def schedule_next(
         self,
         comp: Component,
         executor: concurrent.futures.Executor,
@@ -96,7 +96,7 @@ class JobExecutionHandler:
 
             if prev_ids.issubset(attempt.succeeded):
                 execution.file_logger.debug("Submitting '%s'", nxt.name)
-                fut = executor.submit(self._execute_component, nxt, None, metrics)
+                fut = executor.submit(self.execute_component, nxt, None, metrics)
                 futures[fut] = nxt
                 attempt.pending.discard(nxt.id)
             elif prev_ids & (attempt.failed | attempt.cancelled):
@@ -105,7 +105,7 @@ class JobExecutionHandler:
                 attempt.pending.discard(nxt.id)
                 execution.file_logger.warning("Component '%s' CANCELLED", nxt.name)
 
-    def _mark_unrunnable(
+    def mark_unrunnable(
         self,
         attempt: ExecutionAttempt,
         execution: JobExecution,
@@ -119,7 +119,7 @@ class JobExecutionHandler:
                 "Component '%s' CANCELLED (no runnable path)", comp.name
             )
 
-    def _finalize_success(
+    def finalize_success(
         self,
         execution: JobExecution,
         attempt: ExecutionAttempt,
@@ -146,7 +146,7 @@ class JobExecutionHandler:
 
         self.running_executions.remove(execution)
 
-    def _finalize_failure(
+    def finalize_failure(
         self,
         exc: Exception,
         execution: JobExecution,
@@ -156,7 +156,7 @@ class JobExecutionHandler:
         attempt.error = str(exc)
         self.running_executions.remove(execution)
 
-    def _execute_component(
+    def execute_component(
         self,
         component: Component,
         data: Any,
