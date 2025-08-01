@@ -1,10 +1,10 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
-from tests.helpers import get_by_temp_id
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
 from src.job_execution.job import Job
 from datetime import datetime
+from tests.helpers import get_component_by_name
 
 # ensure Job._build_components() can find TestComponent
 job_module.TestComponent = StubComponent
@@ -22,19 +22,16 @@ def test_execute_job_single_test_component():
         "name": "ExecuteTestComponent",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
-        "component_configs": [
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "components": [
             {
-                "id": "a",
                 "name": "test1",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "a test comp",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             }
         ],
     }
@@ -45,11 +42,11 @@ def test_execute_job_single_test_component():
     assert len(result.executions) == 1
 
     exec_record = result.executions[0]
-    comp = get_by_temp_id(job.components, job._temp_map.get("a"))
-    comp_metrics = exec_record.component_metrics[comp.id]
+    comp = get_component_by_name(job, "test1")
+    comp_metrics = exec_record.attempts[0].component_metrics[comp.id]
     assert comp_metrics.lines_received == 1
     assert comp_metrics.status == RuntimeState.SUCCESS
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
 
 
 def test_execute_job_chain_components_file_logging():
@@ -65,31 +62,23 @@ def test_execute_job_chain_components_file_logging():
         "job_name": "ChainJob",
         "num_of_retries": 0,
         "file_logging": True,  # exercise the file_logging path
-        "created_by": 42,
-        "created_at": datetime.now(),
-        "component_configs": [
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "components": [
             {
-                "id": "a",
                 "name": "comp1",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "first",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
-                "next": ["b"],
+                "next": ["comp2"],
             },
             {
-                "id": "b",
                 "name": "comp2",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "second",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             },
         ],
     }
@@ -103,12 +92,12 @@ def test_execute_job_chain_components_file_logging():
     # single JobExecution entry
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
 
     # both components ran and metrics recorded
-    metrics = exec_record.component_metrics
-    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
-    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    metrics = exec_record.attempts[0].component_metrics
+    comp1 = get_component_by_name(job, "comp1")
+    comp2 = get_component_by_name(job, "comp2")
     assert set(metrics.keys()) == {comp1.id, comp2.id}
     assert metrics[comp1.id].lines_received == 1
     assert metrics[comp1.id].status == RuntimeState.SUCCESS
@@ -131,31 +120,23 @@ def test_execute_job_failing_and_cancelled_components():
         "job_name": "ChainErrorJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
-        "component_configs": [
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "components": [
             {
-                "id": "a",
                 "name": "comp1",
                 "comp_type": "failtest",  # our failing component
                 "strategy_type": "row",
                 "description": "will fail",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
-                "next": ["b"],
+                "next": ["comp2"],
             },
             {
-                "id": "b",
                 "name": "comp2",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "should be cancelled",
-                "x_coord": 1.0,
-                "y_coord": 1.0,
-                "created_by": 1,
-                "created_at": "2024-01-01T00:00:00",
             },
         ],
     }
@@ -166,17 +147,17 @@ def test_execute_job_failing_and_cancelled_components():
     # Job-level assertions
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.FAILED.value
-    assert exec_record.error is not None
+    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
+    assert exec_record.attempts[0].error is not None
     assert (
         "One or more components failed; dependent components cancelled"
-    ) in exec_record.error
+    ) in exec_record.attempts[0].error
 
     # Component-level assertions
-    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
-    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
-    comp1_metrics = exec_record.component_metrics[comp1.id]
-    comp2_metrics = exec_record.component_metrics[comp2.id]
+    comp1 = get_component_by_name(job, "comp1")
+    comp2 = get_component_by_name(job, "comp2")
+    comp1_metrics = exec_record.attempts[0].component_metrics[comp1.id]
+    comp2_metrics = exec_record.attempts[0].component_metrics[comp2.id]
     assert (
         comp1_metrics.status == RuntimeState.FAILED
     ), "comp1 should have FAILED status"
@@ -191,19 +172,16 @@ def test_retry_logic_and_metrics():
         "job_name": "RetryOnceJob",
         "num_of_retries": 1,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
-        "component_configs": [
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "components": [
             {
-                "id": "a",
                 "name": "c1",
                 "comp_type": "stub_fail_once",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             }
         ],
     }
@@ -212,10 +190,11 @@ def test_retry_logic_and_metrics():
 
     # Should retry once, then succeed
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert len(exec_record.attempts) == 2
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
     # lines_received comes from second execution
-    comp = get_by_temp_id(job.components, job._temp_map.get("a"))
-    assert exec_record.component_metrics[comp.id].lines_received == 1
+    comp = get_component_by_name(job, "c1")
+    assert exec_record.attempts[1].component_metrics[comp.id].lines_received == 1
 
 
 def test_execute_job_linear_chain():
@@ -231,55 +210,37 @@ def test_execute_job_linear_chain():
         "job_name": "LinearChain",
         "num_of_retries": 0,
         "file_logging": False,
-        "created_by": 42,
-        "created_at": datetime.now(),
-        "component_configs": [
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "components": [
             {
-                "id": "a",
                 "name": "c1",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 0.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
-                "next": ["b"],
+                "next": ["c2"],
             },
             {
-                "id": "b",
                 "name": "c2",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 1.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
-                "next": ["c"],
+                "next": ["c3"],
             },
             {
-                "id": "c",
                 "name": "c3",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 2.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
-                "next": ["d"],
+                "next": ["c4"],
             },
             {
-                "id": "d",
                 "name": "c4",
                 "comp_type": "test",
                 "strategy_type": "row",
                 "description": "",
-                "x_coord": 3.0,
-                "y_coord": 0.0,
-                "created_by": 1,
-                "created_at": "2025-01-01T00:00:00",
             },
         ],
     }
@@ -291,19 +252,19 @@ def test_execute_job_linear_chain():
     # Should be a single successful execution
     assert len(result.executions) == 1
     exec_record = result.executions[0]
-    assert exec_record.status == RuntimeState.SUCCESS.value
+    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
 
     # Every component should have run once and completed
-    metrics = exec_record.component_metrics
-    comp1 = get_by_temp_id(job.components, job._temp_map.get("a"))
+    metrics = exec_record.attempts[0].component_metrics
+    comp1 = get_component_by_name(job, "c1")
     assert metrics[comp1.id].lines_received == 1
     assert metrics[comp1.id].status == RuntimeState.SUCCESS
-    comp2 = get_by_temp_id(job.components, job._temp_map.get("b"))
+    comp2 = get_component_by_name(job, "c2")
     assert metrics[comp2.id].lines_received == 1
     assert metrics[comp2.id].status == RuntimeState.SUCCESS
-    comp3 = get_by_temp_id(job.components, job._temp_map.get("c"))
+    comp3 = get_component_by_name(job, "c3")
     assert metrics[comp3.id].lines_received == 1
     assert metrics[comp3.id].status == RuntimeState.SUCCESS
-    comp4 = get_by_temp_id(job.components, job._temp_map.get("d"))
+    comp4 = get_component_by_name(job, "c4")
     assert metrics[comp4.id].lines_received == 1
     assert metrics[comp4.id].status == RuntimeState.SUCCESS

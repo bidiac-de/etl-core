@@ -1,9 +1,15 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, List, Any, Dict
-from datetime import datetime
 from uuid import uuid4
-from pydantic import BaseModel, Field, ConfigDict, model_validator, PrivateAttr
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    model_validator,
+    PrivateAttr,
+    field_validator,
+)
 
 from src.components.dataclasses import MetaData, Layout
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -14,7 +20,7 @@ from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
 
 
-class StrategyType(str ,Enum):
+class StrategyType(str, Enum):
     """
     Enum for different strategy types
     """
@@ -32,6 +38,7 @@ class Component(BaseModel, ABC):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
+        validate_assignment=True,
     )
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
@@ -39,16 +46,15 @@ class Component(BaseModel, ABC):
     comp_type: str
     strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
     next: [List[str]] = []
-    layout: [Layout] = Field(default_factory=lambda: Layout())
+    layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
-    metrics: Any = Field(default=None, exclude=True)
 
     # these need to be created in the concrete component classes
-    strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
-    receiver: Optional[Receiver] = Field(default=None, exclude=True)
+    _strategy: Optional[ExecutionStrategy] = PrivateAttr(default=None)
+    _receiver: Optional[Receiver] = PrivateAttr(default=None)
 
     @model_validator(mode="before")
     @classmethod
@@ -57,22 +63,103 @@ class Component(BaseModel, ABC):
         """
         Each concrete component must implement this method to:
         - construct strategy and receiver
+        - modify and return the values dict
         """
         raise NotImplementedError
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        """
+        validate that id is a non-empty string
+        """
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Id must be a non-empty string.")
+        return value.strip()
+
+    @field_validator("name", "comp_type", "strategy_type", mode="before")
+    @classmethod
+    def validate_non_empty_string(cls, value: str) -> str:
+        """
+        Validate that the name, comp_type, and strategy_type are non-empty strings.
+        """
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Value must be a non-empty string.")
+        return value.strip()
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def _cast_metadata(cls, v: MetaData | dict) -> MetaData:
+        if isinstance(v, MetaData):
+            return v
+        if isinstance(v, dict):
+            # let MetaData do its own validation on timestamps, ids, etc.
+            return MetaData(**v)
+        raise TypeError(f"metadata must be MetaData or dict, got {type(v).__name__}")
+
+    @field_validator("layout", mode="before")
+    @classmethod
+    def _cast_layout(cls, v: Layout | dict) -> Layout:
+        if isinstance(v, Layout):
+            return v
+        if isinstance(v, dict):
+            # let Layout do its own validation on coordinates, etc.
+            return Layout(**v)
+        raise TypeError(f"layout must be Layout or dict, got {type(v).__name__}")
+
+    @property
+    def strategy(self) -> ExecutionStrategy:
+        if self._strategy is None:
+            raise ValueError(f"No strategy set for component {self.name}")
+        return self._strategy
+
+    @strategy.setter
+    def strategy(self, value: ExecutionStrategy):
+        if not isinstance(value, ExecutionStrategy):
+            raise TypeError(f"Expected ExecutionStrategy, got {type(value).__name__}")
+        self._strategy = value
+
+    @property
+    def receiver(self) -> Receiver:
+        if self._receiver is None:
+            raise ValueError(f"No receiver set for component {self.name}")
+        return self._receiver
+
+    @receiver.setter
+    def receiver(self, value: Receiver):
+        if not isinstance(value, Receiver):
+            raise TypeError(f"Expected Receiver, got {type(value).__name__}")
+        self._receiver = value
+
+    @property
+    def next_components(self) -> List["Component"]:
+        """
+        Get the next components in the execution chain
+        :return: List of next components
+        """
+        return self._next_components
+
+    @property
+    def prev_components(self) -> List["Component"]:
+        """
+        Get the previous components in the execution chain
+        :return: List of previous components
+        """
+        return self._prev_components
 
     def add_next(self, nxt: "Component"):
         """
         Add a next component to the current component
         :param nxt: The next component to add
         """
-        self.next_components.append(nxt)
+        self._next_components.append(nxt)
 
     def add_prev(self, prev: "Component"):
         """
         Add a previous component to the current component
         :param prev: The previous component to add
         """
-        self.prev_components.append(prev)
+        self._prev_components.append(prev)
 
     def execute(self, data, metrics: ComponentMetrics, **kwargs) -> Any:
         """
@@ -86,19 +173,15 @@ class Component(BaseModel, ABC):
         return self.strategy.execute(self, data, metrics)
 
     @abstractmethod
-    def process_row(
-        self, row: Dict[str, Any], metrics: ComponentMetrics
-    ) -> Dict[str, Any]:
+    def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bulk(
-        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
-    ) -> List[Dict[str, Any]]:
+    def process_bulk(self, *args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+    def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 

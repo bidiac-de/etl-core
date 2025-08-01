@@ -1,13 +1,20 @@
-from typing import TypeVar, Dict
+from typing import TYPE_CHECKING
 
-T = TypeVar("T", bound=object)
+if TYPE_CHECKING:
+    from src.job_execution.job import Job
+    from src.components.base_component import Component
 
 
-def get_by_temp_id(mapping: Dict[str, T], user_assigned_id: str) -> T:
+def get_component_by_name(job: "Job", name: str) -> "Component":
     """
-    Look up the one object in `mapping.values()` whose user_assigned_id matches
+    Look up a Component in job.components by its unique .name.
+
+    :param job: a Job instance whose .components is a List[Component]
+    :param name: the unique name to search for
+    :return: the matching Component
+    :raises ValueError: if no component with that name exists
     """
-    for obj in mapping.values():
-        if getattr(obj, "id", None) == user_assigned_id:
-            return obj
-    raise KeyError(f"no object with user_assigned_id = {user_assigned_id}")
+    for comp in job.components:
+        if comp.name == name:
+            return comp
+    raise ValueError(f"No component named {name!r} found in job.components")
