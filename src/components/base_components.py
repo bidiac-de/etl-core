@@ -11,6 +11,7 @@ from src.components.dataclasses import MetaData, Layout
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+from src.metrics.component_metrics import ComponentMetrics
 
 
 class RuntimeState(Enum):
@@ -49,9 +50,8 @@ class Component(BaseModel, ABC):
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)
-    metrics: Any = Field(default=None, exclude=True)
 
-    # these need to be created in the concrete component classes
+
     strategy: Optional[ExecutionStrategy] = Field(default=None, exclude=True)
     receiver: Optional[Receiver] = Field(default=None, exclude=True)
 
@@ -73,10 +73,10 @@ class Component(BaseModel, ABC):
     def add_prev(self, prev: "Component"):
         self.prev_components.append(prev)
 
-    def execute(self, data, **kwargs) -> Any:
+    def execute(self, data, metrics: Optional[ComponentMetrics] = None, **kwargs) -> Any:
         if not self.strategy:
             raise ValueError(f"No strategy set for component {self.name}")
-        return self.strategy.execute(self, data)
+        return self.strategy.execute(self, data, metrics=metrics)
 
 
     @abstractmethod

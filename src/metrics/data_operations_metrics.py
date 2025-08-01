@@ -8,18 +8,28 @@ class DataOperationsMetrics(ComponentMetrics):
     """
 
     def __init__(
-        self,
-        started_at: datetime,
-        processing_time: timedelta,
-        error_count: int,
-        lines_received: int = 0,
-        lines_forwarded: int = 0,
-        lines_processed: int = 0,
+            self,
+            started_at: datetime,
+            processing_time: timedelta,
+            error_count: int,
+            lines_received: int = 0,
+            lines_forwarded: int = 0,
+            lines_processed: int = 0,
     ):
         super().__init__(
             started_at, processing_time, error_count, lines_received, lines_forwarded
         )
-        self.lines_processed = lines_processed
+        self._lines_processed = lines_processed
+
+    @property
+    def lines_processed(self) -> int:
+        return self._lines_processed
+
+    @lines_processed.setter
+    def lines_processed(self, value: int):
+        if value < 0:
+            raise ValueError("lines_processed cannot be negative")
+        self._lines_processed = value
 
     def __repr__(self):
         base = super().__repr__()[:-1]
@@ -32,14 +42,14 @@ class FilterMetrics(DataOperationsMetrics):
     """
 
     def __init__(
-        self,
-        started_at: datetime,
-        processing_time: timedelta,
-        error_count: int,
-        lines_received: int = 0,
-        lines_forwarded: int = 0,
-        lines_processed: int = 0,
-        lines_dismissed: int = 0,
+            self,
+            started_at: datetime,
+            processing_time: timedelta,
+            error_count: int,
+            lines_received: int = 0,
+            lines_forwarded: int = 0,
+            lines_processed: int = 0,
+            lines_dismissed: int = 0,
     ):
         super().__init__(
             started_at,
@@ -49,7 +59,17 @@ class FilterMetrics(DataOperationsMetrics):
             lines_forwarded,
             lines_processed,
         )
-        self.lines_dismissed = lines_dismissed
+        self._lines_dismissed = lines_dismissed
+
+    @property
+    def lines_dismissed(self) -> int:
+        return self._lines_dismissed
+
+    @lines_dismissed.setter
+    def lines_dismissed(self, value: int):
+        if value < 0:
+            raise ValueError("lines_dismissed cannot be negative")
+        self._lines_dismissed = value
 
     def __repr__(self):
         base = super().__repr__()[:-1]

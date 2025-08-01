@@ -25,7 +25,6 @@ class CSV(FileComponent, ABC):
 
     separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
     schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for CSV columns")
-    metrics: ComponentMetrics = None
     receiver: CSVReceiver = None
 
     @abstractmethod
