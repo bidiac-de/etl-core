@@ -1,6 +1,14 @@
 from typing import Dict, Any, List, TYPE_CHECKING
 from src.components.dataclasses import MetaData
-from pydantic import BaseModel, Field, ConfigDict, NonNegativeInt, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    NonNegativeInt,
+    model_validator,
+    field_validator,
+    PrivateAttr,
+)
 from src.components.base_component import Component
 from src.components.component_registry import component_registry
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -21,7 +29,9 @@ class Job(BaseModel):
     Job Objects
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True, extra="ignore", validate_assignment=True
+    )
 
     id: str = Field(
         default_factory=lambda: str(uuid4()),
@@ -36,8 +46,8 @@ class Job(BaseModel):
     config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
     metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
     executions: List[Any] = Field(default_factory=list, exclude=True)
-    components: Dict[str, Component] = Field(default_factory=dict, exclude=True)
-    root_components: List[Component] = Field(default_factory=list, exclude=True)
+    _components: Dict[str, Component] = PrivateAttr(default_factory=dict)
+    _root_components: List[Component] = PrivateAttr(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -72,21 +82,100 @@ class Job(BaseModel):
                 component = component_class(**cconf)
                 comps[component.id] = component
 
-        self.components = comps
+        self._components = comps
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def validate_id(cls, value):
+        """
+        Id is read-only and should not be set manually
+        """
+        raise ValueError("Id is read-only and should not be set manually.")
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """
+        Validate that the name is a non-empty string.
+        """
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Job name must be a non-empty string.")
+        return value.strip()
+
+    @field_validator("num_of_retries", mode="before")
+    @classmethod
+    def validate_num_of_retries(cls, value: int) -> NonNegativeInt:
+        """
+        Validate that the number of retries is a non-negative integer.
+        """
+        if not isinstance(value, int) or value < 0:
+            raise ValueError("Number of retries must be a non-negative integer.")
+        return NonNegativeInt(value)
+
+    @field_validator("file_logging", mode="before")
+    @classmethod
+    def validate_file_logging(cls, value: bool) -> bool:
+        """
+        Validate that file_logging is a boolean.
+        """
+        if not isinstance(value, bool):
+            raise ValueError("File logging must be a boolean value.")
+        return value
+
+    @field_validator("component_configs", mode="before")
+    @classmethod
+    def validate_component_configs(
+        cls, value: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Validate that component_configs is a list of dictionaries."""
+        if not isinstance(value, list):
+            raise ValueError("Component configs must be a list.")
+        for item in value:
+            if not isinstance(item, dict):
+                raise ValueError("Each component config must be a dictionary.")
+        return value
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def _cast_metadata(cls, v: MetaData | dict) -> MetaData:
+        if isinstance(v, MetaData):
+            return v
+        if isinstance(v, dict):
+            # let MetaData do its own validation on timestamps, ids, etc.
+            return MetaData(**v)
+        raise TypeError(f"metadata must be MetaData or dict, got {type(v).__name__}")
+
+    @field_validator("executions", mode="before")
+    @classmethod
+    def validate_executions(cls, value: List[Any]) -> List[Any]:
+        """
+        Validate that executions is a list.
+        """
+        if not isinstance(value, list):
+            raise ValueError("Executions must be a list.")
+        return value
+
+    @property
+    def components(self) -> Dict[str, Component]:
+        return self._components
+
+    @property
+    def root_components(self) -> List[Component]:
+        return self._root_components
 
     def _connect_components(self) -> None:
-        for component in self.components.values():
-            src = self.components[component.id]
+        for component in self._components.values():
+            src = self._components[component.id]
             for nxt_user_prov_id in component.next:
                 dest_internal = self._temp_map.get(nxt_user_prov_id)
-                if dest_internal not in self.components:
+                if dest_internal not in self._components:
                     raise ValueError(f"Unknown next-component: {nxt_user_prov_id}")
-                dest = self.components[dest_internal]
+                dest = self._components[dest_internal]
                 src.add_next(dest)
                 dest.add_prev(src)
 
-        self.root_components = [
-            c for c in self.components.values() if not c.prev_components
+        self._root_components = [
+            c for c in self._components.values() if not c._prev_components
         ]
 
 
@@ -175,7 +264,7 @@ class ExecutionAttempt:
         self.failed: set[str] = set()
         self.cancelled: set[str] = set()
 
-        for comp in job.components.values():
+        for comp in job._components.values():
             MetricsCls = get_metrics_class(comp.comp_type)
             metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
             self._component_metrics[comp.id] = metrics
@@ -193,11 +282,11 @@ class ExecutionAttempt:
         job = execution.job
         handler = execution.handler
 
-        self.pending = set(job.components.keys())
+        self.pending = set(job._components.keys())
         futures: dict = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for comp in job.root_components:
+            for comp in job._root_components:
                 execution.file_logger.debug("Submitting '%s'", comp.name)
                 metrics = self.component_metrics[comp.id]
                 fut = executor.submit(handler.execute_component, comp, None, metrics)
