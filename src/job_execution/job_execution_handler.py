@@ -1,13 +1,12 @@
+
 import datetime
 import logging
 import concurrent.futures
 from typing import Any
-import threading
 
-from src.job_execution.job import Job, ExecutionAttempt
+from src.job_execution.job import Job, ExecutionAttempt, JobExecution
 from src.components.base_component import Component
 from src.components.runtime_state import RuntimeState
-from src.job_execution.job import JobExecution
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
@@ -28,7 +27,6 @@ class JobExecutionHandler:
         self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
         self.running_executions: list[JobExecution] = []
-        self._local = threading.local()
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         if any(exec_.job == job for exec_ in self.running_executions):
@@ -38,29 +36,29 @@ class JobExecutionHandler:
             return job
 
         execution = JobExecution(
-            job=job, number_of_attempts=job.num_of_retries + 1, handler=self
+            job=job,
+            number_of_attempts=job.num_of_retries + 1,
+            handler=self,
         )
 
         for attempt_index in range(execution.number_of_attempts):
             attempt = ExecutionAttempt(attempt_number=attempt_index + 1, job=job)
             execution.attempts.append(attempt)
-            self._local.attempt = attempt
 
             execution.file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
-                attempt.run_attempt(job, self, max_workers)
+                attempt.run_attempt(execution, max_workers)
                 execution.job_metrics.status = RuntimeState.SUCCESS.value
                 return job
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
                 execution.file_logger.warning(
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
                 if attempt_index == execution.number_of_attempts - 1:
-                    # Final attempt failed, finalize the job execution
-                    self._finalize_failure(exc)
+                    self._finalize_failure(exc, execution, attempt)
                     return job
 
         return job
@@ -69,113 +67,119 @@ class JobExecutionHandler:
         self,
         fut: concurrent.futures.Future,
         comp: Component,
+        attempt: ExecutionAttempt,
+        execution: JobExecution,
     ) -> None:
         try:
             fut.result()
-            self._local.attempt.succeeded.add(comp.id)
-            self._local.execution.job_metrics.update_metrics(
-                self._local.attempt.component_metrics
-            )
+            attempt.succeeded.add(comp.id)
+            execution.job_metrics.update_metrics(attempt.component_metrics)
         except Exception:
-            self._local.attempt.component_metrics[comp.id].status = RuntimeState.FAILED
-            self._local.attempt.failed.add(comp.id)
-            self._local.execution.file_logger.error(
+            attempt.component_metrics[comp.id].status = RuntimeState.FAILED
+            attempt.failed.add(comp.id)
+            execution.file_logger.error(
                 "Component '%s' FAILED", comp.name, exc_info=True
             )
 
     def _schedule_next(
         self,
         comp: Component,
-        executor: concurrent.futures.ThreadPoolExecutor,
+        executor: concurrent.futures.Executor,
         futures: dict[concurrent.futures.Future, Component],
+        attempt: ExecutionAttempt,
+        execution: JobExecution,
     ) -> None:
         for nxt in comp.next_components:
-            if (
-                nxt.id
-                in self._local.attempt.succeeded
-                | self._local.attempt.failed
-                | self._local.attempt.cancelled
-            ):
+            if nxt.id in attempt.succeeded | attempt.failed | attempt.cancelled:
                 continue
+
             prev_ids = {p.id for p in nxt.prev_components}
-            metrics = self._local.attempt.component_metrics[nxt.id]
-            # If all previous components succeeded, schedule the next component
-            if prev_ids.issubset(self._local.attempt.succeeded):
-                self._local.execution.file_logger.debug("Submitting '%s'", nxt.name)
+            metrics = attempt.component_metrics[nxt.id]
+
+            if prev_ids.issubset(attempt.succeeded):
+                execution.file_logger.debug("Submitting '%s'", nxt.name)
                 fut = executor.submit(self._execute_component, nxt, None, metrics)
                 futures[fut] = nxt
-                self._local.attempt.pending.discard(nxt.id)
-            # If any previous component failed or was cancelled, mark this as cancelled
-            elif prev_ids & (
-                self._local.attempt.failed | self._local.attempt.cancelled
-            ):
+                attempt.pending.discard(nxt.id)
+            elif prev_ids & (attempt.failed | attempt.cancelled):
                 metrics.status = RuntimeState.CANCELLED
-                self._local.attempt.cancelled.add(nxt.id)
-                self._local.attempt.pending.discard(nxt.id)
-                self._local.execution.file_logger.warning(
+                attempt.cancelled.add(nxt.id)
+                attempt.pending.discard(nxt.id)
+                execution.file_logger.warning(
                     "Component '%s' CANCELLED", nxt.name
                 )
 
-    def _mark_unrunnable(self) -> None:
-        # Mark all pending components as cancelled if they have no way to run
-        for pid in list(self._local.attempt.pending):
-            comp = self._local.execution.job.components[pid]
-            metrics = self._local.attempt.component_metrics[pid]
+    def _mark_unrunnable(
+        self,
+        attempt: ExecutionAttempt,
+        execution: JobExecution,
+    ) -> None:
+        for pid in list(attempt.pending):
+            comp = execution.job.components[pid]
+            metrics = attempt.component_metrics[pid]
             metrics.status = RuntimeState.CANCELLED
-            self._local.attempt.cancelled.add(pid)
-            self._local.execution.file_logger.warning(
+            attempt.cancelled.add(pid)
+            execution.file_logger.warning(
                 "Component '%s' CANCELLED (no runnable path)", comp.name
             )
 
-    def _finalize_success(self, job: Job) -> None:
-        if self._local.attempt.failed:
+    def _finalize_success(
+        self,
+        execution: JobExecution,
+        attempt: ExecutionAttempt,
+    ) -> None:
+        if attempt.failed:
             raise RuntimeError(
                 "One or more components failed; dependent components cancelled"
             )
-        duration = (
-            datetime.datetime.now() - self._local.execution.job_metrics.started_at
-        )
-        self._local.execution.job_metrics.processing_time = duration
-        self._local.execution.job_metrics.status = RuntimeState.SUCCESS.value
+
+        duration = datetime.datetime.now() - execution.job_metrics.started_at
+        execution.job_metrics.processing_time = duration
+        execution.job_metrics.status = RuntimeState.SUCCESS.value
+
         self.job_information_handler.metrics_handler.add_job_metrics(
-            job.id, self._local.execution.job_metrics
+            execution.job.id, execution.job_metrics
         )
-        for cid, comp in job.components.items():
+
+        for cid in execution.job.components:
             self.job_information_handler.metrics_handler.add_component_metrics(
-                job.id, cid, self._local.attempt.component_metrics[cid]
+                execution.job.id,
+                cid,
+                attempt.component_metrics[cid],
             )
-        self.running_executions.remove(self._local.execution)
+
+        self.running_executions.remove(execution)
 
     def _finalize_failure(
         self,
         exc: Exception,
+        execution: JobExecution,
+        attempt: ExecutionAttempt,
     ) -> None:
-        self._local.execution.job_metrics.status = RuntimeState.FAILED.value
-        self._local.attempt.error = str(exc)
-        self.running_executions.remove(self._local.execution)
+        execution.job_metrics.status = RuntimeState.FAILED.value
+        attempt.error = str(exc)
+        self.running_executions.remove(execution)
 
     def _execute_component(
-        self, component: Component, data: Any, metrics: ComponentMetrics
+        self,
+        component: Component,
+        data: Any,
+        metrics: ComponentMetrics,
     ) -> Any:
         """
         Execute a single component
         !!note: will only work when component is a concrete class !!
-        :param component: The component to execute
-        :param data: Input data for the component
-        :return: Result of the component execution
         """
         try:
-            logger.info(f"Executing component: {component.name}")
+            logger.info("Executing component: %s", component.name)
             metrics.status = RuntimeState.RUNNING
-
             metrics.set_started()
             result = component.execute(data, metrics)
-
             metrics.status = RuntimeState.SUCCESS
-            logger.info(f"Component {component.name} completed successfully")
+            logger.info("Component %s completed successfully", component.name)
             return result
 
         except Exception as e:
-            logger.exception(f"Component {component.name} failed: {str(e)}")
+            logger.exception("Component %s failed: %s", component.name, e)
             metrics.status = RuntimeState.FAILED
             raise

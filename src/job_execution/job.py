@@ -20,7 +20,6 @@ class Job(BaseModel):
     """
     Job Objects
     """
-
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     id: str = Field(
@@ -34,39 +33,25 @@ class Job(BaseModel):
     component_configs: List[Dict[str, Any]] = Field(default_factory=list)
 
     config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
-
-    # runtime-objects
-    metadata: MetaData = Field(default_factory=lambda: MetaData())
+    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
     executions: List[Any] = Field(default_factory=list, exclude=True)
-
     components: Dict[str, Component] = Field(default_factory=dict, exclude=True)
     root_components: List[Component] = Field(default_factory=list, exclude=True)
 
     @model_validator(mode="before")
     @classmethod
     def _store_config(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        store the configuration dictionary in the job object
-        """
         values["config"] = values.copy()
         return values
 
     @model_validator(mode="after")
     def _build_objects(self) -> "Job":
-        """
-        After Pydantic has set all fields, build and connect components
-        """
         self._build_components()
         self._connect_components()
         return self
 
     def _build_components(self) -> None:
-        """
-        Instantiate every component named in config
-        """
         comps: Dict[str, Component] = {}
-
-        # map of temporary IDs to internal ids
         self._temp_map: Dict[str, str] = {}
 
         for cconf in self.config.get("component_configs", []):
@@ -78,12 +63,10 @@ class Job(BaseModel):
             if "id" in cconf:
                 user_prov_id = cconf["id"]
                 component = component_class(**cconf)
-
                 internal_id = str(uuid4())
                 component.id = internal_id
-
-                comps[component.id] = component
-                self._temp_map[user_prov_id] = component.id
+                comps[internal_id] = component
+                self._temp_map[user_prov_id] = internal_id
             else:
                 component = component_class(**cconf)
                 comps[component.id] = component
@@ -91,16 +74,12 @@ class Job(BaseModel):
         self.components = comps
 
     def _connect_components(self) -> None:
-        """
-        Connect components based on the list of next components
-        """
         for component in self.components.values():
             src = self.components[component.id]
             for nxt_user_prov_id in component.next:
                 dest_internal = self._temp_map.get(nxt_user_prov_id)
                 if dest_internal not in self.components:
                     raise ValueError(f"Unknown next-component: {nxt_user_prov_id}")
-
                 dest = self.components[dest_internal]
                 src.add_next(dest)
                 dest.add_prev(src)
@@ -112,16 +91,18 @@ class Job(BaseModel):
 
 class JobExecution:
     """
-    class to encapsulate the execution details of a job
+    Encapsulates the execution details of a job
     """
-
     job: Job
     job_metrics: JobMetrics = None
     attempts: List["ExecutionAttempt"]
     file_logger: logging.Logger = None
 
     def __init__(
-        self, job: Job, number_of_attempts: int, handler: "JobExecutionHandler" = None
+        self,
+        job: Job,
+        number_of_attempts: int,
+        handler: "JobExecutionHandler",
     ):
         self.job = job
         self.job_metrics = JobMetrics()
@@ -130,25 +111,19 @@ class JobExecution:
             raise ValueError("number_of_attempts must be at least 1")
         self._number_of_attempts = number_of_attempts
 
+        self.handler = handler
         handler.running_executions.append(self)
-        handler.job_information_handler.logging_handler.update_job_name(self.job.name)
+        handler.job_information_handler.logging_handler.update_job_name(job.name)
         self.file_logger = handler.job_information_handler.logging_handler.logger
         self.job.executions.append(self)
-        handler._local.execution = self
-        logger.info("Starting execution of job '%s'", self.job.name)
+        logger.info("Starting execution of job '%s'", job.name)
 
     @property
     def number_of_attempts(self) -> int:
-        """
-        How many execution attempts will be made for this job.
-        """
         return self._number_of_attempts
 
     @number_of_attempts.setter
     def number_of_attempts(self, value: int) -> None:
-        """
-        Set a new limit on execution attempts.
-        """
         if not isinstance(value, int) or value < 1:
             raise ValueError("number_of_attempts must be a non-negative integer ≥ 1")
         self._number_of_attempts = value
@@ -156,37 +131,30 @@ class JobExecution:
 
 class ExecutionAttempt:
     """
-    class to encapsulate the execution attempt details of a job
+    Encapsulates the details of a single execution attempt
     """
-
     _attempt_number: int = 0
     component_metrics: Dict[str, ComponentMetrics]
-    _error: str = None
+    _error: str | None = None
 
     def __init__(self, attempt_number: int = 0, job: Job = None):
         if attempt_number < 1:
-            raise ValueError("number_of_attempts must be at least 1")
+            raise ValueError("attempt_number must be at least 1")
         self._attempt_number = attempt_number
         self.component_metrics = {}
         self.pending: set[str] = set()
         self.succeeded: set[str] = set()
         self.failed: set[str] = set()
         self.cancelled: set[str] = set()
-        components = job.components
 
-        # initialize metrics for each component
-        for comp in components.values():
+        for comp in job.components.values():
             MetricsCls = get_metrics_class(comp.comp_type)
-            metrics = MetricsCls(
-                processing_time=timedelta(0),
-                error_count=0,
-            )
+            metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
             self.component_metrics[comp.id] = metrics
 
     def run_attempt(
         self,
-        job: Job,
-        handler: "JobExecutionHandler",
+        execution: JobExecution,
         max_workers: int,
     ) -> None:
         """
@@ -194,38 +162,31 @@ class ExecutionAttempt:
         """
         from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
-        # initialize tracking sets
-        self.pending = set(job.components.keys())
+        job = execution.job
+        handler = execution.handler
 
-        execution = handler._local.execution
+        self.pending = set(job.components.keys())
+        futures: dict = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures: dict = {}
-            # submit initial ready components (roots)
             for comp in job.root_components:
                 execution.file_logger.debug("Submitting '%s'", comp.name)
                 metrics = self.component_metrics[comp.id]
-                fut = executor.submit(
-                    handler._execute_component,
-                    comp,
-                    None,
-                    metrics,
-                )
+                fut = executor.submit(handler._execute_component, comp, None, metrics)
                 futures[fut] = comp
                 self.pending.discard(comp.id)
 
             while futures:
-                done, _ = wait(
-                    futures,
-                    return_when=FIRST_COMPLETED,
-                )
+                done, _ = wait(futures, return_when=FIRST_COMPLETED)
                 for fut in done:
                     comp = futures.pop(fut)
-                    handler._handle_future(fut, comp)
-                    handler._schedule_next(comp, executor, futures)
+                    handler._handle_future(fut, comp, self, execution)
+                    handler._schedule_next(
+                        comp, executor, futures, self, execution
+                    )
 
-        handler._mark_unrunnable()
-        handler._finalize_success(job)
+        handler._mark_unrunnable(self, execution)
+        handler._finalize_success(execution, self)
 
     @property
     def attempt_number(self) -> int:
@@ -233,9 +194,6 @@ class ExecutionAttempt:
 
     @attempt_number.setter
     def attempt_number(self, value: int) -> None:
-        """
-        Set a new limit on execution attempts.
-        """
         if not isinstance(value, int) or value < 1:
             raise ValueError("attempt_number must be a non-negative integer ≥ 1")
         self._attempt_number = value
