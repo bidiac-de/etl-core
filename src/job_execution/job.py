@@ -10,13 +10,13 @@ from pydantic import (
     PrivateAttr,
 )
 from src.components.base_component import Component
-from src.components.component_registry import component_registry
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from uuid import uuid4
 import logging
 from datetime import timedelta
 from src.metrics.metrics_registry import get_metrics_class
+from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
 
@@ -41,13 +41,28 @@ class Job(BaseModel):
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
-    component_configs: List[Dict[str, Any]] = Field(default_factory=list)
+
+    components: List[Component] = Field(default_factory=list)
 
     config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
     metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
     executions: List[Any] = Field(default_factory=list, exclude=True)
-    _components: Dict[str, Component] = PrivateAttr(default_factory=dict)
     _root_components: List[Component] = PrivateAttr(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _instantiate_components(cls, values: dict) -> dict:
+        raw = values.get("components", [])
+        built: list[Component] = []
+        for comp_data in raw:
+            comp_type = comp_data.get("comp_type")
+            CompCls = component_registry.get(comp_type)
+            if CompCls is None:
+                raise ValueError(f"Unknown component type: {comp_type!r}")
+            # This will now call StubComponent.build_objects (etc.)
+            built.append(CompCls(**comp_data))
+        values["components"] = built
+        return values
 
     @model_validator(mode="before")
     @classmethod
@@ -56,33 +71,32 @@ class Job(BaseModel):
         return values
 
     @model_validator(mode="after")
-    def _build_objects(self) -> "Job":
-        self._build_components()
-        self._connect_components()
+    def _check_names_and_wire(self) -> "Job":
+        """
+        Ensure each component.name is unique
+        Wire up `next`/`prev` pointers by those names
+        """
+
+        # name uniqueness
+        names = [c.name for c in self.components]
+        dupes = {n for n in names if names.count(n) > 1}
+        if dupes:
+            raise ValueError(f"Duplicate component names: {sorted(dupes)}")
+
+        # wiring
+        name_map = {c.name: c for c in self.components}
+        for c in self.components:
+            for nxt_name in c.next:
+                try:
+                    nxt = name_map[nxt_name]
+                except KeyError:
+                    raise ValueError(f"Unknown next‐component name: {nxt_name!r}")
+                c.add_next(nxt)
+                nxt.add_prev(c)
+
+        self._root_components = [c for c in self.components if not c.prev_components]
+
         return self
-
-    def _build_components(self) -> None:
-        comps: Dict[str, Component] = {}
-        self._temp_map: Dict[str, str] = {}
-
-        for cconf in self.config.get("component_configs", []):
-            comp_type = cconf["comp_type"]
-            if comp_type not in component_registry:
-                raise ValueError(f"Unknown component type: {comp_type}")
-
-            component_class = component_registry[comp_type]
-            if "id" in cconf:
-                user_prov_id = cconf["id"]
-                component = component_class(**cconf)
-                internal_id = str(uuid4())
-                component.id = internal_id
-                comps[internal_id] = component
-                self._temp_map[user_prov_id] = internal_id
-            else:
-                component = component_class(**cconf)
-                comps[component.id] = component
-
-        self._components = comps
 
     @field_validator("id", mode="before")
     @classmethod
@@ -122,19 +136,6 @@ class Job(BaseModel):
             raise ValueError("File logging must be a boolean value.")
         return value
 
-    @field_validator("component_configs", mode="before")
-    @classmethod
-    def validate_component_configs(
-        cls, value: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Validate that component_configs is a list of dictionaries."""
-        if not isinstance(value, list):
-            raise ValueError("Component configs must be a list.")
-        for item in value:
-            if not isinstance(item, dict):
-                raise ValueError("Each component config must be a dictionary.")
-        return value
-
     @field_validator("metadata", mode="before")
     @classmethod
     def _cast_metadata(cls, v: MetaData | dict) -> MetaData:
@@ -154,10 +155,6 @@ class Job(BaseModel):
         if not isinstance(value, list):
             raise ValueError("Executions must be a list.")
         return value
-
-    @property
-    def components(self) -> Dict[str, Component]:
-        return self._components
 
     @property
     def root_components(self) -> List[Component]:
@@ -259,12 +256,15 @@ class ExecutionAttempt:
         self.execution = execution
         job = execution.job
         self._component_metrics = {}
-        self.pending: set[str] = set()
+
+        components = job.components
+        self.pending: set[str] = {c.id for c in components}
         self.succeeded: set[str] = set()
         self.failed: set[str] = set()
         self.cancelled: set[str] = set()
 
-        for comp in job._components.values():
+        # metrics also keyed by name
+        for comp in components:
             MetricsCls = get_metrics_class(comp.comp_type)
             metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
             self._component_metrics[comp.id] = metrics
@@ -281,8 +281,6 @@ class ExecutionAttempt:
         execution = self.execution
         job = execution.job
         handler = execution.handler
-
-        self.pending = set(job._components.keys())
         futures: dict = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

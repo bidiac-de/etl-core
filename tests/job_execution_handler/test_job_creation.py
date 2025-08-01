@@ -1,6 +1,6 @@
 import pytest
 from src.job_execution.job import Job
-from tests.helpers import get_by_temp_id
+from tests.helpers import get_component_by_name
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
 from datetime import datetime
@@ -70,9 +70,8 @@ def test_create_job_with_test_component():
             "created_by": 42,
             "created_at": datetime.now(),
         },
-        "component_configs": [
+        "components": [
             {
-                "id": "a",
                 "name": "test1",
                 "comp_type": "test",
                 "strategy_type": "row",
@@ -82,7 +81,7 @@ def test_create_job_with_test_component():
     }
 
     job = Job(**config)
-    comp = get_by_temp_id(job.components, job._temp_map.get("a"))
+    comp = get_component_by_name(job, "test1")
     assert comp.__class__.__name__ == "StubComponent"
 
 
@@ -95,7 +94,7 @@ def test_create_job_with_invalid_component_class():
             "created_by": 42,
             "created_at": datetime.now(),
         },
-        "component_configs": [
+        "components": [
             {
                 "name": "invalid1",
                 "comp_type": "non_existent",
@@ -105,5 +104,5 @@ def test_create_job_with_invalid_component_class():
         ],
     }
 
-    with pytest.raises(ValueError, match="Unknown component type: non_existent"):
+    with pytest.raises(ValueError, match="Unknown component type: 'non_existent'"):
         Job(**config)

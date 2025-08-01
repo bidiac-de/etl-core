@@ -110,8 +110,9 @@ class JobExecutionHandler:
         attempt: ExecutionAttempt,
         execution: JobExecution,
     ) -> None:
+        component_map = {c.id: c for c in execution.job.components}
         for pid in list(attempt.pending):
-            comp = execution.job.components[pid]
+            comp = component_map[pid]
             metrics = attempt.component_metrics[pid]
             metrics.status = RuntimeState.CANCELLED
             attempt.cancelled.add(pid)
@@ -137,7 +138,8 @@ class JobExecutionHandler:
             execution.job.id, execution.job_metrics
         )
 
-        for cid in execution.job.components:
+        for comp in execution.job.components:
+            cid = comp.id
             self.job_information_handler.metrics_handler.add_component_metrics(
                 execution.job.id,
                 cid,
