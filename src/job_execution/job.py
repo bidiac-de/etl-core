@@ -149,10 +149,12 @@ class JobExecution:
     def file_logger(self) -> logging.Logger:
         return self._file_logger
 
+
 class ExecutionAttempt:
     """
     Encapsulates the details of a single execution attempt
     """
+
     _attempt_number: int = 0
     _component_metrics: Dict[str, ComponentMetrics]
     _error: str | None = None
@@ -229,4 +231,3 @@ class ExecutionAttempt:
     @property
     def component_metrics(self) -> Dict[str, ComponentMetrics]:
         return self._component_metrics
-

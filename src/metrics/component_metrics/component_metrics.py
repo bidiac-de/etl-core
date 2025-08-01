@@ -1,5 +1,3 @@
-from pydantic import Field
-
 from src.metrics.base_metrics import Metrics
 
 
