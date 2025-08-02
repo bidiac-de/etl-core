@@ -47,7 +47,7 @@ class JobExecutionHandler:
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
-                attempt.run_attempt(max_workers)
+                self._run_attempt(max_workers, execution, attempt)
                 execution.job_metrics.status = RuntimeState.SUCCESS.value
                 return job
             except Exception as exc:  # pylint: disable=broad-except
@@ -56,12 +56,45 @@ class JobExecutionHandler:
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
                 if attempt_index == execution.number_of_attempts - 1:
-                    self.finalize_failure(exc, execution, attempt)
+                    self._finalize_failure(exc, execution, attempt)
                     return job
 
         return job
 
-    def handle_future(
+    def _run_attempt(
+        self,
+        max_workers: int,
+        execution: JobExecution,
+        attempt: ExecutionAttempt,
+    ) -> None:
+        """
+        Execute this attempt: schedule components in parallel and handle execution.
+        """
+        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+
+        job = execution.job
+        handler = execution.handler
+        futures: dict = {}
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for comp in job.root_components:
+                execution.file_logger.debug("Submitting '%s'", comp.name)
+                metrics = attempt.component_metrics[comp.id]
+                fut = executor.submit(handler.execute_component, comp, None, metrics)
+                futures[fut] = comp
+                attempt.pending.discard(comp.id)
+
+            while futures:
+                done, _ = wait(futures, return_when=FIRST_COMPLETED)
+                for fut in done:
+                    comp = futures.pop(fut)
+                    self._handle_future(fut, comp, attempt, execution)
+                    self._schedule_next(comp, executor, futures, attempt, execution)
+
+        self._mark_unrunnable(attempt, execution)
+        self._finalize_success(execution, attempt)
+
+    def _handle_future(
         self,
         fut: concurrent.futures.Future,
         comp: Component,
@@ -79,7 +112,7 @@ class JobExecutionHandler:
                 "Component '%s' FAILED", comp.name, exc_info=True
             )
 
-    def schedule_next(
+    def _schedule_next(
         self,
         comp: Component,
         executor: concurrent.futures.Executor,
@@ -105,7 +138,7 @@ class JobExecutionHandler:
                 attempt.pending.discard(nxt.id)
                 execution.file_logger.warning("Component '%s' CANCELLED", nxt.name)
 
-    def mark_unrunnable(
+    def _mark_unrunnable(
         self,
         attempt: ExecutionAttempt,
         execution: JobExecution,
@@ -120,7 +153,7 @@ class JobExecutionHandler:
                 "Component '%s' CANCELLED (no runnable path)", comp.name
             )
 
-    def finalize_success(
+    def _finalize_success(
         self,
         execution: JobExecution,
         attempt: ExecutionAttempt,
@@ -148,7 +181,7 @@ class JobExecutionHandler:
 
         self.running_executions.remove(execution)
 
-    def finalize_failure(
+    def _finalize_failure(
         self,
         exc: Exception,
         execution: JobExecution,

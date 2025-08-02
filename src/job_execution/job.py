@@ -277,38 +277,6 @@ class ExecutionAttempt:
             metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
             self._component_metrics[comp.id] = metrics
 
-    def run_attempt(
-        self,
-        max_workers: int,
-    ) -> None:
-        """
-        Execute this attempt: schedule components in parallel and handle execution.
-        """
-        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-
-        execution = self.execution
-        job = execution.job
-        handler = execution.handler
-        futures: dict = {}
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for comp in job._root_components:
-                execution.file_logger.debug("Submitting '%s'", comp.name)
-                metrics = self.component_metrics[comp.id]
-                fut = executor.submit(handler.execute_component, comp, None, metrics)
-                futures[fut] = comp
-                self.pending.discard(comp.id)
-
-            while futures:
-                done, _ = wait(futures, return_when=FIRST_COMPLETED)
-                for fut in done:
-                    comp = futures.pop(fut)
-                    handler.handle_future(fut, comp, self, execution)
-                    handler.schedule_next(comp, executor, futures, self, execution)
-
-        handler.mark_unrunnable(self, execution)
-        handler.finalize_success(execution, self)
-
     @property
     def id(self) -> str:
         return self._id
