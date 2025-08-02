@@ -181,6 +181,7 @@ class JobExecution:
     Encapsulates the execution details of a job
     """
 
+    _id: str
     _job: Job
     _job_metrics: JobMetrics = None
     _attempts: List["ExecutionAttempt"]
@@ -192,6 +193,7 @@ class JobExecution:
         number_of_attempts: int,
         handler: "JobExecutionHandler",
     ):
+        self._id = str(uuid4())
         self._job = job
         self._job_metrics = JobMetrics()
         self._attempts = []
@@ -214,6 +216,10 @@ class JobExecution:
         attempt = ExecutionAttempt(attempt_number=attempt_number, execution=self)
         self.attempts.append(attempt)
         return attempt
+
+    @property
+    def id(self) -> str:
+        return self._id
 
     @property
     def job_metrics(self) -> JobMetrics:
@@ -241,6 +247,7 @@ class ExecutionAttempt:
     Encapsulates the details of a single execution attempt
     """
 
+    _id: str
     _attempt_number: int = 0
     _component_metrics: Dict[str, ComponentMetrics]
     _error: str | None = None
@@ -250,6 +257,7 @@ class ExecutionAttempt:
         attempt_number: int,
         execution: JobExecution,
     ) -> None:
+        self._id = str(uuid4())
         if attempt_number < 1:
             raise ValueError("attempt_number must be at least 1")
         self._attempt_number = attempt_number
@@ -300,6 +308,10 @@ class ExecutionAttempt:
 
         handler.mark_unrunnable(self, execution)
         handler.finalize_success(execution, self)
+
+    @property
+    def id(self) -> str:
+        return self._id
 
     @property
     def attempt_number(self) -> int:
