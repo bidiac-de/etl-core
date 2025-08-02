@@ -1,13 +1,42 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
+from src.job_execution.job import Job
 from src.components.component_registry import component_registry
 from src.api.helpers import inline_defs
+from typing import List
 
-router = APIRouter(prefix="/components", tags=["components"])
+router = APIRouter(
+    prefix="/schemas",
+    tags=["schemas"],
+)
 
 
 @router.get(
-    "",
+    "/job",
+    response_model=dict,
+    summary="Get Job JSON schema (with dataclasses & enums inlined)",
+    description=(
+        "Returns the JSON Schema for the Job configuration payload, "
+        "with Layout, MetaData, RuntimeState, etc. nested directly."
+    ),
+)
+def get_job_schema() -> dict:
+    # Generate full schema (with $defs for dataclasses/enums)
+    schema = Job.model_json_schema()
+
+    # Patch components list to link to each component‐type schema:
+    schema["properties"]["components"]["items"] = {
+        "oneOf": [
+            {"$ref": f"/schemas/{comp_type}"}
+            for comp_type in component_registry.keys()
+        ]
+    }
+
+    # Inline all $defs then drop $defs
+    schema = inline_defs(schema)
+    return schema
+
+@router.get(
+    "/component_types",
     response_model=List[str],
     summary="List all available concrete component types",
 )
@@ -20,7 +49,7 @@ def list_component_types() -> List[str]:
 
 
 @router.get(
-    "/{comp_type}/schema",
+    "/{comp_type}",
     response_model=dict,
     summary="Get JSON Schema for a specific component (inlined)",
     description=("Returns the JSON Schema for the named Component subclass"),
