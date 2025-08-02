@@ -47,7 +47,7 @@ class JobExecutionHandler:
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
-                self._run_attempt(max_workers, execution, attempt)
+                self._run_attempt(max_workers, execution, attempt, job)
                 execution.job_metrics.status = RuntimeState.SUCCESS.value
                 return job
             except Exception as exc:  # pylint: disable=broad-except
@@ -66,21 +66,20 @@ class JobExecutionHandler:
         max_workers: int,
         execution: JobExecution,
         attempt: ExecutionAttempt,
+        job: Job,
     ) -> None:
         """
         Execute this attempt: schedule components in parallel and handle execution.
         """
         from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
-        job = execution.job
-        handler = execution.handler
         futures: dict = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for comp in job.root_components:
                 execution.file_logger.debug("Submitting '%s'", comp.name)
                 metrics = attempt.component_metrics[comp.id]
-                fut = executor.submit(handler.execute_component, comp, None, metrics)
+                fut = executor.submit(self.execute_component, comp, None, metrics)
                 futures[fut] = comp
                 attempt.pending.discard(comp.id)
 
