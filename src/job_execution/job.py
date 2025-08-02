@@ -33,20 +33,16 @@ class Job(BaseModel):
         arbitrary_types_allowed=True, extra="ignore", validate_assignment=True
     )
 
-    id: str = Field(
-        default_factory=lambda: str(uuid4()),
-        description="set by constructor",
-        exclude=True,
-    )
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
 
     components: List[Component] = Field(default_factory=list)
 
-    config: Dict[str, Any] = Field(default_factory=dict, exclude=True)
+    _config: Dict[str, Any] = PrivateAttr(default_factory=dict)
     metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
-    executions: List[Any] = Field(default_factory=list, exclude=True)
+    _executions: List[Any] = PrivateAttr(default_factory=list)
     _root_components: List[Component] = PrivateAttr(default_factory=list)
 
     @model_validator(mode="before")
@@ -98,14 +94,6 @@ class Job(BaseModel):
 
         return self
 
-    @field_validator("id", mode="before")
-    @classmethod
-    def validate_id(cls, value):
-        """
-        Id is read-only and should not be set manually
-        """
-        raise ValueError("Id is read-only and should not be set manually.")
-
     @field_validator("name", mode="before")
     @classmethod
     def validate_name(cls, value: str) -> str:
@@ -146,15 +134,35 @@ class Job(BaseModel):
             return MetaData(**v)
         raise TypeError(f"metadata must be MetaData or dict, got {type(v).__name__}")
 
-    @field_validator("executions", mode="before")
-    @classmethod
-    def validate_executions(cls, value: List[Any]) -> List[Any]:
+    @property
+    def id(self) -> str:
         """
-        Validate that executions is a list.
+        Returns the unique identifier of the job.
+        """
+        return self._id
+
+    @property
+    def executions(self) -> List[Any]:
+        """
+        Returns the list of job executions.
+        """
+        return self._executions
+
+    @executions.setter
+    def executions(self, value: List[Any]) -> None:
+        """
+        Sets the list of job executions.
         """
         if not isinstance(value, list):
             raise ValueError("Executions must be a list.")
-        return value
+        self._executions = value
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        """
+        Returns the configuration dictionary of the job.
+        """
+        return self._config
 
     @property
     def root_components(self) -> List[Component]:

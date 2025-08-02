@@ -40,7 +40,7 @@ class Component(BaseModel, ABC):
         extra="ignore",
         validate_assignment=True,
     )
-    id: str = Field(default_factory=lambda: str(uuid4()))
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     name: str
     description: str
     comp_type: str
@@ -66,16 +66,6 @@ class Component(BaseModel, ABC):
         - modify and return the values dict
         """
         raise NotImplementedError
-
-    @field_validator("id", mode="before")
-    @classmethod
-    def validate_id(cls, value: str) -> str:
-        """
-        validate that id is a non-empty string
-        """
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError("Id must be a non-empty string.")
-        return value.strip()
 
     @field_validator("name", "comp_type", "strategy_type", mode="before")
     @classmethod
@@ -106,6 +96,14 @@ class Component(BaseModel, ABC):
             # let Layout do its own validation on coordinates, etc.
             return Layout(**v)
         raise TypeError(f"layout must be Layout or dict, got {type(v).__name__}")
+
+    @property
+    def id(self) -> str:
+        """
+        Get the unique identifier of the component
+        :return: Unique identifier as a string
+        """
+        return self._id
 
     @property
     def strategy(self) -> ExecutionStrategy:
