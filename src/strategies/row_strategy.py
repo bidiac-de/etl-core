@@ -1,4 +1,4 @@
-from base_strategy import ExecutionStrategy
+from src.strategies.base_strategy import ExecutionStrategy
 
 
 class RowExecutionStrategy(ExecutionStrategy):
@@ -7,5 +7,5 @@ class RowExecutionStrategy(ExecutionStrategy):
     For serial strategy, it processes data row by row.
     """
 
-    def execute(self, component, inputs):
-        return component.process_row(inputs)
+    def execute(self, component, inputs, metrics):
+        return component.process_row(inputs, metrics)

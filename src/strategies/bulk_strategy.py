@@ -1,6 +1,6 @@
-from base_strategy import ExecutionStrategy
+from src.strategies.base_strategy import ExecutionStrategy
 
 
 class BulkExecutionStrategy(ExecutionStrategy):
-    def execute(self, component, inputs):
-        return component.process_bulk(inputs)
+    def execute(self, component, inputs, metrics):
+        return component.process_bulk(inputs, metrics)
