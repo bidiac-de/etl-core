@@ -59,7 +59,7 @@ class Component(BaseModel, ABC):
     @model_validator(mode="before")
     @classmethod
     @abstractmethod
-    def build_objects(cls, values: dict) -> dict:
+    def _build_objects(cls, values: dict) -> dict:
         """
         Each concrete component must implement this method to:
         - construct strategy and receiver
@@ -69,7 +69,7 @@ class Component(BaseModel, ABC):
 
     @field_validator("name", "comp_type", "strategy_type", mode="before")
     @classmethod
-    def validate_non_empty_string(cls, value: str) -> str:
+    def _validate_non_empty_string(cls, value: str) -> str:
         """
         Validate that the name, comp_type, and strategy_type are non-empty strings.
         """

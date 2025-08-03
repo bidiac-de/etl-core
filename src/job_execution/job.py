@@ -96,7 +96,7 @@ class Job(BaseModel):
 
     @field_validator("name", mode="before")
     @classmethod
-    def validate_name(cls, value: str) -> str:
+    def _validate_name(cls, value: str) -> str:
         """
         Validate that the name is a non-empty string.
         """
@@ -106,7 +106,7 @@ class Job(BaseModel):
 
     @field_validator("num_of_retries", mode="before")
     @classmethod
-    def validate_num_of_retries(cls, value: int) -> NonNegativeInt:
+    def _validate_num_of_retries(cls, value: int) -> NonNegativeInt:
         """
         Validate that the number of retries is a non-negative integer.
         """
@@ -116,7 +116,7 @@ class Job(BaseModel):
 
     @field_validator("file_logging", mode="before")
     @classmethod
-    def validate_file_logging(cls, value: bool) -> bool:
+    def _validate_file_logging(cls, value: bool) -> bool:
         """
         Validate that file_logging is a boolean.
         """

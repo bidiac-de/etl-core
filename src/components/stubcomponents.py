@@ -14,7 +14,7 @@ class StubComponent(Component):
         return data
 
     @classmethod
-    def build_objects(cls, values):
+    def _build_objects(cls, values):
         """
         Build dependent objects for the stub component
         """
@@ -49,7 +49,7 @@ class FailStubComponent(StubComponent):
         raise RuntimeError("fail stubcomponent failed")
 
     @classmethod
-    def build_objects(cls, values):
+    def _build_objects(cls, values):
         """
         Build dependent objects for the failstub component
         """
@@ -65,7 +65,7 @@ class StubFailOnce(Component):
     _called: bool = PrivateAttr(default=False)
 
     @classmethod
-    def build_objects(cls, values):
+    def _build_objects(cls, values):
         values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
         return values

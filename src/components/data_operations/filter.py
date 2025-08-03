@@ -21,7 +21,7 @@ class FilterComponent(DataOperationComponent):
     )
 
     @classmethod
-    def build_objects(cls, values):
+    def _build_objects(cls, values):
         """
         Build dependent objects for the stub component
         """
