@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, TYPE_CHECKING
+from typing import Dict, Any, List
 from src.components.dataclasses import MetaData
 from pydantic import (
     BaseModel,
@@ -19,9 +19,6 @@ from src.metrics.metrics_registry import get_metrics_class
 from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
-
-if TYPE_CHECKING:
-    from src.job_execution.job_execution_handler import JobExecutionHandler
 
 
 class Job(BaseModel):
@@ -199,7 +196,6 @@ class JobExecution:
         self,
         job: Job,
         number_of_attempts: int,
-        handler: "JobExecutionHandler",
     ):
         self._id = str(uuid4())
         self._job = job
@@ -208,13 +204,6 @@ class JobExecution:
         if number_of_attempts < 1:
             raise ValueError("number_of_attempts must be at least 1")
         self._number_of_attempts = number_of_attempts
-
-        self.handler = handler
-        handler.running_executions.append(self)
-        handler.job_information_handler.logging_handler.update_job_name(job.name)
-        self._file_logger = handler.job_information_handler.logging_handler.logger
-        self.job.executions.append(self)
-        logger.info("Starting execution of job '%s'", job.name)
 
     def create_attempt(self) -> "ExecutionAttempt":
         """

@@ -26,6 +26,7 @@ class JobExecutionHandler:
         self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
         self.running_executions: list[JobExecution] = []
+        self._file_logger = logging.getLogger("job.FileLogger")
 
     def execute_job(self, job: Job, max_workers: int = 4) -> Job:
         if any(exec_.job == job for exec_ in self.running_executions):
@@ -34,16 +35,16 @@ class JobExecutionHandler:
             )
             return job
 
-        execution = JobExecution(
-            job=job,
-            number_of_attempts=job.num_of_retries + 1,
-            handler=self,
-        )
+        execution = JobExecution(job=job, number_of_attempts=job.num_of_retries + 1)
+        self.running_executions.append(execution)
+        self.job_information_handler.logging_handler.update_job_name(job.name)
+        job.executions.append(execution)
+        logger.info("Starting execution of job '%s'", job.name)
 
         for attempt_index in range(execution.number_of_attempts):
             attempt = execution.create_attempt()
 
-            execution.file_logger.debug(
+            self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
@@ -52,7 +53,7 @@ class JobExecutionHandler:
                 return job
             except Exception as exc:  # pylint: disable=broad-except
                 logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
-                execution.file_logger.warning(
+                self._file_logger.warning(
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
                 if attempt_index == execution.number_of_attempts - 1:
@@ -77,7 +78,7 @@ class JobExecutionHandler:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for comp in job.root_components:
-                execution.file_logger.debug("Submitting '%s'", comp.name)
+                self._file_logger.debug("Submitting '%s'", comp.name)
                 metrics = attempt.component_metrics[comp.id]
                 fut = executor.submit(self.execute_component, comp, None, metrics)
                 futures[fut] = comp
@@ -107,9 +108,7 @@ class JobExecutionHandler:
         except Exception:
             attempt.component_metrics[comp.id].status = RuntimeState.FAILED
             attempt.failed.add(comp.id)
-            execution.file_logger.error(
-                "Component '%s' FAILED", comp.name, exc_info=True
-            )
+            self._file_logger.error("Component '%s' FAILED", comp.name, exc_info=True)
 
     def _schedule_next(
         self,
@@ -127,7 +126,7 @@ class JobExecutionHandler:
             metrics = attempt.component_metrics[nxt.id]
 
             if prev_ids.issubset(attempt.succeeded):
-                execution.file_logger.debug("Submitting '%s'", nxt.name)
+                self._file_logger.debug("Submitting '%s'", nxt.name)
                 fut = executor.submit(self.execute_component, nxt, None, metrics)
                 futures[fut] = nxt
                 attempt.pending.discard(nxt.id)
@@ -135,7 +134,7 @@ class JobExecutionHandler:
                 metrics.status = RuntimeState.CANCELLED
                 attempt.cancelled.add(nxt.id)
                 attempt.pending.discard(nxt.id)
-                execution.file_logger.warning("Component '%s' CANCELLED", nxt.name)
+                self._file_logger.warning("Component '%s' CANCELLED", nxt.name)
 
     def _mark_unrunnable(
         self,
@@ -148,7 +147,7 @@ class JobExecutionHandler:
             metrics = attempt.component_metrics[pid]
             metrics.status = RuntimeState.CANCELLED
             attempt.cancelled.add(pid)
-            execution.file_logger.warning(
+            self._file_logger.warning(
                 "Component '%s' CANCELLED (no runnable path)", comp.name
             )
 
