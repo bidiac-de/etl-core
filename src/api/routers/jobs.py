@@ -5,6 +5,8 @@ router = APIRouter(
     prefix="/jobs",
     tags=[""],
 )
+
+
 @router.post(
     "/",
     response_model=str,
@@ -23,13 +25,12 @@ def create_job(job_config: dict) -> str:
     job.save()
     return job.id
 
+
 @router.get(
     "/jobs/{job_id}",
     response_model=dict,
     summary="Get Job by ID",
-    description=(
-        "Returns the JSON representation of the Job matching the given ID, "
-    ),
+    description=("Returns the JSON representation of the Job matching the given ID, "),
 )
 def get_job(id: str) -> dict:
     """
@@ -41,6 +42,7 @@ def get_job(id: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Job with ID {id} not found")
 
     return job.model_dump()
+
 
 @router.put(
     "/jobs/{job_id}",

@@ -4,6 +4,8 @@ router = APIRouter(
     prefix="/ws/jobs/metrics",
     tags=["metrics"],
 )
+
+
 @router.get(
     "/{job_id}",
     summary="Get job metrics",

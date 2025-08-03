@@ -1,6 +1,7 @@
 import importlib
 import pkgutil
 
+
 def inline_defs(schema: dict) -> dict:
     """
     Recursively replace all $ref to #/$defs/... by
@@ -27,9 +28,12 @@ def inline_defs(schema: dict) -> dict:
 
     return _walk(schema)
 
+
 def autodiscover_components(package_name: str) -> None:
     pkg = importlib.import_module(package_name)
-    for finder, mod_name, is_pkg in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
+    for finder, mod_name, is_pkg in pkgutil.walk_packages(
+        pkg.__path__, pkg.__name__ + "."
+    ):
         importlib.import_module(mod_name)
         if is_pkg:
             autodiscover_components(mod_name)

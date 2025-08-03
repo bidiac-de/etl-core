@@ -26,14 +26,14 @@ def get_job_schema() -> dict:
     # Patch components list to link to each component‐type schema:
     schema["properties"]["components"]["items"] = {
         "oneOf": [
-            {"$ref": f"/schemas/{comp_type}"}
-            for comp_type in component_registry.keys()
+            {"$ref": f"/schemas/{comp_type}"} for comp_type in component_registry.keys()
         ]
     }
 
     # Inline all $defs then drop $defs
     schema = inline_defs(schema)
     return schema
+
 
 @router.get(
     "/component_types",
