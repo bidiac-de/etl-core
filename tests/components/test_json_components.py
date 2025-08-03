@@ -1,127 +1,154 @@
 import json
+from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import pytest
-from pathlib import Path
-from components.file_components.json.read_json_component import ReadJSON
+
+from src.components.file_components.json.read_json_component import ReadJSON
 from src.components.file_components.json.write_json_component import WriteJSON
 from src.components.column_definition import ColumnDefinition, DataType
-from datetime import datetime
+from src.metrics.component_metrics import ComponentMetrics
+from src.strategies.row_strategy import RowExecutionStrategy
+from src.strategies.bulk_strategy import BulkExecutionStrategy
 
 
+# --- Patch strategies: swallow metrics kwarg and pass component.metrics into process_* ---
+@pytest.fixture(autouse=True)
+def patch_strategies(monkeypatch):
+    def row_exec(self, component, inputs, **kwargs):
+        return component.process_row(inputs, metrics=getattr(component, "metrics", None))
+
+    def bulk_exec(self, component, inputs, **kwargs):
+        return component.process_bulk(inputs, metrics=getattr(component, "metrics", None))
+
+    monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
+    monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
+
+
+# ---------- Fixtures ----------
 @pytest.fixture
-def sample_json_file(tmp_path: Path):
-    """Creates a sample JSON file for testing."""
-    file_path = tmp_path / "test.json"
-    data = [
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"}
-    ]
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    return file_path
-
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
 
 @pytest.fixture
 def schema_definition():
-    """Sample schema using ColumnDefinition."""
     return [
         ColumnDefinition("id", DataType.INTEGER),
-        ColumnDefinition("name", DataType.STRING)
+        ColumnDefinition("name", DataType.STRING),
     ]
 
+@pytest.fixture
+def sample_json_file(tmp_path: Path) -> Path:
+    fp = tmp_path / "input.json"
+    fp.write_text(json.dumps([
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
+    ]), encoding="utf-8")
+    return fp
 
-def test_readjson_bulk(sample_json_file, schema_definition):
-    """Tests reading all data using ReadJSON."""
-    reader = ReadJSON(
-        id=1,
-        name="ReadTest",
-        description="Test ReadJSON",
-        componentManager=None,
+
+# ---------- ReadJSON via execute() ----------
+def test_readjson_execute_bulk(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="Read bulk",
+        description="Read all records",
+        comp_type="read_json",
+        strategy_type="bulk",
         filepath=sample_json_file,
         schema_definition=schema_definition,
-        created_by=2,
-        created_at=datetime.now()
     )
-    data = reader.process_bulk([])
-    assert isinstance(data, pd.DataFrame)
-    assert len(data) == 2
-    records = data.to_dict(orient="records")
-    assert records[0]["name"] == "Alice"
+    comp.metrics = metrics
 
-def test_readjson_row(sample_json_file, schema_definition):
-    """Tests reading a single row using ReadJSON."""
-    reader = ReadJSON(
-        id=1,
-        name="ReadTest",
-        description="Test ReadJSON",
-        componentManager=None,
+    result = comp.execute(data=None, metrics=metrics)  # metrics kwarg wird von Patch geschluckt
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+    assert set(result.columns) >= {"id", "name"}
+    assert result.iloc[0]["name"] == "Alice"
+
+
+def test_readjson_execute_row(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="Read row",
+        description="Read first record",
+        comp_type="read_json",
+        strategy_type="row",
         filepath=sample_json_file,
         schema_definition=schema_definition,
-        created_by=2,
-        created_at=datetime.now()
     )
-    row = reader.process_row({})
-    assert isinstance(row, dict)
-    assert "name" in row
+    comp.metrics = metrics
+
+    result = comp.execute(data={}, metrics=metrics)
+    assert isinstance(result, dict)
+    assert result.get("name") == "Alice"
 
 
-def test_writejson_and_readback(tmp_path, schema_definition):
-    """Tests writing data with WriteJSON and reading it back with ReadJSON."""
-    file_path = tmp_path / "output.json"
+# ---------- WriteJSON via execute() ----------
+def test_writejson_execute_bulk_and_readback(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+    out_fp = tmp_path / "out.json"
+    out_fp.parent.mkdir(parents=True, exist_ok=True)
+    out_fp.touch()  # Validator requires existing file
+
     writer = WriteJSON(
-        id=1,
-        name="WriteTest",
-        description="Test WriteJSON",
-        componentManager=None,
-        filepath=file_path,
+        name="Write bulk",
+        description="Write records as array",
+        comp_type="write_json",
+        strategy_type="bulk",
+        filepath=out_fp,
         schema_definition=schema_definition,
-        created_by=2,
-        created_at=datetime.now()
     )
+    writer.metrics = metrics
 
-    import pandas as pd  # falls noch nicht oben
-
-    test_data = pd.DataFrame([
+    df = pd.DataFrame([
         {"id": 10, "name": "Charlie"},
-        {"id": 11, "name": "Diana"}
+        {"id": 11, "name": "Diana"},
     ])
 
-    writer.process_bulk(test_data)
+    write_result = writer.execute(data=df, metrics=metrics)
+    assert isinstance(write_result, pd.DataFrame)
+    assert out_fp.exists()
 
-    # Read and verify
     reader = ReadJSON(
-        id=2,
-        name="ReadTest",
-        description="Test ReadJSON",
-        componentManager=None,
-        filepath=file_path,
+        name="Read back",
+        description="Read written file",
+        comp_type="read_json",
+        strategy_type="bulk",
+        filepath=out_fp,
         schema_definition=schema_definition,
-        created_by=2,
-        created_at=datetime.now()
     )
-    read_data = reader.process_bulk([])
-    assert len(read_data) == 2
-    assert read_data.iloc[0]["name"] == "Charlie"
+    reader.metrics = metrics
+
+    read_df = reader.execute(data=None, metrics=metrics)
+    assert len(read_df) == 2
+    assert list(read_df.sort_values("id")["name"]) == ["Charlie", "Diana"]
 
 
-def test_writejson_row(tmp_path, schema_definition):
-    """Tests writing a single row with WriteJSON."""
-    file_path = tmp_path / "row.json"
+def test_writejson_execute_row(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+    single_fp = tmp_path / "single.json"
+    single_fp.parent.mkdir(parents=True, exist_ok=True)
+    single_fp.touch()  # Validator requires existing file
+
     writer = WriteJSON(
-        id=1,
-        name="WriteRowTest",
-        description="Test Write Row",
-        componentManager=None,
-        filepath=file_path,
+        name="Write single row",
+        description="Write first row",
+        comp_type="write_json",
+        strategy_type="row",
+        filepath=single_fp,
         schema_definition=schema_definition,
-        created_by=2,
-        created_at=datetime.now()
     )
-    row = {"id": 99, "name": "SingleRow"}
-    writer.process_row(row)
+    writer.metrics = metrics
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = json.load(f)
-    assert content[0]["id"] == 99
-    assert content[0]["name"] == "SingleRow"
+    row = {"id": 99, "name": "SingleRow"}
+    result = writer.execute(data=row, metrics=metrics)
+    assert result == row
+
+    content = json.loads(single_fp.read_text(encoding="utf-8"))
+    assert isinstance(content, list)
+    assert content and content[0]["id"] == 99 and content[0]["name"] == "SingleRow"
+
