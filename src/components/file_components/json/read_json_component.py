@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal
 
 from pandas import DataFrame
-from pydantic import Field
+from pydantic import Field, PrivateAttr, computed_field
 
 from src.components.file_components.json.json_component import JSON
 from src.components.column_definition import ColumnDefinition
@@ -17,7 +17,13 @@ from src.metrics.component_metrics import ComponentMetrics
 class ReadJSON(JSON):
     """Component that reads data from a JSON file."""
 
-    type: Literal["read_json"] = Field(default="read_json")
+    _type: Literal["read_json"] = PrivateAttr(default="read_json")
+
+    @computed_field(return_type=Literal["read_json"])
+    @property
+    def type(self) -> Literal["read_json"]:
+        """Read-only public getter; included in .model_dump()/.model_dump_json()."""
+        return self._type
 
     @classmethod
     def build_objects(cls, values: dict) -> dict:
