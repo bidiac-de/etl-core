@@ -1,9 +1,12 @@
-from src.components.base_component import Component
+from pydantic import ConfigDict
 from abc import ABC
+from src.components.base_component import Component
 
 
-class DataOperationComponent(Component, ABC):
-    """
-    Base class for data operations.
-    All data operations should inherit from this class.
-    """
+class DataOperationsComponent(Component, ABC):
+    """Concrete data operations component, e.g. filter, map, transform."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
