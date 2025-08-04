@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
 from pydantic import (
     BaseModel,
@@ -18,6 +18,7 @@ from src.strategies.base_strategy import ExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
+from pandas import DataFrame
 
 
 class StrategyType(str, Enum):
@@ -44,7 +45,7 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     comp_type: str
-    strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
+    strategy_type: StrategyType = Field(default=StrategyType.ROW)
     next: [List[str]] = []
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
@@ -147,39 +148,39 @@ class Component(BaseModel, ABC):
         """
         self._prev_components.append(prev)
 
-    def execute(self, data, metrics: ComponentMetrics, **kwargs) -> Any:
+    def execute(
+        self,
+        payload: Any,
+        metrics: ComponentMetrics,
+    ) -> AsyncIterator[Any]:
         """
-
-        :param data: the data to be processed by the component
-        :param metrics: a ComponentMetrics instance constructed by the execution handler
-        :return: result of the component execution
+        Invoke the strategy’s async `execute`, streaming native outputs.
+        Returns an AsyncIterator produced by the async generator.
         """
-        if not self.strategy:
-            raise ValueError(f"No strategy set for component {self.name}")
-        return self.strategy.execute(self, data, metrics)
+        return self.strategy.execute(self, payload, metrics)
 
     @abstractmethod
-    def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bulk(self, *args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> DataFrame:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
 def get_strategy(strategy_type: str) -> ExecutionStrategy:
     """
-    Factory function to get the appropriate execution strategy based on the type.
+    Factory function to get the appropriate execution strategy based on the type
     """
-    if strategy_type == "row":
+    if strategy_type == StrategyType.ROW:
         return RowExecutionStrategy()
-    elif strategy_type == "bulk":
+    elif strategy_type == StrategyType.BULK:
         return BulkExecutionStrategy()
-    elif strategy_type == "bigdata":
+    elif strategy_type == StrategyType.BIGDATA:
         return BigDataExecutionStrategy()
     else:
         raise ValueError(f"Unknown strategy type: {strategy_type}")

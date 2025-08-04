@@ -1,58 +1,80 @@
-import datetime
+import asyncio
 import logging
-import concurrent.futures
-from typing import Any
+from typing import Any, Dict, List
 
-from src.job_execution.job import Job, ExecutionAttempt, JobExecution
-from src.components.base_component import Component
-from src.components.runtime_state import RuntimeState
+from src.job_execution.job import Job, JobExecution, ExecutionAttempt
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 
-logger = logging.getLogger("job.ExecutionHandler")
+_SENTRY = object()
 
 
 class JobExecutionHandler:
     """
-    Handles the execution of ETL jobs by managing component execution
-    Preserves command pattern while supporting parallel execution
+    Manages executions of multiple Jobs in streaming mode:
+    - Maintains running executions and their attempts
+    - Integrates file and console logging
+    - Records system and component metrics
+    - For each execution attempt, spawns one asyncio worker per component
+    - Retries up to job.num_of_retries
     """
 
-    def __init__(self):
-        """
-        Initialize the JobExecutionHandler with the component registry and logging
-        """
+    def __init__(self) -> None:
+        # logging setup
+        self.logger = logging.getLogger("job.ExecutionHandler")
+        self._file_logger = logging.getLogger("job.FileLogger")
+        # metrics handlers
         self.job_information_handler = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
-        self.running_executions: list[JobExecution] = []
-        self._file_logger = logging.getLogger("job.FileLogger")
+        # tracking running executions
+        self.running_executions: List[JobExecution] = []
 
-    def execute_job(self, job: Job, max_workers: int = 4) -> Job:
+    def execute_job(self, job: Job) -> Job:
+        """
+        Kick off a streaming execution for the given Job.
+        Retries according to job.num_of_retries.
+        """
+        # guard against parallel execution of same job
         if any(exec_.job == job for exec_ in self.running_executions):
-            logger.warning(
+            self.logger.warning(
                 "Job '%s' is already running; skipping new execution", job.name
             )
             return job
 
+        # prepare new execution
         execution = JobExecution(job=job, number_of_attempts=job.num_of_retries + 1)
         self.running_executions.append(execution)
-        self.job_information_handler.logging_handler.update_job_name(job.name)
         job.executions.append(execution)
-        logger.info("Starting execution of job '%s'", job.name)
 
+        # update logging context
+        self.job_information_handler.logging_handler.update_job_name(job.name)
+        self.logger.info("Starting streaming execution of job '%s'", job.name)
+
+        # attempt loop
         for attempt_index in range(execution.number_of_attempts):
-            attempt = execution.create_attempt()
-
+            attempt: ExecutionAttempt = execution.create_attempt()
             self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
-                self._run_attempt(max_workers, execution, attempt, job)
-                execution.job_metrics.status = RuntimeState.SUCCESS.value
+                # run one streaming attempt
+                asyncio.run(self._run_attempt(execution, attempt))
+                # finalize on success
+                execution.job_metrics.status = "SUCCESS"
+                self._finalize_success(execution, attempt)
                 return job
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.warning("Attempt %d failed: %s", attempt_index + 1, exc)
+
+            except Exception as exc:
+                # record failure and optionally retry
+                attempt.error = str(exc)
+                self.logger.warning(
+                    "Attempt %d failed for job '%s': %s",
+                    attempt_index + 1,
+                    job.name,
+                    exc,
+                )
                 self._file_logger.warning(
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
@@ -62,153 +84,143 @@ class JobExecutionHandler:
 
         return job
 
-    def _run_attempt(
+    async def _run_attempt(
         self,
-        max_workers: int,
         execution: JobExecution,
         attempt: ExecutionAttempt,
-        job: Job,
     ) -> None:
         """
-        Execute this attempt: schedule components in parallel and handle execution.
+        Executes a single attempt of a JobExecution in streaming mode.
         """
-        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+        job = execution.job
+        # initialize per-component queues
+        queues: Dict[str, asyncio.Queue] = {
+            comp.name: asyncio.Queue() for comp in job.components
+        }
+        # spawn one worker per component
+        tasks: List[asyncio.Task] = []
+        for comp in job.components:
+            # all components that follow this one in the execution chain
+            downstream_names = [n.name for n in comp.next_components]
+            out_queues = [queues[name] for name in downstream_names]
+            # all components that precede this one in the execution chain
+            upstream_names = [n.name for n in comp.prev_components]
+            in_queues = [queues[name] for name in upstream_names]
 
-        futures: dict = {}
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for comp in job.root_components:
-                self._file_logger.debug("Submitting '%s'", comp.name)
-                metrics = attempt.component_metrics[comp.id]
-                fut = executor.submit(self.execute_component, comp, None, metrics)
-                futures[fut] = comp
-                attempt.pending.discard(comp.id)
-
-            while futures:
-                done, _ = wait(futures, return_when=FIRST_COMPLETED)
-                for fut in done:
-                    comp = futures.pop(fut)
-                    self._handle_future(fut, comp, attempt, execution)
-                    self._schedule_next(comp, executor, futures, attempt, execution)
-
-        self._mark_unrunnable(attempt, execution)
-        self._finalize_success(execution, attempt)
-
-    def _handle_future(
-        self,
-        fut: concurrent.futures.Future,
-        comp: Component,
-        attempt: ExecutionAttempt,
-        execution: JobExecution,
-    ) -> None:
-        try:
-            fut.result()
-            attempt.succeeded.add(comp.id)
-            execution.job_metrics.update_metrics(attempt.component_metrics)
-        except Exception:
-            attempt.component_metrics[comp.id].status = RuntimeState.FAILED
-            attempt.failed.add(comp.id)
-            self._file_logger.error("Component '%s' FAILED", comp.name, exc_info=True)
-
-    def _schedule_next(
-        self,
-        comp: Component,
-        executor: concurrent.futures.Executor,
-        futures: dict[concurrent.futures.Future, Component],
-        attempt: ExecutionAttempt,
-        execution: JobExecution,
-    ) -> None:
-        for nxt in comp.next_components:
-            if nxt.id in attempt.succeeded | attempt.failed | attempt.cancelled:
-                continue
-
-            prev_ids = {p.id for p in nxt.prev_components}
-            metrics = attempt.component_metrics[nxt.id]
-
-            if prev_ids.issubset(attempt.succeeded):
-                self._file_logger.debug("Submitting '%s'", nxt.name)
-                fut = executor.submit(self.execute_component, nxt, None, metrics)
-                futures[fut] = nxt
-                attempt.pending.discard(nxt.id)
-            elif prev_ids & (attempt.failed | attempt.cancelled):
-                metrics.status = RuntimeState.CANCELLED
-                attempt.cancelled.add(nxt.id)
-                attempt.pending.discard(nxt.id)
-                self._file_logger.warning("Component '%s' CANCELLED", nxt.name)
-
-    def _mark_unrunnable(
-        self,
-        attempt: ExecutionAttempt,
-        execution: JobExecution,
-    ) -> None:
-        component_map = {c.id: c for c in execution.job.components}
-        for pid in list(attempt.pending):
-            comp = component_map[pid]
-            metrics = attempt.component_metrics[pid]
-            metrics.status = RuntimeState.CANCELLED
-            attempt.cancelled.add(pid)
-            self._file_logger.warning(
-                "Component '%s' CANCELLED (no runnable path)", comp.name
+            metrics: ComponentMetrics = attempt.component_metrics[comp.id]
+            task = asyncio.create_task(
+                self._worker(execution, attempt, comp, in_queues, out_queues, metrics),
+                name=f"worker-{comp.name}",
             )
+            tasks.append(task)
+
+        # seed root components
+        for root in job.root_components:
+            q = queues[root.name]
+            await q.put(None)
+            await q.put(_SENTRY)
+
+        # wait for streaming workers to complete
+        await asyncio.gather(*tasks)
+
+    async def _fan_out(self, item: Any, queues: List[asyncio.Queue]) -> None:
+        """
+        Fan out a batch or sentinel to all downstream queues.
+        """
+        for q in queues:
+            await q.put(item)
+
+    async def _worker(
+        self,
+        execution: JobExecution,
+        attempt: ExecutionAttempt,
+        component: Component,
+        in_queues: List[asyncio.Queue],
+        out_queues: List[asyncio.Queue],
+        metrics: ComponentMetrics,
+    ) -> None:
+        """
+        Worker that merges multiple input queues, streams through the component,
+        and fans out to downstream queues. Shuts down only when all inputs send _SENTRY.
+        """
+        # Keep track of which input queues are still open
+        active_queues = set(in_queues)
+
+        try:
+            while active_queues:
+                # Create a get-task for each active input queue
+                get_tasks = {asyncio.create_task(q.get()): q for q in active_queues}
+                # Wait until any one queue has an item
+                done, _ = await asyncio.wait(
+                    get_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
+                )
+                task = done.pop()
+                payload = task.result()
+                source_q = get_tasks[task]
+
+                # If we got the sentinel, mark that input closed
+                if payload is _SENTRY:
+                    active_queues.remove(source_q)
+                    continue
+
+                # Otherwise, process the payload
+                self._file_logger.info(
+                    "Component '%s' processing payload", component.name
+                )
+                metrics.set_started()
+
+                async for batch in component.execute(payload, metrics):
+                    await self._fan_out(batch, out_queues)
+
+                execution.job_metrics.update_metrics(attempt.component_metrics)
+                metrics.status = "SUCCESS"
+                self._file_logger.info("Component '%s' completed", component.name)
+
+        except Exception as exc:
+            metrics.status = "FAILED"
+            metrics.error_count += 1
+            self._file_logger.error(
+                "Component '%s' FAILED: %s", component.name, exc, exc_info=True
+            )
+            raise
+
+        finally:
+            # Propagate end-of-stream once, after all inputs closed
+            await self._fan_out(_SENTRY, out_queues)
 
     def _finalize_success(
-        self,
-        execution: JobExecution,
-        attempt: ExecutionAttempt,
+        self, execution: JobExecution, attempt: ExecutionAttempt
     ) -> None:
-        if attempt.failed:
-            raise RuntimeError(
-                "One or more components failed; dependent components cancelled"
-            )
-
-        duration = datetime.datetime.now() - execution.job_metrics.started_at
-        execution.job_metrics.processing_time = duration
-        execution.job_metrics.status = RuntimeState.SUCCESS.value
-
+        """
+        Final actions when a streaming execution succeeds.
+        """
+        # persist job-level metrics
         self.job_information_handler.metrics_handler.add_job_metrics(
             execution.job.id, execution.job_metrics
         )
-
+        # persist component-level metrics
         for comp in execution.job.components:
             cid = comp.id
             self.job_information_handler.metrics_handler.add_component_metrics(
-                execution.job.id,
-                cid,
-                attempt.component_metrics[cid],
+                execution.job.id, cid, attempt.component_metrics[cid]
             )
-
+        # cleanup
         self.running_executions.remove(execution)
+        self.logger.info("Job '%s' completed successfully", execution.job.name)
 
     def _finalize_failure(
-        self,
-        exc: Exception,
-        execution: JobExecution,
-        attempt: ExecutionAttempt,
+        self, exc: Exception, execution: JobExecution, attempt: ExecutionAttempt
     ) -> None:
-        execution.job_metrics.status = RuntimeState.FAILED.value
+        """
+        Final actions when all retries are exhausted or streaming execution fails.
+        """
+        execution.job_metrics.status = "FAILED"
         attempt.error = str(exc)
+        # cleanup
         self.running_executions.remove(execution)
-
-    def execute_component(
-        self,
-        component: Component,
-        data: Any,
-        metrics: ComponentMetrics,
-    ) -> Any:
-        """
-        Execute a single component
-        !!note: will only work when component is a concrete class !!
-        """
-        try:
-            logger.info("Executing component: %s", component.name)
-            metrics.status = RuntimeState.RUNNING
-            metrics.set_started()
-            result = component.execute(data, metrics)
-            metrics.status = RuntimeState.SUCCESS
-            logger.info("Component %s completed successfully", component.name)
-            return result
-
-        except Exception as e:
-            logger.exception("Component %s failed: %s", component.name, e)
-            metrics.status = RuntimeState.FAILED
-            raise
+        self.logger.error(
+            "Job '%s' failed after %d attempts: %s",
+            execution.job.name,
+            attempt.attempt_number,
+            exc,
+        )

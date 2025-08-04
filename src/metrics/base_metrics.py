@@ -13,8 +13,8 @@ class Metrics(BaseModel, ABC):
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     _status: str = RuntimeState.PENDING.value
     _created_at: datetime = datetime.now()
-    _started_at: datetime = None
-    _processing_time: timedelta = None
+    _started_at: datetime
+    _processing_time: timedelta
     _error_count: int = 0
 
     def set_started(self):
