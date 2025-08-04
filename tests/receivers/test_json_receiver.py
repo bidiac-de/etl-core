@@ -1,4 +1,3 @@
-# tests/receivers/test_json_receiver.py
 import json
 import gzip
 from datetime import datetime, timedelta
@@ -12,8 +11,6 @@ from src.receivers.files.json_receiver import JSONReceiver
 from src.metrics.component_metrics import ComponentMetrics
 
 
-# ---------- Fixtures ----------
-
 @pytest.fixture
 def metrics() -> ComponentMetrics:
     return ComponentMetrics(
@@ -25,17 +22,16 @@ def metrics() -> ComponentMetrics:
     )
 
 
-# ---------- Tests ----------
-
 def test_jsonreceiver_read_row_gz(tmp_path: Path, metrics: ComponentMetrics):
     """read_row should support .gz via helper (open_text_auto)."""
     receiver = JSONReceiver()
     file_path = tmp_path / "row.json.gz"
     payload = [{"id": 1, "name": "Alice"}]
 
-    # create gz file manually
     with gzip.open(file_path, "wt", encoding="utf-8") as f:
         json.dump(payload, f)
+
+    assert file_path.exists()
 
     row = receiver.read_row(file_path, metrics=metrics)
     assert isinstance(row, dict)

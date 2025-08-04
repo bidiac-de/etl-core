@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import dask.dataframe as dd
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 
 from src.components.file_components.json.read_json_component import ReadJSON
 from src.components.file_components.json.write_json_component import WriteJSON
@@ -13,7 +15,7 @@ from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 
 
-# --- Patch strategies: swallow metrics kwarg and pass component.metrics into process_* ---
+
 @pytest.fixture(autouse=True)
 def patch_strategies(monkeypatch):
     def row_exec(self, component, inputs, **kwargs):
@@ -22,11 +24,14 @@ def patch_strategies(monkeypatch):
     def bulk_exec(self, component, inputs, **kwargs):
         return component.process_bulk(inputs, metrics=getattr(component, "metrics", None))
 
+    def bigdata_exec(self, component, inputs, **kwargs):
+        return component.process_bigdata(inputs, metrics=getattr(component, "metrics", None))
+
     monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
     monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
+    monkeypatch.setattr(BigDataExecutionStrategy, "execute", bigdata_exec, raising=True)
 
 
-# ---------- Fixtures ----------
 @pytest.fixture
 def metrics() -> ComponentMetrics:
     return ComponentMetrics(
@@ -54,8 +59,23 @@ def sample_json_file(tmp_path: Path) -> Path:
     return fp
 
 
-# ---------- ReadJSON via execute() ----------
-def test_readjson_execute_bulk(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+def test_readjson_row(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="Read row",
+        description="Read first record",
+        comp_type="read_json",
+        strategy_type="row",
+        filepath=sample_json_file,
+        schema_definition=schema_definition,
+    )
+    comp.metrics = metrics
+
+    result = comp.execute(data={}, metrics=metrics)
+    assert isinstance(result, dict)
+    assert result.get("name") == "Alice"
+
+
+def test_readjson_bulk(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
     comp = ReadJSON(
         name="Read bulk",
         description="Read all records",
@@ -73,27 +93,58 @@ def test_readjson_execute_bulk(sample_json_file: Path, schema_definition, metric
     assert result.iloc[0]["name"] == "Alice"
 
 
-def test_readjson_execute_row(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+def test_readjson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+    """read_bigdata via execute() liest NDJSON (.jsonl) in ein Dask-DataFrame."""
+    jsonl_path = tmp_path / "stream.jsonl"
+    rows = [{"id": 200, "name": "Gina"}, {"id": 201, "name": "Hank"}]
+    jsonl_path.write_text("\n".join(json.dumps(x) for x in rows), encoding="utf-8")
+    assert jsonl_path.exists()
+
     comp = ReadJSON(
-        name="Read row",
-        description="Read first record",
+        name="Read bigdata",
+        description="Read NDJSON with Dask",
         comp_type="read_json",
-        strategy_type="row",
-        filepath=sample_json_file,
+        strategy_type="bigdata",
+        filepath=jsonl_path,
         schema_definition=schema_definition,
     )
     comp.metrics = metrics
 
-    result = comp.execute(data={}, metrics=metrics)
-    assert isinstance(result, dict)
-    assert result.get("name") == "Alice"
+    ddf = comp.execute(data=None, metrics=metrics)
+    assert isinstance(ddf, dd.DataFrame)
+    df = ddf.compute()
+    assert len(df) == 2
+    assert set(df["name"]) == {"Gina", "Hank"}
 
 
-# ---------- WriteJSON via execute() ----------
-def test_writejson_execute_bulk_and_readback(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+def test_writejson_row(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+    single_fp = tmp_path / "single.json"
+    single_fp.parent.mkdir(parents=True, exist_ok=True)
+    single_fp.touch()
+
+    writer = WriteJSON(
+        name="Write single row",
+        description="Write first row",
+        comp_type="write_json",
+        strategy_type="row",
+        filepath=single_fp,
+        schema_definition=schema_definition,
+    )
+    writer.metrics = metrics
+
+    row = {"id": 99, "name": "SingleRow"}
+    result = writer.execute(data=row, metrics=metrics)
+    assert result == row
+
+    content = json.loads(single_fp.read_text(encoding="utf-8"))
+    assert isinstance(content, list)
+    assert content and content[0]["id"] == 99 and content[0]["name"] == "SingleRow"
+
+
+def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
     out_fp = tmp_path / "out.json"
     out_fp.parent.mkdir(parents=True, exist_ok=True)
-    out_fp.touch()  # Validator requires existing file
+    out_fp.touch()
 
     writer = WriteJSON(
         name="Write bulk",
@@ -129,26 +180,37 @@ def test_writejson_execute_bulk_and_readback(tmp_path: Path, schema_definition, 
     assert list(read_df.sort_values("id")["name"]) == ["Charlie", "Diana"]
 
 
-def test_writejson_execute_row(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
-    single_fp = tmp_path / "single.json"
-    single_fp.parent.mkdir(parents=True, exist_ok=True)
-    single_fp.touch()  # Validator requires existing file
+def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+    """write_bigdata via execute() schreibt partitionierte JSONL-Dateien (part-*.json)."""
+    out_dir = tmp_path / "big_out"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     writer = WriteJSON(
-        name="Write single row",
-        description="Write first row",
+        name="Write bigdata",
+        description="Write Dask partitions",
         comp_type="write_json",
-        strategy_type="row",
-        filepath=single_fp,
+        strategy_type="bigdata",
+        filepath=out_dir,
         schema_definition=schema_definition,
     )
     writer.metrics = metrics
 
-    row = {"id": 99, "name": "SingleRow"}
-    result = writer.execute(data=row, metrics=metrics)
-    assert result == row
+    ddf_in = dd.from_pandas(
+        pd.DataFrame([{"id": 300, "name": "Ivy"}, {"id": 301, "name": "Jake"}]),
+        npartitions=2,
+    )
 
-    content = json.loads(single_fp.read_text(encoding="utf-8"))
-    assert isinstance(content, list)
-    assert content and content[0]["id"] == 99 and content[0]["name"] == "SingleRow"
+    res = writer.execute(data=ddf_in, metrics=metrics)
+
+    assert isinstance(res, dd.DataFrame)
+
+    parts = sorted(out_dir.glob("part-*.json"))
+    assert parts, "No partition files written."
+    for p in parts:
+        assert p.is_file() and p.suffix == ".json"
+
+
+    ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
+    df_out = ddf_out.compute().sort_values("id")
+    assert list(df_out["name"]) == ["Ivy", "Jake"]
 
