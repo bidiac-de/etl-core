@@ -1,12 +1,14 @@
 import asyncio
 import logging
 from typing import Any, Dict, List
+from collections import deque
 
 from src.job_execution.job import Job, JobExecution, ExecutionAttempt
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
+
 
 _SENTRY = object()
 
@@ -182,8 +184,19 @@ class JobExecutionHandler:
             self._file_logger.error(
                 "Component '%s' FAILED: %s", component.name, exc, exc_info=True
             )
+            # Mark all downstream components (and their downstream) as CANCELLED
+            dq = deque(component.next_components)
+            visited = set()
+            while dq:
+                downstream_comp = dq.popleft()
+                if downstream_comp.id in visited:
+                    continue
+                visited.add(downstream_comp.id)
+                dm = attempt.component_metrics[downstream_comp.id]
+                if dm.status not in ("SUCCESS", "FAILED"):
+                    dm.status = "CANCELLED"
+                dq.extend(downstream_comp.next_components)
             raise
-
         finally:
             # Propagate end-of-stream once, after all inputs closed
             await self._fan_out(_SENTRY, out_queues)
