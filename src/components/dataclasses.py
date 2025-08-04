@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, PrivateAttr
 from uuid import uuid4
 
 
@@ -11,17 +11,9 @@ class Layout(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     x_coordinate: float = Field(default=0, alias="x_coord")
     y_coordinate: float = Field(default=0, alias="y_coord")
-
-    @field_validator("id", mode="before")
-    @classmethod
-    def validate_id(cls, value):
-        """
-        Id is read-only and should not be set manually.
-        """
-        raise ValueError("Id is read-only and should not be set manually.")
 
     @field_validator("x_coordinate", "y_coordinate", mode="before")
     @classmethod
@@ -32,6 +24,14 @@ class Layout(BaseModel):
         if value < 0:
             raise ValueError("Coordinates must be non-negative.")
         return value
+
+    @property
+    def id(self) -> str:
+        """
+        Get the unique identifier of the component
+        :return: Unique identifier as a string
+        """
+        return self._id
 
     def __repr__(self):
         return (
@@ -48,19 +48,11 @@ class MetaData(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: Optional[datetime] = Field(default=None, exclude=True)
     created_by: int = Field(default=0)
     updated_by: Optional[int] = Field(default=None)
-
-    @field_validator("id", mode="before")
-    @classmethod
-    def validate_id(cls, value):
-        """
-        Id is read-only and should not be set manually
-        """
-        raise ValueError("Id is read-only and should not be set manually.")
 
     @field_validator("created_at", "updated_at", mode="before")
     @classmethod
@@ -81,3 +73,11 @@ class MetaData(BaseModel):
         if not isinstance(value, int) or value < 0:
             raise ValueError("User ID must be a non-negative integer.")
         return value
+
+    @property
+    def id(self) -> str:
+        """
+        Get the unique identifier of the component
+        :return: Unique identifier as a string
+        """
+        return self._id
