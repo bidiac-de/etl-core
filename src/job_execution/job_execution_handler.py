@@ -55,14 +55,15 @@ class JobExecutionHandler:
         self.logger.info("Starting streaming execution of job '%s'", job.name)
 
         # attempt loop
-        for attempt_index in range(execution.number_of_attempts):
+        while len(execution.attempts) < execution.number_of_attempts:
+            attempt_index = len(execution.attempts)
             attempt: ExecutionAttempt = execution.create_attempt()
             self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
                 # run one streaming attempt
-                asyncio.run(self._run_attempt(execution, attempt))
+                asyncio.run(self._run_attempt(attempt))
                 # finalize on success
                 execution.job_metrics.status = "SUCCESS"
                 self._finalize_success(execution, attempt)
@@ -88,13 +89,12 @@ class JobExecutionHandler:
 
     async def _run_attempt(
         self,
-        execution: JobExecution,
         attempt: ExecutionAttempt,
     ) -> None:
         """
         Executes a single attempt of a JobExecution in streaming mode.
         """
-        job = execution.job
+        job = attempt.execution.job
         # initialize per-component queues
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
@@ -111,7 +111,7 @@ class JobExecutionHandler:
 
             metrics: ComponentMetrics = attempt.component_metrics[comp.id]
             task = asyncio.create_task(
-                self._worker(execution, attempt, comp, in_queues, out_queues, metrics),
+                self._worker(attempt, comp, in_queues, out_queues, metrics),
                 name=f"worker-{comp.name}",
             )
             tasks.append(task)
@@ -134,7 +134,6 @@ class JobExecutionHandler:
 
     async def _worker(
         self,
-        execution: JobExecution,
         attempt: ExecutionAttempt,
         component: Component,
         in_queues: List[asyncio.Queue],
@@ -174,7 +173,7 @@ class JobExecutionHandler:
                 async for batch in component.execute(payload, metrics):
                     await self._fan_out(batch, out_queues)
 
-                execution.job_metrics.update_metrics(attempt.component_metrics)
+                attempt.execution.job_metrics.update_metrics(attempt.component_metrics)
                 metrics.status = "SUCCESS"
                 self._file_logger.info("Component '%s' completed", component.name)
 

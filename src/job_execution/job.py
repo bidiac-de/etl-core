@@ -9,11 +9,8 @@ from pydantic import (
     field_validator,
     PrivateAttr,
 )
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
-from src.strategies.bulk_strategy import BulkExecutionStrategy
-from src.strategies.row_strategy import RowExecutionStrategy
-from src.strategies.base_strategy import ExecutionStrategy, StrategyType
-from src.components.base_component import Component
+
+from src.components.base_component import Component, get_strategy, StrategyType
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
 from uuid import uuid4
@@ -23,20 +20,6 @@ from src.metrics.metrics_registry import get_metrics_class
 from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
-
-
-def get_strategy(strategy_type: str) -> ExecutionStrategy:
-    """
-    Factory function to get the appropriate execution strategy based on the type
-    """
-    if strategy_type == StrategyType.ROW:
-        return RowExecutionStrategy()
-    elif strategy_type == StrategyType.BULK:
-        return BulkExecutionStrategy()
-    elif strategy_type == StrategyType.BIGDATA:
-        return BigDataExecutionStrategy()
-    else:
-        raise ValueError(f"Unknown strategy type: {strategy_type}")
 
 
 class Job(BaseModel):
@@ -68,7 +51,7 @@ class Job(BaseModel):
         built: list[Component] = []
         for comp_data in raw:
             comp_type = comp_data.get("comp_type")
-            comp_cls= component_registry.get(comp_type)
+            comp_cls = component_registry.get(comp_type)
             if comp_cls is None:
                 raise ValueError(f"Unknown component type: {comp_type!r}")
             # This will now call StubComponent.build_objects (etc.)
@@ -300,7 +283,7 @@ class ExecutionAttempt:
 
         # metrics also keyed by name
         for comp in components:
-            metrics_cls= get_metrics_class(comp.comp_type)
+            metrics_cls = get_metrics_class(comp.comp_type)
             metrics = metrics_cls(processing_time=timedelta(0), error_count=0)
             self._component_metrics[comp.id] = metrics
 
