@@ -111,23 +111,11 @@ class Component(BaseModel, ABC):
             raise ValueError(f"No strategy set for component {self.name}")
         return self._strategy
 
-    @strategy.setter
-    def strategy(self, value: ExecutionStrategy):
-        if not isinstance(value, ExecutionStrategy):
-            raise TypeError(f"Expected ExecutionStrategy, got {type(value).__name__}")
-        self._strategy = value
-
     @property
     def receiver(self) -> Receiver:
         if self._receiver is None:
             raise ValueError(f"No receiver set for component {self.name}")
         return self._receiver
-
-    @receiver.setter
-    def receiver(self, value: Receiver):
-        if not isinstance(value, Receiver):
-            raise TypeError(f"Expected Receiver, got {type(value).__name__}")
-        self._receiver = value
 
     @property
     def next_components(self) -> List["Component"]:

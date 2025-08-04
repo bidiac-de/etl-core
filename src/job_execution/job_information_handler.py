@@ -20,21 +20,9 @@ class JobInformationHandler:
     def metrics_handler(self) -> "MetricsHandler":
         return self._metrics_handler
 
-    @metrics_handler.setter
-    def metrics_handler(self, value: "MetricsHandler") -> None:
-        if not isinstance(value, MetricsHandler):
-            raise ValueError("metrics_handler must be an instance of MetricsHandler")
-        self._metrics_handler = value
-
     @property
     def logging_handler(self) -> "LoggingHandler":
         return self._logging_handler
-
-    @logging_handler.setter
-    def logging_handler(self, value: "LoggingHandler") -> None:
-        if not isinstance(value, LoggingHandler):
-            raise ValueError("logging_handler must be an instance of LoggingHandler")
-        self._logging_handler = value
 
 
 class MetricsHandler:
