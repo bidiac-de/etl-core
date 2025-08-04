@@ -12,7 +12,7 @@ from src.metrics.component_metrics import ComponentMetrics
 
 
 @register_component("read_csv")
-class ReadCSV( CSV):
+class ReadCSV(CSV):
     """Component that reads data from a CSV file."""
 
     type: Literal["read_csv"] = Field(default="read_csv")
