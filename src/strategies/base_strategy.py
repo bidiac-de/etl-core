@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator
+from enum import Enum
 
 from pydantic import BaseModel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -22,3 +23,13 @@ class ExecutionStrategy(BaseModel, ABC):  # noqa: WPS214
         """
         Stream through the component logic, yielding native outputs.
         """
+
+
+class StrategyType(str, Enum):
+    """
+    Enum for different strategy types
+    """
+
+    ROW = "row"
+    BULK = "bulk"
+    BIGDATA = "bigdata"

@@ -9,6 +9,10 @@ from pydantic import (
     field_validator,
     PrivateAttr,
 )
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+from src.strategies.bulk_strategy import BulkExecutionStrategy
+from src.strategies.row_strategy import RowExecutionStrategy
+from src.strategies.base_strategy import ExecutionStrategy, StrategyType
 from src.components.base_component import Component
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.job_metrics import JobMetrics
@@ -19,6 +23,20 @@ from src.metrics.metrics_registry import get_metrics_class
 from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
+
+
+def get_strategy(strategy_type: str) -> ExecutionStrategy:
+    """
+    Factory function to get the appropriate execution strategy based on the type
+    """
+    if strategy_type == StrategyType.ROW:
+        return RowExecutionStrategy()
+    elif strategy_type == StrategyType.BULK:
+        return BulkExecutionStrategy()
+    elif strategy_type == StrategyType.BIGDATA:
+        return BigDataExecutionStrategy()
+    else:
+        raise ValueError(f"Unknown strategy type: {strategy_type}")
 
 
 class Job(BaseModel):
@@ -34,6 +52,7 @@ class Job(BaseModel):
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
+    strategy_type: StrategyType = Field(default=StrategyType.ROW)
 
     components: List[Component] = Field(default_factory=list)
 
@@ -49,11 +68,11 @@ class Job(BaseModel):
         built: list[Component] = []
         for comp_data in raw:
             comp_type = comp_data.get("comp_type")
-            CompCls = component_registry.get(comp_type)
-            if CompCls is None:
+            comp_cls= component_registry.get(comp_type)
+            if comp_cls is None:
                 raise ValueError(f"Unknown component type: {comp_type!r}")
             # This will now call StubComponent.build_objects (etc.)
-            built.append(CompCls(**comp_data))
+            built.append(comp_cls(**comp_data))
         values["components"] = built
         return values
 
@@ -91,14 +110,25 @@ class Job(BaseModel):
 
         return self
 
-    @field_validator("name", mode="before")
-    @classmethod
-    def _validate_name(cls, value: str) -> str:
+    @model_validator(mode="after")
+    def _assign_strategies(self) -> "Job":
         """
-        Validate that the name is a non-empty string.
+        After wiring, give every component the Job’s strategy.
+        """
+        for comp in self.components:
+            # override whatever was on the component; use job-level strategy_type
+            comp.strategy = get_strategy(self.strategy_type)
+
+        return self
+
+    @field_validator("name", "strategy_type", mode="before")
+    @classmethod
+    def _validate_non_empty_string(cls, value: str) -> str:
+        """
+        Validate that the name, comp_type, and strategy_type are non-empty strings.
         """
         if not isinstance(value, str) or not value.strip():
-            raise ValueError("Job name must be a non-empty string.")
+            raise ValueError("Value must be a non-empty string.")
         return value.strip()
 
     @field_validator("num_of_retries", mode="before")
@@ -188,7 +218,7 @@ class JobExecution:
 
     _id: str
     _job: Job
-    _job_metrics: JobMetrics = None
+    _job_metrics: JobMetrics
     _attempts: List["ExecutionAttempt"]
     _file_logger: logging.Logger = None
 
@@ -270,8 +300,8 @@ class ExecutionAttempt:
 
         # metrics also keyed by name
         for comp in components:
-            MetricsCls = get_metrics_class(comp.comp_type)
-            metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
+            metrics_cls= get_metrics_class(comp.comp_type)
+            metrics = metrics_cls(processing_time=timedelta(0), error_count=0)
             self._component_metrics[comp.id] = metrics
 
     @property

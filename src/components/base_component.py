@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from enum import Enum
+from src.strategies.base_strategy import StrategyType
 from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
 from pydantic import (
@@ -15,20 +15,7 @@ from src.components.dataclasses import MetaData, Layout
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 from src.strategies.base_strategy import ExecutionStrategy
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
-from src.strategies.bulk_strategy import BulkExecutionStrategy
-from src.strategies.row_strategy import RowExecutionStrategy
 from pandas import DataFrame
-
-
-class StrategyType(str, Enum):
-    """
-    Enum for different strategy types
-    """
-
-    ROW = "row"
-    BULK = "bulk"
-    BIGDATA = "bigdata"
 
 
 class Component(BaseModel, ABC):
@@ -68,7 +55,7 @@ class Component(BaseModel, ABC):
         """
         raise NotImplementedError
 
-    @field_validator("name", "comp_type", "strategy_type", mode="before")
+    @field_validator("name", "comp_type", mode="before")
     @classmethod
     def _validate_non_empty_string(cls, value: str) -> str:
         """
@@ -111,6 +98,15 @@ class Component(BaseModel, ABC):
         if self._strategy is None:
             raise ValueError(f"No strategy set for component {self.name}")
         return self._strategy
+
+    @strategy.setter
+    def strategy(self, value: ExecutionStrategy):
+        if not isinstance(value, ExecutionStrategy):
+            raise TypeError(
+                f"strategy must be an instance of ExecutionStrategy, "
+                f"got {type(value).__name__}"
+            )
+        self._strategy = value
 
     @property
     def receiver(self) -> Receiver:
@@ -170,17 +166,3 @@ class Component(BaseModel, ABC):
     @abstractmethod
     async def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
-
-
-def get_strategy(strategy_type: str) -> ExecutionStrategy:
-    """
-    Factory function to get the appropriate execution strategy based on the type
-    """
-    if strategy_type == StrategyType.ROW:
-        return RowExecutionStrategy()
-    elif strategy_type == StrategyType.BULK:
-        return BulkExecutionStrategy()
-    elif strategy_type == StrategyType.BIGDATA:
-        return BigDataExecutionStrategy()
-    else:
-        raise ValueError(f"Unknown strategy type: {strategy_type}")
