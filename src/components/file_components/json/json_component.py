@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 from pydantic import Field, ConfigDict
 
@@ -19,8 +19,8 @@ class JSON(FileComponent, ABC):
 
     filepath: Path = Field(..., description="Path to the JSON file")
     schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for JSON structure")
-    metrics: ComponentMetrics = None
-    receiver: JSONReceiver = None
+    metrics: Optional[ComponentMetrics] = Field(default=None)
+    receiver: Optional[JSONReceiver] = Field(default=None)
 
     @abstractmethod
     def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:

@@ -15,6 +15,20 @@ from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 
 
+records_std = [
+    {"id": 1, "name": "Alice"},
+    {"id": 2, "name": "Bob"},
+    {"id": 3, "name": "Charlie"},
+]
+
+# zentraler testdaten ordner, verschiedene datensätze auch mit fehlern, valeria und ich nehmen aber immer gleiche datensätze
+
+def write_json(path: Path, records):
+    path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+def write_jsonl(path: Path, records):
+    path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records), encoding="utf-8")
+
 
 @pytest.fixture(autouse=True)
 def patch_strategies(monkeypatch):
@@ -52,10 +66,7 @@ def schema_definition():
 @pytest.fixture
 def sample_json_file(tmp_path: Path) -> Path:
     fp = tmp_path / "input.json"
-    fp.write_text(json.dumps([
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"},
-    ]), encoding="utf-8")
+    write_json(fp, records_std)
     return fp
 
 
@@ -86,18 +97,16 @@ def test_readjson_bulk(sample_json_file: Path, schema_definition, metrics: Compo
     )
     comp.metrics = metrics
 
-    result = comp.execute(data=None, metrics=metrics)  # metrics kwarg wird von Patch geschluckt
+    result = comp.execute(data=None, metrics=metrics)
     assert isinstance(result, pd.DataFrame)
-    assert len(result) == 2
-    assert set(result.columns) >= {"id", "name"}
-    assert result.iloc[0]["name"] == "Alice"
+    assert len(result) == 3
+    assert list(result.sort_values("id")["name"]) == ["Alice", "Bob", "Charlie"]
 
 
 def test_readjson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
     """read_bigdata via execute() liest NDJSON (.jsonl) in ein Dask-DataFrame."""
     jsonl_path = tmp_path / "stream.jsonl"
-    rows = [{"id": 200, "name": "Gina"}, {"id": 201, "name": "Hank"}]
-    jsonl_path.write_text("\n".join(json.dumps(x) for x in rows), encoding="utf-8")
+    write_jsonl(jsonl_path, records_std)  # gleiche Daten, als NDJSON
     assert jsonl_path.exists()
 
     comp = ReadJSON(
@@ -112,9 +121,8 @@ def test_readjson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentM
 
     ddf = comp.execute(data=None, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
-    df = ddf.compute()
-    assert len(df) == 2
-    assert set(df["name"]) == {"Gina", "Hank"}
+    df = ddf.compute().sort_values("id")
+    assert list(df["name"]) == ["Alice", "Bob", "Charlie"]
 
 
 def test_writejson_row(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
@@ -156,11 +164,7 @@ def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMet
     )
     writer.metrics = metrics
 
-    df = pd.DataFrame([
-        {"id": 10, "name": "Charlie"},
-        {"id": 11, "name": "Diana"},
-    ])
-
+    df = pd.DataFrame(records_std)
     write_result = writer.execute(data=df, metrics=metrics)
     assert isinstance(write_result, pd.DataFrame)
     assert out_fp.exists()
@@ -175,9 +179,8 @@ def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMet
     )
     reader.metrics = metrics
 
-    read_df = reader.execute(data=None, metrics=metrics)
-    assert len(read_df) == 2
-    assert list(read_df.sort_values("id")["name"]) == ["Charlie", "Diana"]
+    read_df = reader.execute(data=None, metrics=metrics).sort_values("id")
+    assert list(read_df["name"]) == ["Alice", "Bob", "Charlie"]
 
 
 def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
@@ -195,13 +198,8 @@ def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: Component
     )
     writer.metrics = metrics
 
-    ddf_in = dd.from_pandas(
-        pd.DataFrame([{"id": 300, "name": "Ivy"}, {"id": 301, "name": "Jake"}]),
-        npartitions=2,
-    )
-
+    ddf_in = dd.from_pandas(pd.DataFrame(records_std), npartitions=2)
     res = writer.execute(data=ddf_in, metrics=metrics)
-
     assert isinstance(res, dd.DataFrame)
 
     parts = sorted(out_dir.glob("part-*.json"))
@@ -209,8 +207,7 @@ def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: Component
     for p in parts:
         assert p.is_file() and p.suffix == ".json"
 
-
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
     df_out = ddf_out.compute().sort_values("id")
-    assert list(df_out["name"]) == ["Ivy", "Jake"]
+    assert list(df_out["name"]) == ["Alice", "Bob", "Charlie"]
 

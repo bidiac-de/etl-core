@@ -21,7 +21,6 @@ def metrics() -> ComponentMetrics:
         lines_forwarded=0,
     )
 
-
 def test_jsonreceiver_read_row_gz(tmp_path: Path, metrics: ComponentMetrics):
     """read_row should support .gz via helper (open_text_auto)."""
     receiver = JSONReceiver()
@@ -72,7 +71,6 @@ def test_jsonreceiver_bulk_ndjson(tmp_path: Path, metrics: ComponentMetrics):
     receiver = JSONReceiver()
     file_path = tmp_path / "data.jsonl"
 
-    # write simple NDJSON (one JSON per line)
     lines = [
         {"id": 10, "name": "Charlie"},
         {"id": 11, "name": "Diana"},
@@ -111,7 +109,6 @@ def test_jsonreceiver_read_bigdata_on_jsonl(tmp_path: Path, metrics: ComponentMe
     receiver = JSONReceiver()
     file_path = tmp_path / "stream.jsonl"
 
-    # two lines of NDJSON
     rows = [{"id": 200, "name": "Gina"}, {"id": 201, "name": "Hank"}]
     file_path.write_text("\n".join(json.dumps(x) for x in rows), encoding="utf-8")
 
