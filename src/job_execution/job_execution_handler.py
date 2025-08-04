@@ -95,19 +95,22 @@ class JobExecutionHandler:
         Executes a single attempt of a JobExecution in streaming mode.
         """
         job = attempt.execution.job
-        # initialize per-component queues
+        # initialize one queue per component to hold its incoming batches
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
         }
+
         # spawn one worker per component
         tasks: List[asyncio.Task] = []
         for comp in job.components:
-            # all components that follow this one in the execution chain
-            downstream_names = [n.name for n in comp.next_components]
-            out_queues = [queues[name] for name in downstream_names]
-            # all components that precede this one in the execution chain
-            upstream_names = [n.name for n in comp.prev_components]
-            in_queues = [queues[name] for name in upstream_names]
+            # fan outputs into the input queues of downstream components
+            out_queues: List[asyncio.Queue] = [
+                queues[nxt.name] for nxt in comp.next_components
+            ]
+            # consume from this component’s own queue if it has predecessors
+            in_queues: List[asyncio.Queue] = (
+                [queues[comp.name]] if comp.prev_components else []
+            )
 
             metrics: ComponentMetrics = attempt.component_metrics[comp.id]
             task = asyncio.create_task(
@@ -116,13 +119,7 @@ class JobExecutionHandler:
             )
             tasks.append(task)
 
-        # seed root components
-        for root in job.root_components:
-            q = queues[root.name]
-            await q.put(None)
-            await q.put(_SENTRY)
-
-        # wait for streaming workers to complete
+        # wait for all component workers to complete
         await asyncio.gather(*tasks)
 
     async def _fan_out(self, item: Any, queues: List[asyncio.Queue]) -> None:
@@ -141,63 +138,69 @@ class JobExecutionHandler:
         metrics: ComponentMetrics,
     ) -> None:
         """
-        Worker that merges multiple input queues, streams through the component,
-        and fans out to downstream queues. Shuts down only when all inputs send _SENTRY.
+        If in_queues is empty, run once with payload=None (root).
+        Otherwise merge inputs until all send _SENTRY. On any batch,
+        invoke component.execute and fan out. On error, cancel successors.
+        Always send one _SENTRY downstream.
         """
-        # Keep track of which input queues are still open
-        active_queues = set(in_queues)
+
+        # if a predecessor failure already cancelled this component, skip it entirely
+        if metrics.status == "CANCELLED":
+            await self._fan_out(_SENTRY, out_queues)
+            return
+
+        async def _run(payload: Any) -> None:
+            metrics.set_started()
+            async for batch in component.execute(payload, metrics):
+                await self._fan_out(batch, out_queues)
+            attempt.execution.job_metrics.update_metrics(attempt.component_metrics)
+
+        def _cancel() -> None:
+            dq = deque(component.next_components)
+            seen = set()
+            while dq:
+                nxt = dq.popleft()
+                if nxt.id in seen:
+                    continue
+                seen.add(nxt.id)
+                dm = attempt.component_metrics[nxt.id]
+                if dm.status not in ("SUCCESS", "FAILED"):
+                    dm.status = "CANCELLED"
+                dq.extend(nxt.next_components)
 
         try:
-            while active_queues:
-                # Create a get-task for each active input queue
-                get_tasks = {asyncio.create_task(q.get()): q for q in active_queues}
-                # Wait until any one queue has an item
-                done, _ = await asyncio.wait(
-                    get_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
-                )
-                task = done.pop()
-                payload = task.result()
-                source_q = get_tasks[task]
-
-                # If we got the sentinel, mark that input closed
-                if payload is _SENTRY:
-                    active_queues.remove(source_q)
-                    continue
-
-                # Otherwise, process the payload
-                self._file_logger.info(
-                    "Component '%s' processing payload", component.name
-                )
-                metrics.set_started()
-
-                async for batch in component.execute(payload, metrics):
-                    await self._fan_out(batch, out_queues)
-
-                attempt.execution.job_metrics.update_metrics(attempt.component_metrics)
-                metrics.status = "SUCCESS"
-                self._file_logger.info("Component '%s' completed", component.name)
-
-        except Exception as exc:
+            if not in_queues:
+                # root component
+                await _run(None)
+            else:
+                # fan‐in: merge until all upstreams send the sentinel
+                active = set(in_queues)
+                while active:
+                    tasks = {asyncio.create_task(q.get()): q for q in active}
+                    done, _ = await asyncio.wait(
+                        tasks, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    task = done.pop()
+                    src = tasks[task]
+                    val = task.result()
+                    if val is _SENTRY:
+                        active.remove(src)
+                    else:
+                        await _run(val)
+        except Exception as e:
             metrics.status = "FAILED"
             metrics.error_count += 1
             self._file_logger.error(
-                "Component '%s' FAILED: %s", component.name, exc, exc_info=True
+                "Component '%s' FAILED: %s", component.name, e, exc_info=True
             )
-            # Mark all downstream components (and their downstream) as CANCELLED
-            dq = deque(component.next_components)
-            visited = set()
-            while dq:
-                downstream_comp = dq.popleft()
-                if downstream_comp.id in visited:
-                    continue
-                visited.add(downstream_comp.id)
-                dm = attempt.component_metrics[downstream_comp.id]
-                if dm.status not in ("SUCCESS", "FAILED"):
-                    dm.status = "CANCELLED"
-                dq.extend(downstream_comp.next_components)
+            _cancel()
             raise
+        else:
+            # only mark SUCCESS if we haven't been CANCELLED by an upstream
+            if metrics.status != "CANCELLED":
+                metrics.status = "SUCCESS"
         finally:
-            # Propagate end-of-stream once, after all inputs closed
+            # always propagate the sentinel exactly once
             await self._fan_out(_SENTRY, out_queues)
 
     def _finalize_success(

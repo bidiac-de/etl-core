@@ -1,7 +1,6 @@
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.components.component_registry import register_component
-from src.components.base_component import get_strategy
 from src.receivers.base_receiver import Receiver
 from typing import Any, List, Dict
 from pydantic import PrivateAttr
@@ -9,16 +8,15 @@ from pydantic import PrivateAttr
 
 @register_component("test")
 class StubComponent(Component):
-    def execute(self, data, metrics, **kwargs):
+    async def execute(self, data, metrics, **kwargs):
         metrics.lines_received = 1
-        return data
+        yield data
 
     @classmethod
     def _build_objects(cls, values):
         """
         Build dependent objects for the stub component
         """
-        values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
 
         return values
@@ -45,7 +43,9 @@ class StubComponent(Component):
 
 @register_component("failtest")
 class FailStubComponent(StubComponent):
-    def execute(self, data, metrics: ComponentMetrics, **kwargs) -> Any:
+    async def execute(self, data, metrics, **kwargs):
+        if False:
+            yield data
         raise RuntimeError("fail stubcomponent failed")
 
     @classmethod
@@ -53,7 +53,6 @@ class FailStubComponent(StubComponent):
         """
         Build dependent objects for the failstub component
         """
-        values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
 
         return values
@@ -66,18 +65,15 @@ class StubFailOnce(Component):
 
     @classmethod
     def _build_objects(cls, values):
-        values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = StubReceiver()
         return values
 
-    def execute(self, data, metrics, **kwargs):
-        # on the very first call of this instance, throw…
+    async def execute(self, data, metrics, **kwargs):
         if not self._called:
             self._called = True
             raise RuntimeError("fail first time")
-        # …and on the retry, succeed:
         metrics.lines_received = 1
-        return "recovered"
+        yield "recovered"
 
     def process_row(
         self, row: dict[str, Any], metrics: "ComponentMetrics"

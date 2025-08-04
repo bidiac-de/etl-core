@@ -24,30 +24,28 @@ def test_fan_out_topology():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "root",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["child1", "child2"],
             },
             {
                 "name": "child1",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
             {
                 "name": "child2",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=2)
+    result = handler.execute_job(job)
 
     exec_record = result.executions[0]
     assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
@@ -56,13 +54,13 @@ def test_fan_out_topology():
     assert set(metrics.keys()) == expected_ids
 
     comp1 = get_component_by_name(job, "root")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp1.id].lines_received == 1
     comp2 = get_component_by_name(job, "child1")
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp2.id].lines_received == 1
     comp3 = get_component_by_name(job, "child2")
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp3.id].lines_received == 1
 
 
@@ -80,31 +78,29 @@ def test_fan_in_topology():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "a",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "b",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "c",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=2)
+    result = handler.execute_job(job)
 
     exec_record = result.executions[0]
     assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
@@ -113,13 +109,13 @@ def test_fan_in_topology():
     assert set(metrics.keys()) == expected_ids
 
     comp1 = get_component_by_name(job, "a")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp1.id].lines_received == 1
     comp2 = get_component_by_name(job, "b")
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp2.id].lines_received == 1
     comp3 = get_component_by_name(job, "c")
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp3.id].lines_received == 1
 
 
@@ -137,38 +133,35 @@ def test_diamond_topology():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "root",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["a", "b"],
             },
             {
                 "name": "a",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "b",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "c",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=2)
+    result = handler.execute_job(job)
 
     exec_record = result.executions[0]
     assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
@@ -177,14 +170,14 @@ def test_diamond_topology():
     assert set(metrics.keys()) == expected_ids
 
     comp1 = get_component_by_name(job, "root")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
+    assert metrics[comp1.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp1.id].lines_received == 1
     comp2 = get_component_by_name(job, "a")
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+    assert metrics[comp2.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp2.id].lines_received == 1
     comp3 = get_component_by_name(job, "b")
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
+    assert metrics[comp3.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp3.id].lines_received == 1
     comp4 = get_component_by_name(job, "c")
-    assert metrics[comp4.id].status == RuntimeState.SUCCESS
+    assert metrics[comp4.id].status == RuntimeState.SUCCESS.value
     assert metrics[comp4.id].lines_received == 1

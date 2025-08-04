@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from src.strategies.base_strategy import StrategyType
 from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
 from pydantic import (
@@ -10,12 +9,26 @@ from pydantic import (
     PrivateAttr,
     field_validator,
 )
+from enum import Enum
 
 from src.components.dataclasses import MetaData, Layout
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 from src.strategies.base_strategy import ExecutionStrategy
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+from src.strategies.bulk_strategy import BulkExecutionStrategy
+from src.strategies.row_strategy import RowExecutionStrategy
 from pandas import DataFrame
+
+
+class StrategyType(str, Enum):
+    """
+    Enum for different strategy types
+    """
+
+    ROW = "row"
+    BULK = "bulk"
+    BIGDATA = "bigdata"
 
 
 class Component(BaseModel, ABC):
@@ -166,3 +179,17 @@ class Component(BaseModel, ABC):
     @abstractmethod
     async def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
+
+
+def get_strategy(strategy_type: str) -> ExecutionStrategy:
+    """
+    Factory function to get the appropriate execution strategy based on the type
+    """
+    if strategy_type == StrategyType.ROW:
+        return RowExecutionStrategy()
+    elif strategy_type == StrategyType.BULK:
+        return BulkExecutionStrategy()
+    elif strategy_type == StrategyType.BIGDATA:
+        return BigDataExecutionStrategy()
+    else:
+        raise ValueError(f"Unknown strategy type: {strategy_type}")

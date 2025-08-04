@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator
-from enum import Enum
+from typing import Any, AsyncIterator, TYPE_CHECKING
 
 from pydantic import BaseModel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.components.base_component import Component
+
+if TYPE_CHECKING:
+    from src.components.base_component import Component
 
 
-class ExecutionStrategy(BaseModel, ABC):  # noqa: WPS214
+class ExecutionStrategy(BaseModel, ABC):
     """
     Base class for streaming execution strategies.
     Subclasses implement `execute` as an async generator to drive streaming.
@@ -16,20 +17,10 @@ class ExecutionStrategy(BaseModel, ABC):  # noqa: WPS214
     @abstractmethod
     def execute(
         self,
-        component: Component,
+        component: "Component",
         payload: Any,
         metrics: ComponentMetrics,
     ) -> AsyncIterator[Any]:
         """
         Stream through the component logic, yielding native outputs.
         """
-
-
-class StrategyType(str, Enum):
-    """
-    Enum for different strategy types
-    """
-
-    ROW = "row"
-    BULK = "bulk"
-    BIGDATA = "bigdata"
