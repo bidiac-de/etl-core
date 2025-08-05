@@ -13,7 +13,16 @@ from src.metrics.execution_metrics import ExecutionMetrics
 from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
 
 
-_SENTRY = object()
+class _Sentinel:
+    """Unique end-of-stream marker for each component."""
+
+    __slots__ = ("component_id",)
+
+    def __init__(self, component_id: str) -> None:
+        self.component_id = component_id
+
+    def __repr__(self) -> str:
+        return f"<Sentinel {self.component_id}>"
 
 
 class JobExecutionHandler:
@@ -105,12 +114,19 @@ class JobExecutionHandler:
         Returns the mapping component.id → Task so failures can cancel downstream tasks.
         """
         job = execution.job
+
+        # each component gets its own sentinel instance
+        self._sentinels: Dict[str, _Sentinel] = {
+            comp.id: _Sentinel(comp.id) for comp in job.components
+        }
+
         # Prepare queues
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
         }
         tasks: List[asyncio.Task] = []
         current_tasks: Dict[str, asyncio.Task] = {}
+
         # spawn workers
         for comp in job.components:
             out_queues = [queues[n.name] for n in comp.next_components]
@@ -146,10 +162,11 @@ class JobExecutionHandler:
         metrics as CANCELLED, we just fan out the sentinel.
         """
         attempt = execution.attempts[-1]
+        sentinel = self._sentinels[component.id]
 
         # if already marked canceled, short-circuit
         if metrics.status == "CANCELLED":
-            await self._fan_out(_SENTRY, out_queues)
+            await self._fan_out(sentinel, out_queues)
             return
 
         try:
@@ -177,7 +194,7 @@ class JobExecutionHandler:
 
         finally:
             # always tell downstream there's no more data
-            await self._fan_out(_SENTRY, out_queues)
+            await self._fan_out(sentinel, out_queues)
 
     def _handle_worker_exception(
         self,
@@ -243,7 +260,7 @@ class JobExecutionHandler:
             task = done.pop()
             src = pending[task]
             val = task.result()
-            if val is _SENTRY:
+            if isinstance(val, _Sentinel):
                 active.remove(src)
             else:
                 await self._run_component(component, val, metrics, out_queues)
