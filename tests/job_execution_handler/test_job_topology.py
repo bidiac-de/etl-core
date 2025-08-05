@@ -50,7 +50,7 @@ def test_fan_out_topology():
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "root")
     comp2 = get_component_by_name(job, "child1")
@@ -61,11 +61,11 @@ def test_fan_out_topology():
     comp3_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp3.id)
 
     assert comp1_metrics.lines_received == 1
-    assert comp1_metrics.status == RuntimeState.SUCCESS.value
+    assert comp1_metrics.status == RuntimeState.SUCCESS
     assert comp2_metrics.lines_received == 1
-    assert comp2_metrics.status == RuntimeState.SUCCESS.value
+    assert comp2_metrics.status == RuntimeState.SUCCESS
     assert comp3_metrics.lines_received == 1
-    assert comp3_metrics.status == RuntimeState.SUCCESS.value
+    assert comp3_metrics.status == RuntimeState.SUCCESS
 
 
 def test_fan_in_topology():
@@ -109,7 +109,7 @@ def test_fan_in_topology():
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "a")
     comp2 = get_component_by_name(job, "b")
@@ -120,11 +120,11 @@ def test_fan_in_topology():
     comp3_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp3.id)
 
     assert comp1_metrics.lines_received == 1
-    assert comp1_metrics.status == RuntimeState.SUCCESS.value
+    assert comp1_metrics.status == RuntimeState.SUCCESS
     assert comp2_metrics.lines_received == 1
-    assert comp2_metrics.status == RuntimeState.SUCCESS.value
+    assert comp2_metrics.status == RuntimeState.SUCCESS
     assert comp3_metrics.lines_received == 1
-    assert comp3_metrics.status == RuntimeState.SUCCESS.value
+    assert comp3_metrics.status == RuntimeState.SUCCESS
 
 
 def test_diamond_topology():
@@ -174,7 +174,7 @@ def test_diamond_topology():
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "root")
     comp2 = get_component_by_name(job, "a")
@@ -187,10 +187,10 @@ def test_diamond_topology():
     comp4_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp4.id)
 
     assert comp1_metrics.lines_received == 1
-    assert comp1_metrics.status == RuntimeState.SUCCESS.value
+    assert comp1_metrics.status == RuntimeState.SUCCESS
     assert comp2_metrics.lines_received == 1
-    assert comp2_metrics.status == RuntimeState.SUCCESS.value
+    assert comp2_metrics.status == RuntimeState.SUCCESS
     assert comp3_metrics.lines_received == 1
-    assert comp3_metrics.status == RuntimeState.SUCCESS.value
+    assert comp3_metrics.status == RuntimeState.SUCCESS
     assert comp4_metrics.lines_received == 1
-    assert comp4_metrics.status == RuntimeState.SUCCESS.value
+    assert comp4_metrics.status == RuntimeState.SUCCESS

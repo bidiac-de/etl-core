@@ -31,7 +31,7 @@ def test_linear_stream_multiple_rows():
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     src_comp = get_component_by_name(job, "source")
     echo_comp = get_component_by_name(job, "echo")
@@ -40,10 +40,10 @@ def test_linear_stream_multiple_rows():
     echo_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo_comp.id)
 
     assert src_metrics.lines_received == src_comp.count
-    assert src_metrics.status == RuntimeState.SUCCESS.value
+    assert src_metrics.status == RuntimeState.SUCCESS
 
     assert echo_metrics.lines_received == src_comp.count
-    assert echo_metrics.status == RuntimeState.SUCCESS.value
+    assert echo_metrics.status == RuntimeState.SUCCESS
 
 
 def test_fan_out_multiple_rows():
@@ -69,7 +69,7 @@ def test_fan_out_multiple_rows():
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     source = get_component_by_name(job, "source")
     echo1 = get_component_by_name(job, "echo1")
@@ -113,7 +113,7 @@ def test_fan_in_multiple_rows():
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     src1 = get_component_by_name(job, "src1")
     src2 = get_component_by_name(job, "src2")
@@ -123,4 +123,4 @@ def test_fan_in_multiple_rows():
     expected = src1.count + src2.count
 
     assert e_metrics.lines_received == expected
-    assert e_metrics.status == RuntimeState.SUCCESS.value
+    assert e_metrics.status == RuntimeState.SUCCESS

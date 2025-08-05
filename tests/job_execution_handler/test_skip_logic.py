@@ -53,7 +53,7 @@ def test_branch_skip_fan_out(tmp_path):
     mh = handler.job_info.metrics_handler
 
     # Job-level assertions
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
 
@@ -61,17 +61,17 @@ def test_branch_skip_fan_out(tmp_path):
     comp1 = get_component_by_name(job, "root")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
-        == RuntimeState.FAILED.value
+        == RuntimeState.FAILED
     )
     comp2 = get_component_by_name(job, "child1")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
     comp3 = get_component_by_name(job, "child2")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
 
 
@@ -119,7 +119,7 @@ def test_branch_skip_fan_in(tmp_path):
     mh = handler.job_info.metrics_handler
 
     # Job-level assertions
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
 
@@ -127,17 +127,17 @@ def test_branch_skip_fan_in(tmp_path):
     comp1 = get_component_by_name(job, "ok_root")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
-        == RuntimeState.SUCCESS.value
+        == RuntimeState.SUCCESS
     )
     comp2 = get_component_by_name(job, "fail_root")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
-        == RuntimeState.FAILED.value
+        == RuntimeState.FAILED
     )
     comp3 = get_component_by_name(job, "join")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
 
 
@@ -185,7 +185,7 @@ def test_chain_skip_linear():
     mh = handler.job_info.metrics_handler
 
     # Job-level assertions
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
 
@@ -194,15 +194,15 @@ def test_chain_skip_linear():
     comp3 = get_component_by_name(job, "leaf")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
-        == RuntimeState.FAILED.value
+        == RuntimeState.FAILED
     )
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
 
 
@@ -256,7 +256,7 @@ def test_skip_diamond():
     mh = handler.job_info.metrics_handler
 
     # Job-level assertions
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
 
@@ -266,17 +266,17 @@ def test_skip_diamond():
     comp4 = get_component_by_name(job, "d")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
-        == RuntimeState.FAILED.value
+        == RuntimeState.FAILED
     )
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp4.id).status
-        == RuntimeState.CANCELLED.value
+        == RuntimeState.CANCELLED
     )

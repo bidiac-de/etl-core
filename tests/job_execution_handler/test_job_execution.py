@@ -43,11 +43,11 @@ def test_execute_job_single_test_component():
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     comp = get_component_by_name(job, "test1")
 
     comp_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp.id)
-    assert comp_metrics.status == RuntimeState.SUCCESS.value
+    assert comp_metrics.status == RuntimeState.SUCCESS
     assert comp_metrics.lines_received == 1
 
 
@@ -92,7 +92,7 @@ def test_execute_job_chain_components_file_logging():
 
     assert job.file_logging is True
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     # both components ran and metrics recorded
     comp1 = get_component_by_name(job, "comp1")
@@ -101,12 +101,12 @@ def test_execute_job_chain_components_file_logging():
     assert mh.get_comp_metrics(execution.id, attempt.id, comp1.id).lines_received == 1
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
-        == RuntimeState.SUCCESS.value
+        == RuntimeState.SUCCESS
     )
     assert mh.get_comp_metrics(execution.id, attempt.id, comp2.id).lines_received == 1
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
-        == RuntimeState.SUCCESS.value
+        == RuntimeState.SUCCESS
     )
 
 
@@ -152,7 +152,7 @@ def test_execute_job_failing_and_cancelled_components():
     mh = handler.job_info.metrics_handler
 
     # Job-level assertions
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error is not None
     assert ("fail stubcomponent failed") in attempt.error
 
@@ -162,10 +162,10 @@ def test_execute_job_failing_and_cancelled_components():
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
     assert (
-        comp1_metrics.status == RuntimeState.FAILED.value
+        comp1_metrics.status == RuntimeState.FAILED
     ), "comp1 should have FAILED status"
     assert (
-        comp2_metrics.status == RuntimeState.CANCELLED.value
+        comp2_metrics.status == RuntimeState.CANCELLED
     ), "comp2 should be CANCELLED due to dependency"
 
 
@@ -194,7 +194,7 @@ def test_retry_logic_and_metrics():
     assert len(execution.attempts) == 2
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     # lines_received comes from second execution
     comp = get_component_by_name(job, "c1")
     assert mh.get_comp_metrics(execution.id, attempt.id, comp.id).lines_received == 1
@@ -252,7 +252,7 @@ def test_execute_job_linear_chain():
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "c1")
     comp2 = get_component_by_name(job, "c2")
@@ -265,10 +265,10 @@ def test_execute_job_linear_chain():
     comp4_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp4.id)
 
     assert comp1_metrics.lines_received == 1
-    assert comp1_metrics.status == RuntimeState.SUCCESS.value
+    assert comp1_metrics.status == RuntimeState.SUCCESS
     assert comp2_metrics.lines_received == 1
-    assert comp2_metrics.status == RuntimeState.SUCCESS.value
+    assert comp2_metrics.status == RuntimeState.SUCCESS
     assert comp3_metrics.lines_received == 1
-    assert comp3_metrics.status == RuntimeState.SUCCESS.value
+    assert comp3_metrics.status == RuntimeState.SUCCESS
     assert comp4_metrics.lines_received == 1
-    assert comp4_metrics.status == RuntimeState.SUCCESS.value
+    assert comp4_metrics.status == RuntimeState.SUCCESS

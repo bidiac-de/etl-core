@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Set
 from collections import deque
 
+from src.components.runtime_state import RuntimeState
 from src.job_execution.job import Job, JobExecution
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
@@ -100,7 +101,7 @@ class JobExecutionHandler:
                 continue
             else:
                 # success: mark and finalize
-                job_metrics.status = "SUCCESS"
+                job_metrics.status = RuntimeState.SUCCESS
                 self._finalize_success(execution, job_metrics)
                 break
 
@@ -165,7 +166,7 @@ class JobExecutionHandler:
         sentinel = self._sentinels[component.id]
 
         # if already marked canceled, short-circuit
-        if metrics.status == "CANCELLED":
+        if metrics.status == RuntimeState.CANCELLED:
             await self._fan_out(sentinel, out_queues)
             return
 
@@ -177,7 +178,7 @@ class JobExecutionHandler:
 
         except asyncio.CancelledError:
             # mark cancelled in our metrics, then re-raise so upstream sees it
-            metrics.status = "CANCELLED"
+            metrics.status = RuntimeState.CANCELLED
             raise
 
         except Exception as exc:
@@ -186,8 +187,8 @@ class JobExecutionHandler:
             raise
 
         else:
-            if metrics.status != "CANCELLED":
-                metrics.status = "SUCCESS"
+            if metrics.status != RuntimeState.CANCELLED:
+                metrics.status = RuntimeState.SUCCESS
 
         finally:
             # always tell downstream there's no more data
@@ -201,7 +202,7 @@ class JobExecutionHandler:
         execution: JobExecution,
         attempt: Any,
     ) -> None:
-        metrics.status = "FAILED"
+        metrics.status = RuntimeState.FAILED
         metrics.error_count += 1
         self._file_logger.error(
             "Component '%s' FAILED: %s", component.name, exc, exc_info=True
@@ -219,8 +220,8 @@ class JobExecutionHandler:
             dm = self.job_info.metrics_handler.get_comp_metrics(
                 execution.id, attempt.id, nxt.id
             )
-            if dm.status not in ("SUCCESS", "FAILED"):
-                dm.status = "CANCELLED"
+            if dm.status not in (RuntimeState.SUCCESS, RuntimeState.FAILED):
+                dm.status = RuntimeState.CANCELLED
             dq.extend(nxt.next_components)
 
     async def _fan_out(self, item: Any, queues: List[asyncio.Queue]) -> None:
@@ -276,8 +277,8 @@ class JobExecutionHandler:
             dm = self.job_info.metrics_handler.get_comp_metrics(
                 execution.id, attempt.id, nxt.id
             )
-            if dm.status not in ("SUCCESS", "FAILED"):
-                dm.status = "CANCELLED"
+            if dm.status not in (RuntimeState.SUCCESS, RuntimeState.FAILED):
+                dm.status = RuntimeState.CANCELLED
 
             # cancel tasks cleanly
             task = getattr(self, "_current_tasks", {}).get(nxt.id)
@@ -322,7 +323,7 @@ class JobExecutionHandler:
         Final actions when all retries are exhausted or streaming execution fails.
         """
         attempt = execution.attempts[-1]
-        job_metrics.status = "FAILED"
+        job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         # cleanup
         self.running_executions.remove(execution)
