@@ -57,16 +57,14 @@ class Component(BaseModel, ABC):
     _strategy: Optional[ExecutionStrategy] = PrivateAttr(default=None)
     _receiver: Optional[Receiver] = PrivateAttr(default=None)
 
-    @model_validator(mode="before")
-    @classmethod
+    @model_validator(mode="after")
     @abstractmethod
-    def _build_objects(cls, values: dict) -> dict:
+    def _build_objects(self) -> "Component":
         """
-        Each concrete component must implement this method to:
-        - construct strategy and receiver
-        - modify and return the values dict
+        After-instantiation hook. Override in subclasses to assign
+        `self._strategy` and `self._receiver`, then return `self`.
         """
-        raise NotImplementedError
+        return self
 
     @field_validator("name", "comp_type", mode="before")
     @classmethod
