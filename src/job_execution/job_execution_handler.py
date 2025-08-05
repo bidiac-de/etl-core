@@ -65,9 +65,10 @@ class JobExecutionHandler:
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
+                # build and run worker tasks, storing them for cancellation
                 await self._run_latest_attempt(execution)
             except Exception as exc:
-                # failed attempt
+                # record the error on the attempt
                 attempt = execution.attempts[-1]
                 attempt.error = str(exc)
                 self.logger.warning(
@@ -78,27 +79,39 @@ class JobExecutionHandler:
                 )
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, exc)
 
+                # if no retries left, finalize as failure
                 if not self.retry_strategy.should_retry(attempt_index):
                     self._finalize_failure(exc, execution, job_metrics)
                     break
 
+                # otherwise wait and retry
                 delay = self.retry_strategy.next_delay(attempt_index)
                 if delay > 0:
                     await asyncio.sleep(delay)
                 continue
             else:
+                # success: mark and finalize
                 job_metrics.status = "SUCCESS"
                 self._finalize_success(execution, job_metrics)
                 break
 
         return execution
 
-    async def _run_latest_attempt(self, execution: JobExecution) -> None:
+    async def _run_latest_attempt(
+        self, execution: JobExecution
+    ) -> Dict[str, asyncio.Task]:
+        """
+        Launch one Task per component, track them in a dict, and await them.
+        Returns the mapping component.id → Task so failures can cancel downstream tasks.
+        """
         job = execution.job
+        # Prepare queues
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
         }
-        tasks = []
+        tasks: List[asyncio.Task] = []
+        current_tasks: Dict[str, asyncio.Task] = {}
+        # spawn workers
         for comp in job.components:
             out_queues = [queues[n.name] for n in comp.next_components]
             in_queues = [queues[comp.name]] if comp.prev_components else []
@@ -110,8 +123,15 @@ class JobExecutionHandler:
                 self._worker(execution, comp, in_queues, out_queues, metrics),
                 name=f"worker-{comp.name}",
             )
+            current_tasks[comp.id] = task
             tasks.append(task)
+
+        # attach for cancellation in exception handlers
+        self._current_tasks = current_tasks
+
+        # let exceptions bubble so we can retry if needed
         await asyncio.gather(*tasks)
+        return current_tasks
 
     async def _worker(
         self,
@@ -121,23 +141,42 @@ class JobExecutionHandler:
         out_queues: List[asyncio.Queue],
         metrics: ComponentMetrics,
     ) -> None:
+        """
+        Runs one component; if upstream cancellation has already marked this
+        metrics as CANCELLED, we just fan out the sentinel.
+        """
         attempt = execution.attempts[-1]
+
+        # if already marked canceled, short-circuit
         if metrics.status == "CANCELLED":
             await self._fan_out(_SENTRY, out_queues)
             return
 
         try:
+            # allow this task itself to be cancelled
             if not in_queues:
                 await self._run_component(component, None, metrics, out_queues)
             else:
                 await self._merge_and_run(component, metrics, in_queues, out_queues)
+
+        except asyncio.CancelledError:
+            # explicit task.cancel() reached us
+            metrics.status = "CANCELLED"
+            # still propagate sentinel downstream
+            return
+
         except Exception as exc:
+            # component failure: mark FAILED, increment error, cancel successors
             self._handle_worker_exception(component, exc, metrics, execution, attempt)
+            # re-raise so gather() breaks out
             raise
+
         else:
             if metrics.status != "CANCELLED":
                 metrics.status = "SUCCESS"
+
         finally:
+            # always tell downstream there's no more data
             await self._fan_out(_SENTRY, out_queues)
 
     def _handle_worker_exception(
@@ -153,8 +192,8 @@ class JobExecutionHandler:
         self._file_logger.error(
             "Component '%s' FAILED: %s", component.name, exc, exc_info=True
         )
-        # cancel successors
-        from collections import deque
+        # cancel and mark all downstream components
+        self._cancel_successors(component, execution, attempt)
 
         dq = deque(component.next_components)
         seen: Set[str] = set()
@@ -212,21 +251,34 @@ class JobExecutionHandler:
     def _cancel_successors(
         self,
         component: Component,
-        execution_id: str,
-        attempt_id: str,
+        execution: JobExecution,
+        attempt: Any,
     ) -> None:
+        """
+        BFS through downstream components: mark each CANCELLED in metrics
+        and use task.cancel() to stop its async worker.
+        """
         dq = deque(component.next_components)
         seen: Set[str] = set()
+
         while dq:
             nxt = dq.popleft()
             if nxt.id in seen:
                 continue
             seen.add(nxt.id)
+
+            # mark cancelled in metrics
             dm = self.job_info.metrics_handler.get_comp_metrics(
-                execution_id, attempt_id, nxt.id
+                execution.id, attempt.id, nxt.id
             )
             if dm.status not in ("SUCCESS", "FAILED"):
                 dm.status = "CANCELLED"
+
+            # cancel tasks cleanly
+            task = getattr(self, "_current_tasks", {}).get(nxt.id)
+            if task and not task.done():
+                task.cancel()
+
             dq.extend(nxt.next_components)
 
     def _finalize_success(
