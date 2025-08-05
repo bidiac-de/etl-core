@@ -170,22 +170,19 @@ class JobExecutionHandler:
             return
 
         try:
-            # allow this task itself to be cancelled
             if not in_queues:
                 await self._run_component(component, None, metrics, out_queues)
             else:
                 await self._merge_and_run(component, metrics, in_queues, out_queues)
 
         except asyncio.CancelledError:
-            # explicit task.cancel() reached us
+            # mark cancelled in our metrics, then re-raise so upstream sees it
             metrics.status = "CANCELLED"
-            # still propagate sentinel downstream
-            return
+            raise
 
         except Exception as exc:
             # component failure: mark FAILED, increment error, cancel successors
             self._handle_worker_exception(component, exc, metrics, execution, attempt)
-            # re-raise so gather() breaks out
             raise
 
         else:
