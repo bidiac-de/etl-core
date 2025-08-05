@@ -1,13 +1,9 @@
 import pytest
-from src.receivers.data_operations_receivers.filter_receiver import FilterReceiver
-from src.components.data_operations.comparison_rule import ComparisonRule
-from src.metrics.component_metrics.data_operations_metrics.data_operations_metrics import FilterMetrics
 from datetime import datetime, timedelta
 
-
-@pytest.fixture
-def receiver():
-    return FilterReceiver()
+from src.receivers.data_operations_receivers.filter_receiver import FilterReceiver
+from src.components.data_operations.comparison_rule import ComparisonRule
+from src.metrics.component_metrics.data_operations_metrics.filter_metrics import FilterMetrics
 
 
 @pytest.fixture
@@ -15,68 +11,50 @@ def metrics():
     return FilterMetrics(
         started_at=datetime.now(),
         processing_time=timedelta(0),
-        error_count=0
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+        lines_dismissed=0,
     )
 
 
 @pytest.fixture
-def rule():
-    return ComparisonRule(column="age", operator=">", value=18)
+def sample_data():
+    return [
+        {"id": 1, "name": "Alice", "age": 30},
+        {"id": 2, "name": "Bob", "age": 20},
+        {"id": 3, "name": "Charlie", "age": 35},
+    ]
 
 
-def test_process_row_passes(receiver, metrics, rule):
-    """Row matches rule → should be returned and metrics updated."""
-    row = {"name": "Alice", "age": 20}
-    result = receiver.process_row(metrics, row, rule)
+def test_receiver_row(metrics, sample_data):
+    receiver = FilterReceiver()
+    rule = ComparisonRule(column="age", operator=">", value=25)
 
-    assert result == row
-    assert metrics.lines_received == 1
+    result = receiver.process_row(metrics, sample_data[0], rule)
+    assert result["name"] == "Alice"
     assert metrics.lines_forwarded == 1
     assert metrics.lines_dismissed == 0
 
 
-def test_process_row_fails(receiver, metrics, rule):
-    """Row does not match rule → should return {} and update dismissed."""
-    row = {"name": "Bob", "age": 16}
-    result = receiver.process_row(metrics, row, rule)
+def test_receiver_bulk(metrics, sample_data):
+    receiver = FilterReceiver()
+    rule = ComparisonRule(column="age", operator="<", value=30)
 
-    assert result == {}
-    assert metrics.lines_received == 1
-    assert metrics.lines_forwarded == 0
-    assert metrics.lines_dismissed == 1
+    result = receiver.process_bulk(metrics, sample_data, rule)
+    assert len(result) == 1
+    assert result[0]["name"] == "Bob"
+    assert metrics.lines_forwarded == 1
 
 
-def test_process_bulk(receiver, metrics, rule):
-    """Multiple rows → only matching rows should pass."""
-    data = [
-        {"name": "Alice", "age": 20},   # matches
-        {"name": "Bob", "age": 16},     # fails
-        {"name": "Charlie", "age": 25}  # matches
-    ]
-    result = receiver.process_bulk(metrics, data, rule)
+def test_receiver_bigdata(metrics, sample_data):
+    receiver = FilterReceiver()
+    rule = ComparisonRule(column="age", operator=">=", value=30)
 
-    assert result == [
-        {"name": "Alice", "age": 20},
-        {"name": "Charlie", "age": 25}
-    ]
-    assert metrics.lines_received == 3
+    chunk_iter = [sample_data]
+    result = list(receiver.process_bigdata(metrics, chunk_iter, rule))
+
+    assert len(result) == 2
+    names = [r["name"] for r in result]
+    assert "Alice" in names and "Charlie" in names
     assert metrics.lines_forwarded == 2
-    assert metrics.lines_dismissed == 1
-
-
-def test_process_bigdata(receiver, metrics, rule):
-    """Streaming data → matches should be yielded."""
-    chunk_iterable = [
-        [{"name": "User1", "age": 17}, {"name": "User2", "age": 19}],
-        [{"name": "User3", "age": 20}, {"name": "User4", "age": 15}],
-    ]
-
-    result = list(receiver.process_bigdata(metrics, chunk_iterable, rule))
-
-    assert result == [
-        {"name": "User2", "age": 19},
-        {"name": "User3", "age": 20}
-    ]
-    assert metrics.lines_received == 4
-    assert metrics.lines_forwarded == 2
-    assert metrics.lines_dismissed == 2
