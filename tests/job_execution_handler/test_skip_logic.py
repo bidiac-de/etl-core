@@ -47,21 +47,32 @@ def test_branch_skip_fan_out(tmp_path):
     }
 
     job = Job(**config)
-    result = handler.execute_job(job)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_information_handler.metrics_handler
 
-    # Job should end FAILED due to the initial failure
-    exec_record = result.executions[0]
-    metrics = exec_record.attempts[0].component_metrics
-    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
-    assert "fail stubcomponent failed" in exec_record.attempts[0].error
+    # Job-level assertions
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert attempt.error is not None
+    assert ("fail stubcomponent failed") in attempt.error
 
     # Component statuses
     comp1 = get_component_by_name(job, "root")
-    assert metrics[comp1.id].status == RuntimeState.FAILED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
+        == RuntimeState.FAILED.value
+    )
     comp2 = get_component_by_name(job, "child1")
-    assert metrics[comp2.id].status == RuntimeState.CANCELLED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
+        == RuntimeState.CANCELLED.value
+    )
     comp3 = get_component_by_name(job, "child2")
-    assert metrics[comp3.id].status == RuntimeState.CANCELLED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
+        == RuntimeState.CANCELLED.value
+    )
 
 
 def test_branch_skip_fan_in(tmp_path):
@@ -102,20 +113,32 @@ def test_branch_skip_fan_in(tmp_path):
     }
 
     job = Job(**config)
-    result = handler.execute_job(job)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_information_handler.metrics_handler
 
-    exec_record = result.executions[0]
-    metrics = exec_record.attempts[0].component_metrics
-    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
-    assert "fail stubcomponent failed" in exec_record.attempts[0].error
+    # Job-level assertions
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert attempt.error is not None
+    assert ("fail stubcomponent failed") in attempt.error
 
     # ok_root ran, fail_root failed, join skipped
     comp1 = get_component_by_name(job, "ok_root")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
+        == RuntimeState.SUCCESS.value
+    )
     comp2 = get_component_by_name(job, "fail_root")
-    assert metrics[comp2.id].status == RuntimeState.FAILED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
+        == RuntimeState.FAILED.value
+    )
     comp3 = get_component_by_name(job, "join")
-    assert metrics[comp3.id].status == RuntimeState.CANCELLED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
+        == RuntimeState.CANCELLED.value
+    )
 
 
 def test_chain_skip_linear():
@@ -156,19 +179,31 @@ def test_chain_skip_linear():
     }
 
     job = Job(**config)
-    result = handler.execute_job(job)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_information_handler.metrics_handler
 
-    exec_record = result.executions[0]
-    metrics = exec_record.attempts[0].component_metrics
-    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
-    assert "fail stubcomponent failed" in exec_record.attempts[0].error
+    # Job-level assertions
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert attempt.error is not None
+    assert ("fail stubcomponent failed") in attempt.error
 
     comp1 = get_component_by_name(job, "root")
     comp2 = get_component_by_name(job, "middle")
     comp3 = get_component_by_name(job, "leaf")
-    assert metrics[comp1.id].status == RuntimeState.FAILED.value
-    assert metrics[comp2.id].status == RuntimeState.CANCELLED.value
-    assert metrics[comp3.id].status == RuntimeState.CANCELLED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
+        == RuntimeState.FAILED.value
+    )
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
+        == RuntimeState.CANCELLED.value
+    )
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
+        == RuntimeState.CANCELLED.value
+    )
 
 
 def test_skip_diamond():
@@ -215,18 +250,33 @@ def test_skip_diamond():
     }
 
     job = Job(**config)
-    result = handler.execute_job(job)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_information_handler.metrics_handler
 
-    exec_record = result.executions[0]
-    metrics = exec_record.attempts[0].component_metrics
-    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
-    assert "fail stubcomponent failed" in exec_record.attempts[0].error
+    # Job-level assertions
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
+    assert attempt.error is not None
+    assert ("fail stubcomponent failed") in attempt.error
 
     comp1 = get_component_by_name(job, "a")
     comp2 = get_component_by_name(job, "b")
     comp3 = get_component_by_name(job, "c")
     comp4 = get_component_by_name(job, "d")
-    assert metrics[comp1.id].status == RuntimeState.FAILED.value
-    assert metrics[comp2.id].status == RuntimeState.CANCELLED.value
-    assert metrics[comp3.id].status == RuntimeState.CANCELLED.value
-    assert metrics[comp4.id].status == RuntimeState.CANCELLED.value
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
+        == RuntimeState.FAILED.value
+    )
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
+        == RuntimeState.CANCELLED.value
+    )
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
+        == RuntimeState.CANCELLED.value
+    )
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp4.id).status
+        == RuntimeState.CANCELLED.value
+    )

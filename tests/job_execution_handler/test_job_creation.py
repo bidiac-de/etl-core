@@ -32,7 +32,6 @@ def test_create_job_with_complete_config():
     assert job.name == "TestJob"
     assert job.num_of_retries == 3
     assert job.metadata.created_by == 42
-    assert job.executions == []
     assert job.file_logging is True
 
 
@@ -50,7 +49,6 @@ def test_create_job_with_partial_config():
     assert isinstance(job.id, str)
     assert job.name == "default_job_name"
     assert job.num_of_retries == 0
-    assert job.executions == []
     assert job.file_logging is False
     assert job.strategy_type == "row"
 
