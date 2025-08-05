@@ -242,25 +242,16 @@ class JobExecutionHandler:
         async for batch in component.execute(payload, metrics):
             await self._fan_out(batch, out_queues)
 
-    async def _merge_and_run(
-        self,
-        component: Component,
-        metrics: ComponentMetrics,
-        in_queues: List[asyncio.Queue],
-        out_queues: List[asyncio.Queue],
-    ) -> None:
-        # wait for all predecessors to send the sentinel
-        active = set(in_queues)
-        while active:
-            pending = {asyncio.create_task(q.get()): q for q in active}
-            done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-            task = done.pop()
-            src = pending[task]
-            val = task.result()
-            if isinstance(val, _Sentinel):
-                active.remove(src)
+    async def _merge_and_run(self, component, metrics, in_queues, out_queues):
+        queue = in_queues[0]
+        remaining = {p.id for p in component.prev_components}
+
+        while remaining:
+            item = await queue.get()
+            if isinstance(item, _Sentinel):
+                remaining.discard(item.component_id)
             else:
-                await self._run_component(component, val, metrics, out_queues)
+                await self._run_component(component, item, metrics, out_queues)
 
     def _cancel_successors(
         self,
