@@ -4,7 +4,7 @@ from src.components.runtime_state import RuntimeState
 from typing import Dict
 
 
-class JobMetrics(Metrics):
+class ExecutionMetrics(Metrics):
     """
     A class to represent job metrics.
     """
