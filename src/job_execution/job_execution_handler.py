@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 from collections import deque
 
 from src.job_execution.job import Job, JobExecution
@@ -149,86 +149,111 @@ class JobExecutionHandler:
         out_queues: List[asyncio.Queue],
         metrics: ComponentMetrics,
     ) -> None:
-        """
-        If in_queues is empty, run once with payload=None (root).
-        Otherwise, merge inputs until all send _SENTRY. On any batch,
-        invoke component.execute() and fan out. On error, cancel successors.
-        Always send one _SENTRY downstream.
-        """
         attempt = execution.attempts[-1]
-        # if a predecessor failure already cancelled this component, skip it entirely
+        # if upstream already cancelled us, just fan out one sentinel and return
         if metrics.status == "CANCELLED":
             await self._fan_out(_SENTRY, out_queues)
             return
 
-        async def _run(payload: Any) -> None:
-            metrics.set_started()
-            async for batch in component.execute(payload, metrics):
-                await self._fan_out(batch, out_queues)
-            # collect component metrics to update job metrics
-            all_comp_metrics = {
-                comp.id: self.job_information_handler.metrics_handler.get_comp_metrics(
-                    execution.id, attempt.id, comp.id
-                )
-                for comp in execution.job.components
-            }
-
-            # update job metrics with collected component metrics
-            (
-                self.job_information_handler.metrics_handler.get_job_metrics(
-                    execution.id
-                ).update_metrics(all_comp_metrics)
-            )
-
-        def _cancel() -> None:
-            dq = deque(component.next_components)
-            seen = set()
-            while dq:
-                nxt = dq.popleft()
-                if nxt.id in seen:
-                    continue
-                seen.add(nxt.id)
-                dm = self.job_information_handler.metrics_handler.get_comp_metrics(
-                    execution.id, attempt.id, nxt.id
-                )
-                if dm.status not in ("SUCCESS", "FAILED"):
-                    dm.status = "CANCELLED"
-                dq.extend(nxt.next_components)
-
         try:
             if not in_queues:
                 # root component
-                await _run(None)
+                await self._run_component(
+                    component,
+                    None,
+                    execution,
+                    metrics,
+                    out_queues,
+                )
             else:
-                # fan‐in: merge until all upstreams send the sentinel
-                active = set(in_queues)
-                while active:
-                    tasks = {asyncio.create_task(q.get()): q for q in active}
-                    done, _ = await asyncio.wait(
-                        tasks, return_when=asyncio.FIRST_COMPLETED
-                    )
-                    task = done.pop()
-                    src = tasks[task]
-                    val = task.result()
-                    if val is _SENTRY:
-                        active.remove(src)
-                    else:
-                        await _run(val)
+                # merge inputs from predecessors
+                await self._merge_and_run(
+                    component,
+                    execution,
+                    metrics,
+                    in_queues,
+                    out_queues,
+                )
         except Exception as e:
             metrics.status = "FAILED"
             metrics.error_count += 1
             self._file_logger.error(
                 "Component '%s' FAILED: %s", component.name, e, exc_info=True
             )
-            _cancel()
+            self._cancel_successors(component, execution.id, attempt.id)
             raise
         else:
-            # only mark SUCCESS if we haven't been CANCELLED by an upstream
             if metrics.status != "CANCELLED":
                 metrics.status = "SUCCESS"
         finally:
-            # always propagate the sentinel exactly once
+            # always send exactly one sentinel downstream
             await self._fan_out(_SENTRY, out_queues)
+
+    async def _run_component(
+        self,
+        component: Component,
+        payload: Any,
+        execution: JobExecution,
+        metrics: ComponentMetrics,
+        out_queues: List[asyncio.Queue],
+    ) -> None:
+        # mark start and stream all batches
+        metrics.set_started()
+        async for batch in component.execute(payload, metrics):
+            await self._fan_out(batch, out_queues)
+
+        # after this component is done, update the overall job metrics
+        all_comp = {
+            comp.id: self.job_information_handler.metrics_handler.get_comp_metrics(
+                execution.id, execution.attempts[-1].id, comp.id
+            )
+            for comp in execution.job.components
+        }
+        jm = self.job_information_handler.metrics_handler.get_job_metrics(execution.id)
+        jm.update_metrics(all_comp)
+
+    async def _merge_and_run(
+        self,
+        component: Component,
+        execution: JobExecution,
+        metrics: ComponentMetrics,
+        in_queues: List[asyncio.Queue],
+        out_queues: List[asyncio.Queue],
+    ) -> None:
+        # wait for all predecessors to send the sentinel
+        active = set(in_queues)
+        while active:
+            pending = {asyncio.create_task(q.get()): q for q in active}
+            done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            task = done.pop()
+            src = pending[task]
+            val = task.result()
+            if val is _SENTRY:
+                active.remove(src)
+            else:
+                await self._run_component(
+                    component, val, execution, metrics, out_queues
+                )
+
+    def _cancel_successors(
+        self,
+        component: Component,
+        execution_id: str,
+        attempt_id: str,
+    ) -> None:
+        dq = deque(component.next_components)
+        seen: Set[str] = set()
+        while dq:
+            nxt = dq.popleft()
+            if nxt.id in seen:
+                continue
+            seen.add(nxt.id)
+            dm = self.job_information_handler.metrics_handler.get_comp_metrics(
+                execution_id, attempt_id, nxt.id
+            )
+            if dm.status not in ("SUCCESS", "FAILED"):
+                dm.status = "CANCELLED"
+            dq.extend(nxt.next_components)
 
     def _finalize_success(
         self, execution: JobExecution, job_metrics: "ExecutionMetrics"
