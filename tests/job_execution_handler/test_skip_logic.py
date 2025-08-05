@@ -50,12 +50,12 @@ def test_branch_skip_fan_out(tmp_path):
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
     assert attempt.error is not None
-    assert ("fail stubcomponent failed") in attempt.error
+    assert "fail stubcomponent failed" in attempt.error
 
     # Component statuses
     comp1 = get_component_by_name(job, "root")
@@ -116,12 +116,12 @@ def test_branch_skip_fan_in(tmp_path):
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
     assert attempt.error is not None
-    assert ("fail stubcomponent failed") in attempt.error
+    assert "fail stubcomponent failed" in attempt.error
 
     # ok_root ran, fail_root failed, join skipped
     comp1 = get_component_by_name(job, "ok_root")
@@ -182,12 +182,12 @@ def test_chain_skip_linear():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
     assert attempt.error is not None
-    assert ("fail stubcomponent failed") in attempt.error
+    assert "fail stubcomponent failed" in attempt.error
 
     comp1 = get_component_by_name(job, "root")
     comp2 = get_component_by_name(job, "middle")
@@ -253,12 +253,12 @@ def test_skip_diamond():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
     assert attempt.error is not None
-    assert ("fail stubcomponent failed") in attempt.error
+    assert "fail stubcomponent failed" in attempt.error
 
     comp1 = get_component_by_name(job, "a")
     comp2 = get_component_by_name(job, "b")

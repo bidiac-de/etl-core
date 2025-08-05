@@ -41,7 +41,7 @@ def test_execute_job_single_test_component():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
     comp = get_component_by_name(job, "test1")
@@ -88,7 +88,7 @@ def test_execute_job_chain_components_file_logging():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert job.file_logging is True
 
@@ -149,7 +149,7 @@ def test_execute_job_failing_and_cancelled_components():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED.value
@@ -192,7 +192,7 @@ def test_retry_logic_and_metrics():
     execution = handler.execute_job(job)
     attempt = execution.attempts[1]
     assert len(execution.attempts) == 2
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
     # lines_received comes from second execution
@@ -250,7 +250,7 @@ def test_execute_job_linear_chain():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
 

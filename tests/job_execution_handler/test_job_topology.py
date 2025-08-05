@@ -48,7 +48,7 @@ def test_fan_out_topology():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
 
@@ -107,7 +107,7 @@ def test_fan_in_topology():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
 
@@ -172,7 +172,7 @@ def test_diamond_topology():
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
-    mh = handler.job_information_handler.metrics_handler
+    mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS.value
 
