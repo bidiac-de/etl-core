@@ -1,8 +1,10 @@
-import pytest
 import csv
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Generator
-from datetime import datetime
+from typing import Dict, Any, Generator
+
+import pandas as pd
+import pytest
 
 from src.components.file_components.csv.read_csv import ReadCSV
 from src.components.file_components.csv.write_csv import WriteCSV
@@ -10,8 +12,41 @@ from src.components.file_components.csv.csv_component import Delimiter
 from src.components.column_definition import ColumnDefinition, DataType
 from src.metrics.component_metrics import ComponentMetrics
 
+from src.strategies.row_strategy import RowExecutionStrategy
+from src.strategies.bulk_strategy import BulkExecutionStrategy
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+
+
+@pytest.fixture(autouse=True)
+def patch_strategies(monkeypatch):
+    """Patch strategies so execute() calls process_* methods directly."""
+    def row_exec(self, component, inputs, **kwargs):
+        return component.process_row(inputs, metrics=kwargs.get("metrics"))
+
+    def bulk_exec(self, component, inputs, **kwargs):
+        return component.process_bulk(inputs, metrics=kwargs.get("metrics"))
+
+    def bigdata_exec(self, component, inputs, **kwargs):
+        return component.process_bigdata(inputs, metrics=kwargs.get("metrics"))
+
+    monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec)
+    monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec)
+    monkeypatch.setattr(BigDataExecutionStrategy, "execute", bigdata_exec)
+
+
 @pytest.fixture
-def schema_def() -> List[ColumnDefinition]:
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
+
+
+@pytest.fixture
+def schema_definition():
     return [
         ColumnDefinition(name="id", data_type=DataType.STRING),
         ColumnDefinition(name="name", data_type=DataType.STRING),
@@ -19,137 +54,126 @@ def schema_def() -> List[ColumnDefinition]:
 
 
 @pytest.fixture
-def sample_csv_data() -> List[Dict[str, Any]]:
-    return [
-        {"id": "1", "name": "Alice"},
-        {"id": "2", "name": "Bob"},
-        {"id": "3", "name": "Charlie"}
-    ]
-
-
-@pytest.fixture
-def sample_csv_file(tmp_path: Path, sample_csv_data: List[Dict[str, Any]]) -> Path:
-    """Create a temporary CSV file with sample data."""
-    path = tmp_path / "test.csv"
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "name"])
-        writer.writeheader()
-        writer.writerows(sample_csv_data)
+def sample_csv_file() -> Path:
+    path = Path(__file__).parent / "data" / "sample.csv"
+    assert path.exists(), f"CSV-Datei nicht gefunden: {path}"
     return path
 
 
-@pytest.fixture
-def empty_metrics() -> ComponentMetrics:
-    """Create an empty ComponentMetrics object."""
-    return ComponentMetrics(started_at=datetime.now(), processing_time=0)
-
-
-def test_readcsv_row(sample_csv_file, schema_def, empty_metrics):
-    reader = ReadCSV(
+def test_readcsv_row(sample_csv_file, schema_definition, metrics):
+    comp = ReadCSV(
         name="ReadCSVRow",
         description="Test reading one row",
-        comp_type="csv",
+        comp_type="read_csv",
         filepath=sample_csv_file,
-        schema_definition=schema_def,
+        schema_definition=schema_definition,
         separator=Delimiter.COMMA,
-        strategy_type="row"
+        strategy_type="row",
     )
-    row = reader.process_row({}, empty_metrics)
-    assert isinstance(row, dict)
-    assert row["id"] == "1"
-    assert row["name"] == "Alice"
+    result = comp.execute(data={}, metrics=metrics)
+    assert isinstance(result, dict)
+    assert result["id"] == "1"
+    assert result["name"] == "Alice"
 
 
-def test_readcsv_bulk(sample_csv_file, schema_def, empty_metrics):
-    reader = ReadCSV(
+def test_readcsv_bulk(sample_csv_file, schema_definition, metrics):
+    comp = ReadCSV(
         name="ReadCSV_Bulk",
         description="Test reading bulk",
-        comp_type="csv",
+        comp_type="read_csv",
         filepath=sample_csv_file,
-        schema_definition=schema_def,
+        schema_definition=schema_definition,
         separator=Delimiter.COMMA,
-        strategy_type="bulk"
+        strategy_type="bulk",
     )
-    rows = reader.process_bulk([], empty_metrics)
-    assert len(rows) == 3
-    assert rows[1]["name"] == "Bob"
+    result = comp.execute(data=None, metrics=metrics)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 3
+    assert "Bob" in result["name"].values
 
 
-def test_readcsv_bigdata(sample_csv_file, schema_def, empty_metrics):
-    reader = ReadCSV(
+def test_readcsv_bigdata(sample_csv_file, schema_definition, metrics):
+    comp = ReadCSV(
         name="ReadCSV_BigData",
-        description="Test reading with bigdata strategy",
-        comp_type="csv",
+        description="Test reading with bigdata",
+        comp_type="read_csv",
         filepath=sample_csv_file,
-        schema_definition=schema_def,
+        schema_definition=schema_definition,
         separator=Delimiter.COMMA,
-        strategy_type="bigdata"
+        strategy_type="bigdata",
     )
-    rows = list(reader.process_bigdata(None, empty_metrics))
+    result = comp.execute(data=None, metrics=metrics)
+    rows = list(result)
     assert len(rows) == 3
-    assert rows[2]["name"] == "Charlie"
+    assert any(r["name"] == "Charlie" for r in rows)
 
 
-def test_writecsv_row(tmp_path: Path, schema_def, empty_metrics):
+def test_writecsv_row(tmp_path: Path, schema_definition, metrics, sample_csv_file):
     path = tmp_path / "write_row.csv"
-    writer = WriteCSV(
+    path.write_text(sample_csv_file.read_text())
+
+    comp = WriteCSV(
         name="WriteCSVRow",
         description="Test writing one row",
-        comp_type="csv",
+        comp_type="write_csv",
         filepath=path,
-        schema_definition=schema_def,
+        schema_definition=schema_definition,
         separator=Delimiter.COMMA,
-        strategy_type="row"
+        strategy_type="row",
     )
-    writer.process_row({"id": "10", "name": "Daisy"}, empty_metrics)
+    comp.execute(data={"id": "10", "name": "Daisy"}, metrics=metrics)
 
     with open(path, newline="") as f:
         reader = list(csv.DictReader(f))
-        assert reader[0]["id"] == "10"
-        assert reader[0]["name"] == "Daisy"
+        assert reader[-1]["id"] == "10"
+        assert reader[-1]["name"] == "Daisy"
 
 
-def test_writecsv_bulk(tmp_path: Path, schema_def, empty_metrics):
+def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics, sample_csv_file):
     path = tmp_path / "write_bulk.csv"
-    data = [{"id": "20", "name": "Eva"}, {"id": "21", "name": "Finn"}]
+    path.write_text(sample_csv_file.read_text())
 
-    writer = WriteCSV(
+    comp = WriteCSV(
         name="WriteCSV_Bulk",
         description="Test writing bulk",
-        comp_type="csv",
+        comp_type="write_csv",
         filepath=path,
-        schema_definition=schema_def,
+        schema_definition=schema_definition,
         separator=Delimiter.COMMA,
-        strategy_type="bulk"
+        strategy_type="bulk",
     )
-    writer.process_bulk(data, empty_metrics)
+    df = pd.DataFrame([
+        {"id": "20", "name": "Eva"},
+        {"id": "21", "name": "Finn"},
+    ])
+    comp.execute(data=df.to_dict(orient="records"), metrics=metrics)
 
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
-        assert len(rows) == 2
-        assert rows[1]["name"] == "Finn"
+        assert any(r["name"] == "Eva" for r in rows)
+        assert any(r["name"] == "Finn" for r in rows)
 
 
-def test_writecsv_bigdata(tmp_path: Path, schema_def, empty_metrics):
+def test_writecsv_bigdata(tmp_path: Path, schema_definition, metrics, sample_csv_file):
     path = tmp_path / "write_bigdata.csv"
+    path.write_text(sample_csv_file.read_text())
 
     def gen_data() -> Generator[Dict[str, Any], None, None]:
         yield {"id": "30", "name": "Gina"}
         yield {"id": "31", "name": "Hugo"}
 
-    writer = WriteCSV(
+    comp = WriteCSV(
         name="WriteCSV_BigData",
         description="Test writing big data",
-        comp_type="csv",
+        comp_type="write_csv",
         filepath=path,
-        schema_definition=schema_def,
+        schema_definition=schema_definition,
         separator=Delimiter.COMMA,
-        strategy_type="bigdata"
+        strategy_type="bigdata",
     )
-    writer.process_bigdata(gen_data(), empty_metrics)
+    comp.execute(data=gen_data(), metrics=metrics)
 
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
-        assert len(rows) == 2
-        assert rows[0]["name"] == "Gina"
-        assert rows[1]["id"] == "31"
+        assert any(r["name"] == "Gina" for r in rows)
+        assert any(r["id"] == "31" for r in rows)

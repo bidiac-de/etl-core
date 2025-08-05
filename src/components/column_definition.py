@@ -1,6 +1,8 @@
 from enum import Enum
+from pydantic import BaseModel
 
-class DataType(Enum):
+
+class DataType(str, Enum):
     STRING = "string"
     INTEGER = "integer"
     FLOAT = "float"
@@ -9,7 +11,7 @@ class DataType(Enum):
     PATH = "path"
     ENUM = "enum"
 
-class ColumnDefinition:
-    def __init__(self, name: str, data_type: DataType):
-        self.name = name
-        self.data_type = data_type
+
+class ColumnDefinition(BaseModel):
+    name: str
+    data_type: DataType

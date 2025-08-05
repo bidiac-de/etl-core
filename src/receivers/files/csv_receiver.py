@@ -23,7 +23,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
     def __init__(self, filepath: Path):
         """Initialize the CSVReceiver with a fixed filepath."""
         self.filepath: Path = resolve_file_path(filepath)
-        ensure_exists(self.filepath)
+
 
     def read_row(self, metrics: ComponentMetrics, line_number: int = 0) -> Dict[str, Any]:
         """
@@ -47,7 +47,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
 
     def write_row(self, metrics: ComponentMetrics, row: Dict[str, Any]):
         """Write a single row to the CSV file."""
-        write_csv_row(self.filepath, row, exists=file_exists(self.filepath))
+        write_csv_row(self.filepath, row)
 
     def write_bulk(self, metrics: ComponentMetrics, data: List[Dict[str, Any]]):
         """Write multiple rows to the CSV file."""

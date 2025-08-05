@@ -24,19 +24,18 @@ class ReadCSV(CSV):
         values.setdefault("layout", Layout())
 
         values["strategy"] = get_strategy(values["strategy_type"])
-        values["receiver"] = CSVReceiver()
+        values["receiver"] = CSVReceiver(filepath=values["filepath"])
         values.setdefault("metadata", MetaData())
         return values
 
     def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
-        """ Read a single row from the CSV file."""
-        return self.receiver.read_row(filepath=self.filepath, metrics=metrics)
-
+        """ Read a single row from the CSV file. """
+        return self.receiver.read_row(metrics=metrics)
 
     def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
-        """ Read all rows from the CSV file."""
-        return self.receiver.read_bulk(filepath=self.filepath, metrics=metrics)
+        """ Read all rows from the CSV file. """
+        return self.receiver.read_bulk(metrics=metrics)
 
     def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
-        """ Read rows from a large CSV file using a streaming approach."""
-        return self.receiver.read_bigdata(filepath=self.filepath, metrics=metrics)
+        """ Read rows from a large CSV file using a streaming approach. """
+        return self.receiver.read_bigdata(metrics=metrics)

@@ -41,12 +41,15 @@ def read_csv_bigdata(path: Path, use_dask: bool = False, blocksize: str = "16MB"
     for chunk in df:
         for _, row in chunk.iterrows():
             yield row.to_dict()
-def write_csv_row(path: Path, row: Dict[str, Any], exists: bool):
-    """Write a single row to a CSV file."""
+
+def write_csv_row(path: Path, row: Dict[str, Any]):
+    """Write a single row to a CSV file, adding header if needed."""
     path = resolve_file_path(path)
+    file_exists = path.exists() and path.stat().st_size > 0
+
     with open_file(path, "a") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=row.keys())
-        if not exists:
+        if not file_exists:
             writer.writeheader()
         writer.writerow(row)
 

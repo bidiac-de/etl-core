@@ -22,21 +22,21 @@ class WriteCSV(CSV):
     def build_objects(cls, values):
         values.setdefault("layout", Layout())
         values["strategy"] = get_strategy(values["strategy_type"])
-        values["receiver"] = CSVReceiver()
+        values["receiver"] = CSVReceiver(filepath=values["filepath"])
         values.setdefault("metadata", MetaData())
         return values
 
     def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
-        """Write a single row to the CSV file."""
-        self.receiver.write_row(row=row, filepath=self.filepath, metrics=metrics)
-        return row
+      """ Write a single row to the CSV file. """
+      self.receiver.write_row(row=row, metrics=metrics)
+      return row
 
     def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
-        """Write multiple rows to the CSV file."""
-        self.receiver.write_bulk(data=data, filepath=self.filepath, metrics=metrics)
-        return data
+      """ Write multiple rows to the CSV file. """
+      self.receiver.write_bulk(data=data, metrics=metrics)
+      return data
 
     def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
-        """Write large amounts of data to the CSV file using a streaming approach."""
-        self.receiver.write_bigdata(data=chunk_iterable, filepath=self.filepath, metrics=metrics)
-        return chunk_iterable
+       """ Write large amounts of data to the CSV file using a streaming approach. """
+       self.receiver.write_bigdata(data=chunk_iterable, metrics=metrics)
+       return chunk_iterable
