@@ -11,6 +11,11 @@ from src.receivers.files.json_receiver import JSONReceiver
 from src.metrics.component_metrics import ComponentMetrics
 
 
+DATA_DIR = Path(__file__).resolve().parents[1] / "components" / "data"
+PEOPLE_JSON = DATA_DIR / "testdata.json"
+PEOPLE_JSONL = DATA_DIR / "testdata.jsonl"
+
+
 @pytest.fixture
 def metrics() -> ComponentMetrics:
     return ComponentMetrics(
@@ -20,6 +25,7 @@ def metrics() -> ComponentMetrics:
         lines_received=0,
         lines_forwarded=0,
     )
+
 
 def test_jsonreceiver_read_row_gz(tmp_path: Path, metrics: ComponentMetrics):
     """read_row should support .gz via helper (open_text_auto)."""
@@ -50,37 +56,26 @@ def test_jsonreceiver_row_roundtrip(tmp_path: Path, metrics: ComponentMetrics):
     assert row_out == row_in
 
 
-def test_jsonreceiver_bulk_array_json(tmp_path: Path, metrics: ComponentMetrics):
-    """read_bulk for array-of-records JSON."""
+def test_jsonreceiver_bulk_array_json(metrics: ComponentMetrics):
+    """read_bulk for array-of-records JSON from central file."""
     receiver = JSONReceiver()
-    file_path = tmp_path / "bulk.json"
-    df_in = pd.DataFrame([{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}])
+    assert PEOPLE_JSON.exists(), f"Missing test data file: {PEOPLE_JSON}"
 
-    receiver.write_bulk(df_in, file_path, metrics=metrics)
-    assert file_path.exists()
-
-    df_out = receiver.read_bulk(file_path, metrics=metrics)
+    df_out = receiver.read_bulk(PEOPLE_JSON, metrics=metrics)
     assert isinstance(df_out, pd.DataFrame)
-    assert len(df_out) == 2
-    assert set(df_out.columns) >= {"id", "name"}
-    assert df_out.iloc[0]["name"] in {"Alice", "Bob"}  # order not strictly guaranteed
+    assert len(df_out) == 3
+    assert list(df_out.sort_values("id")["name"]) == ["Alice", "Bob", "Charlie"]
 
 
-def test_jsonreceiver_bulk_ndjson(tmp_path: Path, metrics: ComponentMetrics):
-    """read_bulk should handle NDJSON if extension is .jsonl/.ndjson."""
+def test_jsonreceiver_bulk_ndjson(metrics: ComponentMetrics):
+    """read_bulk should handle NDJSON (.jsonl) from central file."""
     receiver = JSONReceiver()
-    file_path = tmp_path / "data.jsonl"
+    assert PEOPLE_JSONL.exists(), f"Missing test data file: {PEOPLE_JSONL}"
 
-    lines = [
-        {"id": 10, "name": "Charlie"},
-        {"id": 11, "name": "Diana"},
-    ]
-    file_path.write_text("\n".join(json.dumps(x) for x in lines), encoding="utf-8")
-
-    df = receiver.read_bulk(file_path, metrics=metrics)
+    df = receiver.read_bulk(PEOPLE_JSONL, metrics=metrics)
     assert isinstance(df, pd.DataFrame)
-    assert len(df) == 2
-    assert set(df["name"]) == {"Charlie", "Diana"}
+    assert len(df) == 3
+    assert set(df["name"]) == {"Alice", "Bob", "Charlie"}
 
 
 def test_jsonreceiver_write_bigdata_and_readback_with_dask(tmp_path: Path, metrics: ComponentMetrics):
@@ -104,16 +99,14 @@ def test_jsonreceiver_write_bigdata_and_readback_with_dask(tmp_path: Path, metri
     assert set(df_out["name"]) == {"Eve", "Frank"}
 
 
-def test_jsonreceiver_read_bigdata_on_jsonl(tmp_path: Path, metrics: ComponentMetrics):
-    """read_bigdata should read NDJSON when path endswith .jsonl/.ndjson."""
+def test_jsonreceiver_read_bigdata_on_jsonl(metrics: ComponentMetrics):
+    """read_bigdata should read NDJSON when path endswith .jsonl/.ndjson (central file)."""
     receiver = JSONReceiver()
-    file_path = tmp_path / "stream.jsonl"
+    assert PEOPLE_JSONL.exists(), f"Missing test data file: {PEOPLE_JSONL}"
 
-    rows = [{"id": 200, "name": "Gina"}, {"id": 201, "name": "Hank"}]
-    file_path.write_text("\n".join(json.dumps(x) for x in rows), encoding="utf-8")
-
-    ddf = receiver.read_bigdata(file_path, metrics=metrics)
+    ddf = receiver.read_bigdata(PEOPLE_JSONL, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
     df = ddf.compute()
-    assert len(df) == 2
-    assert set(df["name"]) == {"Gina", "Hank"}
+    assert len(df) == 3
+    assert set(df["name"]) == {"Alice", "Bob", "Charlie"}
+

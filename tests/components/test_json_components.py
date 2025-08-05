@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import dask.dataframe as dd
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.components.file_components.json.read_json_component import ReadJSON
 from src.components.file_components.json.write_json_component import WriteJSON
 from src.components.column_definition import ColumnDefinition, DataType
@@ -15,19 +15,9 @@ from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 
 
-records_std = [
-    {"id": 1, "name": "Alice"},
-    {"id": 2, "name": "Bob"},
-    {"id": 3, "name": "Charlie"},
-]
-
-# zentraler testdaten ordner, verschiedene datensätze auch mit fehlern, valeria und ich nehmen aber immer gleiche datensätze
-
-def write_json(path: Path, records):
-    path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
-
-def write_jsonl(path: Path, records):
-    path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records), encoding="utf-8")
+DATA_DIR = Path(__file__).resolve().parent / "data"
+PEOPLE_JSON = DATA_DIR / "testdata.json"
+PEOPLE_JSONL = DATA_DIR / "testdata.jsonl"
 
 
 @pytest.fixture(autouse=True)
@@ -56,21 +46,34 @@ def metrics() -> ComponentMetrics:
         lines_forwarded=0,
     )
 
+
 @pytest.fixture
 def schema_definition():
     return [
-        ColumnDefinition("id", DataType.INTEGER),
-        ColumnDefinition("name", DataType.STRING),
+        ColumnDefinition(name="id", data_type=DataType.INTEGER),
+        ColumnDefinition(name="name", data_type=DataType.STRING),
     ]
 
+
 @pytest.fixture
-def sample_json_file(tmp_path: Path) -> Path:
-    fp = tmp_path / "input.json"
-    write_json(fp, records_std)
-    return fp
+def records_std() -> list[dict]:
+    assert PEOPLE_JSON.exists(), f"Missing test data file: {PEOPLE_JSON}"
+    return json.loads(PEOPLE_JSON.read_text(encoding="utf-8"))
 
 
-def test_readjson_row(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+@pytest.fixture
+def sample_json_file() -> Path:
+    assert PEOPLE_JSON.exists(), f"Missing test data file: {PEOPLE_JSON}"
+    return PEOPLE_JSON
+
+
+@pytest.fixture
+def sample_jsonl_file() -> Path:
+    assert PEOPLE_JSONL.exists(), f"Missing test data file: {PEOPLE_JSONL}"
+    return PEOPLE_JSONL
+
+
+def test_readjson_row(sample_json_file: Path, schema_definition, metrics: ComponentMetrics, records_std):
     comp = ReadJSON(
         name="Read row",
         description="Read first record",
@@ -83,10 +86,10 @@ def test_readjson_row(sample_json_file: Path, schema_definition, metrics: Compon
 
     result = comp.execute(data={}, metrics=metrics)
     assert isinstance(result, dict)
-    assert result.get("name") == "Alice"
+    assert result == records_std[0]
 
 
-def test_readjson_bulk(sample_json_file: Path, schema_definition, metrics: ComponentMetrics):
+def test_readjson_bulk(sample_json_file: Path, schema_definition, metrics: ComponentMetrics, records_std):
     comp = ReadJSON(
         name="Read bulk",
         description="Read all records",
@@ -97,24 +100,20 @@ def test_readjson_bulk(sample_json_file: Path, schema_definition, metrics: Compo
     )
     comp.metrics = metrics
 
-    result = comp.execute(data=None, metrics=metrics)
-    assert isinstance(result, pd.DataFrame)
-    assert len(result) == 3
-    assert list(result.sort_values("id")["name"]) == ["Alice", "Bob", "Charlie"]
+    df = comp.execute(data=None, metrics=metrics)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == len(records_std)
+    assert list(df.sort_values("id")["name"]) == [r["name"] for r in sorted(records_std, key=lambda x: x["id"])]
 
 
-def test_readjson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+def test_readjson_bigdata(sample_jsonl_file: Path, schema_definition, metrics: ComponentMetrics, records_std):
     """read_bigdata via execute() liest NDJSON (.jsonl) in ein Dask-DataFrame."""
-    jsonl_path = tmp_path / "stream.jsonl"
-    write_jsonl(jsonl_path, records_std)  # gleiche Daten, als NDJSON
-    assert jsonl_path.exists()
-
     comp = ReadJSON(
         name="Read bigdata",
         description="Read NDJSON with Dask",
         comp_type="read_json",
         strategy_type="bigdata",
-        filepath=jsonl_path,
+        filepath=sample_jsonl_file,
         schema_definition=schema_definition,
     )
     comp.metrics = metrics
@@ -122,10 +121,10 @@ def test_readjson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentM
     ddf = comp.execute(data=None, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
     df = ddf.compute().sort_values("id")
-    assert list(df["name"]) == ["Alice", "Bob", "Charlie"]
+    assert list(df["name"]) == [r["name"] for r in sorted(records_std, key=lambda x: x["id"])]
 
 
-def test_writejson_row(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+def test_writejson_row(tmp_path: Path, schema_definition, metrics: ComponentMetrics, records_std):
     single_fp = tmp_path / "single.json"
     single_fp.parent.mkdir(parents=True, exist_ok=True)
     single_fp.touch()
@@ -140,16 +139,15 @@ def test_writejson_row(tmp_path: Path, schema_definition, metrics: ComponentMetr
     )
     writer.metrics = metrics
 
-    row = {"id": 99, "name": "SingleRow"}
+    row = records_std[0]
     result = writer.execute(data=row, metrics=metrics)
     assert result == row
 
     content = json.loads(single_fp.read_text(encoding="utf-8"))
-    assert isinstance(content, list)
-    assert content and content[0]["id"] == 99 and content[0]["name"] == "SingleRow"
+    assert isinstance(content, list) and content and content[0] == row
 
 
-def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMetrics, records_std):
     out_fp = tmp_path / "out.json"
     out_fp.parent.mkdir(parents=True, exist_ok=True)
     out_fp.touch()
@@ -164,8 +162,8 @@ def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMet
     )
     writer.metrics = metrics
 
-    df = pd.DataFrame(records_std)
-    write_result = writer.execute(data=df, metrics=metrics)
+    df_in = pd.DataFrame(records_std)
+    write_result = writer.execute(data=df_in, metrics=metrics)
     assert isinstance(write_result, pd.DataFrame)
     assert out_fp.exists()
 
@@ -179,11 +177,11 @@ def test_writejson_bulk(tmp_path: Path, schema_definition, metrics: ComponentMet
     )
     reader.metrics = metrics
 
-    read_df = reader.execute(data=None, metrics=metrics).sort_values("id")
-    assert list(read_df["name"]) == ["Alice", "Bob", "Charlie"]
+    df_out = reader.execute(data=None, metrics=metrics).sort_values("id")
+    assert list(df_out["name"]) == [r["name"] for r in sorted(records_std, key=lambda x: x["id"])]
 
 
-def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics):
+def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: ComponentMetrics, records_std):
     """write_bigdata via execute() schreibt partitionierte JSONL-Dateien (part-*.json)."""
     out_dir = tmp_path / "big_out"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -209,5 +207,5 @@ def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics: Component
 
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
     df_out = ddf_out.compute().sort_values("id")
-    assert list(df_out["name"]) == ["Alice", "Bob", "Charlie"]
+    assert list(df_out["name"]) == [r["name"] for r in sorted(records_std, key=lambda x: x["id"])]
 
