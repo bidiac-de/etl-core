@@ -3,11 +3,13 @@ import logging
 from typing import Any, Dict, List
 from collections import deque
 
-from src.job_execution.job import Job, JobExecution, ExecutionAttempt
+from src.job_execution.job import Job, JobExecution
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
+from src.metrics.metrics_registry import get_metrics_class
+from src.metrics.execution_metrics import ExecutionMetrics
 
 
 _SENTRY = object()
@@ -33,68 +35,73 @@ class JobExecutionHandler:
         # tracking running executions
         self.running_executions: List[JobExecution] = []
 
-    def execute_job(self, job: Job) -> Job:
+    def execute_job(self, job: Job) -> JobExecution:
         """
         Kick off a streaming execution for the given Job.
         Retries according to job.num_of_retries.
         """
         # guard against parallel execution of same job
-        if any(exec_.job == job for exec_ in self.running_executions):
-            self.logger.warning(
-                "Job '%s' is already running; skipping new execution", job.name
-            )
-            return job
+        for exec_ in self.running_executions:
+            if exec_.job == job:
+                self.logger.warning(
+                    "Job '%s' is already running; returning existing execution",
+                    job.name,
+                )
+                return exec_
 
         # prepare new execution
-        execution = JobExecution(job=job, number_of_attempts=job.num_of_retries + 1)
+        execution = JobExecution(job=job)
         self.running_executions.append(execution)
-        job.executions.append(execution)
 
         # update logging context
         self.job_information_handler.logging_handler.update_job_name(job.name)
         self.logger.info("Starting streaming execution of job '%s'", job.name)
 
+        job_metrics = self.job_information_handler.metrics_handler.create_job_metrics(
+            execution.id
+        )
         # attempt loop
-        while len(execution.attempts) < execution.number_of_attempts:
+        while len(execution.attempts) < execution.max_attempts:
             attempt_index = len(execution.attempts)
-            attempt: ExecutionAttempt = execution.create_attempt()
+            execution.start_attempt()
             self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
             try:
                 # run one streaming attempt
-                asyncio.run(self._run_attempt(attempt))
+                asyncio.run(self._run_latest_attempt(execution))
                 # finalize on success
-                execution.job_metrics.status = "SUCCESS"
-                self._finalize_success(execution, attempt)
-                return job
+                job_metrics.status = "SUCCESS"
+                self._finalize_success(execution, job_metrics)
+                return execution
 
             except Exception as exc:
+                attempt = execution.attempts[-1]
                 # record failure and optionally retry
                 attempt.error = str(exc)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
-                    attempt_index + 1,
+                    attempt.index,
                     job.name,
                     exc,
                 )
                 self._file_logger.warning(
                     "Attempt %d failed: %s", attempt_index + 1, exc
                 )
-                if attempt_index == execution.number_of_attempts - 1:
-                    self._finalize_failure(exc, execution, attempt)
-                    return job
+                if attempt_index == execution.max_attempts - 1:
+                    self._finalize_failure(exc, execution, job_metrics)
+                    return execution
 
-        return job
+        return execution
 
-    async def _run_attempt(
+    async def _run_latest_attempt(
         self,
-        attempt: ExecutionAttempt,
+        execution: JobExecution,
     ) -> None:
         """
         Executes a single attempt of a JobExecution in streaming mode.
         """
-        job = attempt.execution.job
+        job = execution.job
         # initialize one queue per component to hold its incoming batches
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
@@ -112,9 +119,14 @@ class JobExecutionHandler:
                 [queues[comp.name]] if comp.prev_components else []
             )
 
-            metrics: ComponentMetrics = attempt.component_metrics[comp.id]
+            metrics_cls = get_metrics_class(comp.comp_type)
+            metrics = (
+                self.job_information_handler.metrics_handler.create_component_metrics(
+                    execution.id, execution.attempts[-1].id, comp.id, metrics_cls
+                )
+            )
             task = asyncio.create_task(
-                self._worker(attempt, comp, in_queues, out_queues, metrics),
+                self._worker(execution, comp, in_queues, out_queues, metrics),
                 name=f"worker-{comp.name}",
             )
             tasks.append(task)
@@ -131,7 +143,7 @@ class JobExecutionHandler:
 
     async def _worker(
         self,
-        attempt: ExecutionAttempt,
+        execution: JobExecution,
         component: Component,
         in_queues: List[asyncio.Queue],
         out_queues: List[asyncio.Queue],
@@ -139,11 +151,11 @@ class JobExecutionHandler:
     ) -> None:
         """
         If in_queues is empty, run once with payload=None (root).
-        Otherwise merge inputs until all send _SENTRY. On any batch,
-        invoke component.execute and fan out. On error, cancel successors.
+        Otherwise, merge inputs until all send _SENTRY. On any batch,
+        invoke component.execute() and fan out. On error, cancel successors.
         Always send one _SENTRY downstream.
         """
-
+        attempt = execution.attempts[-1]
         # if a predecessor failure already cancelled this component, skip it entirely
         if metrics.status == "CANCELLED":
             await self._fan_out(_SENTRY, out_queues)
@@ -153,7 +165,20 @@ class JobExecutionHandler:
             metrics.set_started()
             async for batch in component.execute(payload, metrics):
                 await self._fan_out(batch, out_queues)
-            attempt.execution.job_metrics.update_metrics(attempt.component_metrics)
+            # collect component metrics to update job metrics
+            all_comp_metrics = {
+                comp.id: self.job_information_handler.metrics_handler.get_comp_metrics(
+                    execution.id, attempt.id, comp.id
+                )
+                for comp in execution.job.components
+            }
+
+            # update job metrics with collected component metrics
+            (
+                self.job_information_handler.metrics_handler.get_job_metrics(
+                    execution.id
+                ).update_metrics(all_comp_metrics)
+            )
 
         def _cancel() -> None:
             dq = deque(component.next_components)
@@ -163,7 +188,9 @@ class JobExecutionHandler:
                 if nxt.id in seen:
                     continue
                 seen.add(nxt.id)
-                dm = attempt.component_metrics[nxt.id]
+                dm = self.job_information_handler.metrics_handler.get_comp_metrics(
+                    execution.id, attempt.id, nxt.id
+                )
                 if dm.status not in ("SUCCESS", "FAILED"):
                     dm.status = "CANCELLED"
                 dq.extend(nxt.next_components)
@@ -204,38 +231,38 @@ class JobExecutionHandler:
             await self._fan_out(_SENTRY, out_queues)
 
     def _finalize_success(
-        self, execution: JobExecution, attempt: ExecutionAttempt
+        self, execution: JobExecution, job_metrics: "ExecutionMetrics"
     ) -> None:
         """
         Final actions when a streaming execution succeeds.
         """
-        # persist job-level metrics
-        self.job_information_handler.metrics_handler.add_job_metrics(
-            execution.job.id, execution.job_metrics
-        )
-        # persist component-level metrics
+        # log job-level metrics
+        self.job_information_handler.logging_handler.log(job_metrics)
+        # log component metrics
         for comp in execution.job.components:
-            cid = comp.id
-            self.job_information_handler.metrics_handler.add_component_metrics(
-                execution.job.id, cid, attempt.component_metrics[cid]
+            cm = self.job_information_handler.metrics_handler.get_comp_metrics(
+                execution.id, execution.attempts[-1].id, comp.id
             )
+            self.job_information_handler.logging_handler.log(cm)
+
         # cleanup
         self.running_executions.remove(execution)
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
     def _finalize_failure(
-        self, exc: Exception, execution: JobExecution, attempt: ExecutionAttempt
+        self, exc: Exception, execution: JobExecution, job_metrics: "ExecutionMetrics"
     ) -> None:
         """
         Final actions when all retries are exhausted or streaming execution fails.
         """
-        execution.job_metrics.status = "FAILED"
+        attempt = execution.attempts[-1]
+        job_metrics.status = "FAILED"
         attempt.error = str(exc)
         # cleanup
         self.running_executions.remove(execution)
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",
             execution.job.name,
-            attempt.attempt_number,
+            attempt.index,
             exc,
         )
