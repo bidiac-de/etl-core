@@ -161,7 +161,6 @@ class JobExecutionHandler:
                 await self._run_component(
                     component,
                     None,
-                    execution,
                     metrics,
                     out_queues,
                 )
@@ -169,7 +168,6 @@ class JobExecutionHandler:
                 # merge inputs from predecessors
                 await self._merge_and_run(
                     component,
-                    execution,
                     metrics,
                     in_queues,
                     out_queues,
@@ -193,7 +191,6 @@ class JobExecutionHandler:
         self,
         component: Component,
         payload: Any,
-        execution: JobExecution,
         metrics: ComponentMetrics,
         out_queues: List[asyncio.Queue],
     ) -> None:
@@ -202,20 +199,9 @@ class JobExecutionHandler:
         async for batch in component.execute(payload, metrics):
             await self._fan_out(batch, out_queues)
 
-        # after this component is done, update the overall job metrics
-        all_comp = {
-            comp.id: self.job_information_handler.metrics_handler.get_comp_metrics(
-                execution.id, execution.attempts[-1].id, comp.id
-            )
-            for comp in execution.job.components
-        }
-        jm = self.job_information_handler.metrics_handler.get_job_metrics(execution.id)
-        jm.update_metrics(all_comp)
-
     async def _merge_and_run(
         self,
         component: Component,
-        execution: JobExecution,
         metrics: ComponentMetrics,
         in_queues: List[asyncio.Queue],
         out_queues: List[asyncio.Queue],
@@ -231,9 +217,7 @@ class JobExecutionHandler:
             if val is _SENTRY:
                 active.remove(src)
             else:
-                await self._run_component(
-                    component, val, execution, metrics, out_queues
-                )
+                await self._run_component(component, val, metrics, out_queues)
 
     def _cancel_successors(
         self,
@@ -261,6 +245,16 @@ class JobExecutionHandler:
         """
         Final actions when a streaming execution succeeds.
         """
+        # aggregate component metrics for final job metrics
+        all_comp = {
+            comp.id: self.job_information_handler.metrics_handler.get_comp_metrics(
+                execution.id, execution.attempts[-1].id, comp.id
+            )
+            for comp in execution.job.components
+        }
+        jm = self.job_information_handler.metrics_handler.get_job_metrics(execution.id)
+        jm.update_metrics(all_comp)
+
         # log job-level metrics
         self.job_information_handler.logging_handler.log(job_metrics)
         # log component metrics
