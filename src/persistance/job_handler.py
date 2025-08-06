@@ -1,59 +1,83 @@
-import uuid
-from typing import Optional
-from sqlmodel import Session, select
+from typing import List, Optional
 
+from sqlmodel import Session
+from db import engine
+from src.persistance.table_definitions import JobTable
 from src.job_execution.job import Job
+from src.components.base_component import Component
 
 
 class JobHandler:
     """
-    CRUD operations for Job (and its Components) using SQLModel.
+    CRUD for JobTable, serializing via Pydantic v2’s model_dump().
     """
 
-    def __init__(self, session: Session):
-        self.session = session
+    def __init__(self, session_engine=engine):
+        self.engine = session_engine
 
-    def create(self, job: Job) -> Job:
-        """
-        Persist a new Job (with its components) and return the saved instance.
-        """
-        self.session.add(job)
-        self.session.commit()
-        self.session.refresh(job)
-        return job
+    @staticmethod
+    def _serialize_components(components: List[Component]) -> List[dict]:
+        # every Component is a Pydantic model → use model_dump()
+        return [comp.model_dump() for comp in components]
 
-    def get(self, job_id: uuid.UUID) -> Optional[Job]:
-        """
-        Retrieve a Job by its UUID (or None if not found).
-        """
-        statement = select(Job).where(Job.id == job_id)
-        return self.session.exec(statement).one_or_none()
+    @staticmethod
+    def _serialize_metadata(meta) -> dict:
+        return meta.model_dump()
 
-    def update(self, job_id: uuid.UUID, job_data: Job) -> Optional[Job]:
+    def create(self, job: Job) -> JobTable:
         """
-        Update an existing Job. Pass in a Job model with the same .id,
-        or return None if the original doesn't exist.
+        INSERT a new row for this Job.
         """
-        existing = self.get(job_id)
-        if not existing:
-            return None
+        # build a JobTable instance
+        job_record = JobTable(
+            id=job.id,
+            name=job.name,
+            num_of_retries=job.num_of_retries,
+            file_logging=job.file_logging,
+            strategy_type=job.strategy_type,
+            components=self._serialize_components(job.components),
+            metadata_=self._serialize_metadata(job.metadata),
+        )
+        with Session(self.engine) as session:
+            session.add(job_record)
+            session.commit()
+            session.refresh(job_record)
+            return job_record  # ← instance, never the class
 
-        # merge fields (you can also use .update from dicts)
-        for field, value in job_data.model_dump(exclude_unset=True).items():
-            setattr(existing, field, value)
-
-        self.session.add(existing)
-        self.session.commit()
-        self.session.refresh(existing)
-        return existing
-
-    def delete(self, job_id: uuid.UUID) -> bool:
+    def update(self, job: Job):
         """
-        Delete a Job by UUID. Returns True if deleted, False if not found.
+        UPDATE the row matching job.id with this Job’s fields.
         """
-        existing = self.get(job_id)
-        if not existing:
-            return False
-        self.session.delete(existing)
-        self.session.commit()
-        return True
+        with Session(self.engine) as session:
+            record = session.get(JobTable, job.id)
+            if record is None:
+                raise ValueError(f"Job with id {job.id!r} not found")
+            # assign every field
+            record.name = job.name
+            record.num_of_retries = job.num_of_retries
+            record.file_logging = job.file_logging
+            record.strategy_type = job.strategy_type
+            record.components = self._serialize_components(job.components)
+            record.metadata_ = self._serialize_metadata(job.metadata)
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return record  # ← still an instance
+
+    def delete(self, job_id: str) -> None:
+        """
+        DELETE the row with the given id.
+        """
+        with Session(self.engine) as session:
+            record = session.get(JobTable, job_id)
+            if record is None:
+                raise ValueError(f"Job with id {job_id!r} not found")
+            session.delete(record)
+            session.commit()
+
+    def get_by_id(self, job_id: str) -> Optional[JobTable]:
+        """
+        SELECT * FROM job_table WHERE id = :job_id.
+        """
+        with Session(self.engine) as session:
+            return session.get(JobTable, job_id)

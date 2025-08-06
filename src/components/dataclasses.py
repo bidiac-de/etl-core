@@ -57,7 +57,7 @@ class MetaData(BaseModel):
     @field_validator("created_at", "updated_at", mode="before")
     @classmethod
     def validate_timestamps(cls, value):
-        #If string (from JSON): parse
+        # If string (from JSON): parse
         if isinstance(value, str):
             try:
                 value = datetime.fromisoformat(value)
