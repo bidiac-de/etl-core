@@ -132,6 +132,12 @@ class Component(BaseModel, ABC):
         """
         return self._next_components
 
+    @next_components.setter
+    def next_components(self, value: List["Component"]):
+        if not isinstance(value, list):
+            raise TypeError("next_components must be a list of Component instances")
+        self._next_components = value
+
     @property
     def prev_components(self) -> List["Component"]:
         """

@@ -9,6 +9,7 @@ from pydantic import (
     field_validator,
     PrivateAttr,
 )
+from collections import Counter
 
 from src.components.base_component import Component, get_strategy, StrategyType
 from uuid import uuid4
@@ -57,27 +58,24 @@ class Job(BaseModel):
 
     @model_validator(mode="after")
     def _check_names_and_wire(self) -> "Job":
-        """
-        Ensure each component.name is unique
-        Wire up `next`/`prev` pointers by those names
-        """
-
-        # name uniqueness
-        names = [c.name for c in self.components]
-        dupes = {n for n in names if names.count(n) > 1}
+        # check names for duplicates
+        counts = Counter(c.name for c in self.components)
+        dupes = [name for name, cnt in counts.items() if cnt > 1]
         if dupes:
             raise ValueError(f"Duplicate component names: {sorted(dupes)}")
 
-        # wiring
+        # create mapping
         name_map = {c.name: c for c in self.components}
-        for c in self.components:
-            for nxt_name in c.next:
-                try:
-                    nxt = name_map[nxt_name]
-                except KeyError:
-                    raise ValueError(f"Unknown next‐component name: {nxt_name!r}")
-                c.add_next(nxt)
-                nxt.add_prev(c)
+
+        # wire up components using comprehension
+        for comp in self.components:
+            try:
+                next_objs = [name_map[n] for n in comp.next]
+            except KeyError as e:
+                raise ValueError(f"Unknown next‐component name: {e.args[0]!r}")
+            comp.next_components = next_objs
+            for nxt in next_objs:
+                nxt.prev_components.append(comp)
 
         return self
 
