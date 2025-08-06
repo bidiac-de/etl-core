@@ -18,7 +18,7 @@ def test_branch_skip_fan_out(tmp_path):
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "SkipFanOutJob",
+        "name": "SkipFanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
@@ -83,7 +83,7 @@ def test_branch_skip_fan_in(tmp_path):
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "SkipFanInJob",
+        "name": "SkipFanInJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
@@ -149,7 +149,7 @@ def test_chain_skip_linear():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "ChainSkipJob",
+        "name": "ChainSkipJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
@@ -214,7 +214,7 @@ def test_skip_diamond():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "SkipDiamondJob",
+        "name": "SkipDiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {

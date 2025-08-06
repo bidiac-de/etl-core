@@ -12,7 +12,7 @@ job_module.MultiEchoComponent = MultiEcho
 def test_linear_stream_multiple_rows():
     handler = JobExecutionHandler()
     config = {
-        "job_name": "LinearStreamJob",
+        "name": "LinearStreamJob",
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
@@ -49,7 +49,7 @@ def test_linear_stream_multiple_rows():
 def test_fan_out_multiple_rows():
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanOutStreamJob",
+        "name": "FanOutStreamJob",
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
@@ -87,7 +87,7 @@ def test_fan_out_multiple_rows():
 def test_fan_in_multiple_rows():
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanInStreamJob",
+        "name": "FanInStreamJob",
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",

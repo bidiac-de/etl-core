@@ -17,7 +17,7 @@ def test_fan_out_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanOutJob",
+        "name": "FanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
@@ -75,7 +75,7 @@ def test_fan_in_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanInJob",
+        "name": "FanInJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
@@ -134,7 +134,7 @@ def test_diamond_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "DiamondJob",
+        "name": "DiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
