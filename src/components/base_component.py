@@ -45,8 +45,7 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     comp_type: str
-    strategy_type: StrategyType = Field(default=StrategyType.ROW)
-    next: [List[str]] = []
+    next: List[str] = []  # List of names of next components from config
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
 
