@@ -70,10 +70,12 @@ class MetaData(BaseModel):
 
     @field_validator("created_by", "updated_by", mode="before")
     @classmethod
-    def validate_user_ids(cls, value: int) -> int:
+    def validate_user_ids(cls, value: int):
         """
-        Validate that user IDs are non-negative integers
+        Validate that set user IDs are non-negative integers
         """
+        if value is None:
+            return None
         if not isinstance(value, int) or value < 0:
             raise ValueError("User ID must be a non-negative integer.")
         return value

@@ -1,7 +1,7 @@
 from typing import List, Optional, Any
 import datetime
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 from src.persistance.db import engine
 from src.persistance.table_definitions import JobTable
 from src.job_execution.job import Job
@@ -108,3 +108,31 @@ class JobHandler:
         """
         with Session(self.engine) as session:
             return session.get(JobTable, job_id)
+
+    def get_all(self) -> list[JobTable]:
+        """
+        Return every JobTable row as a concrete list.
+        """
+        with Session(self.engine) as session:
+            records = session.exec(select(JobTable)).all()
+            #cast to list for strict typing
+            return list(records)
+
+    @staticmethod
+    def record_to_job(record: JobTable) -> Job:
+        """
+        Build a Job domain object from a JobTable record
+        """
+        payload = {
+            "name": record.name,
+            "num_of_retries": record.num_of_retries,
+            "file_logging": record.file_logging,
+            "strategy_type": record.strategy_type,
+            "components": record.components,
+            "metadata": record.metadata_,
+        }
+        # Instantiate Pydantic Job
+        job = Job(**payload)
+        # Override private _id to match the record's id
+        object.__setattr__(job, "_id", record.id)
+        return job

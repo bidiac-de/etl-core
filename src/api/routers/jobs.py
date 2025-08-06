@@ -1,14 +1,15 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
+from typing import List, Dict
+
 from src.job_execution.job import Job
 from src.persistance.job_handler import JobHandler
 
 router = APIRouter(
     prefix="/jobs",
-    tags=[""],
+    tags=["Jobs"],
 )
 
-
-# create a single handler instance to reuse across requests
 job_handler = JobHandler()
 
 
@@ -16,81 +17,88 @@ job_handler = JobHandler()
     "/",
     response_model=str,
     summary="Create a new Job",
-    description=(
-        "Creates a new Job with the provided configuration "
-        "and persists it to the internal database."
-    ),
+    description="Creates a new Job with the provided configuration and persists it.",
 )
 def create_job(job_config: dict) -> str:
-    """
-    Build a Job model from the incoming JSON, then persist via JobHandler.
-    """
     job = Job(**job_config)
     try:
         job_handler.create(job)
     except Exception as e:
-        # wrap any persistence errors as 500s
         raise HTTPException(status_code=500, detail=f"Failed to persist job: {e}")
-
     return job.id
 
 
 @router.get(
-    "/jobs/{job_id}",
+    "/{job_id}",
     response_model=dict,
     summary="Get Job by ID",
-    description=("Returns the JSON representation of the Job matching the given ID, "),
+    description="Returns the JSON representation of the Job matching the given ID.",
 )
-def get_job(id: str) -> dict:
-    """
-    Retrieve a Job by its ID
-    !!! placeholder implementation for planning purposes
-    """
-    job = Job.get_by_id(id)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job with ID {id} not found")
-
+def get_job(job_id: str) -> dict:
+    record = job_handler.get_by_id(job_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
+    job = job_handler.record_to_job(record)
     return job.model_dump()
 
 
 @router.put(
-    "/jobs/{job_id}",
+    "/{job_id}",
     response_model=str,
     summary="Update Job by ID",
-    description=(
-        "Updates the Job matching the given ID with the provided configuration. "
-        "Returns a success message if the update was successful."
-    ),
+    description="Updates the Job matching the given ID with the provided configuration.",
 )
-def update_job(id: str, job_config: dict) -> str:
-    """
-    Update a Job by its ID with the provided configuration
-    !!! placeholder implementation for planning purposes
-    """
-    job = Job.get_by_id(id)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job with ID {id} not found")
+def update_job(job_id: str, job_config: dict) -> str:
+    # validate and build new Job with the path‐param ID
+    try:
+        job = Job(**job_config)
+        object.__setattr__(job, "_id", job_id)
+    except ValidationError as ve:
+        raise HTTPException(status_code=422, detail=ve.errors())
 
-    job.update(**job_config)
-    return f"Job with ID {id} updated successfully"
+    try:
+        job_handler.update(job)
+    except ValueError as not_found:
+        raise HTTPException(status_code=404, detail=str(not_found))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update job: {e}")
+
+    return job.id
 
 
 @router.delete(
-    "/jobs/{job_id}",
+    "/{job_id}",
+    response_model=dict,
     summary="Delete Job by ID",
-    description=(
-        "Deletes the Job matching the given ID. "
-        "Returns a success message if the deletion was successful."
-    ),
+    description="Deletes the Job matching the given ID.",
 )
-def delete_job(id: str) -> dict:
-    """
-    Delete a Job by its ID
-    !!! placeholder implementation for planning purposes
-    """
-    job = Job.get_by_id(id)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job with ID {id} not found")
+def delete_job(job_id: str) -> dict:
+    record = job_handler.get_by_id(job_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
+    try:
+        job_handler.delete(job_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete job: {e}")
+    return {"message": f"Job {job_id!r} deleted successfully"}
 
-    job.delete()
-    return {"message": f"Job with ID {id} deleted successfully"}
+@router.get(
+    "/",
+    response_model=List[Dict],
+    summary="List all Jobs (no components)",
+    description="Returns each job’s data—excluding components but including metadata.",
+)
+def list_jobs() -> List[Dict]:
+    records = job_handler.get_all()
+    if not records:
+        return []
+
+    jobs: List[Dict] = []
+    for record in records:
+        # get all fields as a dict, drop 'components'
+        rec_dict = record.dict(exclude={"components"})
+        # rename metadata_ → metadata
+        rec_dict["metadata"] = rec_dict.pop("metadata_", {})
+        jobs.append(rec_dict)
+
+    return jobs
