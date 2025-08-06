@@ -56,10 +56,14 @@ class MetaData(BaseModel):
 
     @field_validator("created_at", "updated_at", mode="before")
     @classmethod
-    def validate_timestamps(cls, value: datetime) -> datetime:
-        """
-        Validate that datetime values are not in the future
-        """
+    def validate_timestamps(cls, value):
+        #If string (from JSON): parse
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value)
+            except ValueError:
+                raise ValueError("Timestamp must be ISO-format datetime string.")
+
         if value > datetime.now():
             raise ValueError("Timestamp cannot be in the future.")
         return value
