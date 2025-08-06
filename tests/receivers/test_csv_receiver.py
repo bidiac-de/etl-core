@@ -22,7 +22,7 @@ def metrics() -> ComponentMetrics:
 
 @pytest.fixture
 def sample_csv_file() -> Path:
-    return Path(__file__).parent.parent / "components" / "data" / "sample.csv"
+    return Path(__file__).parent.parent / "components" / "data" / "csv"/ "test_data.csv"
 
 
 def test_readcsv_row(sample_csv_file, metrics):
