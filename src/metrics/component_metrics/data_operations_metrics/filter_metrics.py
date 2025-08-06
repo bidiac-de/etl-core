@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, field_validator
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.metrics.metrics_registry import register_metrics
 
@@ -10,3 +10,9 @@ class FilterMetrics(ComponentMetrics):
     """
 
     lines_dismissed: int = Field(default=0)
+
+    @field_validator("lines_dismissed")
+    def validate_lines_dismissed(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("lines_dismissed must be a non-negative integer")
+        return value

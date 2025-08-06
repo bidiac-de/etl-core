@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
 from pydantic import (
     BaseModel,
@@ -10,6 +9,7 @@ from pydantic import (
     PrivateAttr,
     field_validator,
 )
+from enum import Enum
 
 from src.components.dataclasses import MetaData, Layout
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -18,6 +18,7 @@ from src.strategies.base_strategy import ExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
+from pandas import DataFrame
 
 
 class StrategyType(str, Enum):
@@ -44,7 +45,7 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     comp_type: str
-    strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
+    strategy_type: StrategyType = Field(default=StrategyType.ROW)
     next: [List[str]] = []
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
@@ -56,20 +57,18 @@ class Component(BaseModel, ABC):
     _strategy: Optional[ExecutionStrategy] = PrivateAttr(default=None)
     _receiver: Optional[Receiver] = PrivateAttr(default=None)
 
-    @model_validator(mode="before")
-    @classmethod
+    @model_validator(mode="after")
     @abstractmethod
-    def build_objects(cls, values: dict) -> dict:
+    def _build_objects(self) -> "Component":
         """
-        Each concrete component must implement this method to:
-        - construct strategy and receiver
-        - modify and return the values dict
+        After-instantiation hook. Override in subclasses to assign
+        `self._strategy` and `self._receiver`, then return `self`.
         """
-        raise NotImplementedError
+        return self
 
-    @field_validator("name", "comp_type", "strategy_type", mode="before")
+    @field_validator("name", "comp_type", mode="before")
     @classmethod
-    def validate_non_empty_string(cls, value: str) -> str:
+    def _validate_non_empty_string(cls, value: str) -> str:
         """
         Validate that the name, comp_type, and strategy_type are non-empty strings.
         """
@@ -114,7 +113,10 @@ class Component(BaseModel, ABC):
     @strategy.setter
     def strategy(self, value: ExecutionStrategy):
         if not isinstance(value, ExecutionStrategy):
-            raise TypeError(f"Expected ExecutionStrategy, got {type(value).__name__}")
+            raise TypeError(
+                f"strategy must be an instance of ExecutionStrategy, "
+                f"got {type(value).__name__}"
+            )
         self._strategy = value
 
     @property
@@ -122,12 +124,6 @@ class Component(BaseModel, ABC):
         if self._receiver is None:
             raise ValueError(f"No receiver set for component {self.name}")
         return self._receiver
-
-    @receiver.setter
-    def receiver(self, value: Receiver):
-        if not isinstance(value, Receiver):
-            raise TypeError(f"Expected Receiver, got {type(value).__name__}")
-        self._receiver = value
 
     @property
     def next_components(self) -> List["Component"]:
@@ -159,39 +155,39 @@ class Component(BaseModel, ABC):
         """
         self._prev_components.append(prev)
 
-    def execute(self, data, metrics: ComponentMetrics, **kwargs) -> Any:
+    def execute(
+        self,
+        payload: Any,
+        metrics: ComponentMetrics,
+    ) -> AsyncIterator[Any]:
         """
-
-        :param data: the data to be processed by the component
-        :param metrics: a ComponentMetrics instance constructed by the execution handler
-        :return: result of the component execution
+        Invoke the strategy’s async `execute`, streaming native outputs.
+        Returns an AsyncIterator produced by the async generator.
         """
-        if not self.strategy:
-            raise ValueError(f"No strategy set for component {self.name}")
-        return self.strategy.execute(self, data, metrics)
+        return self.strategy.execute(self, payload, metrics)
 
     @abstractmethod
-    def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bulk(self, *args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> DataFrame:
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
 def get_strategy(strategy_type: str) -> ExecutionStrategy:
     """
-    Factory function to get the appropriate execution strategy based on the type.
+    Factory function to get the appropriate execution strategy based on the type
     """
-    if strategy_type == "row":
+    if strategy_type == StrategyType.ROW:
         return RowExecutionStrategy()
-    elif strategy_type == "bulk":
+    elif strategy_type == StrategyType.BULK:
         return BulkExecutionStrategy()
-    elif strategy_type == "bigdata":
+    elif strategy_type == StrategyType.BIGDATA:
         return BigDataExecutionStrategy()
     else:
         raise ValueError(f"Unknown strategy type: {strategy_type}")

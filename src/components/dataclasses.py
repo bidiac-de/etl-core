@@ -25,18 +25,19 @@ class Layout(BaseModel):
             raise ValueError("Coordinates must be non-negative.")
         return value
 
+    @property
+    def id(self) -> str:
+        """
+        Get the unique identifier of the component
+        :return: Unique identifier as a string
+        """
+        return self._id
+
     def __repr__(self):
         return (
             f"Layout(x_coordinate={self.x_coordinate}"
             f", y_coordinate={self.y_coordinate})"
         )
-
-    @property
-    def id(self) -> str:
-        """
-        Read-only property to access the private _id attribute.
-        """
-        return self._id
 
 
 class MetaData(BaseModel):
@@ -76,6 +77,7 @@ class MetaData(BaseModel):
     @property
     def id(self) -> str:
         """
-        Read-only property to access the private _id attribute.
+        Get the unique identifier of the component
+        :return: Unique identifier as a string
         """
         return self._id

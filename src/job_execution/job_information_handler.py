@@ -1,7 +1,9 @@
 import logging
-from src.metrics.job_metrics import JobMetrics
+from src.metrics.execution_metrics import ExecutionMetrics
 import datetime
 from pathlib import Path
+from typing import Dict, Tuple, Type
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 class JobInformationHandler:
@@ -9,25 +11,85 @@ class JobInformationHandler:
     Handles job information and metrics for optional logging
     """
 
+    _metrics_handler: "MetricsHandler"
+    _logging_handler: "LoggingHandler"
+
     def __init__(self, job_name: str):
-        self.metrics_handler = MetricsHandler()
-        self.logging_handler = LoggingHandler(job_name)
+        self._metrics_handler = MetricsHandler()
+        self._logging_handler = LoggingHandler(job_name)
+
+    @property
+    def metrics_handler(self) -> "MetricsHandler":
+        return self._metrics_handler
+
+    @property
+    def logging_handler(self) -> "LoggingHandler":
+        return self._logging_handler
 
 
 class MetricsHandler:
     """
-    Handles metrics collection and storage
+    Single source of truth for every metrics object.
     """
 
-    def __init__(self):
-        self.job_metrics = []  # list[JobMetrics]
-        self.component_metrics = {}  # dict[job_id, list[ComponentMetrics]]
+    def __init__(self) -> None:
+        # execution_id -> JobMetrics
+        self._job_metrics: Dict[str, ExecutionMetrics] = {}
+        # (execution_id, attempt_id, component_id) -> ComponentMetrics
+        self._component_metrics: Dict[Tuple[str, str, str], ComponentMetrics] = {}
 
-    def add_job_metrics(self, job_id: str, metrics: JobMetrics):
-        self.job_metrics.append((job_id, metrics))
+    def create_job_metrics(self, execution_id: str) -> ExecutionMetrics:
+        """
+        Lazily create or return the JobMetrics for the given execution.
+        """
+        if execution_id not in self._job_metrics:
+            self._job_metrics[execution_id] = ExecutionMetrics()
+        return self._job_metrics[execution_id]
 
-    def add_component_metrics(self, job_id: str, name: str, metrics):
-        self.component_metrics.setdefault(job_id, []).append((name, metrics))
+    def get_job_metrics(self, execution_id: str) -> ExecutionMetrics:
+        """
+        Retrieve existing JobMetrics; KeyError if missing.
+        """
+        return self._job_metrics[execution_id]
+
+    def create_component_metrics(
+        self,
+        execution_id: str,
+        attempt_id: str,
+        component_id: str,
+        metrics_cls: Type[ComponentMetrics] = ComponentMetrics,
+    ) -> ComponentMetrics:
+        """
+        Lazily create or return the metrics object for this component.
+        Allows passing a subclass of ComponentMetrics for concrete components.
+        """
+        key = (execution_id, attempt_id, component_id)
+        if key not in self._component_metrics:
+            self._component_metrics[key] = metrics_cls()
+        return self._component_metrics[key]
+
+    def get_comp_metrics(
+        self,
+        execution_id: str,
+        attempt_id: str,
+        component_id: str,
+    ) -> ComponentMetrics:
+        """
+        Retrieve existing ComponentMetrics; KeyError if missing.
+        """
+        return self._component_metrics[(execution_id, attempt_id, component_id)]
+
+    def all_job_metrics(self) -> Dict[str, ExecutionMetrics]:
+        """
+        Access all recorded job metrics.
+        """
+        return dict(self._job_metrics)
+
+    def all_comp_metrics(self) -> Dict[Tuple[str, str, str], ComponentMetrics]:
+        """
+        Access all recorded component metrics.
+        """
+        return dict(self._component_metrics)
 
 
 class LoggingHandler:
@@ -36,15 +98,19 @@ class LoggingHandler:
     and creates a fresh timestamped file on each execution
     """
 
+    _base_log_dir: Path
+    _job_name: str
+    _logger: logging.Logger
+
     def __init__(
         self,
         job_name: str,
         base_log_dir: Path = Path("logs"),
     ):
-        self.base_log_dir = base_log_dir
-        self.job_name = job_name
-        self.logger = logging.getLogger(f"job.{job_name}")
-        self.logger.setLevel(logging.DEBUG)
+        self._base_log_dir = base_log_dir
+        self._job_name = job_name
+        self._logger = logging.getLogger(f"job.{job_name}")
+        self._logger.setLevel(logging.DEBUG)
         self._configure_handler()
 
     def _configure_handler(self) -> None:
@@ -52,7 +118,7 @@ class LoggingHandler:
         (Re)configure the FileHandler for current execution
         """
         # ensure base/job directory exists
-        job_dir = self.base_log_dir / self.job_name
+        job_dir = self._base_log_dir / self.job_name
         job_dir.mkdir(parents=True, exist_ok=True)
 
         # timestamped logfile so each run is separate
@@ -65,22 +131,48 @@ class LoggingHandler:
         fh.setFormatter(fmt)
 
         # clear out old handlers so we don't double-log
-        for h in list(self.logger.handlers):
-            self.logger.removeHandler(h)
+        for h in self._logger.handlers:
+            self._logger.removeHandler(h)
 
-        self.logger.addHandler(fh)
+        self._logger.addHandler(fh)
 
     def log(self, information) -> None:
         """
         Log a metric object at INFO level
         """
-        self.logger.info("%r", information)
+        self._logger.info("%r", information)
 
     def update_job_name(self, new_job_name: str) -> None:
         """
         Switch to a new job name (and log directory) and start a new file
         """
-        self.job_name = new_job_name
-        self.logger = logging.getLogger(f"job.{new_job_name}")
-        self.logger.setLevel(logging.DEBUG)
+        self._job_name = new_job_name
+        self._logger = logging.getLogger(f"job.{new_job_name}")
+        self._logger.setLevel(logging.DEBUG)
+        self._configure_handler()
+
+    @property
+    def base_log_dir(self) -> Path:
+        return self._base_log_dir
+
+    @base_log_dir.setter
+    def base_log_dir(self, value: Path) -> None:
+        if not isinstance(value, Path):
+            raise ValueError("base_log_dir must be a Path object")
+        self._base_log_dir = value
+        self._configure_handler()
+
+    @property
+    def job_name(self) -> str:
+        return self._job_name
+
+    @property
+    def logger(self) -> logging.Logger:
+        return self._logger
+
+    @logger.setter
+    def logger(self, value: logging.Logger) -> None:
+        if not isinstance(value, logging.Logger):
+            raise ValueError("logger must be an instance of logging.Logger")
+        self._logger = value
         self._configure_handler()

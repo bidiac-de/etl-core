@@ -2,7 +2,6 @@ from src.components.data_operations.data_operations import DataOperationComponen
 from typing import Any, Literal, List, Dict
 from pydantic import Field
 from src.components.component_registry import register_component
-from src.components.base_component import get_strategy
 from src.receivers.data_operations_receivers.filter_receiver import FilterReceiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
@@ -21,11 +20,10 @@ class FilterComponent(DataOperationComponent):
     )
 
     @classmethod
-    def build_objects(cls, values):
+    def _build_objects(cls, values):
         """
         Build dependent objects for the stub component
         """
-        values["strategy"] = get_strategy(values["strategy_type"])
         values["receiver"] = FilterReceiver()
 
         return values

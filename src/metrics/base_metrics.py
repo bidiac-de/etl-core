@@ -1,7 +1,7 @@
 from abc import ABC
 from datetime import datetime, timedelta
 from uuid import uuid4
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, PrivateAttr
 from src.components.runtime_state import RuntimeState
 
 
@@ -10,11 +10,11 @@ class Metrics(BaseModel, ABC):
     Base class for metrics.
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), exclude=True)
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     _status: str = RuntimeState.PENDING.value
     _created_at: datetime = datetime.now()
-    _started_at: datetime = None
-    _processing_time: timedelta = None
+    _started_at: datetime
+    _processing_time: timedelta
     _error_count: int = 0
 
     def set_started(self):
@@ -23,6 +23,14 @@ class Metrics(BaseModel, ABC):
         """
         self.started_at = datetime.now()
         self.status = RuntimeState.RUNNING.value
+
+    @property
+    def id(self) -> str:
+        """
+        Get the unique identifier of the component
+        :return: Unique identifier as a string
+        """
+        return self._id
 
     @property
     def status(self) -> str:
