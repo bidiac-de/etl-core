@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import List, Optional, Any
+import datetime
 
 from sqlmodel import Session
-from db import engine
+from src.persistance.db import engine
 from src.persistance.table_definitions import JobTable
 from src.job_execution.job import Job
 from src.components.base_component import Component
@@ -16,13 +17,39 @@ class JobHandler:
         self.engine = session_engine
 
     @staticmethod
-    def _serialize_components(components: List[Component]) -> List[dict]:
-        # every Component is a Pydantic model → use model_dump()
-        return [comp.model_dump() for comp in components]
+    def _deep_serialize(obj: Any) -> Any:
+        """
+        Recursively convert datetime, date, time to ISO strings,
+        and walk through lists/dicts.
+        """
+        if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+            return obj.isoformat()
+        if isinstance(obj, dict):
+            return {k: JobHandler._deep_serialize(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [JobHandler._deep_serialize(v) for v in obj]
+        return obj
 
-    @staticmethod
-    def _serialize_metadata(meta) -> dict:
-        return meta.model_dump()
+    @classmethod
+    def _serialize_components(cls, components: List[Component]) -> List[dict]:
+        """
+        Serialize each Component via model_dump and deep-serialize it.
+        """
+        out: List[dict] = []
+        for comp in components:
+            data = comp.model_dump()
+            out.append(cls._deep_serialize(data))
+        return out
+
+
+    @classmethod
+    def _serialize_metadata(cls, meta: Any) -> dict:
+        """
+        Serialize metadata (dataclass → asdict, else Pydantic → model_dump)
+        then deep-serialize to handle datetimes.
+        """
+        data = meta.model_dump()
+        return cls._deep_serialize(data)
 
     def create(self, job: Job) -> JobTable:
         """

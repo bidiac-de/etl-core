@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from src.job_execution.job import Job
+from src.persistance.job_handler import JobHandler
 
 router = APIRouter(
     prefix="/jobs",
@@ -7,22 +8,30 @@ router = APIRouter(
 )
 
 
+# create a single handler instance to reuse across requests
+job_handler = JobHandler()
+
+
 @router.post(
     "/",
     response_model=str,
     summary="Create a new Job",
     description=(
-        "Creates a new Job with the provided configuration. "
-        "returns the ID of the created Job."
+        "Creates a new Job with the provided configuration "
+        "and persists it to the internal database."
     ),
 )
 def create_job(job_config: dict) -> str:
     """
-    Create a new Job with the provided configuration
-    !!! placeholder implementation for planning purposes
+    Build a Job model from the incoming JSON, then persist via JobHandler.
     """
     job = Job(**job_config)
-    job.save()
+    try:
+        job_handler.create(job)
+    except Exception as e:
+        # wrap any persistence errors as 500s
+        raise HTTPException(status_code=500, detail=f"Failed to persist job: {e}")
+
     return job.id
 
 
