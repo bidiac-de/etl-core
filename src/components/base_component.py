@@ -62,7 +62,7 @@ class Component(BaseModel, ABC):
     def _build_objects(self) -> "Component":
         """
         After-instantiation hook. Override in subclasses to assign
-        `self._strategy` and `self._receiver`, then return `self`.
+        `self._receiver`, then return `self`.
         """
         return self
 

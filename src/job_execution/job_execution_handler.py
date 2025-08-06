@@ -281,7 +281,7 @@ class JobExecutionHandler:
                 dm.status = RuntimeState.CANCELLED
 
             # cancel tasks cleanly
-            task = getattr(self, "_current_tasks", {}).get(nxt.id)
+            task = self._current_tasks.get(nxt.id)
             if task and not task.done():
                 task.cancel()
 

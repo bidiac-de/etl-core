@@ -46,8 +46,11 @@ class Job(BaseModel):
             comp_type = comp_data.get("comp_type")
             comp_cls = component_registry.get(comp_type)
             if comp_cls is None:
-                raise ValueError(f"Unknown component type: {comp_type!r}")
-            # This will now call StubComponent.build_objects (etc.)
+                valid_types = list(component_registry.keys())
+                raise ValueError(
+                    f"Unknown component type: {comp_type!r}. "
+                    f"Valid types are: {valid_types}"
+                )
             built.append(comp_cls(**comp_data))
         values["components"] = built
         return values
@@ -75,8 +78,6 @@ class Job(BaseModel):
                     raise ValueError(f"Unknown next‐component name: {nxt_name!r}")
                 c.add_next(nxt)
                 nxt.add_prev(c)
-
-        self._root_components = [c for c in self.components if not c.prev_components]
 
         return self
 
@@ -137,17 +138,6 @@ class Job(BaseModel):
         Returns the unique identifier of the job.
         """
         return self._id
-
-    def _connect_components(self) -> None:
-        for component in self._components.values():
-            src = self._components[component.id]
-            for nxt_user_prov_id in component.next:
-                dest_internal = self._temp_map.get(nxt_user_prov_id)
-                if dest_internal not in self._components:
-                    raise ValueError(f"Unknown next-component: {nxt_user_prov_id}")
-                dest = self._components[dest_internal]
-                src.add_next(dest)
-                dest.add_prev(src)
 
 
 class JobExecution:
