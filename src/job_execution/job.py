@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 from src.components.dataclasses import MetaData
 from pydantic import (
     BaseModel,
@@ -10,13 +10,27 @@ from pydantic import (
     PrivateAttr,
 )
 from collections import Counter
+import asyncio
 
 from src.components.base_component import Component, get_strategy, StrategyType
+from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
 from uuid import uuid4
 import logging
 from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
+
+
+class _Sentinel:
+    """Unique end-of-stream marker for each component."""
+
+    __slots__ = ("component_id",)
+
+    def __init__(self, component_id: str) -> None:
+        self.component_id = component_id
+
+    def __repr__(self) -> str:
+        return f"<Sentinel {self.component_id}>"
 
 
 class Job(BaseModel):
@@ -146,8 +160,16 @@ class JobExecution:
     def __init__(self, job: Job):
         self._id: str = str(uuid4())
         self._job = job
+        # each execution carries its own retry strategy
+        self._retry_strategy = ConstantRetryStrategy(job.num_of_retries)
         self._max_attempts = job.num_of_retries + 1
         self._attempts: List[ExecutionAttempt] = []
+
+        # each component gets its own sentinel instance
+        self._sentinels: Dict[str, _Sentinel] = {
+            comp.id: _Sentinel(comp.id) for comp in job.components
+        }
+        self._current_tasks: Dict[str, asyncio.Task] = {}
 
     def start_attempt(self):
         if len(self._attempts) >= self._max_attempts:
@@ -175,6 +197,41 @@ class JobExecution:
     @property
     def attempts(self) -> List["ExecutionAttempt"]:
         return self._attempts
+
+    @property
+    def retry_strategy(self) -> RetryStrategy:
+        """
+        Returns the retry strategy for this job execution.
+        """
+        return self._retry_strategy
+
+    @property
+    def sentinels(self) -> Dict[str, _Sentinel]:
+        """
+        Returns a mapping of component IDs to their sentinels.
+        Sentinels are used to mark the end of a stream for each component.
+        """
+        return self._sentinels
+
+    @property
+    def current_tasks(self) -> Dict[str, asyncio.Task]:
+        """
+        Returns a mapping of component IDs to their current asyncio tasks.
+        This is used to track the execution of components in the job.
+        """
+        return self._current_tasks
+
+    @current_tasks.setter
+    def current_tasks(self, tasks: Dict[str, asyncio.Task]) -> None:
+        """
+        Sets the current tasks for the job execution.
+        This is used to track the execution of components in the job.
+        """
+        if not isinstance(tasks, dict):
+            raise TypeError(
+                "current_tasks must be a dictionary of component IDs to asyncio tasks"
+            )
+        self._current_tasks = tasks
 
 
 class ExecutionAttempt:

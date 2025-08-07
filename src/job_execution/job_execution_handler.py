@@ -4,26 +4,13 @@ from typing import Any, Dict, List, Set
 from collections import deque
 
 from src.components.runtime_state import RuntimeState
-from src.job_execution.job import Job, JobExecution
+from src.job_execution.job import Job, JobExecution, _Sentinel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.metrics.metrics_registry import get_metrics_class
 from src.metrics.execution_metrics import ExecutionMetrics
-from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
-
-
-class _Sentinel:
-    """Unique end-of-stream marker for each component."""
-
-    __slots__ = ("component_id",)
-
-    def __init__(self, component_id: str) -> None:
-        self.component_id = component_id
-
-    def __repr__(self) -> str:
-        return f"<Sentinel {self.component_id}>"
 
 
 class JobExecutionHandler:
@@ -38,15 +25,12 @@ class JobExecutionHandler:
 
     def __init__(
         self,
-        retry_strategy: RetryStrategy | None = None,
     ) -> None:
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
         self.running_executions: List[JobExecution] = []
-        # standard strategy:  retry exactly job.num_of_retries times with no delay
-        self.retry_strategy = retry_strategy or ConstantRetryStrategy(0, delay=0)
 
     def execute_job(self, job: Job) -> JobExecution:
         # guard condition: dont allow executing the same job multiple times concurrently
@@ -57,8 +41,6 @@ class JobExecutionHandler:
 
         execution = JobExecution(job)
         self.running_executions.append(execution)
-        # fit retry strategy to job
-        self.retry_strategy.max_retries = job.num_of_retries
 
         return asyncio.run(self._main_loop(execution))
 
@@ -90,12 +72,12 @@ class JobExecutionHandler:
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, exc)
 
                 # if no retries left, finalize as failure
-                if not self.retry_strategy.should_retry(attempt_index):
+                if not execution.retry_strategy.should_retry(attempt_index):
                     self._finalize_failure(exc, execution, job_metrics)
                     break
 
                 # otherwise wait and retry
-                delay = self.retry_strategy.next_delay(attempt_index)
+                delay = execution.retry_strategy.next_delay(attempt_index)
                 if delay > 0:
                     await asyncio.sleep(delay)
                 continue
@@ -115,11 +97,6 @@ class JobExecutionHandler:
         Returns the mapping component.id → Task so failures can cancel downstream tasks.
         """
         job = execution.job
-
-        # each component gets its own sentinel instance
-        self._sentinels: Dict[str, _Sentinel] = {
-            comp.id: _Sentinel(comp.id) for comp in job.components
-        }
 
         # Prepare queues
         queues: Dict[str, asyncio.Queue] = {
@@ -144,7 +121,7 @@ class JobExecutionHandler:
             tasks.append(task)
 
         # attach for cancellation in exception handlers
-        self._current_tasks = current_tasks
+        execution.current_tasks = current_tasks
 
         # let exceptions bubble so we can retry if needed
         await asyncio.gather(*tasks)
@@ -163,7 +140,7 @@ class JobExecutionHandler:
         metrics as CANCELLED, we just fan out the sentinel.
         """
         attempt = execution.latest_attempt()
-        sentinel = self._sentinels[component.id]
+        sentinel = execution.sentinels[component.id]
 
         # if already marked canceled, short-circuit
         if metrics.status == RuntimeState.CANCELLED:
@@ -281,7 +258,7 @@ class JobExecutionHandler:
                 dm.status = RuntimeState.CANCELLED
 
             # cancel tasks cleanly
-            task = self._current_tasks.get(nxt.id)
+            task = execution.current_tasks.get(nxt.id)
             if task and not task.done():
                 task.cancel()
 
