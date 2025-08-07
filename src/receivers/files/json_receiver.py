@@ -4,7 +4,7 @@ import pandas as pd
 import dask.dataframe as dd
 from typing import Any, Dict, List, Generator
 
-from metrics.component_metrics import ComponentMetrics
+from src.metrics.component_metrics import ComponentMetrics
 from src.receivers.read_file_receiver import ReadFileReceiver
 from src.receivers.write_file_receiver import WriteFileReceiver
 

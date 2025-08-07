@@ -12,6 +12,7 @@ from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.metrics.component_metrics import ComponentMetrics
+from src.context.context_provider import IContextProvider
 
 
 class RuntimeState(Enum):
@@ -44,9 +45,10 @@ class Component(BaseModel, ABC):
     description: str
     comp_type: str
     strategy_type: StrategyType = Field(default=StrategyType.ROW.value)
-    next: [List[str]] = []
-    layout: [Layout] = Field(default_factory=lambda: Layout())
+    next: List[str] = []
+    layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
+    contexts: List[IContextProvider] = Field(default_factory=list)
 
     next_components: List["Component"] = Field(default_factory=list, exclude=True)
     prev_components: List["Component"] = Field(default_factory=list, exclude=True)

@@ -31,23 +31,26 @@ class ConnectionHandler:
     ) -> "ConnectionHandler":
         db = db_type.lower()
 
-
         if db in cls._SQL_DIALECTS:
             driver = cls._SQL_DIALECTS[db]
+
             if driver == "sqlite":
                 if not database:
                     raise ValueError("SQLite requires a database (file path).")
-                url = f"sqlite:///{database}"
+                real_url = f"sqlite:///{database}"
+                masked_url = real_url
             else:
+
                 if not all([user, password, host, port, database]):
                     raise ValueError(f"{db} requires user, password, host, port, and database.")
-                url = f"{driver}://{user}:{'***'}@{host}:{port}/{database}"  # password masked
 
-            engine = create_engine(url.replace(f":***@", ":***@"), **extras)
+
+                real_url = f"{driver}://{user}:{password}@{host}:{port}/{database}"
+                masked_url = f"{driver}://{user}:***@{host}:{port}/{database}"
+
+            engine = create_engine(real_url, **extras)
             conn = engine.connect()
-
-            safe_url = url.replace(f":***@", ":***@")  # already masked
-            print(f"[ConnectionHandler] Created SQLAlchemy connection: {safe_url}")
+            print(f"[ConnectionHandler] Created SQLAlchemy connection: {masked_url}")
 
             instance = cls()
             instance.connection = conn
@@ -57,15 +60,17 @@ class ConnectionHandler:
             if not host or not database:
                 raise ValueError("MongoDB requires at least host and database.")
 
-            creds = f"{user}:***@" if user and password else ""
+            creds = f"{user}:{password}@" if user and password else ""
+            masked_creds = f"{user}:***@" if user and password else ""
             port_part = f":{port}" if port else ""
-            uri = f"mongodb://{creds}{host}{port_part}"
 
-            client = MongoClient(uri.replace("***", "***"), **extras)
+            real_uri = f"mongodb://{creds}{host}{port_part}"
+            masked_uri = f"mongodb://{masked_creds}{host}{port_part}"
+
+            client = MongoClient(real_uri, **extras)
             conn = client[database]
 
-            safe_uri = f"mongodb://{host}{port_part}/{database}"
-            print(f"[ConnectionHandler] Created MongoDB connection: {safe_uri}")
+            print(f"[ConnectionHandler] Created MongoDB connection: {masked_uri}/{database}")
 
             instance = cls()
             instance.connection = conn
