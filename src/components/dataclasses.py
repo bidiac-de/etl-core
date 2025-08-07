@@ -60,7 +60,6 @@ class MetaData(BaseModel):
         """
         Validate that datetime values are not in the future
         """
-    def validate_timestamps(cls, value):
         # If string (from JSON): parse
         if isinstance(value, str):
             try:

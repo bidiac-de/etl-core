@@ -13,6 +13,19 @@ router = APIRouter(
 job_handler = JobHandler()
 
 
+def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
+    # Remove non-serializable fields from Pydantic errors
+    sanitized: List[Dict] = []
+    for err in errors:
+        # Keep only essential serializable keys
+        filtered = {}
+        for key in ("type", "loc", "msg", "url"):
+            if key in err:
+                filtered[key] = err[key]
+        sanitized.append(filtered)
+    return sanitized
+
+
 @router.post(
     "/",
     response_model=str,
@@ -20,7 +33,13 @@ job_handler = JobHandler()
     description="Creates a new Job with the provided configuration and persists it.",
 )
 def create_job(job_config: dict) -> str:
-    job = Job(**job_config)
+    try:
+        job = Job(**job_config)
+    except ValidationError as ve:
+        clean = _sanitize_errors(ve.errors())
+        raise HTTPException(status_code=422, detail=clean)
+    except Exception as ve:
+        raise HTTPException(status_code=500, detail=f"Failed to create job: {ve}")
     try:
         job_handler.create(job)
     except Exception as e:
@@ -30,49 +49,52 @@ def create_job(job_config: dict) -> str:
 
 @router.get(
     "/{job_id}",
-    response_model=dict,
+    response_model=Dict,
     summary="Get Job by ID",
     description="Returns the JSON representation of the Job matching the given ID.",
 )
-def get_job(job_id: str) -> dict:
+def get_job(job_id: str) -> Dict:
     record = job_handler.get_by_id(job_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
     job = job_handler.record_to_job(record)
-    return job.model_dump()
+    result = job.model_dump()
+    result["id"] = job.id
+    return result
 
 
 @router.put(
     "/{job_id}",
     response_model=str,
     summary="Update Job by ID",
-    description="Updates the Job matching the given ID with the provided configuration.",
+    description="Updates the Job matching the given ID with the"
+    " provided configuration.",
 )
 def update_job(job_id: str, job_config: dict) -> str:
-    # validate and build new Job with the path‐param ID
     try:
         job = Job(**job_config)
-        object.__setattr__(job, "_id", job_id)
     except ValidationError as ve:
-        raise HTTPException(status_code=422, detail=ve.errors())
-
+        clean = _sanitize_errors(ve.errors())
+        raise HTTPException(status_code=422, detail=clean)
+    except Exception as ve:
+        raise HTTPException(status_code=500, detail=f"Failed to update job: {ve}")
+    object.__setattr__(job, "_id", job_id)
     try:
         job_handler.update(job)
     except ValueError as not_found:
         raise HTTPException(status_code=404, detail=str(not_found))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update job: {e}")
-
     return job.id
 
 
 @router.delete(
     "/{job_id}",
-    response_model=dict,
+    response_model=Dict,
     summary="Delete Job by ID",
     description="Deletes the Job matching the given ID.",
 )
-def delete_job(job_id: str) -> dict:
+def delete_job(job_id: str) -> Dict:
     record = job_handler.get_by_id(job_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
@@ -81,6 +103,7 @@ def delete_job(job_id: str) -> dict:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete job: {e}")
     return {"message": f"Job {job_id!r} deleted successfully"}
+
 
 @router.get(
     "/",
@@ -95,9 +118,7 @@ def list_jobs() -> List[Dict]:
 
     jobs: List[Dict] = []
     for record in records:
-        # get all fields as a dict, drop 'components'
         rec_dict = record.dict(exclude={"components"})
-        # rename metadata_ → metadata
         rec_dict["metadata"] = rec_dict.pop("metadata_", {})
         jobs.append(rec_dict)
 

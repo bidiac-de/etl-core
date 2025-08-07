@@ -41,7 +41,6 @@ class JobHandler:
             out.append(cls._deep_serialize(data))
         return out
 
-
     @classmethod
     def _serialize_metadata(cls, meta: Any) -> dict:
         """
@@ -115,7 +114,7 @@ class JobHandler:
         """
         with Session(self.engine) as session:
             records = session.exec(select(JobTable)).all()
-            #cast to list for strict typing
+            # cast to list for strict typing
             return list(records)
 
     @staticmethod

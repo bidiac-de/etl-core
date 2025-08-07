@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 from src.persistance.table_definitions import JobTable
+
 _ = JobTable  # ensure the table definition is imported
 
 load_dotenv()
