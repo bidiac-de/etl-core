@@ -17,12 +17,12 @@ class Layout(BaseModel):
 
     @field_validator("x_coordinate", "y_coordinate", mode="before")
     @classmethod
-    def validate_coordinates(cls, value: float) -> float:
+    def validate_coordinates(cls, value: int) -> int:
         """
-        Validate that the coordinates are non-negative.
+        Validate that the coordinates are integer
         """
-        if value < 0:
-            raise ValueError("Coordinates must be non-negative.")
+        if not isinstance(value, int):
+            raise ValueError("Coordinates must be integer.")
         return value
 
     @property
@@ -56,6 +56,10 @@ class MetaData(BaseModel):
 
     @field_validator("created_at", "updated_at", mode="before")
     @classmethod
+    def validate_timestamps(cls, value: datetime) -> datetime:
+        """
+        Validate that datetime values are not in the future
+        """
     def validate_timestamps(cls, value):
         # If string (from JSON): parse
         if isinstance(value, str):

@@ -45,8 +45,7 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     comp_type: str
-    strategy_type: StrategyType = Field(default=StrategyType.ROW)
-    next: [List[str]] = []
+    next: List[str] = []  # List of names of next components from config
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
 
@@ -62,7 +61,7 @@ class Component(BaseModel, ABC):
     def _build_objects(self) -> "Component":
         """
         After-instantiation hook. Override in subclasses to assign
-        `self._strategy` and `self._receiver`, then return `self`.
+        `self._receiver`, then return `self`.
         """
         return self
 
@@ -132,6 +131,12 @@ class Component(BaseModel, ABC):
         :return: List of next components
         """
         return self._next_components
+
+    @next_components.setter
+    def next_components(self, value: List["Component"]):
+        if not isinstance(value, list):
+            raise TypeError("next_components must be a list of Component instances")
+        self._next_components = value
 
     @property
     def prev_components(self) -> List["Component"]:

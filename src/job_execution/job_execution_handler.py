@@ -4,26 +4,13 @@ from typing import Any, Dict, List, Set
 from collections import deque
 
 from src.components.runtime_state import RuntimeState
-from src.job_execution.job import Job, JobExecution
+from src.job_execution.job import Job, JobExecution, _Sentinel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.metrics.metrics_registry import get_metrics_class
 from src.metrics.execution_metrics import ExecutionMetrics
-from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
-
-
-class _Sentinel:
-    """Unique end-of-stream marker for each component."""
-
-    __slots__ = ("component_id",)
-
-    def __init__(self, component_id: str) -> None:
-        self.component_id = component_id
-
-    def __repr__(self) -> str:
-        return f"<Sentinel {self.component_id}>"
 
 
 class JobExecutionHandler:
@@ -38,17 +25,23 @@ class JobExecutionHandler:
 
     def __init__(
         self,
-        retry_strategy: RetryStrategy | None = None,
     ) -> None:
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
         self.running_executions: List[JobExecution] = []
-        # standard strategy:  retry exactly job.num_of_retries times with no delay
-        self.retry_strategy = retry_strategy or ConstantRetryStrategy(0, delay=0)
 
     def execute_job(self, job: Job) -> JobExecution:
+        """
+        top-level method to execute a Job, managing its execution lifecycle:
+        - checks if the job is already running
+        - initializes a JobExecution instance
+        - starts the main loop for the job execution
+        - handles retries and finalization
+        :param job: Job instance to execute
+        :return: Execution instance containing job execution details
+        """
         # guard condition: dont allow executing the same job multiple times concurrently
         for exec_ in self.running_executions:
             if exec_.job == job:
@@ -57,12 +50,17 @@ class JobExecutionHandler:
 
         execution = JobExecution(job)
         self.running_executions.append(execution)
-        # fit retry strategy to job
-        self.retry_strategy.max_retries = job.num_of_retries
 
         return asyncio.run(self._main_loop(execution))
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
+        """
+        Main loop for executing a JobExecution
+        - initializes job metrics
+        - runs attempts until success or max retries exhausted
+        - handles retries and finalization further
+        :param execution: Execution instance to run
+        """
         job = execution.job
         self.job_info.logging_handler.update_job_name(job.name)
         self.logger.info("Starting execution of '%s'", job.name)
@@ -77,25 +75,27 @@ class JobExecutionHandler:
             try:
                 # build and run worker tasks, storing them for cancellation
                 await self._run_latest_attempt(execution)
-            except Exception as exc:
-                # record the error on the attempt
-                attempt = execution.attempts[-1]
-                attempt.error = str(exc)
+            except ExceptionGroup as eg:
+                # unwrap the error from TaskGroup
+                inner = eg.exceptions[0] if eg.exceptions else eg
+                attempt = execution.latest_attempt()
+                attempt.error = str(inner)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
                     attempt.index,
                     job.name,
-                    exc,
+                    inner,
                 )
-                self._file_logger.warning("Attempt %d failed: %s", attempt.index, exc)
+                self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
+                # reuse inner for retry/finalize logic
+                exc = inner
 
                 # if no retries left, finalize as failure
-                if not self.retry_strategy.should_retry(attempt_index):
+                if not execution.retry_strategy.should_retry(attempt_index):
                     self._finalize_failure(exc, execution, job_metrics)
                     break
-
                 # otherwise wait and retry
-                delay = self.retry_strategy.next_delay(attempt_index)
+                delay = execution.retry_strategy.next_delay(attempt_index)
                 if delay > 0:
                     await asyncio.sleep(delay)
                 continue
@@ -112,43 +112,36 @@ class JobExecutionHandler:
     ) -> Dict[str, asyncio.Task]:
         """
         Launch one Task per component, track them in a dict, and await them.
-        Returns the mapping component.id → Task so failures can cancel downstream tasks.
+        Returns the mapping from component.id to Task so failures can cancel
+        downstream tasksin case of component failure.
         """
         job = execution.job
-
-        # each component gets its own sentinel instance
-        self._sentinels: Dict[str, _Sentinel] = {
-            comp.id: _Sentinel(comp.id) for comp in job.components
-        }
 
         # Prepare queues
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
         }
-        tasks: List[asyncio.Task] = []
-        current_tasks: Dict[str, asyncio.Task] = {}
 
-        # spawn workers
-        for comp in job.components:
-            out_queues = [queues[n.name] for n in comp.next_components]
-            in_queues = [queues[comp.name]] if comp.prev_components else []
-            metrics_cls = get_metrics_class(comp.comp_type)
-            metrics = self.job_info.metrics_handler.create_component_metrics(
-                execution.id, execution.attempts[-1].id, comp.id, metrics_cls
-            )
-            task = asyncio.create_task(
-                self._worker(execution, comp, in_queues, out_queues, metrics),
-                name=f"worker-{comp.name}",
-            )
-            current_tasks[comp.id] = task
-            tasks.append(task)
+        # spawn all component workers under one TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            for comp in job.components:
+                out_queues = [queues[n.name] for n in comp.next_components]
+                in_queues = [queues[comp.name]] if comp.prev_components else []
+                metrics_cls = get_metrics_class(comp.comp_type)
+                metrics = self.job_info.metrics_handler.create_component_metrics(
+                    execution.id,
+                    execution.latest_attempt().id,
+                    comp.id,
+                    metrics_cls,
+                )
+                task = tg.create_task(
+                    self._worker(execution, comp, in_queues, out_queues, metrics),
+                    name=f"worker-{comp.name}",
+                )
+                execution.latest_attempt().current_tasks[comp.id] = task
 
-        # attach for cancellation in exception handlers
-        self._current_tasks = current_tasks
-
-        # let exceptions bubble so we can retry if needed
-        await asyncio.gather(*tasks)
-        return current_tasks
+        # once the with block exits, all workers are done (or cancelled)
+        return execution.latest_attempt().current_tasks
 
     async def _worker(
         self,
@@ -162,8 +155,8 @@ class JobExecutionHandler:
         Runs one component; if upstream cancellation has already marked this
         metrics as CANCELLED, we just fan out the sentinel.
         """
-        attempt = execution.attempts[-1]
-        sentinel = self._sentinels[component.id]
+        attempt = execution.latest_attempt()
+        sentinel = execution.sentinels[component.id]
 
         # if already marked canceled, short-circuit
         if metrics.status == RuntimeState.CANCELLED:
@@ -171,6 +164,7 @@ class JobExecutionHandler:
             return
 
         try:
+            # run without payload, comp is a root
             if not in_queues:
                 await self._run_component(component, None, metrics, out_queues)
             else:
@@ -202,6 +196,13 @@ class JobExecutionHandler:
         execution: JobExecution,
         attempt: Any,
     ) -> None:
+        """
+        Handle exceptions raised by a component worker
+        - mark component as FAILED in metrics
+        - increment error count
+        - cancel all downstream components
+        :return:
+        """
         metrics.status = RuntimeState.FAILED
         metrics.error_count += 1
         self._file_logger.error(
@@ -238,12 +239,18 @@ class JobExecutionHandler:
         metrics: ComponentMetrics,
         out_queues: List[asyncio.Queue],
     ) -> None:
+        """
+        Run a single component with the given payload and metrics
+        """
         # mark start and stream all batches
         metrics.set_started()
         async for batch in component.execute(payload, metrics):
             await self._fan_out(batch, out_queues)
 
     async def _merge_and_run(self, component, metrics, in_queues, out_queues):
+        """
+        Merge payloads from multiple input queues and run the component.
+        """
         queue = in_queues[0]
         remaining = {p.id for p in component.prev_components}
 
@@ -281,7 +288,7 @@ class JobExecutionHandler:
                 dm.status = RuntimeState.CANCELLED
 
             # cancel tasks cleanly
-            task = getattr(self, "_current_tasks", {}).get(nxt.id)
+            task = execution.latest_attempt().current_tasks.get(nxt.id)
             if task and not task.done():
                 task.cancel()
 
@@ -296,7 +303,7 @@ class JobExecutionHandler:
         # aggregate component metrics for final job metrics
         all_comp = {
             comp.id: self.job_info.metrics_handler.get_comp_metrics(
-                execution.id, execution.attempts[-1].id, comp.id
+                execution.id, execution.latest_attempt().id, comp.id
             )
             for comp in execution.job.components
         }
@@ -308,7 +315,7 @@ class JobExecutionHandler:
         # log component metrics
         for comp in execution.job.components:
             cm = self.job_info.metrics_handler.get_comp_metrics(
-                execution.id, execution.attempts[-1].id, comp.id
+                execution.id, execution.latest_attempt().id, comp.id
             )
             self.job_info.logging_handler.log(cm)
 
@@ -322,7 +329,7 @@ class JobExecutionHandler:
         """
         Final actions when all retries are exhausted or streaming execution fails.
         """
-        attempt = execution.attempts[-1]
+        attempt = execution.latest_attempt()
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         # cleanup

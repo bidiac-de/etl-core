@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 from src.components.dataclasses import MetaData
 from pydantic import (
     BaseModel,
@@ -9,13 +9,28 @@ from pydantic import (
     field_validator,
     PrivateAttr,
 )
+from collections import Counter
+import asyncio
 
 from src.components.base_component import Component, get_strategy, StrategyType
+from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
 from uuid import uuid4
 import logging
 from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
+
+
+class _Sentinel:
+    """Unique end-of-stream marker for each component."""
+
+    __slots__ = ("component_id",)
+
+    def __init__(self, component_id: str) -> None:
+        self.component_id = component_id
+
+    def __repr__(self) -> str:
+        return f"<Sentinel {self.component_id}>"
 
 
 class Job(BaseModel):
@@ -46,37 +61,35 @@ class Job(BaseModel):
             comp_type = comp_data.get("comp_type")
             comp_cls = component_registry.get(comp_type)
             if comp_cls is None:
-                raise ValueError(f"Unknown component type: {comp_type!r}")
-            # This will now call StubComponent.build_objects (etc.)
+                valid_types = list(component_registry.keys())
+                raise ValueError(
+                    f"Unknown component type: {comp_type!r}. "
+                    f"Valid types are: {valid_types}"
+                )
             built.append(comp_cls(**comp_data))
         values["components"] = built
         return values
 
     @model_validator(mode="after")
     def _check_names_and_wire(self) -> "Job":
-        """
-        Ensure each component.name is unique
-        Wire up `next`/`prev` pointers by those names
-        """
-
-        # name uniqueness
-        names = [c.name for c in self.components]
-        dupes = {n for n in names if names.count(n) > 1}
+        # check names for duplicates
+        counts = Counter(c.name for c in self.components)
+        dupes = [name for name, cnt in counts.items() if cnt > 1]
         if dupes:
             raise ValueError(f"Duplicate component names: {sorted(dupes)}")
 
-        # wiring
+        # create mapping
         name_map = {c.name: c for c in self.components}
-        for c in self.components:
-            for nxt_name in c.next:
-                try:
-                    nxt = name_map[nxt_name]
-                except KeyError:
-                    raise ValueError(f"Unknown next‐component name: {nxt_name!r}")
-                c.add_next(nxt)
-                nxt.add_prev(c)
 
-        self._root_components = [c for c in self.components if not c.prev_components]
+        # wire up components using comprehension
+        for comp in self.components:
+            try:
+                next_objs = [name_map[n] for n in comp.next]
+            except KeyError as e:
+                raise ValueError(f"Unknown next‐component name: {e.args[0]!r}")
+            comp.next_components = next_objs
+            for nxt in next_objs:
+                nxt.prev_components.append(comp)
 
         return self
 
@@ -138,17 +151,6 @@ class Job(BaseModel):
         """
         return self._id
 
-    def _connect_components(self) -> None:
-        for component in self._components.values():
-            src = self._components[component.id]
-            for nxt_user_prov_id in component.next:
-                dest_internal = self._temp_map.get(nxt_user_prov_id)
-                if dest_internal not in self._components:
-                    raise ValueError(f"Unknown next-component: {nxt_user_prov_id}")
-                dest = self._components[dest_internal]
-                src.add_next(dest)
-                dest.add_prev(src)
-
 
 class JobExecution:
     """
@@ -158,14 +160,26 @@ class JobExecution:
     def __init__(self, job: Job):
         self._id: str = str(uuid4())
         self._job = job
+        # each execution carries its own retry strategy
+        self._retry_strategy = ConstantRetryStrategy(job.num_of_retries)
         self._max_attempts = job.num_of_retries + 1
         self._attempts: List[ExecutionAttempt] = []
+
+        # each component gets its own sentinel instance
+        self._sentinels: Dict[str, _Sentinel] = {
+            comp.id: _Sentinel(comp.id) for comp in job.components
+        }
 
     def start_attempt(self):
         if len(self._attempts) >= self._max_attempts:
             raise RuntimeError("No attempts left")
         attempt = ExecutionAttempt(len(self.attempts) + 1, self)
         self._attempts.append(attempt)
+
+    def latest_attempt(self) -> "ExecutionAttempt":
+        if not self._attempts:
+            raise RuntimeError("No attempts have been started yet")
+        return self._attempts[-1]
 
     @property
     def id(self) -> str:
@@ -183,6 +197,21 @@ class JobExecution:
     def attempts(self) -> List["ExecutionAttempt"]:
         return self._attempts
 
+    @property
+    def retry_strategy(self) -> RetryStrategy:
+        """
+        Returns the retry strategy for this job execution.
+        """
+        return self._retry_strategy
+
+    @property
+    def sentinels(self) -> Dict[str, _Sentinel]:
+        """
+        Returns a mapping of component IDs to their sentinels.
+        Sentinels are used to mark the end of a stream for each component.
+        """
+        return self._sentinels
+
 
 class ExecutionAttempt:
     """
@@ -195,11 +224,13 @@ class ExecutionAttempt:
         self._id = str(uuid4())
         self._index = index
         self._error: str | None = None
+
         # runtime sets
         self._pending = {c.id for c in execution.job.components}
         self._succeeded = set()
         self._failed = set()
         self._cancelled = set()
+        self._current_tasks: Dict[str, asyncio.Task] = {}
 
     @property
     def id(self) -> str:
@@ -246,3 +277,23 @@ class ExecutionAttempt:
         Components that have been cancelled.
         """
         return self._cancelled
+
+    @property
+    def current_tasks(self) -> Dict[str, asyncio.Task]:
+        """
+        Returns a mapping of component IDs to their current asyncio tasks.
+        This is used to track the execution of components in the job.
+        """
+        return self._current_tasks
+
+    @current_tasks.setter
+    def current_tasks(self, tasks: Dict[str, asyncio.Task]) -> None:
+        """
+        Sets the current tasks for the job execution.
+        This is used to track the execution of components in the job.
+        """
+        if not isinstance(tasks, dict):
+            raise TypeError(
+                "current_tasks must be a dictionary of component IDs to asyncio tasks"
+            )
+        self._current_tasks = tasks
