@@ -33,6 +33,15 @@ class JobExecutionHandler:
         self.running_executions: List[JobExecution] = []
 
     def execute_job(self, job: Job) -> JobExecution:
+        """
+        top-level method to execute a Job, managing its execution lifecycle:
+        - checks if the job is already running
+        - initializes a JobExecution instance
+        - starts the main loop for the job execution
+        - handles retries and finalization
+        :param job: Job instance to execute
+        :return: Execution instance containing job execution details
+        """
         # guard condition: dont allow executing the same job multiple times concurrently
         for exec_ in self.running_executions:
             if exec_.job == job:
@@ -45,6 +54,13 @@ class JobExecutionHandler:
         return asyncio.run(self._main_loop(execution))
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
+        """
+        Main loop for executing a JobExecution
+        - initializes job metrics
+        - runs attempts until success or max retries exhausted
+        - handles retries and finalization further
+        :param execution: Execution instance to run
+        """
         job = execution.job
         self.job_info.logging_handler.update_job_name(job.name)
         self.logger.info("Starting execution of '%s'", job.name)
@@ -60,7 +76,7 @@ class JobExecutionHandler:
                 # build and run worker tasks, storing them for cancellation
                 await self._run_latest_attempt(execution)
             except ExceptionGroup as eg:
-                # unwrap the real error from TaskGroup
+                # unwrap the error from TaskGroup
                 inner = eg.exceptions[0] if eg.exceptions else eg
                 attempt = execution.latest_attempt()
                 attempt.error = str(inner)
@@ -78,7 +94,6 @@ class JobExecutionHandler:
                 if not execution.retry_strategy.should_retry(attempt_index):
                     self._finalize_failure(exc, execution, job_metrics)
                     break
-
                 # otherwise wait and retry
                 delay = execution.retry_strategy.next_delay(attempt_index)
                 if delay > 0:
@@ -97,7 +112,8 @@ class JobExecutionHandler:
     ) -> Dict[str, asyncio.Task]:
         """
         Launch one Task per component, track them in a dict, and await them.
-        Returns the mapping component.id → Task so failures can cancel downstream tasks.
+        Returns the mapping from component.id to Task so failures can cancel
+        downstream tasksin case of component failure.
         """
         job = execution.job
 
@@ -148,6 +164,7 @@ class JobExecutionHandler:
             return
 
         try:
+            # run without payload, comp is a root
             if not in_queues:
                 await self._run_component(component, None, metrics, out_queues)
             else:
@@ -179,6 +196,13 @@ class JobExecutionHandler:
         execution: JobExecution,
         attempt: Any,
     ) -> None:
+        """
+        Handle exceptions raised by a component worker
+        - mark component as FAILED in metrics
+        - increment error count
+        - cancel all downstream components
+        :return:
+        """
         metrics.status = RuntimeState.FAILED
         metrics.error_count += 1
         self._file_logger.error(
@@ -215,12 +239,18 @@ class JobExecutionHandler:
         metrics: ComponentMetrics,
         out_queues: List[asyncio.Queue],
     ) -> None:
+        """
+        Run a single component with the given payload and metrics
+        """
         # mark start and stream all batches
         metrics.set_started()
         async for batch in component.execute(payload, metrics):
             await self._fan_out(batch, out_queues)
 
     async def _merge_and_run(self, component, metrics, in_queues, out_queues):
+        """
+        Merge payloads from multiple input queues and run the component.
+        """
         queue = in_queues[0]
         remaining = {p.id for p in component.prev_components}
 
