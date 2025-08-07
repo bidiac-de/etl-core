@@ -4,21 +4,17 @@ from typing import Dict, Any, List, Generator, Union
 import pandas as pd
 import dask.dataframe as dd
 
-from src.receivers.files.file_helper import resolve_file_path, ensure_exists, open_file, file_exists
+from src.receivers.files.file_helper import resolve_file_path, ensure_exists, open_file
 
 
-
-def read_csv_row(path: Path, line_number: int = 0) -> Dict[str, Any]:
-    """Read a specific row from a CSV file by line number."""
+def read_csv_row(path: Path) -> Generator[Dict[str, Any], None, None]:
+    """Yield CSV rows as dictionaries (synchronous generator)."""
     path = resolve_file_path(path)
     ensure_exists(path)
-
-    with open_file(path, "r") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for i, row in enumerate(reader):
-            if i == line_number:
-                return row
-    return {}
+    with open_file(path, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            yield row
 
 
 def read_csv_bulk(path: Path) -> pd.DataFrame:
@@ -28,28 +24,21 @@ def read_csv_bulk(path: Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def read_csv_bigdata(path: Path, use_dask: bool = False, blocksize: str = "16MB") \
-        -> Union[Generator[Dict[str, Any], None, None], pd.DataFrame, dd.DataFrame]:
-    """Read large CSV files using Pandas (streaming) or Dask."""
+def read_csv_bigdata(path: Path, blocksize: str = "16MB") -> dd.DataFrame:
+    """Read large CSV files efficiently using Dask."""
     path = resolve_file_path(path)
     ensure_exists(path)
+    return dd.read_csv(path, blocksize=blocksize)
 
-    if use_dask:
-        return dd.read_csv(path, blocksize=blocksize)
-
-    df = pd.read_csv(path, chunksize=10000)
-    for chunk in df:
-        for _, row in chunk.iterrows():
-            yield row.to_dict()
 
 def write_csv_row(path: Path, row: Dict[str, Any]):
     """Write a single row to a CSV file, adding header if needed."""
     path = resolve_file_path(path)
-    file_exists = path.exists() and path.stat().st_size > 0
+    file_exists_flag = path.exists() and path.stat().st_size > 0
 
     with open_file(path, "a") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=row.keys())
-        if not file_exists:
+        if not file_exists_flag:
             writer.writeheader()
         writer.writerow(row)
 
@@ -63,16 +52,12 @@ def write_csv_bulk(path: Path, data: List[Dict[str, Any]]):
         writer.writerows(data)
 
 
-def write_csv_bigdata(path: Path, data: Union[pd.DataFrame, dd.DataFrame, Generator[Dict[str, Any], None, None]]):
-    """Write large datasets to a CSV file using Pandas, Dask, or a generator."""
+def write_csv_bigdata(path: Path, data: Union[dd.DataFrame, Generator[Dict[str, Any], None, None]]):
+    """Write large datasets to a CSV file using Dask or a generator."""
     path = resolve_file_path(path)
 
-    if isinstance(data, pd.DataFrame):
-        data.to_csv(path, index=False)
-
-    elif isinstance(data, dd.DataFrame):
+    if isinstance(data, dd.DataFrame):
         data.to_csv(str(path), single_file=True, index=False)
-
     elif hasattr(data, "__iter__"):
         first_row = next(data, None)
         if not first_row:

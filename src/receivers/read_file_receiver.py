@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Generator
 from pathlib import Path
 from src.receivers.base_receiver import Receiver
-from src.metrics.component_metrics import ComponentMetrics
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 class ReadFileReceiver(Receiver, ABC):
