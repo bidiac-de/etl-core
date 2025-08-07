@@ -59,17 +59,20 @@ class JobExecutionHandler:
             try:
                 # build and run worker tasks, storing them for cancellation
                 await self._run_latest_attempt(execution)
-            except Exception as exc:
-                # record the error on the attempt
+            except ExceptionGroup as eg:
+                # unwrap the real error from TaskGroup
+                inner = eg.exceptions[0] if eg.exceptions else eg
                 attempt = execution.latest_attempt()
-                attempt.error = str(exc)
+                attempt.error = str(inner)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
                     attempt.index,
                     job.name,
-                    exc,
+                    inner,
                 )
-                self._file_logger.warning("Attempt %d failed: %s", attempt.index, exc)
+                self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
+                # reuse inner for retry/finalize logic
+                exc = inner
 
                 # if no retries left, finalize as failure
                 if not execution.retry_strategy.should_retry(attempt_index):
@@ -102,30 +105,30 @@ class JobExecutionHandler:
         queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
         }
-        tasks: List[asyncio.Task] = []
-        current_tasks: Dict[str, asyncio.Task] = {}
 
-        # spawn workers
-        for comp in job.components:
-            out_queues = [queues[n.name] for n in comp.next_components]
-            in_queues = [queues[comp.name]] if comp.prev_components else []
-            metrics_cls = get_metrics_class(comp.comp_type)
-            metrics = self.job_info.metrics_handler.create_component_metrics(
-                execution.id, execution.latest_attempt().id, comp.id, metrics_cls
-            )
-            task = asyncio.create_task(
-                self._worker(execution, comp, in_queues, out_queues, metrics),
-                name=f"worker-{comp.name}",
-            )
-            current_tasks[comp.id] = task
-            tasks.append(task)
+        # reset per‐attempt task mapping
+        execution.current_tasks = {}
 
-        # attach for cancellation in exception handlers
-        execution.current_tasks = current_tasks
+        # spawn all component workers under one TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            for comp in job.components:
+                out_queues = [queues[n.name] for n in comp.next_components]
+                in_queues = [queues[comp.name]] if comp.prev_components else []
+                metrics_cls = get_metrics_class(comp.comp_type)
+                metrics = self.job_info.metrics_handler.create_component_metrics(
+                    execution.id,
+                    execution.latest_attempt().id,
+                    comp.id,
+                    metrics_cls,
+                )
+                task = tg.create_task(
+                    self._worker(execution, comp, in_queues, out_queues, metrics),
+                    name=f"worker-{comp.name}",
+                )
+                execution.current_tasks[comp.id] = task
 
-        # let exceptions bubble so we can retry if needed
-        await asyncio.gather(*tasks)
-        return current_tasks
+        # once the with block exits, all workers are done (or cancelled)
+        return execution.current_tasks
 
     async def _worker(
         self,
