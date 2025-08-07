@@ -79,7 +79,7 @@ class JobExecutionHandler:
                 await self._run_latest_attempt(execution)
             except Exception as exc:
                 # record the error on the attempt
-                attempt = execution.attempts[-1]
+                attempt = execution.latest_attempt()
                 attempt.error = str(exc)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
@@ -134,7 +134,7 @@ class JobExecutionHandler:
             in_queues = [queues[comp.name]] if comp.prev_components else []
             metrics_cls = get_metrics_class(comp.comp_type)
             metrics = self.job_info.metrics_handler.create_component_metrics(
-                execution.id, execution.attempts[-1].id, comp.id, metrics_cls
+                execution.id, execution.latest_attempt().id, comp.id, metrics_cls
             )
             task = asyncio.create_task(
                 self._worker(execution, comp, in_queues, out_queues, metrics),
@@ -162,7 +162,7 @@ class JobExecutionHandler:
         Runs one component; if upstream cancellation has already marked this
         metrics as CANCELLED, we just fan out the sentinel.
         """
-        attempt = execution.attempts[-1]
+        attempt = execution.latest_attempt()
         sentinel = self._sentinels[component.id]
 
         # if already marked canceled, short-circuit
@@ -296,7 +296,7 @@ class JobExecutionHandler:
         # aggregate component metrics for final job metrics
         all_comp = {
             comp.id: self.job_info.metrics_handler.get_comp_metrics(
-                execution.id, execution.attempts[-1].id, comp.id
+                execution.id, execution.latest_attempt().id, comp.id
             )
             for comp in execution.job.components
         }
@@ -308,7 +308,7 @@ class JobExecutionHandler:
         # log component metrics
         for comp in execution.job.components:
             cm = self.job_info.metrics_handler.get_comp_metrics(
-                execution.id, execution.attempts[-1].id, comp.id
+                execution.id, execution.latest_attempt().id, comp.id
             )
             self.job_info.logging_handler.log(cm)
 
@@ -322,7 +322,7 @@ class JobExecutionHandler:
         """
         Final actions when all retries are exhausted or streaming execution fails.
         """
-        attempt = execution.attempts[-1]
+        attempt = execution.latest_attempt()
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         # cleanup

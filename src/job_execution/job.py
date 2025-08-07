@@ -155,6 +155,11 @@ class JobExecution:
         attempt = ExecutionAttempt(len(self.attempts) + 1, self)
         self._attempts.append(attempt)
 
+    def latest_attempt(self) -> "ExecutionAttempt":
+        if not self._attempts:
+            raise RuntimeError("No attempts have been started yet")
+        return self._attempts[-1]
+
     @property
     def id(self) -> str:
         return self._id
