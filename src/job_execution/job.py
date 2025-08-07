@@ -169,7 +169,6 @@ class JobExecution:
         self._sentinels: Dict[str, _Sentinel] = {
             comp.id: _Sentinel(comp.id) for comp in job.components
         }
-        self._current_tasks: Dict[str, asyncio.Task] = {}
 
     def start_attempt(self):
         if len(self._attempts) >= self._max_attempts:
@@ -213,26 +212,6 @@ class JobExecution:
         """
         return self._sentinels
 
-    @property
-    def current_tasks(self) -> Dict[str, asyncio.Task]:
-        """
-        Returns a mapping of component IDs to their current asyncio tasks.
-        This is used to track the execution of components in the job.
-        """
-        return self._current_tasks
-
-    @current_tasks.setter
-    def current_tasks(self, tasks: Dict[str, asyncio.Task]) -> None:
-        """
-        Sets the current tasks for the job execution.
-        This is used to track the execution of components in the job.
-        """
-        if not isinstance(tasks, dict):
-            raise TypeError(
-                "current_tasks must be a dictionary of component IDs to asyncio tasks"
-            )
-        self._current_tasks = tasks
-
 
 class ExecutionAttempt:
     """
@@ -245,11 +224,13 @@ class ExecutionAttempt:
         self._id = str(uuid4())
         self._index = index
         self._error: str | None = None
+
         # runtime sets
         self._pending = {c.id for c in execution.job.components}
         self._succeeded = set()
         self._failed = set()
         self._cancelled = set()
+        self._current_tasks: Dict[str, asyncio.Task] = {}
 
     @property
     def id(self) -> str:
@@ -296,3 +277,23 @@ class ExecutionAttempt:
         Components that have been cancelled.
         """
         return self._cancelled
+
+    @property
+    def current_tasks(self) -> Dict[str, asyncio.Task]:
+        """
+        Returns a mapping of component IDs to their current asyncio tasks.
+        This is used to track the execution of components in the job.
+        """
+        return self._current_tasks
+
+    @current_tasks.setter
+    def current_tasks(self, tasks: Dict[str, asyncio.Task]) -> None:
+        """
+        Sets the current tasks for the job execution.
+        This is used to track the execution of components in the job.
+        """
+        if not isinstance(tasks, dict):
+            raise TypeError(
+                "current_tasks must be a dictionary of component IDs to asyncio tasks"
+            )
+        self._current_tasks = tasks

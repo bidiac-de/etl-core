@@ -106,9 +106,6 @@ class JobExecutionHandler:
             comp.name: asyncio.Queue() for comp in job.components
         }
 
-        # reset per‐attempt task mapping
-        execution.current_tasks = {}
-
         # spawn all component workers under one TaskGroup
         async with asyncio.TaskGroup() as tg:
             for comp in job.components:
@@ -125,10 +122,10 @@ class JobExecutionHandler:
                     self._worker(execution, comp, in_queues, out_queues, metrics),
                     name=f"worker-{comp.name}",
                 )
-                execution.current_tasks[comp.id] = task
+                execution.latest_attempt().current_tasks[comp.id] = task
 
         # once the with block exits, all workers are done (or cancelled)
-        return execution.current_tasks
+        return execution.latest_attempt().current_tasks
 
     async def _worker(
         self,
@@ -261,7 +258,7 @@ class JobExecutionHandler:
                 dm.status = RuntimeState.CANCELLED
 
             # cancel tasks cleanly
-            task = execution.current_tasks.get(nxt.id)
+            task = execution.latest_attempt().current_tasks.get(nxt.id)
             if task and not task.done():
                 task.cancel()
 
