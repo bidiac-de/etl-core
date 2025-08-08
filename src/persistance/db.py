@@ -9,8 +9,11 @@ _ = JobTable  # ensure the table definition is imported
 load_dotenv()
 db_path = os.getenv("DB_PATH")
 
-# create the directory if it doesn't exist
-os.makedirs(os.path.dirname(db_path), exist_ok=True)
+if db_path:
+    dir_name = os.path.dirname(db_path)
+    if dir_name:
+        # create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
 url = db_path and f"sqlite:///{db_path}" or "sqlite:///:memory:"
 engine = create_engine(

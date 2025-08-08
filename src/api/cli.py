@@ -9,7 +9,7 @@ app = typer.Typer()
 def create_job(path: str):
     cfg = json.load(open(path))
     resp = requests.post("http://127.0.0.1:8000/jobs", json=cfg)
-    typer.echo(f"Created job {resp.json()['id']}")
+    typer.echo(f"Created job {resp.json()}")
 
 
 @app.command()
@@ -78,7 +78,7 @@ def list_component_types():
 
 @app.command()
 def get_component_schema(comp_type: str):
-    resp = requests.get(f"http://127.0.01:8000/schemas/{comp_type}")
+    resp = requests.get(f"http://127.0.0.1:8000/schemas/{comp_type}")
     if resp.status_code == 404:
         typer.echo(f"Component schema for {comp_type} not found")
     else:
