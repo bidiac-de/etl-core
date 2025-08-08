@@ -9,3 +9,4 @@ dask
 uvicorn
 pandas
 dotenv
+pyarrow
