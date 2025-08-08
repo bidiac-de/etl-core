@@ -5,3 +5,7 @@ pydantic == v2.5.3
 typer
 requests
 sqlmodel
+dask
+uvicorn
+pandas
+dotenv
