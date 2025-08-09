@@ -10,3 +10,5 @@ uvicorn
 pandas
 dotenv
 pyarrow
+sqlalchemy
+pytest

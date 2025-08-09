@@ -3,7 +3,12 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 from src.api.main import app
 from src.persistance.db import engine
-from src.persistance.table_definitions import JobTable, MetaDataTable, LayoutTable, ComponentTable
+from src.persistance.table_definitions import (
+    JobTable,
+    MetaDataTable,
+    LayoutTable,
+    ComponentTable,
+)
 
 client = TestClient(app)
 
@@ -27,6 +32,7 @@ def clear_db():
         session.exec(delete(ComponentTable))
         session.exec(delete(LayoutTable))
         session.commit()
+
 
 def test_list_jobs_empty():
     response = client.get("/jobs/")
@@ -58,9 +64,14 @@ def test_create_job_with_components():
             "timestampt": "2023-10-01T12:00:00",
         },
         "components": [
-            {"comp_type": "test", "name": "test1", "description": "", "next": ["test2"]},
+            {
+                "comp_type": "test",
+                "name": "test1",
+                "description": "",
+                "next": ["test2"],
+            },
             {"comp_type": "test", "name": "test2", "description": "", "next": []},
-        ]
+        ],
     }
     create_resp = client.post("/jobs/", json=config)
     job_id = create_resp.json()

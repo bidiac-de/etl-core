@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from src.job_execution.job import Job
+from src.persistance.base_models.job_base import JobBase
 from src.components.component_registry import component_registry
 from src.api.helpers import inline_defs
 from typing import List
@@ -21,14 +21,7 @@ router = APIRouter(
 )
 def get_job_schema() -> dict:
     # Generate full schema (with $defs for dataclasses/enums)
-    schema = Job.model_json_schema()
-
-    # Patch components list to link to each component‐type schema:
-    schema["properties"]["components"]["items"] = {
-        "oneOf": [
-            {"$ref": f"/schemas/{comp_type}"} for comp_type in component_registry.keys()
-        ]
-    }
+    schema = JobBase.model_json_schema()
 
     # Inline all $defs then drop $defs
     schema = inline_defs(schema)
