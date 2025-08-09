@@ -1,8 +1,8 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
-import src.job_execution.job as job_module
+import src.job_execution.runtimejob as job_module
 from src.components.stubcomponents import StubComponent
-from src.job_execution.job import Job
+from src.job_execution.runtimejob import RuntimeJob
 from datetime import datetime
 from tests.helpers import get_component_by_name
 
@@ -23,8 +23,8 @@ def test_execute_job_single_test_component():
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -32,11 +32,15 @@ def test_execute_job_single_test_component():
                 "name": "test1",
                 "comp_type": "test",
                 "description": "a test comp",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             }
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
 
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
@@ -65,8 +69,8 @@ def test_execute_job_chain_components_file_logging():
         "num_of_retries": 0,
         "file_logging": True,  # exercise the file_logging path
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -74,17 +78,25 @@ def test_execute_job_chain_components_file_logging():
                 "name": "comp1",
                 "comp_type": "test",
                 "description": "first",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["comp2"],
             },
             {
                 "name": "comp2",
                 "comp_type": "test",
                 "description": "second",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -126,8 +138,8 @@ def test_execute_job_failing_and_cancelled_components():
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -135,17 +147,25 @@ def test_execute_job_failing_and_cancelled_components():
                 "name": "comp1",
                 "comp_type": "failtest",  # our failing component
                 "description": "will fail",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["comp2"],
             },
             {
                 "name": "comp2",
                 "comp_type": "test",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "description": "should be cancelled",
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -176,8 +196,8 @@ def test_retry_logic_and_metrics():
         "num_of_retries": 1,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -185,10 +205,14 @@ def test_retry_logic_and_metrics():
                 "name": "c1",
                 "comp_type": "stub_fail_once",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             }
         ],
     }
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[1]
     assert len(execution.attempts) == 2
@@ -214,8 +238,8 @@ def test_execute_job_linear_chain():
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -223,29 +247,45 @@ def test_execute_job_linear_chain():
                 "name": "c1",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["c2"],
             },
             {
                 "name": "c2",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["c3"],
             },
             {
                 "name": "c3",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["c4"],
             },
             {
                 "name": "c4",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     # Allow up to 4 workers, but dependencies enforce sequential execution
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
@@ -288,8 +328,8 @@ def test_execute_linear_chain_with_retry_metrics():
         "num_of_retries": 1,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -297,13 +337,34 @@ def test_execute_linear_chain_with_retry_metrics():
                 "name": "c1",
                 "comp_type": "stub_fail_once",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["c2"],
             },
-            {"name": "c2", "comp_type": "test", "description": "", "next": ["c3"]},
-            {"name": "c3", "comp_type": "test", "description": ""},
+            {
+                "name": "c2",
+                "comp_type": "test",
+                "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+                "next": ["c3"],
+            },
+            {
+                "name": "c3",
+                "comp_type": "test",
+                "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+            },
         ],
     }
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
 
     # should have retried exactly once

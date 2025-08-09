@@ -1,8 +1,8 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
-import src.job_execution.job as job_module
+import src.job_execution.runtimejob as job_module
 from src.components.stubcomponents import StubComponent
-from src.job_execution.job import Job
+from src.job_execution.runtimejob import RuntimeJob
 from tests.helpers import get_component_by_name
 from datetime import datetime
 
@@ -22,8 +22,8 @@ def test_branch_skip_fan_out(tmp_path):
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -31,22 +31,34 @@ def test_branch_skip_fan_out(tmp_path):
                 "name": "root",
                 "comp_type": "failtest",  # will throw
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["child1", "child2"],
             },
             {
                 "name": "child1",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "child2",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -87,8 +99,8 @@ def test_branch_skip_fan_in(tmp_path):
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -96,23 +108,35 @@ def test_branch_skip_fan_in(tmp_path):
                 "name": "ok_root",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["join"],
             },
             {
                 "name": "fail_root",
                 "comp_type": "failtest",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["join"],
             },
             {
                 "name": "join",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -153,8 +177,8 @@ def test_chain_skip_linear():
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -162,23 +186,35 @@ def test_chain_skip_linear():
                 "name": "root",
                 "comp_type": "failtest",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["middle"],
             },
             {
                 "name": "middle",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["leaf"],
             },
             {
                 "name": "leaf",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -218,8 +254,8 @@ def test_skip_diamond():
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -227,29 +263,45 @@ def test_skip_diamond():
                 "name": "a",
                 "comp_type": "failtest",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["b", "c"],
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["d"],
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["d"],
             },
             {
                 "name": "d",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1

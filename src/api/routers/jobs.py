@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
 from typing import List, Dict
 
-from src.job_execution.job import Job
-from src.persistance.job_handler import JobHandler
+from src.job_execution.runtimejob import RuntimeJob
+from src.persistance.handlers.job_handler import JobHandler
 
 router = APIRouter(
     prefix="/jobs",
@@ -32,16 +32,9 @@ def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
     summary="Create a new Job",
     description="Creates a new Job with the provided configuration and persists it.",
 )
-def create_job(job_config: dict) -> str:
+def create_job(job: RuntimeJob) -> str:
     try:
-        job = Job(**job_config)
-    except ValidationError as ve:
-        clean = _sanitize_errors(ve.errors())
-        raise HTTPException(status_code=422, detail=clean)
-    except Exception as ve:
-        raise HTTPException(status_code=500, detail=f"Failed to create job: {ve}")
-    try:
-        job_handler.create(job)
+        job_handler.create_job_entry(job)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to persist job: {e}")
     return job.id
@@ -72,7 +65,7 @@ def get_job(job_id: str) -> Dict:
 )
 def update_job(job_id: str, job_config: dict) -> str:
     try:
-        job = Job(**job_config)
+        job = RuntimeJob(**job_config)
     except ValidationError as ve:
         clean = _sanitize_errors(ve.errors())
         raise HTTPException(status_code=422, detail=clean)
@@ -118,8 +111,8 @@ def list_jobs() -> List[Dict]:
 
     jobs: List[Dict] = []
     for record in records:
-        rec_dict = record.dict(exclude={"components"})
-        rec_dict["metadata"] = rec_dict.pop("metadata_", {})
-        jobs.append(rec_dict)
+        runtime_obj = job_handler.record_to_job(record)
+        obj_dict = runtime_obj.model_dump(exclude={"components"})
+        jobs.append(obj_dict)
 
     return jobs

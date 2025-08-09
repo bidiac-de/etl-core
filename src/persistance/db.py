@@ -2,9 +2,15 @@ import os
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine
 from sqlmodel.pool import StaticPool
-from src.persistance.table_definitions import JobTable
+from src.persistance.table_definitions import (
+    JobTable,
+    ComponentTable,
+    MetaDataTable,
+    LayoutTable,
+)
 
-_ = JobTable  # ensure the table definition is imported
+# ensure the table definitions are loaded
+_, _, _, _ = JobTable, ComponentTable, MetaDataTable, LayoutTable
 
 load_dotenv()
 db_path = os.getenv("DB_PATH")

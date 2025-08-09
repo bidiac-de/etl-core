@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Set
 from collections import deque
 
 from src.components.runtime_state import RuntimeState
-from src.job_execution.job import Job, JobExecution, _Sentinel
+from src.job_execution.runtimejob import RuntimeJob, JobExecution, _Sentinel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
@@ -32,7 +32,7 @@ class JobExecutionHandler:
         self.system_metrics_handler = SystemMetricsHandler()
         self.running_executions: List[JobExecution] = []
 
-    def execute_job(self, job: Job) -> JobExecution:
+    def execute_job(self, job: RuntimeJob) -> JobExecution:
         """
         top-level method to execute a Job, managing its execution lifecycle:
         - checks if the job is already running

@@ -1,8 +1,9 @@
-from src.job_execution.job_execution_handler import JobExecutionHandler, Job
+from src.job_execution.job_execution_handler import JobExecutionHandler, RuntimeJob
 from src.components.runtime_state import RuntimeState
 from tests.helpers import get_component_by_name
-import src.job_execution.job as job_module
+import src.job_execution.runtimejob as job_module
 from src.components.stubcomponents import MultiSource, MultiEcho
+from datetime import datetime
 
 # ensure Job._build_components() can find TestComponent
 job_module.MultiSourceComponent = MultiSource
@@ -16,17 +17,33 @@ def test_linear_stream_multiple_rows():
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "components": [
             {
                 "name": "source",
                 "comp_type": "multi_source",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["echo"],
             },
-            {"name": "echo", "comp_type": "multi_echo", "description": ""},
+            {
+                "name": "echo",
+                "comp_type": "multi_echo",
+                "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+            },
         ],
     }
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
@@ -53,18 +70,42 @@ def test_fan_out_multiple_rows():
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "components": [
             {
                 "name": "source",
                 "comp_type": "multi_source",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["echo1", "echo2"],
             },
-            {"name": "echo1", "comp_type": "multi_echo", "description": ""},
-            {"name": "echo2", "comp_type": "multi_echo", "description": ""},
+            {
+                "name": "echo1",
+                "comp_type": "multi_echo",
+                "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+            },
+            {
+                "name": "echo2",
+                "comp_type": "multi_echo",
+                "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+            },
         ],
     }
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
@@ -91,24 +132,44 @@ def test_fan_in_multiple_rows():
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "components": [
             {
                 "name": "src1",
                 "comp_type": "multi_source",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["echo"],
             },
             {
                 "name": "src2",
                 "comp_type": "multi_source",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["echo"],
             },
-            {"name": "echo", "comp_type": "multi_echo", "description": ""},
+            {
+                "name": "echo",
+                "comp_type": "multi_echo",
+                "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+            },
         ],
     }
 
-    job = Job(**config)
+    job = RuntimeJob(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler

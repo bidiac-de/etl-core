@@ -3,8 +3,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 from src.api.main import app
 from src.persistance.db import engine
-from src.persistance.table_definitions import JobTable
-
+from src.persistance.table_definitions import JobTable, MetaDataTable, LayoutTable, ComponentTable
 
 client = TestClient(app)
 
@@ -12,17 +11,22 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clear_db():
     """
-    Clear the JobTable before each test to ensure isolation.
+    Clear the Tables before each test to ensure isolation.
     """
     with Session(engine) as session:
         session.exec(delete(JobTable))
+        session.exec(delete(MetaDataTable))
+        session.exec(delete(ComponentTable))
+        session.exec(delete(LayoutTable))
         session.commit()
     yield
     # cleanup (redundant but safe)
     with Session(engine) as session:
         session.exec(delete(JobTable))
+        session.exec(delete(MetaDataTable))
+        session.exec(delete(ComponentTable))
+        session.exec(delete(LayoutTable))
         session.commit()
-
 
 def test_list_jobs_empty():
     response = client.get("/jobs/")
@@ -43,13 +47,20 @@ def test_create_and_persist_job_default():
         assert record.name == "default_job_name"
 
 
-def test_create_job_with_config():
+def test_create_job_with_components():
     config = {
         "name": "test_job",
         "num_of_retries": 2,
         "file_logging": True,
         "strategy_type": "row",
-        "components": [],
+        "metadata_": {
+            "user_id": 42,
+            "timestampt": "2023-10-01T12:00:00",
+        },
+        "components": [
+            {"comp_type": "test", "name": "test1", "description": "", "next": ["test2"]},
+            {"comp_type": "test", "name": "test2", "description": "", "next": []},
+        ]
     }
     create_resp = client.post("/jobs/", json=config)
     job_id = create_resp.json()
@@ -183,4 +194,4 @@ def test_list_jobs_after_create():
     assert isinstance(items, list) and len(items) == 2
     for item in items:
         assert "components" not in item
-        assert "metadata" in item
+        assert "metadata_" in item

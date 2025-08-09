@@ -1,7 +1,6 @@
 from typing import List, Dict
 from src.components.dataclasses import MetaData
 from pydantic import (
-    BaseModel,
     Field,
     ConfigDict,
     NonNegativeInt,
@@ -12,8 +11,9 @@ from pydantic import (
 from collections import Counter
 import asyncio
 
-from src.components.base_component import Component, get_strategy, StrategyType
+from src.components.base_component import Component, get_strategy
 from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
+from src.persistance.base_models.job_base import JobBase
 from uuid import uuid4
 import logging
 from src.components.component_registry import component_registry
@@ -33,7 +33,7 @@ class _Sentinel:
         return f"<Sentinel {self.component_id}>"
 
 
-class Job(BaseModel):
+class RuntimeJob(JobBase):
     """
     Job Objects
     """
@@ -41,16 +41,9 @@ class Job(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True, extra="ignore", validate_assignment=True
     )
-
-    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    name: str = Field(default="default_job_name")
-    num_of_retries: NonNegativeInt = Field(default=0)
-    file_logging: bool = Field(default=False)
-    strategy_type: StrategyType = Field(default=StrategyType.ROW)
-
     components: List[Component] = Field(default_factory=list)
-
-    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
+    metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
 
     @model_validator(mode="before")
     @classmethod
@@ -71,7 +64,7 @@ class Job(BaseModel):
         return values
 
     @model_validator(mode="after")
-    def _check_names_and_wire(self) -> "Job":
+    def _check_names_and_wire(self) -> "JobBase":
         # check names for duplicates
         counts = Counter(c.name for c in self.components)
         dupes = [name for name, cnt in counts.items() if cnt > 1]
@@ -94,7 +87,7 @@ class Job(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _assign_strategies(self) -> "Job":
+    def _assign_strategies(self) -> "JobBase":
         """
         After wiring, give every component the Job’s strategy.
         """
@@ -134,7 +127,7 @@ class Job(BaseModel):
             raise ValueError("File logging must be a boolean value.")
         return value
 
-    @field_validator("metadata", mode="before")
+    @field_validator("metadata_", mode="before")
     @classmethod
     def _cast_metadata(cls, v: MetaData | dict) -> MetaData:
         if isinstance(v, MetaData):
@@ -157,7 +150,7 @@ class JobExecution:
     Runtime state for one execution of a JobDefinition.
     """
 
-    def __init__(self, job: Job):
+    def __init__(self, job: RuntimeJob):
         self._id: str = str(uuid4())
         self._job = job
         # each execution carries its own retry strategy
@@ -186,7 +179,7 @@ class JobExecution:
         return self._id
 
     @property
-    def job(self) -> Job:
+    def job(self) -> RuntimeJob:
         return self._job
 
     @property

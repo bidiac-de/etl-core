@@ -10,7 +10,10 @@ def test_get_job_schema_structure():
     assert response.status_code == 200
     schema = response.json()
     assert "properties" in schema
-    assert "components" in schema["properties"]
+    assert "name" in schema["properties"]
+    assert "file_logging" in schema["properties"]
+    assert "num_of_retries" in schema["properties"]
+    assert "strategy_type" in schema["properties"]
     assert "$defs" not in schema
 
 
