@@ -1,40 +1,46 @@
-# src/components/file_components/xml/xml_component.py
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List
 from pydantic import Field, ConfigDict
 
 from src.components.file_components.file_component import FileComponent
-from src.components.column_definition import ColumnDefinition
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.receivers.files.xml_receiver import XMLReceiver
+from src.components import Schema
 
-class XML(FileComponent, ABC):
+
+class XMLTag(str, Enum):
+    ROOT = "rows"
+    RECORD = "row"
+
+
+class XML(FileComponent):
     """Abstract base class for XML file components."""
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
-    filepath: Path = Field(..., description="Path to the XML file")
-    schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for XML structure")
-    metrics: Optional[ComponentMetrics] = None
-    receiver: Optional[XMLReceiver] = None
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
 
-    @abstractmethod
-    def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics = None) -> Dict[str, Any]:
-        """
-       Process a single XML row (dict).
-       """
-        raise NotImplementedError
+    root_tag: str = Field(default="rows")
+    record_tag: str = Field(default="row")
 
     @abstractmethod
-    def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics = None):
+    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
         """
-        Process a list of XML rows (dicts).
+        Process a single record.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics = None):
+    async def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
         """
-        Process XML data in a streaming/big data fashion.
+        Process multiple records.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+        """
+        Process big data / streaming.
         """
         raise NotImplementedError

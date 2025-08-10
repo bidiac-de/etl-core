@@ -1,69 +1,149 @@
+# src/receivers/files/xml_receiver.py
 from pathlib import Path
-from typing import Any, Dict, Generator
-
-import pandas as pd
+from typing import Dict, Any, List, AsyncIterator
+import asyncio
 import xml.etree.ElementTree as ET
 
-from metrics.component_metrics.component_metrics import ComponentMetrics
+import pandas as pd
+import dask.dataframe as dd
+
 from src.receivers.read_file_receiver import ReadFileReceiver
 from src.receivers.write_file_receiver import WriteFileReceiver
-from src.receivers.files.xml_helper import load_xml_records, dump_xml_records, elem_to_dict
-import dask
-import dask.dataframe as dd
-from uuid import uuid4
-
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
-    root_tag: str = "records"
-    record_tag: str = "record"
+    """Stateless XML receiver (pandas bulk; simple dask wrapper for bigdata)."""
 
-    def read_row(self, filepath: Path, metrics: ComponentMetrics) -> Dict[str, Any]:
-        record_tag = getattr(self, "record_tag", "record")
-        records = load_xml_records(filepath, record_tag=record_tag)
-        return records[0] if records else {}
+    async def read_row(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            *,
+            root_tag: str = "rows",
+            record_tag: str = "row",
+    ) -> AsyncIterator[Dict[str, Any]]:
 
-    def read_bulk(self, filepath: Path, metrics: ComponentMetrics) -> pd.DataFrame:
-        record_tag = getattr(self, "record_tag", "record")
-        records = load_xml_records(filepath, record_tag=record_tag)
-        return pd.DataFrame(records)
+        def _read_all() -> List[Dict[str, Any]]:
+            root = ET.parse(filepath).getroot()
+            return [
+                {child.tag: (child.text or "") for child in rec}
+                for rec in root.findall(record_tag)
+            ]
 
-    def read_bigdata(self, filepath: Path, metrics: ComponentMetrics) -> Generator[Dict[str, Any], None, None]:
-        """Streaming read via iterparse → yields record dicts (generator)."""
-        record_tag = getattr(self, "record_tag", "record")
-        context = ET.iterparse(str(filepath), events=("end",))
-        for _, elem in context:
-            if elem.tag == record_tag:
-                yield elem_to_dict(elem)  # use helper
-                elem.clear()  # free memory
+        records = await asyncio.to_thread(_read_all)
+        for rec in records:
+            yield rec
 
-    def write_row(self, row: Dict[str, Any], filepath: Path, metrics: ComponentMetrics):
-        root_tag = getattr(self, "root_tag", "records")
-        record_tag = getattr(self, "record_tag", "record")
-        dump_xml_records(filepath, [row], root_tag=root_tag, record_tag=record_tag)
+    async def read_bulk(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            *,
+            root_tag: str = "rows",
+            record_tag: str = "row",
+    ) -> pd.DataFrame:
 
-    def write_bulk(self, df: pd.DataFrame, filepath: Path, metrics: ComponentMetrics):
-        root_tag = getattr(self, "root_tag", "records")
-        record_tag = getattr(self, "record_tag", "record")
-        records = df.to_dict(orient="records")
-        dump_xml_records(filepath, records, root_tag=root_tag, record_tag=record_tag)
+        def _read_df() -> pd.DataFrame:
+            root = ET.parse(filepath).getroot()
+            rows = [
+                {child.tag: (child.text or "") for child in rec}
+                for rec in root.findall(record_tag)
+            ]
+            if not rows:
+                return pd.DataFrame()
 
-    def write_bigdata(self, ddf: dd.DataFrame, filepath: Path, metrics: ComponentMetrics):
-        """Write a Dask DataFrame as partitioned XML files (folder with part-*.xml)."""
-        filepath.mkdir(parents=True, exist_ok=True)
+            all_keys: set[str] = set()
+            for r in rows:
+                all_keys.update(r.keys())
+            return pd.DataFrame(rows, columns=list(all_keys))
 
-        root_tag = getattr(self, "root_tag", "records")
-        record_tag = getattr(self, "record_tag", "record")
+        return await asyncio.to_thread(_read_df)
 
-        def _write_partition(pdf: pd.DataFrame, out_dir: str, root_tag: str, record_tag: str) -> str:
-            out_path = Path(out_dir) / f"part-{uuid4().hex}.xml"
-            records = pdf.to_dict(orient="records")
-            dump_xml_records(out_path, records, root_tag=root_tag, record_tag=record_tag)
-            return str(out_path)
+    async def read_bigdata(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            *,
+            root_tag: str = "rows",
+            record_tag: str = "row",
+            npartitions: int = 2,
+    ) -> dd.DataFrame:
+        pdf = await self.read_bulk(filepath, metrics, root_tag=root_tag, record_tag=record_tag)
+        return dd.from_pandas(pdf, npartitions=max(1, npartitions))
 
-        delayed_tasks = [
-            dask.delayed(_write_partition)(part.compute(), str(filepath), root_tag, record_tag)
-            for part in ddf.to_delayed()
-        ]
-        dask.compute(*delayed_tasks)
+    async def write_row(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            *,
+            row: Dict[str, Any],
+            root_tag: str = "rows",
+            record_tag: str = "row",
+            indent: int = 2,
+    ):
+        def _write():
+            try:
+                root = ET.parse(filepath).getroot()
+            except FileNotFoundError:
+                root = ET.Element(root_tag)
+            except ET.ParseError:
+                root = ET.Element(root_tag)
 
+            rec = ET.SubElement(root, record_tag)
+            for k, v in row.items():
+                c = ET.SubElement(rec, str(k))
+                c.text = "" if v is None else str(v)
+            ET.ElementTree(root).write(filepath, encoding="utf-8", xml_declaration=True)
+
+        await asyncio.to_thread(_write)
+
+    async def write_bulk(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            *,
+            data: List[Dict[str, Any]],
+            root_tag: str = "rows",
+            record_tag: str = "row",
+            indent: int = 2,
+    ):
+        def _write():
+            root = ET.Element(root_tag)
+            for row in data:
+                rec = ET.SubElement(root, record_tag)
+                for k, v in row.items():
+                    c = ET.SubElement(rec, str(k))
+                    c.text = "" if v is None else str(v)
+            ET.ElementTree(root).write(filepath, encoding="utf-8", xml_declaration=True)
+
+        await asyncio.to_thread(_write)
+
+    async def write_bigdata(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            *,
+            data: dd.DataFrame,
+            record_tag: str = "row",
+    ):
+        def _write_partition(pdf: pd.DataFrame, part_idx: int):
+            root = ET.Element("rows")
+            for _, row in pdf.iterrows():
+                rec = ET.SubElement(root, record_tag)
+                for k, v in row.to_dict().items():
+                    c = ET.SubElement(rec, str(k))
+                    if v is None or (isinstance(v, float) and pd.isna(v)):
+                        c.text = ""
+                    else:
+                        c.text = str(v)
+            out = Path(filepath) / f"part-{part_idx:05d}.xml"
+            ET.ElementTree(root).write(out, encoding="utf-8", xml_declaration=True)
+
+        def _write_all():
+            Path(filepath).mkdir(parents=True, exist_ok=True)
+            for i in range(data.npartitions):
+                pdf = data.get_partition(i).compute()
+                _write_partition(pdf, i)
+
+        await asyncio.to_thread(_write_all)
