@@ -26,27 +26,29 @@ def test_execute_job_single_test_component():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "test1",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "a test comp",
             }
         ],
     }
 
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=1)
 
-    assert len(result.executions) == 1
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
-    exec_record = result.executions[0]
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     comp = get_component_by_name(job, "test1")
-    comp_metrics = exec_record.attempts[0].component_metrics[comp.id]
-    assert comp_metrics.lines_received == 1
+
+    comp_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp.id)
     assert comp_metrics.status == RuntimeState.SUCCESS
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
+    assert comp_metrics.lines_received == 1
 
 
 def test_execute_job_chain_components_file_logging():
@@ -66,43 +68,46 @@ def test_execute_job_chain_components_file_logging():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "comp1",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "first",
                 "next": ["comp2"],
             },
             {
                 "name": "comp2",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "second",
             },
         ],
     }
 
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=1)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
-    # should complete successfully
-    assert result.file_logging is True
+    assert job.file_logging is True
 
-    # single JobExecution entry
-    assert len(result.executions) == 1
-    exec_record = result.executions[0]
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     # both components ran and metrics recorded
-    metrics = exec_record.attempts[0].component_metrics
     comp1 = get_component_by_name(job, "comp1")
     comp2 = get_component_by_name(job, "comp2")
-    assert set(metrics.keys()) == {comp1.id, comp2.id}
-    assert metrics[comp1.id].lines_received == 1
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
-    assert metrics[comp2.id].lines_received == 1
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
+
+    assert mh.get_comp_metrics(execution.id, attempt.id, comp1.id).lines_received == 1
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
+        == RuntimeState.SUCCESS
+    )
+    assert mh.get_comp_metrics(execution.id, attempt.id, comp2.id).lines_received == 1
+    assert (
+        mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
+        == RuntimeState.SUCCESS
+    )
 
 
 def test_execute_job_failing_and_cancelled_components():
@@ -124,40 +129,38 @@ def test_execute_job_failing_and_cancelled_components():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "comp1",
                 "comp_type": "failtest",  # our failing component
-                "strategy_type": "row",
                 "description": "will fail",
                 "next": ["comp2"],
             },
             {
                 "name": "comp2",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "should be cancelled",
             },
         ],
     }
 
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=1)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
     # Job-level assertions
-    assert len(result.executions) == 1
-    exec_record = result.executions[0]
-    assert exec_record.job_metrics.status == RuntimeState.FAILED.value
-    assert exec_record.attempts[0].error is not None
-    assert (
-        "One or more components failed; dependent components cancelled"
-    ) in exec_record.attempts[0].error
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
+    assert attempt.error is not None
+    assert ("fail stubcomponent failed") in attempt.error
 
     # Component-level assertions
     comp1 = get_component_by_name(job, "comp1")
     comp2 = get_component_by_name(job, "comp2")
-    comp1_metrics = exec_record.attempts[0].component_metrics[comp1.id]
-    comp2_metrics = exec_record.attempts[0].component_metrics[comp2.id]
+    comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
+    comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
     assert (
         comp1_metrics.status == RuntimeState.FAILED
     ), "comp1 should have FAILED status"
@@ -176,25 +179,25 @@ def test_retry_logic_and_metrics():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "c1",
                 "comp_type": "stub_fail_once",
-                "strategy_type": "row",
                 "description": "",
             }
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=1)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[1]
+    assert len(execution.attempts) == 2
+    mh = handler.job_info.metrics_handler
 
-    # Should retry once, then succeed
-    exec_record = result.executions[0]
-    assert len(exec_record.attempts) == 2
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     # lines_received comes from second execution
     comp = get_component_by_name(job, "c1")
-    assert exec_record.attempts[1].component_metrics[comp.id].lines_received == 1
+    assert mh.get_comp_metrics(execution.id, attempt.id, comp.id).lines_received == 1
 
 
 def test_execute_job_linear_chain():
@@ -214,32 +217,29 @@ def test_execute_job_linear_chain():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "c1",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c2"],
             },
             {
                 "name": "c2",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c3"],
             },
             {
                 "name": "c3",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c4"],
             },
             {
                 "name": "c4",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
@@ -247,24 +247,97 @@ def test_execute_job_linear_chain():
 
     job = Job(**config)
     # Allow up to 4 workers, but dependencies enforce sequential execution
-    result = handler.execute_job(job, max_workers=4)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
-    # Should be a single successful execution
-    assert len(result.executions) == 1
-    exec_record = result.executions[0]
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    # Every component should have run once and completed
-    metrics = exec_record.attempts[0].component_metrics
     comp1 = get_component_by_name(job, "c1")
-    assert metrics[comp1.id].lines_received == 1
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
     comp2 = get_component_by_name(job, "c2")
-    assert metrics[comp2.id].lines_received == 1
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
     comp3 = get_component_by_name(job, "c3")
-    assert metrics[comp3.id].lines_received == 1
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
     comp4 = get_component_by_name(job, "c4")
-    assert metrics[comp4.id].lines_received == 1
-    assert metrics[comp4.id].status == RuntimeState.SUCCESS
+
+    comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
+    comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
+    comp3_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp3.id)
+    comp4_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp4.id)
+
+    assert comp1_metrics.lines_received == 1
+    assert comp1_metrics.status == RuntimeState.SUCCESS
+    assert comp2_metrics.lines_received == 1
+    assert comp2_metrics.status == RuntimeState.SUCCESS
+    assert comp3_metrics.lines_received == 1
+    assert comp3_metrics.status == RuntimeState.SUCCESS
+    assert comp4_metrics.lines_received == 1
+    assert comp4_metrics.status == RuntimeState.SUCCESS
+
+
+def test_execute_linear_chain_with_retry_metrics():
+    """
+    A linear job with two components where:
+      - the first component fails once, then succeeds on retry
+      - first attempt: comp1 FAILED (0 lines), comp2 CANCELLED (0 lines)
+      - second attempt: both SUCCESS (1 line each)
+      - final job status is SUCCESS
+    """
+    handler = JobExecutionHandler()
+    config = {
+        "name": "LinearRetryJob",
+        "num_of_retries": 1,
+        "file_logging": False,
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "strategy_type": "row",
+        "components": [
+            {
+                "name": "c1",
+                "comp_type": "stub_fail_once",
+                "description": "",
+                "next": ["c2"],
+            },
+            {"name": "c2", "comp_type": "test", "description": "", "next": ["c3"]},
+            {"name": "c3", "comp_type": "test", "description": ""},
+        ],
+    }
+    job = Job(**config)
+    execution = handler.execute_job(job)
+
+    # should have retried exactly once
+    assert len(execution.attempts) == 2
+    mh = handler.job_info.metrics_handler
+
+    # grab the two components
+    comp1 = get_component_by_name(job, "c1")
+    comp2 = get_component_by_name(job, "c2")
+    comp3 = get_component_by_name(job, "c3")
+    first = execution.attempts[0]
+    second = execution.attempts[1]
+
+    # first attempt metrics
+    m1_first = mh.get_comp_metrics(execution.id, first.id, comp1.id)
+    m2_first = mh.get_comp_metrics(execution.id, first.id, comp2.id)
+    m3_first = mh.get_comp_metrics(execution.id, first.id, comp3.id)
+    assert m1_first.status == RuntimeState.FAILED
+    assert m1_first.lines_received == 0
+    assert m2_first.status == RuntimeState.CANCELLED
+    assert m2_first.lines_received == 0
+    assert m3_first.status == RuntimeState.CANCELLED
+    assert m3_first.lines_received == 0
+
+    # second attempt metrics
+    m1_second = mh.get_comp_metrics(execution.id, second.id, comp1.id)
+    m2_second = mh.get_comp_metrics(execution.id, second.id, comp2.id)
+    m3_second = mh.get_comp_metrics(execution.id, second.id, comp3.id)
+    assert m1_second.status == RuntimeState.SUCCESS
+    assert m1_second.lines_received == 1
+    assert m2_second.status == RuntimeState.SUCCESS
+    assert m2_second.lines_received == 1
+    assert m3_second.status == RuntimeState.SUCCESS
+    assert m3_second.lines_received == 1
+
+    # final job-level status should be SUCCESS
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS

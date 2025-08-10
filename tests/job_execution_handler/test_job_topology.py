@@ -24,46 +24,48 @@ def test_fan_out_topology():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "root",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["child1", "child2"],
             },
             {
                 "name": "child1",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
             {
                 "name": "child2",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=2)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
-    exec_record = result.executions[0]
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
-    metrics = exec_record.attempts[0].component_metrics
-    expected_ids = {c.id for c in job.components}
-    assert set(metrics.keys()) == expected_ids
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "root")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
-    assert metrics[comp1.id].lines_received == 1
     comp2 = get_component_by_name(job, "child1")
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
-    assert metrics[comp2.id].lines_received == 1
     comp3 = get_component_by_name(job, "child2")
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
-    assert metrics[comp3.id].lines_received == 1
+
+    comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
+    comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
+    comp3_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp3.id)
+
+    assert comp1_metrics.lines_received == 1
+    assert comp1_metrics.status == RuntimeState.SUCCESS
+    assert comp2_metrics.lines_received == 1
+    assert comp2_metrics.status == RuntimeState.SUCCESS
+    assert comp3_metrics.lines_received == 1
+    assert comp3_metrics.status == RuntimeState.SUCCESS
 
 
 def test_fan_in_topology():
@@ -80,47 +82,49 @@ def test_fan_in_topology():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "a",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "b",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "c",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=2)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
-    exec_record = result.executions[0]
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
-    metrics = exec_record.attempts[0].component_metrics
-    expected_ids = {c.id for c in job.components}
-    assert set(metrics.keys()) == expected_ids
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "a")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
-    assert metrics[comp1.id].lines_received == 1
     comp2 = get_component_by_name(job, "b")
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
-    assert metrics[comp2.id].lines_received == 1
     comp3 = get_component_by_name(job, "c")
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
-    assert metrics[comp3.id].lines_received == 1
+
+    comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
+    comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
+    comp3_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp3.id)
+
+    assert comp1_metrics.lines_received == 1
+    assert comp1_metrics.status == RuntimeState.SUCCESS
+    assert comp2_metrics.lines_received == 1
+    assert comp2_metrics.status == RuntimeState.SUCCESS
+    assert comp3_metrics.lines_received == 1
+    assert comp3_metrics.status == RuntimeState.SUCCESS
 
 
 def test_diamond_topology():
@@ -137,54 +141,56 @@ def test_diamond_topology():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "root",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["a", "b"],
             },
             {
                 "name": "a",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "b",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
                 "next": ["c"],
             },
             {
                 "name": "c",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "",
             },
         ],
     }
     job = Job(**config)
-    result = handler.execute_job(job, max_workers=2)
+    execution = handler.execute_job(job)
+    attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
+    mh = handler.job_info.metrics_handler
 
-    exec_record = result.executions[0]
-    assert exec_record.job_metrics.status == RuntimeState.SUCCESS.value
-    metrics = exec_record.attempts[0].component_metrics
-    expected_ids = {c.id for c in job.components}
-    assert set(metrics.keys()) == expected_ids
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     comp1 = get_component_by_name(job, "root")
-    assert metrics[comp1.id].status == RuntimeState.SUCCESS
-    assert metrics[comp1.id].lines_received == 1
     comp2 = get_component_by_name(job, "a")
-    assert metrics[comp2.id].status == RuntimeState.SUCCESS
-    assert metrics[comp2.id].lines_received == 1
     comp3 = get_component_by_name(job, "b")
-    assert metrics[comp3.id].status == RuntimeState.SUCCESS
-    assert metrics[comp3.id].lines_received == 1
     comp4 = get_component_by_name(job, "c")
-    assert metrics[comp4.id].status == RuntimeState.SUCCESS
-    assert metrics[comp4.id].lines_received == 1
+
+    comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
+    comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
+    comp3_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp3.id)
+    comp4_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp4.id)
+
+    assert comp1_metrics.lines_received == 1
+    assert comp1_metrics.status == RuntimeState.SUCCESS
+    assert comp2_metrics.lines_received == 1
+    assert comp2_metrics.status == RuntimeState.SUCCESS
+    assert comp3_metrics.lines_received == 1
+    assert comp3_metrics.status == RuntimeState.SUCCESS
+    assert comp4_metrics.lines_received == 1
+    assert comp4_metrics.status == RuntimeState.SUCCESS

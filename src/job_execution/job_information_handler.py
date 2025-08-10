@@ -1,7 +1,9 @@
 import logging
-from src.metrics.job_metrics import JobMetrics
+from src.metrics.execution_metrics import ExecutionMetrics
 import datetime
 from pathlib import Path
+from typing import Dict, Tuple, Type
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 class JobInformationHandler:
@@ -20,48 +22,74 @@ class JobInformationHandler:
     def metrics_handler(self) -> "MetricsHandler":
         return self._metrics_handler
 
-    @metrics_handler.setter
-    def metrics_handler(self, value: "MetricsHandler") -> None:
-        if not isinstance(value, MetricsHandler):
-            raise ValueError("metrics_handler must be an instance of MetricsHandler")
-        self._metrics_handler = value
-
     @property
     def logging_handler(self) -> "LoggingHandler":
         return self._logging_handler
 
-    @logging_handler.setter
-    def logging_handler(self, value: "LoggingHandler") -> None:
-        if not isinstance(value, LoggingHandler):
-            raise ValueError("logging_handler must be an instance of LoggingHandler")
-        self._logging_handler = value
-
 
 class MetricsHandler:
     """
-    Handles metrics collection and storage
+    Single source of truth for every metrics object.
     """
 
-    _job_metrics: list
-    _component_metrics: dict  # job_id -> list of (name, metrics)
+    def __init__(self) -> None:
+        # execution_id -> JobMetrics
+        self._job_metrics: Dict[str, ExecutionMetrics] = {}
+        # (execution_id, attempt_id, component_id) -> ComponentMetrics
+        self._component_metrics: Dict[Tuple[str, str, str], ComponentMetrics] = {}
 
-    def __init__(self):
-        self._job_metrics = []
-        self._component_metrics = {}
+    def create_job_metrics(self, execution_id: str) -> ExecutionMetrics:
+        """
+        Lazily create or return the JobMetrics for the given execution.
+        """
+        if execution_id not in self._job_metrics:
+            self._job_metrics[execution_id] = ExecutionMetrics()
+        return self._job_metrics[execution_id]
 
-    @property
-    def job_metrics(self) -> list:
-        return self._job_metrics
+    def get_job_metrics(self, execution_id: str) -> ExecutionMetrics:
+        """
+        Retrieve existing JobMetrics; KeyError if missing.
+        """
+        return self._job_metrics[execution_id]
 
-    @property
-    def component_metrics(self) -> dict:
-        return self._component_metrics
+    def create_component_metrics(
+        self,
+        execution_id: str,
+        attempt_id: str,
+        component_id: str,
+        metrics_cls: Type[ComponentMetrics] = ComponentMetrics,
+    ) -> ComponentMetrics:
+        """
+        Lazily create or return the metrics object for this component.
+        Allows passing a subclass of ComponentMetrics for concrete components.
+        """
+        key = (execution_id, attempt_id, component_id)
+        if key not in self._component_metrics:
+            self._component_metrics[key] = metrics_cls()
+        return self._component_metrics[key]
 
-    def add_job_metrics(self, job_id: str, metrics: JobMetrics):
-        self._job_metrics.append((job_id, metrics))
+    def get_comp_metrics(
+        self,
+        execution_id: str,
+        attempt_id: str,
+        component_id: str,
+    ) -> ComponentMetrics:
+        """
+        Retrieve existing ComponentMetrics; KeyError if missing.
+        """
+        return self._component_metrics[(execution_id, attempt_id, component_id)]
 
-    def add_component_metrics(self, job_id: str, name: str, metrics):
-        self._component_metrics.setdefault(job_id, []).append((name, metrics))
+    def all_job_metrics(self) -> Dict[str, ExecutionMetrics]:
+        """
+        Access all recorded job metrics.
+        """
+        return dict(self._job_metrics)
+
+    def all_comp_metrics(self) -> Dict[Tuple[str, str, str], ComponentMetrics]:
+        """
+        Access all recorded component metrics.
+        """
+        return dict(self._component_metrics)
 
 
 class LoggingHandler:
@@ -103,7 +131,7 @@ class LoggingHandler:
         fh.setFormatter(fmt)
 
         # clear out old handlers so we don't double-log
-        for h in list(self._logger.handlers):
+        for h in self._logger.handlers:
             self._logger.removeHandler(h)
 
         self._logger.addHandler(fh)

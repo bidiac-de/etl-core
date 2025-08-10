@@ -21,6 +21,7 @@ def test_create_job_with_complete_config():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
     }
 
     job = Job(**config)
@@ -31,7 +32,6 @@ def test_create_job_with_complete_config():
     assert job.name == "TestJob"
     assert job.num_of_retries == 3
     assert job.metadata.created_by == 42
-    assert job.executions == []
     assert job.file_logging is True
 
 
@@ -49,8 +49,8 @@ def test_create_job_with_partial_config():
     assert isinstance(job.id, str)
     assert job.name == "default_job_name"
     assert job.num_of_retries == 0
-    assert job.executions == []
     assert job.file_logging is False
+    assert job.strategy_type == "row"
 
 
 def test_create_job_with_invalid_config_type():
@@ -70,11 +70,11 @@ def test_create_job_with_test_component():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "test1",
                 "comp_type": "test",
-                "strategy_type": "row",
                 "description": "test dummy",
             }
         ],
@@ -94,6 +94,7 @@ def test_create_job_with_invalid_component_class():
             "created_by": 42,
             "created_at": datetime.now(),
         },
+        "strategy_type": "row",
         "components": [
             {
                 "name": "invalid1",

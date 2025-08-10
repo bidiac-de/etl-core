@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, TYPE_CHECKING
+from typing import List, Dict
 from src.components.dataclasses import MetaData
 from pydantic import (
     BaseModel,
@@ -9,19 +9,28 @@ from pydantic import (
     field_validator,
     PrivateAttr,
 )
-from src.components.base_component import Component
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.metrics.job_metrics import JobMetrics
+from collections import Counter
+import asyncio
+
+from src.components.base_component import Component, get_strategy, StrategyType
+from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
 from uuid import uuid4
 import logging
-from datetime import timedelta
-from src.metrics.metrics_registry import get_metrics_class
 from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
 
-if TYPE_CHECKING:
-    from src.job_execution.job_execution_handler import JobExecutionHandler
+
+class _Sentinel:
+    """Unique end-of-stream marker for each component."""
+
+    __slots__ = ("component_id",)
+
+    def __init__(self, component_id: str) -> None:
+        self.component_id = component_id
+
+    def __repr__(self) -> str:
+        return f"<Sentinel {self.component_id}>"
 
 
 class Job(BaseModel):
@@ -37,13 +46,11 @@ class Job(BaseModel):
     name: str = Field(default="default_job_name")
     num_of_retries: NonNegativeInt = Field(default=0)
     file_logging: bool = Field(default=False)
+    strategy_type: StrategyType = Field(default=StrategyType.ROW)
 
     components: List[Component] = Field(default_factory=list)
 
-    _config: Dict[str, Any] = PrivateAttr(default_factory=dict)
     metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
-    _executions: List[Any] = PrivateAttr(default_factory=list)
-    _root_components: List[Component] = PrivateAttr(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -52,61 +59,64 @@ class Job(BaseModel):
         built: list[Component] = []
         for comp_data in raw:
             comp_type = comp_data.get("comp_type")
-            CompCls = component_registry.get(comp_type)
-            if CompCls is None:
-                raise ValueError(f"Unknown component type: {comp_type!r}")
-            # This will now call StubComponent.build_objects (etc.)
-            built.append(CompCls(**comp_data))
+            comp_cls = component_registry.get(comp_type)
+            if comp_cls is None:
+                valid_types = list(component_registry.keys())
+                raise ValueError(
+                    f"Unknown component type: {comp_type!r}. "
+                    f"Valid types are: {valid_types}"
+                )
+            built.append(comp_cls(**comp_data))
         values["components"] = built
-        return values
-
-    @model_validator(mode="before")
-    @classmethod
-    def _store_config(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        values["config"] = values.copy()
         return values
 
     @model_validator(mode="after")
     def _check_names_and_wire(self) -> "Job":
-        """
-        Ensure each component.name is unique
-        Wire up `next`/`prev` pointers by those names
-        """
-
-        # name uniqueness
-        names = [c.name for c in self.components]
-        dupes = {n for n in names if names.count(n) > 1}
+        # check names for duplicates
+        counts = Counter(c.name for c in self.components)
+        dupes = [name for name, cnt in counts.items() if cnt > 1]
         if dupes:
             raise ValueError(f"Duplicate component names: {sorted(dupes)}")
 
-        # wiring
+        # create mapping
         name_map = {c.name: c for c in self.components}
-        for c in self.components:
-            for nxt_name in c.next:
-                try:
-                    nxt = name_map[nxt_name]
-                except KeyError:
-                    raise ValueError(f"Unknown next‐component name: {nxt_name!r}")
-                c.add_next(nxt)
-                nxt.add_prev(c)
 
-        self._root_components = [c for c in self.components if not c.prev_components]
+        # wire up components using comprehension
+        for comp in self.components:
+            try:
+                next_objs = [name_map[n] for n in comp.next]
+            except KeyError as e:
+                raise ValueError(f"Unknown next‐component name: {e.args[0]!r}")
+            comp.next_components = next_objs
+            for nxt in next_objs:
+                nxt.prev_components.append(comp)
 
         return self
 
-    @field_validator("name", mode="before")
-    @classmethod
-    def validate_name(cls, value: str) -> str:
+    @model_validator(mode="after")
+    def _assign_strategies(self) -> "Job":
         """
-        Validate that the name is a non-empty string.
+        After wiring, give every component the Job’s strategy.
+        """
+        for comp in self.components:
+            # override whatever was on the component; use job-level strategy_type
+            comp.strategy = get_strategy(self.strategy_type)
+
+        return self
+
+    @field_validator("name", "strategy_type", mode="before")
+    @classmethod
+    def _validate_non_empty_string(cls, value: str) -> str:
+        """
+        Validate that the name, comp_type, and strategy_type are non-empty strings.
         """
         if not isinstance(value, str) or not value.strip():
-            raise ValueError("Job name must be a non-empty string.")
+            raise ValueError("Value must be a non-empty string.")
         return value.strip()
 
     @field_validator("num_of_retries", mode="before")
     @classmethod
-    def validate_num_of_retries(cls, value: int) -> NonNegativeInt:
+    def _validate_num_of_retries(cls, value: int) -> NonNegativeInt:
         """
         Validate that the number of retries is a non-negative integer.
         """
@@ -116,7 +126,7 @@ class Job(BaseModel):
 
     @field_validator("file_logging", mode="before")
     @classmethod
-    def validate_file_logging(cls, value: bool) -> bool:
+    def _validate_file_logging(cls, value: bool) -> bool:
         """
         Validate that file_logging is a boolean.
         """
@@ -141,157 +151,94 @@ class Job(BaseModel):
         """
         return self._id
 
-    @property
-    def executions(self) -> List[Any]:
-        """
-        Returns the list of job executions.
-        """
-        return self._executions
-
-    @executions.setter
-    def executions(self, value: List[Any]) -> None:
-        """
-        Sets the list of job executions.
-        """
-        if not isinstance(value, list):
-            raise ValueError("Executions must be a list.")
-        self._executions = value
-
-    @property
-    def config(self) -> Dict[str, Any]:
-        """
-        Returns the configuration dictionary of the job.
-        """
-        return self._config
-
-    @property
-    def root_components(self) -> List[Component]:
-        return self._root_components
-
-    def _connect_components(self) -> None:
-        for component in self._components.values():
-            src = self._components[component.id]
-            for nxt_user_prov_id in component.next:
-                dest_internal = self._temp_map.get(nxt_user_prov_id)
-                if dest_internal not in self._components:
-                    raise ValueError(f"Unknown next-component: {nxt_user_prov_id}")
-                dest = self._components[dest_internal]
-                src.add_next(dest)
-                dest.add_prev(src)
-
-        self._root_components = [
-            c for c in self._components.values() if not c._prev_components
-        ]
-
 
 class JobExecution:
     """
-    Encapsulates the execution details of a job
+    Runtime state for one execution of a JobDefinition.
     """
 
-    _id: str
-    _job: Job
-    _job_metrics: JobMetrics = None
-    _attempts: List["ExecutionAttempt"]
-    _file_logger: logging.Logger = None
-
-    def __init__(
-        self,
-        job: Job,
-        number_of_attempts: int,
-        handler: "JobExecutionHandler",
-    ):
-        self._id = str(uuid4())
+    def __init__(self, job: Job):
+        self._id: str = str(uuid4())
         self._job = job
-        self._job_metrics = JobMetrics()
-        self._attempts = []
-        if number_of_attempts < 1:
-            raise ValueError("number_of_attempts must be at least 1")
-        self._number_of_attempts = number_of_attempts
+        # each execution carries its own retry strategy
+        self._retry_strategy = ConstantRetryStrategy(job.num_of_retries)
+        self._max_attempts = job.num_of_retries + 1
+        self._attempts: List[ExecutionAttempt] = []
 
-        self.handler = handler
-        handler.running_executions.append(self)
-        handler.job_information_handler.logging_handler.update_job_name(job.name)
-        self._file_logger = handler.job_information_handler.logging_handler.logger
-        self.job.executions.append(self)
-        logger.info("Starting execution of job '%s'", job.name)
+        # each component gets its own sentinel instance
+        self._sentinels: Dict[str, _Sentinel] = {
+            comp.id: _Sentinel(comp.id) for comp in job.components
+        }
 
-    def create_attempt(self) -> "ExecutionAttempt":
-        """
-        Create and register a new execution attempt.
-        """
-        attempt_number = len(self.attempts) + 1
-        attempt = ExecutionAttempt(attempt_number=attempt_number, execution=self)
-        self.attempts.append(attempt)
-        return attempt
+    def start_attempt(self):
+        if len(self._attempts) >= self._max_attempts:
+            raise RuntimeError("No attempts left")
+        attempt = ExecutionAttempt(len(self.attempts) + 1, self)
+        self._attempts.append(attempt)
+
+    def latest_attempt(self) -> "ExecutionAttempt":
+        if not self._attempts:
+            raise RuntimeError("No attempts have been started yet")
+        return self._attempts[-1]
 
     @property
     def id(self) -> str:
         return self._id
-
-    @property
-    def job_metrics(self) -> JobMetrics:
-        return self._job_metrics
-
-    @property
-    def number_of_attempts(self) -> int:
-        return self._number_of_attempts
 
     @property
     def job(self) -> Job:
         return self._job
 
     @property
+    def max_attempts(self) -> int:
+        return self._max_attempts
+
+    @property
     def attempts(self) -> List["ExecutionAttempt"]:
         return self._attempts
 
     @property
-    def file_logger(self) -> logging.Logger:
-        return self._file_logger
+    def retry_strategy(self) -> RetryStrategy:
+        """
+        Returns the retry strategy for this job execution.
+        """
+        return self._retry_strategy
+
+    @property
+    def sentinels(self) -> Dict[str, _Sentinel]:
+        """
+        Returns a mapping of component IDs to their sentinels.
+        Sentinels are used to mark the end of a stream for each component.
+        """
+        return self._sentinels
 
 
 class ExecutionAttempt:
     """
-    Encapsulates the details of a single execution attempt
+    Data for one try of a JobExecution.
     """
 
-    _id: str
-    _attempt_number: int = 0
-    _component_metrics: Dict[str, ComponentMetrics]
-    _error: str | None = None
-
-    def __init__(
-        self,
-        attempt_number: int,
-        execution: JobExecution,
-    ) -> None:
+    def __init__(self, index: int, execution: JobExecution):
+        if index < 1:
+            raise ValueError("attempt number must be >= 1")
         self._id = str(uuid4())
-        if attempt_number < 1:
-            raise ValueError("attempt_number must be at least 1")
-        self._attempt_number = attempt_number
-        self.execution = execution
-        job = execution.job
-        self._component_metrics = {}
+        self._index = index
+        self._error: str | None = None
 
-        components = job.components
-        self.pending: set[str] = {c.id for c in components}
-        self.succeeded: set[str] = set()
-        self.failed: set[str] = set()
-        self.cancelled: set[str] = set()
-
-        # metrics also keyed by name
-        for comp in components:
-            MetricsCls = get_metrics_class(comp.comp_type)
-            metrics = MetricsCls(processing_time=timedelta(0), error_count=0)
-            self._component_metrics[comp.id] = metrics
+        # runtime sets
+        self._pending = {c.id for c in execution.job.components}
+        self._succeeded = set()
+        self._failed = set()
+        self._cancelled = set()
+        self._current_tasks: Dict[str, asyncio.Task] = {}
 
     @property
     def id(self) -> str:
         return self._id
 
     @property
-    def attempt_number(self) -> int:
-        return self._attempt_number
+    def index(self) -> int:
+        return self._index
 
     @property
     def error(self) -> str | None:
@@ -304,5 +251,49 @@ class ExecutionAttempt:
         self._error = value
 
     @property
-    def component_metrics(self) -> Dict[str, ComponentMetrics]:
-        return self._component_metrics
+    def pending(self) -> set[str]:
+        """
+        Components that are still pending execution.
+        """
+        return self._pending
+
+    @property
+    def succeeded(self) -> set[str]:
+        """
+        Components that have successfully executed.
+        """
+        return self._succeeded
+
+    @property
+    def failed(self) -> set[str]:
+        """
+        Components that have failed execution.
+        """
+        return self._failed
+
+    @property
+    def cancelled(self) -> set[str]:
+        """
+        Components that have been cancelled.
+        """
+        return self._cancelled
+
+    @property
+    def current_tasks(self) -> Dict[str, asyncio.Task]:
+        """
+        Returns a mapping of component IDs to their current asyncio tasks.
+        This is used to track the execution of components in the job.
+        """
+        return self._current_tasks
+
+    @current_tasks.setter
+    def current_tasks(self, tasks: Dict[str, asyncio.Task]) -> None:
+        """
+        Sets the current tasks for the job execution.
+        This is used to track the execution of components in the job.
+        """
+        if not isinstance(tasks, dict):
+            raise TypeError(
+                "current_tasks must be a dictionary of component IDs to asyncio tasks"
+            )
+        self._current_tasks = tasks
