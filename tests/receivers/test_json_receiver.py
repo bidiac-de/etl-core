@@ -140,8 +140,7 @@ async def test_readjson_row_gz(tmp_path: Path, metrics: ComponentMetrics):
         with gzip.open(gz_path, "wt", encoding="utf-8") as f:
             _json.dump(payload, f)
 
-    await asyncio.to_thread(_write_gz)  # blockierendes I/O in Thread auslagern
-
+    await asyncio.to_thread(_write_gz)
     r = JSONReceiver()
     rows = [row async for row in r.read_row(filepath=gz_path, metrics=metrics)]
     assert len(rows) == 1
