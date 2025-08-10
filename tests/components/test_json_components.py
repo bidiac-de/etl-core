@@ -1,5 +1,3 @@
-# tests/components/test_json_components.py
-
 import json
 import pytest
 import pandas as pd
@@ -19,15 +17,15 @@ from src.components.column_definition import ColumnDefinition, DataType
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components import Schema
 
-# Testdaten
-DATA_DIR = Path(__file__).parent / "data"
-VALID_JSON = DATA_DIR / "testdata.json"                # Array-of-records JSON
-VALID_NDJSON = DATA_DIR / "testdata.jsonl"            # NDJSON
+
+DATA_DIR = Path(__file__).parent / "data" / "json"
+VALID_JSON = DATA_DIR / "testdata.json"
+VALID_NDJSON = DATA_DIR / "testdata.jsonl"
 EXTRA_MISSING_JSON = DATA_DIR / "testdata_extra_missing.json"
 MIXED_TYPES_JSON = DATA_DIR / "testdata_mixed_types.json"
 NESTED_JSON = DATA_DIR / "testdata_nested.json"
-INVALID_JSON_FILE = DATA_DIR / "testdata_bad.json"    # malformed JSON
-BAD_LINE_JSONL = DATA_DIR / "testdata_bad_line.jsonl" # NDJSON mit kaputter Zeile
+INVALID_JSON_FILE = DATA_DIR / "testdata_bad.json"
+BAD_LINE_JSONL = DATA_DIR / "testdata_bad_line.jsonl"
 MIXED_SCHEMA_JSONL = DATA_DIR / "testdata_mixed_schema.jsonl"
 
 
@@ -38,7 +36,6 @@ def build_minimal_schema() -> Schema:
             ColumnDefinition(name="name", data_type=DataType.STRING),
         ]
     )
-
 
 @pytest.fixture(autouse=True)
 def patch_strategies(monkeypatch):
@@ -83,7 +80,6 @@ def metrics() -> ComponentMetrics:
     )
 
 
-# ---------- Read: Bulk ----------
 
 @pytest.mark.asyncio
 async def test_readjson_valid_bulk(schema_definition, metrics):
@@ -223,7 +219,6 @@ async def test_readjson_ndjson_mixed_schema(schema_definition, metrics):
     assert set(df.columns) >= {"id", "name", "nickname", "active"}
 
 
-# ---------- Read: Row (Streaming) ----------
 
 @pytest.mark.asyncio
 async def test_readjson_row_streaming(schema_definition, metrics):
@@ -243,7 +238,6 @@ async def test_readjson_row_streaming(schema_definition, metrics):
     assert set(rows[0].keys()) >= {"id", "name"}
 
 
-# ---------- Read: BigData (Dask) ----------
 
 @pytest.mark.asyncio
 async def test_readjson_bigdata(schema_definition, metrics):
@@ -264,7 +258,6 @@ async def test_readjson_bigdata(schema_definition, metrics):
     assert {"Alice", "Bob", "Charlie"}.issubset(set(df["name"]))
 
 
-# ---------- Write ----------
 
 @pytest.mark.asyncio
 async def test_writejson_row(tmp_path: Path, schema_definition, metrics):
@@ -312,7 +305,6 @@ async def test_writejson_bulk(tmp_path: Path, schema_definition, metrics):
     assert isinstance(res, list) and len(res) == 3
     assert out_fp.exists()
 
-    # read-back
     reader = ReadJSON(
         name="ReadBack_Bulk_JSON",
         description="Read back bulk JSON",
@@ -352,7 +344,6 @@ async def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics):
     parts = sorted(out_dir.glob("part-*.json"))
     assert parts, "No partition files written."
 
-    # read back via dask
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
     df_out = ddf_out.compute().sort_values("id")
     assert list(df_out["name"]) == ["Nina", "Omar"]

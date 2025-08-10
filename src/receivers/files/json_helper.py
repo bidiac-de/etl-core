@@ -10,7 +10,6 @@ def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
     """
     p = str(path)
     if p.endswith(".gz"):
-        # gzip.open returns a binary stream -> wrap with TextIOWrapper for text decoding
         return io.TextIOWrapper(gzip.open(p, mode.replace("t","")), encoding=encoding)
     return open(path, mode, encoding=encoding)
 
@@ -29,12 +28,10 @@ def load_json_records(path: Path) -> List[Dict[str, Any]]:
     if text.startswith("["):
         data = json.loads(text)
         return data if isinstance(data, list) else [data]
-    # Try JSON Lines (one object per non-empty line)
     lines = [ln for ln in text.splitlines() if ln.strip()]
     try:
         return [json.loads(ln) for ln in lines]
     except json.JSONDecodeError:
-        # Fallback: treat whole content as a single JSON object
         obj = json.loads(text)
         return obj if isinstance(obj, list) else [obj]
 
