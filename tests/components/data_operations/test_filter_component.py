@@ -1,86 +1,123 @@
-import pytest
+import asyncio
 from datetime import datetime, timedelta
+from typing import Any, AsyncIterator, Dict, List
+
+import dask.dataframe as dd
+import pandas as pd
+import pytest
 
 from src.components.data_operations.filter_component import FilterComponent
 from src.components.data_operations.comparison_rule import ComparisonRule
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import FilterMetrics
-from src.components.base_component import get_strategy
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.strategies.row_strategy import RowExecutionStrategy
+from src.strategies.bulk_strategy import BulkExecutionStrategy
+from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+
+
+async def agen_rows(items: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+    for it in items:
+        yield it
+        await asyncio.sleep(0)
+
+async def aframes(items: List[pd.DataFrame]) -> AsyncIterator[pd.DataFrame]:
+    for it in items:
+        yield it
+        await asyncio.sleep(0)
+
+
+@pytest.fixture(autouse=True)
+def patch_strategies(monkeypatch):
+    """
+    Make strategies return easy-to-assert shapes in tests:
+      - Row: list[dict]
+      - Bulk: single concatenated DataFrame
+      - BigData: dd.DataFrame
+    """
+    async def row_exec(self, component, payload, metrics):
+        return [r async for r in component.process_row(payload, metrics=metrics)]
+
+    async def bulk_exec(self, component, payload, metrics):
+        parts = [f async for f in component.process_bulk(payload, metrics=metrics)]
+        import pandas as pd
+        return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+    async def bigdata_exec(self, component, payload, metrics):
+        return await component.process_bigdata(payload, metrics=metrics)
+
+    monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
+    monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
+    monkeypatch.setattr(BigDataExecutionStrategy, "execute", bigdata_exec, raising=True)
 
 
 @pytest.fixture
-def sample_data():
-    return [
-        {"id": 1, "name": "Alice", "age": 30, "country": "DE"},
-        {"id": 2, "name": "Bob", "age": 20, "country": "FR"},
-        {"id": 3, "name": "Charlie", "age": 35, "country": "US"},
-    ]
-
-
-@pytest.fixture
-def metrics():
-    return FilterMetrics(
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
         started_at=datetime.now(),
         processing_time=timedelta(0),
         error_count=0,
         lines_received=0,
         lines_forwarded=0,
-        lines_dismissed=0,
     )
 
 
-def test_filter_row(sample_data, metrics):
+@pytest.mark.asyncio
+async def test_filter_component_row(metrics: ComponentMetrics):
     comp = FilterComponent(
-        name="FilterRow",
-        description="Filter rows older than 25",
+        name="Filter rows",
+        description="row path",
         comp_type="filter",
-        schema_definition=[],
-        strategy_type="row",
-        strategy=get_strategy("row"),
-        comparison_rule=ComparisonRule(column="age", operator=">", value=25),
+        rule=ComparisonRule(column="name", operator="==", value="Alice"),
     )
-    result = comp.process_row(sample_data[0], metrics)
-    assert result["name"] == "Alice"
+    comp.strategy = RowExecutionStrategy()
+
+    rows_in = [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
+        {"id": 3, "name": "Alice"},
+    ]
+    out = await comp.execute(payload=agen_rows(rows_in), metrics=metrics)
+    assert [r["id"] for r in out] == [1, 3]
 
 
-def test_filter_bulk(sample_data, metrics):
+@pytest.mark.asyncio
+async def test_filter_component_bulk(metrics: ComponentMetrics):
     comp = FilterComponent(
-        name="FilterBulk",
-        description="Filter only US entries",
+        name="Filter bulk",
+        description="bulk path",
         comp_type="filter",
-        schema_definition=[],
-        strategy_type="bulk",
-        strategy=get_strategy("bulk"),
-        comparison_rule=ComparisonRule(column="country", operator="==", value="US"),
+        rule=ComparisonRule(column="id", operator=">=", value=2),
     )
-    result = comp.process_bulk(sample_data, metrics)
-    assert len(result) == 1
-    assert result[0]["name"] == "Charlie"
+    comp.strategy = BulkExecutionStrategy()
+
+    f1 = pd.DataFrame([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
+    f2 = pd.DataFrame([{"id": 3, "name": "C"}])
+    out_df = await comp.execute(payload=aframes([f1, f2]), metrics=metrics)
+
+    assert isinstance(out_df, pd.DataFrame)
+    assert list(out_df["id"]) == [2, 3]
 
 
-def test_filter_nested_rules(sample_data, metrics):
-    rule = ComparisonRule(
-        logical_operator="AND",
-        rules=[
-            ComparisonRule(column="age", operator=">", value=25),
-            ComparisonRule(
-                logical_operator="OR",
-                rules=[
-                    ComparisonRule(column="country", operator="==", value="DE"),
-                    ComparisonRule(column="name", operator="contains", value="Ali"),
-                ],
-            ),
-        ],
-    )
-
+@pytest.mark.asyncio
+async def test_filter_component_bigdata(metrics: ComponentMetrics):
     comp = FilterComponent(
-        name="FilterNested",
-        description="Nested logic filter",
+        name="Filter big",
+        description="bigdata path",
         comp_type="filter",
-        schema_definition=[],
-        strategy_type="bulk",
-        strategy=get_strategy("bulk"),
-        comparison_rule=rule,
+        rule=ComparisonRule(
+            logical_operator="OR",
+            rules=[
+                ComparisonRule(column="name", operator="==", value="Alice"),
+                ComparisonRule(column="name", operator="==", value="Charlie"),
+            ],
+        ),
     )
-    result = comp.process_bulk(sample_data, metrics)
-    assert len(result) == 1
-    assert result[0]["name"] == "Alice"
+    comp.strategy = BigDataExecutionStrategy()
+
+    pdf = pd.DataFrame(
+        [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}, {"id": 3, "name": "Charlie"}]
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    dout = await comp.execute(payload=ddf, metrics=metrics)
+    out = dout.compute().sort_values("id")
+    assert list(out["name"]) == ["Alice", "Charlie"]

@@ -1,37 +1,58 @@
-from typing import Any, Dict, List, Generator, Union
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import FilterMetrics
+from __future__ import annotations
+from typing import Any, AsyncIterator, Dict
+import asyncio
+import pandas as pd
+import dask.dataframe as dd
+
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.data_operations_receivers.data_operations_receiver import DataOperationsReceiver
-from src.utils.data_operations_helper import DataOperationsHelper
 from src.components.data_operations.comparison_rule import ComparisonRule
+from src.receivers.data_operations_receivers.filter_helper import eval_rule_on_row, eval_rule_on_frame
 
 
 class FilterReceiver(DataOperationsReceiver):
-    """Receiver for filtering rows of data using a ComparisonRule."""
+    """Applies filter rules to row/chunk streams or Dask DataFrames."""
 
-    def process_row(self, metrics: FilterMetrics, row: Dict[str, Any], rule: ComparisonRule) -> Dict[str, Any]:
-        metrics.lines_received += 1
-        if DataOperationsHelper.matches(row, rule):
-            metrics.lines_forwarded += 1
-            return row
-        metrics.lines_dismissed += 1
-        return {}
-
-    def process_bulk(self, metrics: FilterMetrics, data: List[Dict[str, Any]], rule: ComparisonRule) -> List[Dict[str, Any]]:
-        result = []
-        for row in data:
-            processed_row = self.process_row(metrics, row, rule)
-            if processed_row:
-                result.append(processed_row)
-        return result
-
-    def process_bigdata(
+    async def process_row(
             self,
-            metrics: FilterMetrics,
-            chunk_iterable: Union[Generator[Dict[str, Any], None, None], Any],
+            rows: AsyncIterator[Dict[str, Any]],
+            *,
+            metrics: ComponentMetrics,
             rule: ComparisonRule,
-    ) -> Generator[Dict[str, Any], None, None]:
-        for chunk in chunk_iterable:
-            for row in chunk:
-                processed_row = self.process_row(metrics, row, rule)
-                if processed_row:
-                    yield processed_row
+            **_: Any,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Filter incoming rows one by one."""
+        async for row in rows:
+            if eval_rule_on_row(row, rule):
+                yield row
+
+    async def process_bulk(
+            self,
+            frames: AsyncIterator[pd.DataFrame],
+            *,
+            metrics: ComponentMetrics,
+            rule: ComparisonRule,
+            **_: Any,
+    ) -> AsyncIterator[pd.DataFrame]:
+        """Filter incoming DataFrames in bulk."""
+        async for pdf in frames:
+            mask = await asyncio.to_thread(eval_rule_on_frame, pdf, rule)
+            out = pdf[mask]
+            if not out.empty:
+                yield out
+
+    async def process_bigdata(
+            self,
+            ddf: dd.DataFrame,
+            *,
+            metrics: ComponentMetrics,
+            rule: ComparisonRule,
+            **_: Any,
+    ) -> dd.DataFrame:
+        """Filter a large Dask DataFrame at the partition level."""
+
+        def _apply(pdf: pd.DataFrame) -> pd.DataFrame:
+            m = eval_rule_on_frame(pdf, rule)
+            return pdf[m]
+
+        return ddf.map_partitions(_apply, meta=dd.utils.make_meta(ddf))

@@ -1,60 +1,126 @@
-import pytest
+import asyncio
 from datetime import datetime, timedelta
+from typing import Any, AsyncIterator, Dict, List
 
+import dask.dataframe as dd
+import pandas as pd
+import pytest
+
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.data_operations_receivers.filter_receiver import FilterReceiver
 from src.components.data_operations.comparison_rule import ComparisonRule
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import FilterMetrics
+
+
+
+
+async def agen_from_list(items: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:
+    for it in items:
+        yield it
+        await asyncio.sleep(0)
+
+async def aframes_from_list(frames: List[pd.DataFrame]) -> AsyncIterator[pd.DataFrame]:
+    for f in frames:
+        yield f
+        await asyncio.sleep(0)
 
 
 @pytest.fixture
-def metrics():
-    return FilterMetrics(
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
         started_at=datetime.now(),
         processing_time=timedelta(0),
         error_count=0,
         lines_received=0,
         lines_forwarded=0,
-        lines_dismissed=0,
     )
 
 
-@pytest.fixture
-def sample_data():
-    return [
-        {"id": 1, "name": "Alice", "age": 30},
-        {"id": 2, "name": "Bob", "age": 20},
-        {"id": 3, "name": "Charlie", "age": 35},
+@pytest.mark.asyncio
+async def test_filter_receiver_row_simple_equality(metrics: ComponentMetrics):
+    rows = [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
+        {"id": 3, "name": "Alice"},
+    ]
+    rule = ComparisonRule(column="name", operator="==", value="Alice")
+
+    recv = FilterReceiver()
+    out = [r async for r in recv.process_row(agen_from_list(rows), metrics=metrics, rule=rule)]
+
+    assert [r["id"] for r in out] == [1, 3]
+    assert all(r["name"] == "Alice" for r in out)
+
+
+@pytest.mark.asyncio
+async def test_filter_receiver_row_nested_and_or(metrics: ComponentMetrics):
+    rows = [
+        {"id": 1, "name": "Alice",   "age": 25},
+        {"id": 2, "name": "Bob",     "age": 30},
+        {"id": 3, "name": "Charlie", "age": 19},
     ]
 
+    rule = ComparisonRule(
+        logical_operator="AND",
+        rules=[
+            ComparisonRule(
+                logical_operator="OR",
+                rules=[
+                    ComparisonRule(column="name", operator="==", value="Alice"),
+                    ComparisonRule(column="name", operator="==", value="Bob"),
+                ],
+            ),
+            ComparisonRule(column="age", operator=">=", value=25),
+        ],
+    )
 
-def test_receiver_row(metrics, sample_data):
-    receiver = FilterReceiver()
-    rule = ComparisonRule(column="age", operator=">", value=25)
+    recv = FilterReceiver()
+    out = [r async for r in recv.process_row(agen_from_list(rows), metrics=metrics, rule=rule)]
 
-    result = receiver.process_row(metrics, sample_data[0], rule)
-    assert result["name"] == "Alice"
-    assert metrics.lines_forwarded == 1
-    assert metrics.lines_dismissed == 0
+    assert [r["id"] for r in out] == [1, 2]
 
 
-def test_receiver_bulk(metrics, sample_data):
-    receiver = FilterReceiver()
-    rule = ComparisonRule(column="age", operator="<", value=30)
+@pytest.mark.asyncio
+async def test_filter_receiver_bulk_contains_and_not(metrics: ComponentMetrics):
+    df1 = pd.DataFrame([{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}])
+    df2 = pd.DataFrame([{"id": 3, "name": "Charlie"}, {"id": 4, "name": "Liam"}])
 
-    result = receiver.process_bulk(metrics, sample_data, rule)
-    assert len(result) == 1
-    assert result[0]["name"] == "Bob"
-    assert metrics.lines_forwarded == 1
+    rule = ComparisonRule(
+        logical_operator="NOT",
+        rules=[ComparisonRule(column="name", operator="contains", value="li")]
+    )
+
+    recv = FilterReceiver()
+    parts = [f async for f in recv.process_bulk(aframes_from_list([df1, df2]), metrics=metrics, rule=rule)]
+    out = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-def test_receiver_bigdata(metrics, sample_data):
-    receiver = FilterReceiver()
-    rule = ComparisonRule(column="age", operator=">=", value=30)
+    assert out.shape[0] == 1
+    assert out.iloc[0]["name"] == "Bob"
 
-    chunk_iter = [sample_data]
-    result = list(receiver.process_bigdata(metrics, chunk_iter, rule))
 
-    assert len(result) == 2
-    names = [r["name"] for r in result]
-    assert "Alice" in names and "Charlie" in names
-    assert metrics.lines_forwarded == 2
+@pytest.mark.asyncio
+async def test_filter_receiver_bulk_gt(metrics: ComponentMetrics):
+    df = pd.DataFrame([{"id": 1}, {"id": 2}, {"id": 3}])
+    rule = ComparisonRule(column="id", operator=">", value=1)
+
+    recv = FilterReceiver()
+    parts = [f async for f in recv.process_bulk(aframes_from_list([df]), metrics=metrics, rule=rule)]
+    out = pd.concat(parts, ignore_index=True)
+
+    assert list(out["id"]) == [2, 3]
+
+
+
+@pytest.mark.asyncio
+async def test_filter_receiver_bigdata_map_partitions(metrics: ComponentMetrics):
+    pdf = pd.DataFrame(
+        [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}, {"id": 3, "name": "Charlie"}]
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    rule = ComparisonRule(column="name", operator="contains", value="li")
+
+    recv = FilterReceiver()
+    dout = await recv.process_bigdata(ddf, metrics=metrics, rule=rule)
+    out = dout.compute().sort_values("id")
+
+    assert list(out["id"]) == [1, 3]
