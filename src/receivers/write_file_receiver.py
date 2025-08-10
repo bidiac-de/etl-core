@@ -10,9 +10,6 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 class WriteFileReceiver(Receiver, ABC):
     """Abstract receiver for writing data (async + streaming-friendly)."""
 
-    def __init__(self):
-        super().__init__()
-
     @abstractmethod
     async def write_row(self, metrics: ComponentMetrics, row: Dict[str, Any]) -> None:
         """

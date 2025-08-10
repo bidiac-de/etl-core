@@ -7,9 +7,6 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 class ReadFileReceiver(Receiver, ABC):
     """Abstract receiver for reading data (async + streaming)."""
 
-    def __init__(self):
-        super().__init__()
-
     @abstractmethod
     async def read_row(self, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         """

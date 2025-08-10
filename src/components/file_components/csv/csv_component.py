@@ -23,7 +23,7 @@ class CSV(FileComponent, ABC):
     )
 
     separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
-    schema: Schema = Field(..., description="Schema definition")
+
 
     @abstractmethod
     async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:

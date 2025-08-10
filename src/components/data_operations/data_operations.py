@@ -1,5 +1,5 @@
 from typing import List, Optional
-from src.components.base_components import Component
+from src.components.base_component import Component
 from abc import ABC
 
 

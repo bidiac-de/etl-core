@@ -1,5 +1,5 @@
 from typing import Type
-from src.components.base_components import Component
+from src.components.base_component import Component
 
 component_registry: dict[str, Type[Component]] = {}
 

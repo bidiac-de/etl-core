@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 from typing import List, Any, Iterable
-from src.components.base_components import Component
+from src.components.base_component import Component
 from src.components.column_definition import ColumnDefinition
 from src.components.databases.connection_handler import ConnectionHandler
 from src.context.context import Context

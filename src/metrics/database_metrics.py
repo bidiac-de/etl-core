@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from src.metrics.component_metrics import ComponentMetrics
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 class DatabaseMetrics(ComponentMetrics):
