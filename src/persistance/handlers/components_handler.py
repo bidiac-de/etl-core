@@ -92,35 +92,63 @@ class ComponentHandler:
         """
         self.delete_all(session, job_record)
         session.flush()
+        session.expire(job_record, ["components"])
         return self.create_all_from_configs(session, job_record, component_cfgs)
 
-    def delete_all(self, session: Session, job_record) -> None:
+    def delete_all(self, session: Session, job_record: JobTable) -> None:
         """
         Delete all components for a job, including link rows and metadata/layout.
+
+        Ordering rules:
+          1) delete next-link rows
+          2) collect child rows (layout, metadata_) while parents are alive
+          3) delete parents (ComponentTable)
+          4) delete child rows (LayoutTable, MetaDataTable)
+          5) clear/expire relationship so no deleted instances linger in-memory
         """
-        comp_ids = [c.id for c in (job_record.components or [])]
-        if comp_ids:
-            # Cast ORM-typed attributes to SQL expression columns for type checkers
-            component_id_col = cast(ColumnElement[str], ComponentNextLink.component_id)
-            next_id_col = cast(ColumnElement[str], ComponentNextLink.next_id)
+        comp_rows: List[ComponentTable] = list(job_record.components or [])
+        if not comp_rows:
+            return
 
-            stmt_links = cast(
-                Select[ComponentNextLink],
-                select(ComponentNextLink).where(
-                    component_id_col.in_(comp_ids) | next_id_col.in_(comp_ids)
-                ),
-            )
-            for row in session.exec(stmt_links):
-                session.delete(row)
-            session.flush()
+        comp_ids = [c.id for c in comp_rows]
 
-        # delete components (and their 1-1 layout/metadata)
-        for comp in job_record.components or []:
-            if comp.layout is not None:
-                session.delete(comp.layout)
-            if comp.metadata is not None:
-                session.delete(comp.metadata)
-            session.delete(comp)
+        # 1) delete next-link rows first
+        component_id_col = cast(ColumnElement[str], ComponentNextLink.component_id)
+        next_id_col = cast(ColumnElement[str], ComponentNextLink.next_id)
+        stmt_links = cast(
+            Select[ComponentNextLink],
+            select(ComponentNextLink).where(
+                component_id_col.in_(comp_ids) | next_id_col.in_(comp_ids)
+            ),
+        )
+        for row in session.exec(stmt_links):
+            session.delete(row)
+        session.flush()
+
+        # 2) collect child rows WHILE parents are still present
+        layouts = [c.layout for c in comp_rows if c.layout is not None]
+        metas = [
+            c.metadata_ for c in comp_rows if getattr(c, "metadata_", None) is not None
+        ]
+
+        # 3) delete parents first to avoid NULLing non-null FKs
+        with session.no_autoflush:
+            for comp in comp_rows:
+                session.delete(comp)
+        session.flush()
+
+        # 4) delete child rows (now orphaned or no longer referenced)
+        for row in layouts:
+            session.delete(row)
+        for row in metas:
+            session.delete(row)
+        session.flush()
+
+        # 5) clear and expire the parent-side relationship to drop deleted instances
+        if getattr(job_record, "components", None) is not None:
+            job_record.components.clear()
+        session.flush()
+        session.expire(job_record, ["components"])
 
     def build_runtime_for_all(self, job_record) -> List:
         """Build domain components from a job_record with relationships loaded."""
@@ -133,7 +161,7 @@ class ComponentHandler:
                 "comp_type": ct.comp_type,
                 "next": [n.name for n in ct.next_components],
                 "layout": self.dc.dump_layout(ct.layout),
-                "metadata": self.dc.dump_metadata(ct.metadata),
+                "metadata": self.dc.dump_metadata(ct.metadata_),
             }
             cls = component_registry[ct.comp_type]
             obj = cls(**data)

@@ -89,12 +89,20 @@ class JobHandler:
             if row is None:
                 raise ValueError(f"Job with id {job_id!r} not found")
 
-            # components + links + dataclasses
+            # Delete all components, links, metadata
             self.ch.delete_all(session, row)
-            if row.metadata_ is not None:
-                session.delete(row.metadata_)
 
-            session.delete(row)
+            # Capture metadata row while job is still loaded
+            job_meta = row.metadata_
+
+            # Critical: prevent autoflush that would null job.metadata_id
+            with session.no_autoflush:
+                # Delete parent job first so the FK no longer exists
+                session.delete(row)
+                # safe to delete the metadata row now
+                if job_meta is not None:
+                    session.delete(job_meta)
+
             session.commit()
 
     def get_by_id(self, job_id: str) -> Optional[JobTable]:
@@ -110,7 +118,7 @@ class JobHandler:
         """
         build a RuntimeJob from a JobTable record.
         """
-        # fresh relationships for components; load inside a session.
+        # fresh relationships for components; load inside a session
         with self._session() as session:
             rec = session.get(JobTable, record.id)
             if rec is None:

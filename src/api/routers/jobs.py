@@ -98,6 +98,7 @@ def list_jobs() -> List[Dict]:
     for record in records:
         runtime_obj = job_handler.record_to_job(record)
         obj_dict = runtime_obj.model_dump(exclude={"components"})
+        obj_dict["id"] = record.id
         jobs.append(obj_dict)
 
     return jobs
