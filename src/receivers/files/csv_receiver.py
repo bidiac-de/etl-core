@@ -1,4 +1,3 @@
-# src/receivers/files/csv_receiver.py
 from pathlib import Path
 from typing import Dict, Any, List, AsyncIterator, Union
 import pandas as pd
@@ -18,7 +17,6 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
 
     async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         """Yield CSV rows as dictionaries."""
-        # Sync → Async Brücke: im Thread lesen, danach yielden
         rows = await asyncio.to_thread(lambda: list(read_csv_row(filepath)))
         for row in rows:
             yield row

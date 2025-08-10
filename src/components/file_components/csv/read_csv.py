@@ -14,7 +14,6 @@ class ReadCSV(CSV):
 
     @model_validator(mode="after")
     def _build_objects(self):
-        # Receiver ist STATELESS – kein filepath/sep im ctor
         self._receiver = CSVReceiver()
         return self
 
@@ -22,7 +21,6 @@ class ReadCSV(CSV):
             self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Read rows one-by-one (streaming)."""
-        # ❗ WICHTIG: filepath an den Receiver übergeben
         async for result in self._receiver.read_row(self.filepath, metrics=metrics):
             yield result
 
@@ -30,7 +28,6 @@ class ReadCSV(CSV):
             self, data: Any, metrics: ComponentMetrics
     ) -> pd.DataFrame:
         """Read whole CSV as a pandas DataFrame."""
-        # ❗ KEIN async for — DataFrame direkt zurückgeben
         return await self._receiver.read_bulk(self.filepath, metrics=metrics)
 
     async def process_bigdata(

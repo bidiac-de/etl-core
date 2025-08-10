@@ -4,7 +4,8 @@ from typing import Any, Dict, List
 from pydantic import Field, ConfigDict
 from src.components.file_components.file_component import FileComponent
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.components import Schema
+
+
 
 
 class Delimiter(str, Enum):

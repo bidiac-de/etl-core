@@ -28,7 +28,7 @@ def sample_csv_file() -> Path:
 
 @pytest.mark.asyncio
 async def test_readcsv_row(sample_csv_file: Path, metrics: ComponentMetrics):
-    r = CSVReceiver()  # stateless
+    r = CSVReceiver()
     rows = [row async for row in r.read_row(filepath=sample_csv_file, metrics=metrics)]
     assert isinstance(rows, list)
     assert len(rows) >= 1
