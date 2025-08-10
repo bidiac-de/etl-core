@@ -4,6 +4,13 @@ on:
     branches:
       - main
     types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read          # Read repository contents
+  pull-requests: write    # Comment on PRs with SonarQube results
+  checks: write           # Create/update check runs
+  security-events: write  # Upload SARIF results (if enabled)
+
 jobs:
   sonarqube:
     name: SonarQube

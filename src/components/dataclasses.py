@@ -17,12 +17,12 @@ class Layout(BaseModel):
 
     @field_validator("x_coordinate", "y_coordinate", mode="before")
     @classmethod
-    def validate_coordinates(cls, value: float) -> float:
+    def validate_coordinates(cls, value: int) -> int:
         """
-        Validate that the coordinates are non-negative.
+        Validate that the coordinates are integer
         """
-        if value < 0:
-            raise ValueError("Coordinates must be non-negative.")
+        if not isinstance(value, int):
+            raise ValueError("Coordinates must be integer.")
         return value
 
     @property

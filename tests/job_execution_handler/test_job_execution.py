@@ -272,3 +272,72 @@ def test_execute_job_linear_chain():
     assert comp3_metrics.status == RuntimeState.SUCCESS
     assert comp4_metrics.lines_received == 1
     assert comp4_metrics.status == RuntimeState.SUCCESS
+
+
+def test_execute_linear_chain_with_retry_metrics():
+    """
+    A linear job with two components where:
+      - the first component fails once, then succeeds on retry
+      - first attempt: comp1 FAILED (0 lines), comp2 CANCELLED (0 lines)
+      - second attempt: both SUCCESS (1 line each)
+      - final job status is SUCCESS
+    """
+    handler = JobExecutionHandler()
+    config = {
+        "name": "LinearRetryJob",
+        "num_of_retries": 1,
+        "file_logging": False,
+        "metadata": {
+            "created_by": 42,
+            "created_at": datetime.now(),
+        },
+        "strategy_type": "row",
+        "components": [
+            {
+                "name": "c1",
+                "comp_type": "stub_fail_once",
+                "description": "",
+                "next": ["c2"],
+            },
+            {"name": "c2", "comp_type": "test", "description": "", "next": ["c3"]},
+            {"name": "c3", "comp_type": "test", "description": ""},
+        ],
+    }
+    job = Job(**config)
+    execution = handler.execute_job(job)
+
+    # should have retried exactly once
+    assert len(execution.attempts) == 2
+    mh = handler.job_info.metrics_handler
+
+    # grab the two components
+    comp1 = get_component_by_name(job, "c1")
+    comp2 = get_component_by_name(job, "c2")
+    comp3 = get_component_by_name(job, "c3")
+    first = execution.attempts[0]
+    second = execution.attempts[1]
+
+    # first attempt metrics
+    m1_first = mh.get_comp_metrics(execution.id, first.id, comp1.id)
+    m2_first = mh.get_comp_metrics(execution.id, first.id, comp2.id)
+    m3_first = mh.get_comp_metrics(execution.id, first.id, comp3.id)
+    assert m1_first.status == RuntimeState.FAILED
+    assert m1_first.lines_received == 0
+    assert m2_first.status == RuntimeState.CANCELLED
+    assert m2_first.lines_received == 0
+    assert m3_first.status == RuntimeState.CANCELLED
+    assert m3_first.lines_received == 0
+
+    # second attempt metrics
+    m1_second = mh.get_comp_metrics(execution.id, second.id, comp1.id)
+    m2_second = mh.get_comp_metrics(execution.id, second.id, comp2.id)
+    m3_second = mh.get_comp_metrics(execution.id, second.id, comp3.id)
+    assert m1_second.status == RuntimeState.SUCCESS
+    assert m1_second.lines_received == 1
+    assert m2_second.status == RuntimeState.SUCCESS
+    assert m2_second.lines_received == 1
+    assert m3_second.status == RuntimeState.SUCCESS
+    assert m3_second.lines_received == 1
+
+    # final job-level status should be SUCCESS
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
