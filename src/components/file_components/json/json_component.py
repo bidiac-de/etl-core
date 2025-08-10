@@ -15,26 +15,23 @@ class JSON(FileComponent, ABC):
         extra="ignore",
     )
 
-    filepath: Path = Field(..., description="Path to the JSON file")
-    schema_definition: List[ColumnDefinition] = Field(..., description="JSON schema definition")
-
 
     @abstractmethod
-    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
+    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
         """
         Yield single rows (dict) from file.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> AsyncIterator["pd.DataFrame"]:
+    async def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
         """
         Yield pandas DataFrame chunks.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> AsyncIterator["pd.DataFrame"]:
+    async def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
         """
         Yield pandas DataFrame per (big) chunk/partition (e.g., from Dask).
         """

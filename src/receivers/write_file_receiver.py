@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Dict, List, Union
 import pandas as pd
 import dask.dataframe as dd
@@ -11,7 +12,12 @@ class WriteFileReceiver(Receiver, ABC):
     """Abstract receiver for writing data (async + streaming-friendly)."""
 
     @abstractmethod
-    async def write_row(self, metrics: ComponentMetrics, row: Dict[str, Any]) -> None:
+    async def write_row(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            row: Dict[str, Any]
+    ) -> None:
         """
         Write a single row.
         """
@@ -20,6 +26,7 @@ class WriteFileReceiver(Receiver, ABC):
     @abstractmethod
     async def write_bulk(
             self,
+            filepath: Path,
             metrics: ComponentMetrics,
             data: Union[pd.DataFrame, List[Dict[str, Any]]],
     ) -> None:
@@ -30,7 +37,12 @@ class WriteFileReceiver(Receiver, ABC):
         pass
 
     @abstractmethod
-    async def write_bigdata(self, metrics: ComponentMetrics, data: dd.DataFrame) -> None:
+    async def write_bigdata(
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            data: dd.DataFrame
+    ) -> None:
         """
         Write large datasets (e.g., Dask DataFrame partitions).
         """

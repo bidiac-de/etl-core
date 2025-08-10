@@ -1,6 +1,7 @@
 from typing import Any, Dict, Literal, AsyncGenerator
 from pydantic import Field, model_validator
 import pandas as pd
+import dask.dataframe as dd
 
 from src.components.file_components.json.json_component import JSON
 from src.components.dataclasses import Layout, MetaData
@@ -16,10 +17,8 @@ class ReadJSON(JSON):
     type: Literal["read_json"] = Field(default="read_json")
 
     @model_validator(mode="after")
-    def build_objects(self):
-        self._receiver = JSONReceiver(filepath=self.filepath)
-        self.layout = Layout()
-        self.metadata = MetaData()
+    def _build_objects(self):
+        self._receiver = JSONReceiver()
         return self
 
     async def process_row(
@@ -28,23 +27,21 @@ class ReadJSON(JSON):
         """
         Yield one row (dict) at a time.
         """
-        async for rec in self._receiver.read_row(metrics=metrics):
+        async for rec in self._receiver.read_row(self.filepath, metrics=metrics):
             yield rec
 
     async def process_bulk(
             self, data: Any, metrics: ComponentMetrics
-    ) -> AsyncGenerator[pd.DataFrame, None]:
+    ) -> pd.DataFrame:
         """
         Yield pandas DataFrame-Chunks.
         """
-        async for df in self._receiver.read_bulk(metrics=metrics):
-            yield df
+        return await self._receiver.read_bulk(self.filepath, metrics=metrics)
 
     async def process_bigdata(
             self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> AsyncGenerator[pd.DataFrame, None]:
+    ) -> dd.DataFrame:
         """
         Yield pandas DataFrame pro (Dask-)Partition.
         """
-        async for df in self._receiver.read_bigdata(metrics=metrics):
-            yield df
+        return await self._receiver.read_bigdata(self.filepath, metrics=metrics)

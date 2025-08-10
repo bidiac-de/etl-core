@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Union
 from pydantic import Field, model_validator
 import pandas as pd
 
@@ -16,10 +16,8 @@ class WriteJSON(JSON):
     type: Literal["write_json"] = Field(default="write_json")
 
     @model_validator(mode="after")
-    def build_objects(self):
-        self._receiver = JSONReceiver(filepath=self.filepath)
-        self.layout = Layout()
-        self.metadata = MetaData()
+    def _build_objects(self):
+        self._receiver = JSONReceiver()
         return self
 
     async def process_row(
@@ -28,16 +26,16 @@ class WriteJSON(JSON):
         """
         Write a single row and pass it downstream.
         """
-        await self._receiver.write_row(row=row, metrics=metrics)
+        await self._receiver.write_row(self.filepath, metrics=metrics, row=row)
         return row
 
     async def process_bulk(
-            self, data: List[Dict[str, Any]] | pd.DataFrame, metrics: ComponentMetrics
-    ) -> List[Dict[str, Any]] | pd.DataFrame:
+            self, data: Union[List[Dict[str, Any]], pd.DataFrame], metrics: ComponentMetrics
+    ) -> Union[List[Dict[str, Any]], pd.DataFrame]:
         """
         Write multiple rows (DataFrame or List[dict]).
         """
-        await self._receiver.write_bulk(data=data, metrics=metrics)
+        await self._receiver.write_bulk(self.filepath, metrics=metrics, data=data)
         return data
 
     async def process_bigdata(
@@ -45,6 +43,6 @@ class WriteJSON(JSON):
     ) -> Any:
         """
         Write big data (z. B. Dask DataFrame)."""
-        await self._receiver.write_bigdata(data=chunk_iterable, metrics=metrics)
+        await self._receiver.write_bigdata(self.filepath, metrics=metrics, data=chunk_iterable)
         return chunk_iterable
 

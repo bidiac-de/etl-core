@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import AsyncIterator, Dict, Any
 
 from src.receivers.base_receiver import Receiver
@@ -8,14 +9,14 @@ class ReadFileReceiver(Receiver, ABC):
     """Abstract receiver for reading data (async + streaming)."""
 
     @abstractmethod
-    async def read_row(self, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
+    async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         """
         Yield single rows (as dicts).
         """
         pass
 
     @abstractmethod
-    async def read_bulk(self, metrics: ComponentMetrics):
+    async def read_bulk(self, filepath: Path, metrics: ComponentMetrics):
         """
         Read 'bulk' data.
         EITHER yield pd.DataFrame chunks (AsyncIterator[pd.DataFrame])
@@ -25,7 +26,7 @@ class ReadFileReceiver(Receiver, ABC):
         pass
 
     @abstractmethod
-    async def read_bigdata(self, metrics: ComponentMetrics):
+    async def read_bigdata(self, filepath: Path, metrics: ComponentMetrics):
         """
         Read 'big data' (usually Dask).
         EITHER return a dd.DataFrame (awaitable)
