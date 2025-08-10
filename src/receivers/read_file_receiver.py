@@ -1,27 +1,37 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Generator
-from pathlib import Path
+from typing import AsyncIterator, Dict, Any
+
 from src.receivers.base_receiver import Receiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
-
 class ReadFileReceiver(Receiver, ABC):
-    """Abstract receiver for reading data."""
+    """Abstract receiver for reading data (async + streaming)."""
 
-    def __init__(self, id: int = 0):
-        super().__init__(id)
+    def __init__(self):
+        super().__init__()
 
     @abstractmethod
-    def read_row(self, filepath: Path, metrics: ComponentMetrics) -> Dict[str, Any]:
-        """Reads a single row."""
+    async def read_row(self, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Yield single rows (as dicts).
+        """
         pass
 
     @abstractmethod
-    def read_bulk(self, filepath: Path, metrics: ComponentMetrics) -> List[Dict[str, Any]]:
-        """Reads multiple rows as list."""
+    async def read_bulk(self, metrics: ComponentMetrics):
+        """
+        Read 'bulk' data.
+        EITHER yield pd.DataFrame chunks (AsyncIterator[pd.DataFrame])
+        OR return a single pd.DataFrame (awaitable).
+        Pick one shape and keep it consistent across receivers.
+        """
         pass
 
     @abstractmethod
-    def read_bigdata(self, filepath: Path, metrics: ComponentMetrics) -> Generator[Dict[str, Any], None, None]:
-        """Reads big data in a generator/streaming manner."""
+    async def read_bigdata(self, metrics: ComponentMetrics):
+        """
+        Read 'big data' (usually Dask).
+        EITHER return a dd.DataFrame (awaitable)
+        OR yield dd.DataFrame partitions.
+        """
         pass

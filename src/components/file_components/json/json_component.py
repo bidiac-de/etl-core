@@ -1,16 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any, AsyncIterator, Dict, List
 from pydantic import Field, ConfigDict
 
 from src.components.file_components.file_component import FileComponent
 from src.components.column_definition import ColumnDefinition
 from src.metrics.component_metrics import ComponentMetrics
-from src.receivers.files.json_receiver import JSONReceiver
-
 
 class JSON(FileComponent, ABC):
-    """Abstract base class for JSON file components."""
+    """Abstract JSON component, async + streaming (yield)."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -18,27 +16,26 @@ class JSON(FileComponent, ABC):
     )
 
     filepath: Path = Field(..., description="Path to the JSON file")
-    schema_definition: List[ColumnDefinition] = Field(..., description="Schema definition for JSON structure")
-    metrics: Optional[ComponentMetrics] = Field(default=None)
-    receiver: Optional[JSONReceiver] = Field(default=None)
+    schema_definition: List[ColumnDefinition] = Field(..., description="JSON schema definition")
+
 
     @abstractmethod
-    def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
+    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         """
-        Process a single JSON row (dict).
+        Yield single rows (dict) from file.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
+    async def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> AsyncIterator["pd.DataFrame"]:
         """
-        Process a list of JSON rows (dicts).
+        Yield pandas DataFrame chunks.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+    async def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> AsyncIterator["pd.DataFrame"]:
         """
-        Process JSON data in a streaming/big data fashion.
+        Yield pandas DataFrame per (big) chunk/partition (e.g., from Dask).
         """
         raise NotImplementedError
