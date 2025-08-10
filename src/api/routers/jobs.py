@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import ValidationError
 from typing import List, Dict
 
 from src.job_execution.runtimejob import RuntimeJob
@@ -63,14 +62,7 @@ def get_job(job_id: str) -> Dict:
     description="Updates the Job matching the given ID with the"
     " provided configuration.",
 )
-def update_job(job_id: str, job_config: dict) -> str:
-    try:
-        job = RuntimeJob(**job_config)
-    except ValidationError as ve:
-        clean = _sanitize_errors(ve.errors())
-        raise HTTPException(status_code=422, detail=clean)
-    except Exception as ve:
-        raise HTTPException(status_code=500, detail=f"Failed to update job: {ve}")
+def update_job(job_id: str, job: RuntimeJob) -> str:
     object.__setattr__(job, "_id", job_id)
     try:
         job_handler.update(job)
