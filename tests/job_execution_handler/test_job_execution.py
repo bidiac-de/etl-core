@@ -2,9 +2,8 @@ from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
 import src.job_execution.runtimejob as job_module
 from src.components.stubcomponents import StubComponent
-from src.job_execution.runtimejob import RuntimeJob
 from datetime import datetime
-from tests.helpers import get_component_by_name
+from tests.helpers import get_component_by_name, runtime_job_from_config
 
 # ensure Job._build_components() can find TestComponent
 job_module.TestComponent = StubComponent
@@ -40,7 +39,7 @@ def test_execute_job_single_test_component():
         ],
     }
 
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
 
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
@@ -96,7 +95,7 @@ def test_execute_job_chain_components_file_logging():
         ],
     }
 
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -165,7 +164,7 @@ def test_execute_job_failing_and_cancelled_components():
         ],
     }
 
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -212,7 +211,7 @@ def test_retry_logic_and_metrics():
             }
         ],
     }
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[1]
     assert len(execution.attempts) == 2
@@ -285,7 +284,7 @@ def test_execute_job_linear_chain():
         ],
     }
 
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     # Allow up to 4 workers, but dependencies enforce sequential execution
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
@@ -364,7 +363,7 @@ def test_execute_linear_chain_with_retry_metrics():
             },
         ],
     }
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
 
     # should have retried exactly once

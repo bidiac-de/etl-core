@@ -2,8 +2,7 @@ from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
 import src.job_execution.runtimejob as job_module
 from src.components.stubcomponents import StubComponent
-from src.job_execution.runtimejob import RuntimeJob
-from tests.helpers import get_component_by_name
+from tests.helpers import get_component_by_name, runtime_job_from_config
 from datetime import datetime
 
 # ensure Job._build_components() can find TestComponent
@@ -56,7 +55,7 @@ def test_fan_out_topology():
             },
         ],
     }
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -127,7 +126,7 @@ def test_fan_in_topology():
             },
         ],
     }
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
@@ -208,7 +207,7 @@ def test_diamond_topology():
             },
         ],
     }
-    job = RuntimeJob(**config)
+    job = runtime_job_from_config(config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1

@@ -5,8 +5,8 @@ from src.api.helpers import inline_defs
 from typing import List
 
 router = APIRouter(
-    prefix="/schemas",
-    tags=["schemas"],
+    prefix="/configs",
+    tags=["configs"],
 )
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from uuid import uuid4
 
 from typing import List, Optional
 from contextlib import contextmanager
@@ -6,6 +7,7 @@ from contextlib import contextmanager
 from sqlmodel import Session, select
 from src.persistance.db import engine
 from src.job_execution.runtimejob import RuntimeJob
+from src.persistance.configs.job_config import JobConfig
 from src.persistance.table_definitions import JobTable
 from src.persistance.handlers.dataclasses_handler import DataClassHandler
 from src.persistance.handlers.components_handler import ComponentHandler
@@ -26,54 +28,56 @@ class JobHandler:
         with Session(self.engine) as session:
             yield session
 
-    def create_job_entry(self, job: RuntimeJob) -> JobTable:
+    def create_job_entry(self, cfg: JobConfig) -> JobTable:
+        """
+        Persist a pure config. DB/system generates IDs.
+        """
         with self._session() as session:
             job_meta = self.dc.create_metadata_entry(
-                session, job.metadata_.model_dump()
+                session, cfg.metadata_.model_dump()
             )
-
             row = JobTable(
-                id=job.id,
-                name=job.name,
-                num_of_retries=job.num_of_retries,
-                file_logging=job.file_logging,
-                strategy_type=job.strategy_type,
+                id=str(uuid4()),
+                name=cfg.name,
+                num_of_retries=cfg.num_of_retries,
+                file_logging=cfg.file_logging,
+                strategy_type=cfg.strategy_type,
                 metadata_=job_meta,
             )
             session.add(row)
             session.flush()
 
-            self.ch.create_all(session, row, job.components)
-
+            self.ch.create_all_from_configs(session, row, cfg.components)
             session.commit()
             session.refresh(row)
             return row
 
-    def update(self, job: RuntimeJob) -> JobTable:
+    def update(self, job_id: str, cfg: JobConfig) -> JobTable:
+        """
+        Replace an existing job with data from a pure config.
+        """
         with self._session() as session:
-            row = session.get(JobTable, job.id)
+            row = session.get(JobTable, job_id)
             if row is None:
-                raise ValueError(f"Job with id {job.id!r} not found")
+                raise ValueError(f"Job with id {job_id!r} not found")
 
-            # simple field updates
-            row.name = job.name
-            row.num_of_retries = job.num_of_retries
-            row.file_logging = job.file_logging
-            row.strategy_type = job.strategy_type
+            # simple fields
+            row.name = cfg.name
+            row.num_of_retries = cfg.num_of_retries
+            row.file_logging = cfg.file_logging
+            row.strategy_type = cfg.strategy_type
 
             # metadata
             if row.metadata_ is None:
                 row.metadata_ = self.dc.create_metadata_entry(
-                    session, job.metadata_.model_dump()
+                    session, cfg.metadata_.model_dump()
                 )
             else:
                 self.dc.update_metadata_entry(
-                    session, row.metadata_, job.metadata_.model_dump()
+                    session, row.metadata_, cfg.metadata_.model_dump()
                 )
 
-            # replace components
-            self.ch.replace_all(session, row, job.components)
-
+            self.ch.replace_all_from_configs(session, row, cfg.components)
             session.add(row)
             session.commit()
             session.refresh(row)
@@ -112,17 +116,20 @@ class JobHandler:
             if rec is None:
                 raise ValueError(f"Job with id {record.id!r} not found")
 
-            comps = self.ch.hydrate_all(rec)
-
             payload = {
                 "name": rec.name,
                 "num_of_retries": rec.num_of_retries,
                 "file_logging": rec.file_logging,
                 "strategy_type": rec.strategy_type,
-                "components": [c.model_dump() for c in comps],
-                "metadata": rec.metadata_.model_dump() if rec.metadata else {},
+                "components": [],
+                "metadata": {},
             }
             job = RuntimeJob(**payload)
             # Keep persisted id
             object.__setattr__(job, "_id", rec.id)
+
+            comps = self.ch.build_runtime_for_all(rec)
+            job.components = comps
+            if rec.metadata_ is not None:
+                job.metadata_ = self.dc.dump_metadata(rec.metadata_)
             return job

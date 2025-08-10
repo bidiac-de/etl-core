@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
 
-from src.job_execution.runtimejob import RuntimeJob
 from src.persistance.handlers.job_handler import JobHandler
+from src.persistance.configs.job_config import JobConfig
 
 router = APIRouter(
     prefix="/jobs",
@@ -31,12 +31,12 @@ def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
     summary="Create a new Job",
     description="Creates a new Job with the provided configuration and persists it.",
 )
-def create_job(job: RuntimeJob) -> str:
+def create_job(job_cfg: JobConfig) -> str:
     try:
-        job_handler.create_job_entry(job)
+        entry = job_handler.create_job_entry(job_cfg)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to persist job: {e}")
-    return job.id
+    return entry.id
 
 
 @router.get(
@@ -55,22 +55,15 @@ def get_job(job_id: str) -> Dict:
     return result
 
 
-@router.put(
-    "/{job_id}",
-    response_model=str,
-    summary="Update Job by ID",
-    description="Updates the Job matching the given ID with the"
-    " provided configuration.",
-)
-def update_job(job_id: str, job: RuntimeJob) -> str:
-    object.__setattr__(job, "_id", job_id)
+@router.put("/{job_id}", response_model=str)
+def update_job(job_id: str, job_cfg: JobConfig) -> str:
     try:
-        job_handler.update(job)
+        row = job_handler.update(job_id, job_cfg)
     except ValueError as not_found:
         raise HTTPException(status_code=404, detail=str(not_found))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update job: {e}")
-    return job.id
+    return row.id
 
 
 @router.delete(
