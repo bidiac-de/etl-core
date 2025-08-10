@@ -61,7 +61,7 @@ def test_create_job_with_components():
         "strategy_type": "row",
         "metadata_": {
             "user_id": 42,
-            "timestampt": "2023-10-01T12:00:00",
+            "timestamp": "2023-10-01T12:00:00",
         },
         "components": [
             {
@@ -84,6 +84,12 @@ def test_create_job_with_components():
         assert record.num_of_retries == 2
         assert record.file_logging is True
         assert record.strategy_type == "row"
+        meta = session.get(MetaDataTable, record.metadata_.id)
+        assert meta.user_id == 42
+        comp1 = session.get(ComponentTable, record.components[0].id)
+        comp2 = session.get(ComponentTable, record.components[1].id)
+        assert comp1.name == "test1"
+        assert comp2.name == "test2"
 
 
 def test_create_job_invalid_component_type():
