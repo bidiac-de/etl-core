@@ -1,23 +1,18 @@
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict
+from typing import Annotated, Dict, List
 
-from src.persistance.handlers.job_handler import JobHandler
+from fastapi import APIRouter, Depends, HTTPException
+
+from src.api.dependencies import get_job_handler
 from src.persistance.configs.job_config import JobConfig
+from src.persistance.handlers.job_handler import JobHandler
 
-router = APIRouter(
-    prefix="/jobs",
-    tags=["Jobs"],
-)
-
-job_handler = JobHandler()
+router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 
 def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
-    # Remove non-serializable fields from Pydantic errors
     sanitized: List[Dict] = []
     for err in errors:
-        # Keep only essential serializable keys
-        filtered = {}
+        filtered: Dict = {}
         for key in ("type", "loc", "msg", "url"):
             if key in err:
                 filtered[key] = err[key]
@@ -31,11 +26,16 @@ def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
     summary="Create a new Job",
     description="Creates a new Job with the provided configuration and persists it.",
 )
-def create_job(job_cfg: JobConfig) -> str:
+def create_job(
+    job_cfg: JobConfig,
+    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
+) -> str:
     try:
         entry = job_handler.create_job_entry(job_cfg)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to persist job: {e}")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist job: {exc}"
+        ) from exc
     return entry.id
 
 
@@ -45,7 +45,10 @@ def create_job(job_cfg: JobConfig) -> str:
     summary="Get Job by ID",
     description="Returns the JSON representation of the Job matching the given ID.",
 )
-def get_job(job_id: str) -> Dict:
+def get_job(
+    job_id: str,
+    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
+) -> Dict:
     record = job_handler.get_by_id(job_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
@@ -56,13 +59,19 @@ def get_job(job_id: str) -> Dict:
 
 
 @router.put("/{job_id}", response_model=str)
-def update_job(job_id: str, job_cfg: JobConfig) -> str:
+def update_job(
+    job_id: str,
+    job_cfg: JobConfig,
+    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
+) -> str:
     try:
         row = job_handler.update(job_id, job_cfg)
     except ValueError as not_found:
-        raise HTTPException(status_code=404, detail=str(not_found))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update job: {e}")
+        raise HTTPException(status_code=404, detail=str(not_found)) from not_found
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update job: {exc}"
+        ) from exc
     return row.id
 
 
@@ -72,14 +81,19 @@ def update_job(job_id: str, job_cfg: JobConfig) -> str:
     summary="Delete Job by ID",
     description="Deletes the Job matching the given ID.",
 )
-def delete_job(job_id: str) -> Dict:
+def delete_job(
+    job_id: str,
+    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
+) -> Dict:
     record = job_handler.get_by_id(job_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
     try:
         job_handler.delete(job_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete job: {e}")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete job: {exc}"
+        ) from exc
     return {"message": f"Job {job_id!r} deleted successfully"}
 
 
@@ -89,7 +103,9 @@ def delete_job(job_id: str) -> Dict:
     summary="List all Jobs (no components)",
     description="Returns each job’s data—excluding components but including metadata.",
 )
-def list_jobs() -> List[Dict]:
+def list_jobs(
+    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
+) -> List[Dict]:
     records = job_handler.get_all()
     if not records:
         return []
