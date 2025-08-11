@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -24,22 +23,14 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_json_file() -> Path:
     return (
-            Path(__file__).parent.parent
-            / "components"
-            / "data"
-            / "json"
-            / "testdata.json"
+        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.json"
     )
 
 
 @pytest.fixture
 def sample_ndjson_file() -> Path:
     return (
-            Path(__file__).parent.parent
-            / "components"
-            / "data"
-            / "json"
-            / "testdata.jsonl"
+        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.jsonl"
     )
 
 
@@ -78,8 +69,12 @@ async def test_writejson_row(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.json"
     r = JSONReceiver()
 
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"})
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"})
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"}
+    )
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"}
+    )
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics)
     assert len(df) == 2
@@ -129,8 +124,11 @@ async def test_writejson_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 
 @pytest.mark.asyncio
 async def test_readjson_row_gz(tmp_path: Path, metrics: ComponentMetrics):
-    """Optional: .gz Support – only read_row (uses open_text_auto)."""
-    import gzip, json as _json
+    """
+    Optional: .gz Support – only read_row (uses open_text_auto).
+    """
+    import gzip
+    import json as _json
     import asyncio
 
     gz_path = tmp_path / "rows.json.gz"

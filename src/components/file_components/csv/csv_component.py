@@ -8,13 +8,12 @@ from src.components.file_components.file_component import FileComponent
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
-
-
 class Delimiter(str, Enum):
     """Enum for possible CSV delimiters."""
-    COMMA = ','
-    SEMICOLON = ';'
-    TAB = '\t'
+
+    COMMA = ","
+    SEMICOLON = ";"
+    TAB = "\t"
 
 
 class CSV(FileComponent, ABC):
@@ -25,25 +24,32 @@ class CSV(FileComponent, ABC):
         extra="ignore",
     )
 
-    separator: Delimiter = Field(default=Delimiter.COMMA, description="CSV field separator")
-
+    separator: Delimiter = Field(
+        default=Delimiter.COMMA, description="CSV field separator"
+    )
 
     @abstractmethod
-    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
+    async def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> Dict[str, Any]:
         """
         Process a single row of CSV data.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bulk(self, data: Optional[pd.DataFrame], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
+    async def process_bulk(
+        self, data: Optional[pd.DataFrame], metrics: ComponentMetrics
+    ) -> List[Dict[str, Any]]:
         """
         Process multiple rows of CSV data.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+    async def process_bigdata(
+        self, chunk_iterable: Any, metrics: ComponentMetrics
+    ) -> Any:
         """
         Process CSV data in a streaming/big data fashion.
         """

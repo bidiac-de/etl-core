@@ -5,9 +5,9 @@ from typing import Dict, Any, List, Generator
 
 class MongoDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
     """
-    MongoDBReceiver is a class that handles the reception of data from a MongoDB database.
-    It is designed to work with the MongoDB database system and provides methods to connect,
-    query, and retrieve data from the database.
+    MongoDBReceiver is a class that handles the reception of data from a
+    MongoDB database. It is designed to work with the MongoDB database system and
+    provides methods to connect, query, and retrieve data from the database.
     """
 
     async def read_row(self) -> Dict[str, Any]:

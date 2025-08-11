@@ -52,7 +52,9 @@ def write_csv_bulk(path: Path, data: List[Dict[str, Any]]):
         writer.writerows(data)
 
 
-def write_csv_bigdata(path: Path, data: Union[dd.DataFrame, Generator[Dict[str, Any], None, None]]):
+def write_csv_bigdata(
+    path: Path, data: Union[dd.DataFrame, Generator[Dict[str, Any], None, None]]
+):
     """Write large datasets to a CSV file using Dask or a generator."""
     path = resolve_file_path(path)
 

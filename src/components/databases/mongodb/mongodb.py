@@ -1,12 +1,11 @@
 from src.components.databases.database import DatabaseComponent
-from src.components.base_component import Component
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 import pandas as pd
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
-class MongoDBComponent(Component, ABC):
+class MongoDBComponent(DatabaseComponent, ABC):
     """
     MongoDB component for orchestrating MongoDB operations.
     """

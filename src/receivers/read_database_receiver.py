@@ -10,16 +10,16 @@ class ReadDatabaseReceiver(Receiver, ABC):
         super().__init__(id)
 
     @abstractmethod
-    def read_row(self) -> Dict[str, Any]:
+    async def read_row(self) -> Dict[str, Any]:
         """Reads a single row."""
         pass
 
     @abstractmethod
-    def read_bulk(self) -> List[Dict[str, Any]]:
+    async def read_bulk(self) -> List[Dict[str, Any]]:
         """Reads multiple rows as list."""
         pass
 
     @abstractmethod
-    def read_bigdata(self) -> Generator[Dict[str, Any], None, None]:
+    async def read_bigdata(self) -> Generator[Dict[str, Any], None, None]:
         """Reads big data in a generator/streaming manner."""
         pass

@@ -16,21 +16,28 @@ class WriteMongoDB(MongoDBComponent):
         return self
 
     async def process_row(self, row: dict, metrics: ComponentMetrics) -> dict:
-        """Write a single row to MongoDB."""
+        """
+        Write a single row to MongoDB.
+        """
         await self._receiver.write_row(self.collection_name, row, metrics=metrics)
         return row
 
     async def process_bulk(
         self, data: list[dict], metrics: ComponentMetrics
     ) -> list[dict]:
-        """Write a bulk of data to MongoDB."""
+        """
+        Write a bulk of data to MongoDB.
+        """
         await self._receiver.write_bulk(self.collection_name, data, metrics=metrics)
         return data
 
     async def process_bigdata(
         self, chunk_iterable: Any, metrics: ComponentMetrics
     ) -> Any:
-        """Write large data to MongoDB using a suitable framework for big data operations."""
+        """
+        Write large data to MongoDB using a suitable framework
+        for big data operations.
+        """
         await self._receiver.write_bigdata(
             self.collection_name, chunk_iterable, metrics=metrics
         )

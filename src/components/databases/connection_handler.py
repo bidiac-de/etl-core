@@ -20,14 +20,14 @@ class ConnectionHandler:
 
     @classmethod
     def create(
-            cls,
-            db_type: str,
-            user: Optional[str] = None,
-            password: Optional[str] = None,
-            host: Optional[str] = None,
-            port: Optional[int] = None,
-            database: Optional[str] = None,
-            **extras: Any
+        cls,
+        db_type: str,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        database: Optional[str] = None,
+        **extras: Any,
     ) -> "ConnectionHandler":
         db = db_type.lower()
 
@@ -42,8 +42,9 @@ class ConnectionHandler:
             else:
 
                 if not all([user, password, host, port, database]):
-                    raise ValueError(f"{db} requires user, password, host, port, and database.")
-
+                    raise ValueError(
+                        f"{db} requires user, password, host, port, and database."
+                    )
 
                 real_url = f"{driver}://{user}:{password}@{host}:{port}/{database}"
                 masked_url = f"{driver}://{user}:***@{host}:{port}/{database}"
@@ -70,7 +71,10 @@ class ConnectionHandler:
             client = MongoClient(real_uri, **extras)
             conn = client[database]
 
-            print(f"[ConnectionHandler] Created MongoDB connection: {masked_uri}/{database}")
+            print(
+                f"[ConnectionHandler] Created MongoDB "
+                f"connection: {masked_uri}/{database}"
+            )
 
             instance = cls()
             instance.connection = conn
