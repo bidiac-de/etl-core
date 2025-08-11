@@ -1,33 +1,41 @@
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, AsyncGenerator, Literal
+import pandas as pd
+import dask.dataframe as dd
 from pydantic import Field, model_validator
+
 from src.components.file_components.csv.csv_component import CSV
 from src.components.registry import register_component
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.files.csv_receiver import CSVReceiver
 
+
 @register_component("write_csv")
 class WriteCSV(CSV):
-    type: Literal["write_csv"] = Field(default="write_csv")
+    """CSV writer supporting row, bulk, and bigdata modes."""
+
 
     @model_validator(mode="after")
     def _build_objects(self):
-        self._receiver = CSVReceiver()  # stateless
+        self._receiver = CSVReceiver()
         return self
 
     async def process_row(
             self, row: Dict[str, Any], metrics: ComponentMetrics
-    ) -> Dict[str, Any]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Write a single row and yield it."""
         await self._receiver.write_row(self.filepath, metrics=metrics, row=row)
-        return row
+        yield row
 
     async def process_bulk(
             self, data: List[Dict[str, Any]], metrics: ComponentMetrics
-    ) -> List[Dict[str, Any]]:
+    ) -> AsyncGenerator[pd.DataFrame, None]:
+        """Write full pandas DataFrame and yield it."""
         await self._receiver.write_bulk(self.filepath, metrics=metrics, data=data)
-        return data
+        yield data
 
     async def process_bigdata(
             self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> Any:
+    ) -> AsyncGenerator[dd.DataFrame, None]:
+        """Write Dask DataFrame and yield it."""
         await self._receiver.write_bigdata(self.filepath, metrics=metrics, data=chunk_iterable)
-        return chunk_iterable
+        yield chunk_iterable

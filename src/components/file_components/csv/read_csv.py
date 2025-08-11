@@ -10,7 +10,7 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 @register_component("read_csv")
 class ReadCSV(CSV):
-    type: Literal["write_csv"] = Field(default="write_csv")
+    """CSV reader supporting row, bulk, and bigdata modes."""
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -25,13 +25,19 @@ class ReadCSV(CSV):
             yield result
 
     async def process_bulk(
-            self, data: Any, metrics: ComponentMetrics
-    ) -> pd.DataFrame:
+            self,
+            metrics: ComponentMetrics,
+            dataframe: pd.DataFrame,
+    ) -> AsyncGenerator[pd.DataFrame, None]:
         """Read whole CSV as a pandas DataFrame."""
-        return await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        df = await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        yield df
 
     async def process_bigdata(
-            self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> dd.DataFrame:
+            self,
+            metrics: ComponentMetrics,
+            dataframe: pd.DataFrame,
+    ) -> AsyncGenerator[dd.DataFrame, None]:
         """Read large CSV as a Dask DataFrame."""
-        return await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        yield ddf

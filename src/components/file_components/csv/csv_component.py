@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 from pydantic import Field, ConfigDict
 from src.components.file_components.file_component import FileComponent
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -34,7 +36,7 @@ class CSV(FileComponent, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
+    async def process_bulk(self, data: Optional[pd.DataFrame], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
         """
         Process multiple rows of CSV data.
         """

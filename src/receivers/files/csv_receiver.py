@@ -13,7 +13,7 @@ from src.receivers.files.csv_helper import (
 )
 
 class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
-    """Receiver for CSV files with Pandas (bulk) and Dask (bigdata)."""
+    """Receiver for CSV files."""
 
     async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         """Yield CSV rows as dictionaries."""
