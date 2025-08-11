@@ -1,6 +1,8 @@
-from typing import List
+from typing import List, Any
+from sqlalchemy import Column
 from uuid import uuid4
 from sqlalchemy.orm import foreign
+from sqlalchemy.types import JSON
 
 from sqlmodel import Field, SQLModel, Relationship
 from src.persistance.base_models.job_base import JobBase
@@ -50,6 +52,11 @@ class ComponentTable(ComponentBase, table=True):
 
     metadata_id: str = Field(foreign_key="metadatatable.id", nullable=False)
     metadata_: MetaDataTable = Relationship(back_populates="components")
+
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+    )
 
     # self-referential many-to-many for “next”
     next_components: List["ComponentTable"] = Relationship(

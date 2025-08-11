@@ -1,24 +1,46 @@
 from __future__ import annotations
 
-from typing import List, cast, Dict
+from typing import Any, Dict, List, Set, Tuple, cast
+
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, select
 from sqlmodel.sql.expression import Select
-from sqlalchemy.sql.elements import ColumnElement
 
 from src.components.base_component import Component
-from src.persistance.table_definitions import (
-    ComponentTable,
-    ComponentNextLink,
-    JobTable,
-)
 from src.components.component_registry import component_registry
 from src.persistance.handlers.dataclasses_handler import DataClassHandler
+from src.persistance.table_definitions import (
+    ComponentNextLink,
+    ComponentTable,
+    JobTable,
+)
+
+# Fields that remain as top-level columns on ComponentTable
+# Everything else goes into ComponentTable.payload
+BASE_FIELDS: Set[str] = {
+    "name",
+    "description",
+    "comp_type",
+    "next",
+    "layout",
+    "layout_",
+    "metadata",
+    "metadata_",
+}
+
+
+def _split_base_and_payload(
+    data: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    base = {k: v for k, v in data.items() if k in BASE_FIELDS}
+    payload = {k: v for k, v in data.items() if k not in BASE_FIELDS}
+    return base, payload
 
 
 class ComponentHandler:
     """
-    Handler for CRUD operations on ComponentTable as well
-    as re-building runtime components.
+    Handler for CRUD operations on ComponentTable and
+    re-building runtime components.
     """
 
     def __init__(self, dc_handler: DataClassHandler):
@@ -31,8 +53,8 @@ class ComponentHandler:
         cfg: Component,
     ) -> ComponentTable:
         """
-        Insert a single component row for job_record and wire its `next` links.
-        `cfg.next` must reference existing component names on the same job,
+        Insert a single component row for job_record and wire its next links.
+        cfg.next must reference existing component names on the same job,
         or ValueError is raised.
         """
         ct = self._insert_component_row(session, job_record, cfg)
@@ -98,13 +120,12 @@ class ComponentHandler:
     def delete_all(self, session: Session, job_record: JobTable) -> None:
         """
         Delete all components for a job, including link rows and metadata/layout.
-
         Ordering rules:
           1) delete next-link rows
           2) collect child rows (layout, metadata_) while parents are alive
           3) delete parents (ComponentTable)
           4) delete child rows (LayoutTable, MetaDataTable)
-          5) clear/expire relationship so no deleted instances linger in-memory
+          5) clear/expire relationship so no deleted instances remain in-memory
         """
         comp_rows: List[ComponentTable] = list(job_record.components or [])
         if not comp_rows:
@@ -112,7 +133,7 @@ class ComponentHandler:
 
         comp_ids = [c.id for c in comp_rows]
 
-        # 1) delete next-link rows first
+        # delete next-link rows first
         component_id_col = cast(ColumnElement[str], ComponentNextLink.component_id)
         next_id_col = cast(ColumnElement[str], ComponentNextLink.next_id)
         stmt_links = cast(
@@ -125,44 +146,50 @@ class ComponentHandler:
             session.delete(row)
         session.flush()
 
-        # 2) collect child rows WHILE parents are still present
+        # collect child rows WHILE parents are still present
         layouts = [c.layout for c in comp_rows if c.layout is not None]
         metas = [
             c.metadata_ for c in comp_rows if getattr(c, "metadata_", None) is not None
         ]
 
-        # 3) delete parents first to avoid NULLing non-null FKs
+        # delete parents first to avoid NULLing non-null FKs
         with session.no_autoflush:
             for comp in comp_rows:
                 session.delete(comp)
         session.flush()
 
-        # 4) delete child rows (now orphaned or no longer referenced)
+        # delete child rows (now orphaned or no longer referenced)
         for row in layouts:
             session.delete(row)
         for row in metas:
             session.delete(row)
         session.flush()
 
-        # 5) clear and expire the parent-side relationship to drop deleted instances
+        # clear and expire the parent-side relationship to drop deleted instances
         if getattr(job_record, "components", None) is not None:
             job_record.components.clear()
         session.flush()
         session.expire(job_record, ["components"])
 
     def build_runtime_for_all(self, job_record) -> List:
-        """Build domain components from a job_record with relationships loaded."""
-        runtime_comps = []
+        """
+        Build domain components from a job_record with relationships loaded.
+        """
+        runtime_comps: List = []
         for ct in job_record.components:
-            data = {
+            base = {
                 "id": ct.id,
                 "name": ct.name,
                 "description": ct.description,
                 "comp_type": ct.comp_type,
                 "next": [n.name for n in ct.next_components],
                 "layout": self.dc.dump_layout(ct.layout),
+                # Keep key name as in your current code:
                 "metadata": self.dc.dump_metadata(ct.metadata_),
             }
+            # Merge payload with base, base > payload on collisions.
+            data = {**ct.payload, **base}
+
             cls = component_registry[ct.comp_type]
             obj = cls(**data)
             # restore private id so the runtime matches DB row ids
@@ -171,7 +198,6 @@ class ComponentHandler:
 
         name_map = {c.name: c for c in runtime_comps}
 
-        # wire up components using comprehension
         for comp in runtime_comps:
             try:
                 next_objs = [name_map[n] for n in comp.next]
@@ -212,18 +238,22 @@ class ComponentHandler:
     ) -> ComponentTable:
         """
         Creates layout/metadata rows, then the component row.
+        Subtype-specific fields are stored into ComponentTable.payload.
         """
         layout = self.dc.create_layout_entry(session, cfg.layout.model_dump())
         meta = self.dc.create_metadata_entry(session, cfg.metadata_.model_dump())
 
+        raw: Dict[str, Any] = cfg.model_dump(by_alias=False, exclude_none=True)
+        base_fields, payload_fields = _split_base_and_payload(raw)
+
         ct = ComponentTable(
-            # id is auto via default_factory on the table model
-            name=cfg.name,
-            description=cfg.description,
-            comp_type=cfg.comp_type,
+            name=base_fields["name"],
+            description=base_fields.get("description", ""),
+            comp_type=base_fields["comp_type"],
             job=job_record,
             layout=layout,
             metadata_=meta,
+            payload=payload_fields,
         )
         session.add(ct)
         return ct

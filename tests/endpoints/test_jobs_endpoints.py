@@ -8,6 +8,8 @@ from src.persistance.table_definitions import (
     LayoutTable,
     ComponentTable,
 )
+from typing import Dict, List
+from src.persistance.configs.job_config import JobConfig
 
 
 def test_list_jobs_empty(client: TestClient):
@@ -238,7 +240,66 @@ def test_list_jobs_returns_metadata_but_not_components(client: TestClient) -> No
     assert "id" in items[0]
 
 
-# helpers:
+def test_component_payload_persisted_in_db(client: TestClient) -> None:
+    # Create job via API with a component that has an extra field `count`
+    cfg: Dict = {
+        "name": "payload_job",
+        "components": [
+            {
+                "comp_type": "multi_source",
+                "name": "src",
+                "description": "",
+                "next": [],
+                "count": 7,  # extra attribute → should land in payload
+            }
+        ],
+    }
+    resp = client.post("/jobs/", json=cfg)
+    assert resp.status_code == 200
+    job_id = resp.json()
+
+    # Inspect DB directly: payload should contain {"count": 7}
+    with Session(engine) as session:
+        rows: List[ComponentTable] = list(
+            session.exec(select(ComponentTable).where(ComponentTable.job_id == job_id))
+        )
+        assert len(rows) == 1
+        ct = rows[0]
+        assert isinstance(ct.payload, dict)
+        assert ct.payload == {"count": 7}
+
+
+def test_component_payload_hydrates_to_runtime(shared_job_handler) -> None:
+    # Create job using the real handler & JobConfig
+    cfg = JobConfig(
+        name="payload_roundtrip",
+        components=[
+            {
+                "comp_type": "multi_source",
+                "name": "src",
+                "description": "",
+                "next": [],
+                "count": 3,  # should survive round-trip into runtime object
+            }
+        ],
+    )
+    row = shared_job_handler.create_job_entry(cfg)
+    job_id = row.id
+
+    # Load fresh record and hydrate to RuntimeJob
+    record = shared_job_handler.get_by_id(job_id)
+    assert record is not None
+    runtime = shared_job_handler.record_to_job(record)
+
+    # Validate: correct class + attribute restored from payload
+    assert len(runtime.components) == 1
+    comp = runtime.components[0]
+    # class is MultiSource (registered at import time)
+    assert comp.comp_type == "multi_source"
+    assert getattr(comp, "count", None) == 3
+
+
+# helpers for these specific tests
 def _post_job(client: TestClient, config: dict | None = None) -> str:
     payload = config or {}
     resp = client.post("/jobs/", json=payload)
