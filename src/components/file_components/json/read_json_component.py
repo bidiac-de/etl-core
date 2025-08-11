@@ -36,7 +36,8 @@ class ReadJSON(JSON):
         """
         Yield pandas DataFrame-Chunks.
         """
-        return await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        df = await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        yield df
 
     async def process_bigdata(
             self, chunk_iterable: Any, metrics: ComponentMetrics
@@ -44,4 +45,5 @@ class ReadJSON(JSON):
         """
         Yield pandas DataFrame pro (Dask-)Partition.
         """
-        return await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        yield ddf

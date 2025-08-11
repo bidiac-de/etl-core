@@ -4,7 +4,7 @@ import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal, AsyncGenerator
 
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
@@ -37,29 +37,49 @@ def build_minimal_schema() -> Schema:
         ]
     )
 
+
+Mode = Literal["row", "bulk", "bigdata"]
+
+async def _consume_async_gen(gen: AsyncGenerator):
+    items = []
+    async for item in gen:
+        items.append(item)
+    return items
+
+async def _coerce_async_result(res: Any, *, mode: Mode, component_type: str):
+    if hasattr(res, "__aiter__"):
+        items = await _consume_async_gen(res)
+        if mode == "row":
+            return items[0] if (component_type == "write_json" and len(items) == 1) else items
+        return items[0] if items else None
+
+    if hasattr(res, "__await__"):
+        return await res
+
+    return res
+
+
 @pytest.fixture(autouse=True)
 def patch_strategies(monkeypatch):
+    from src.strategies.row_strategy import RowExecutionStrategy
+    from src.strategies.bulk_strategy import BulkExecutionStrategy
+    from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+
     async def row_exec(self, component, payload, metrics):
         res = component.process_row(payload, metrics=metrics)
-        if hasattr(res, "__aiter__"):
-            items = []
-            async for item in res:
-                items.append(item)
-            return items
-        if hasattr(res, "__await__"):
-            return await res
-        return res
+        return await _coerce_async_result(res, mode="row", component_type=getattr(component, "type", ""))
 
     async def bulk_exec(self, component, payload, metrics):
-        return await component.process_bulk(payload, metrics=metrics)
+        res = component.process_bulk(payload, metrics=metrics)
+        return await _coerce_async_result(res, mode="bulk", component_type=getattr(component, "type", ""))
 
     async def bigdata_exec(self, component, payload, metrics):
-        return await component.process_bigdata(payload, metrics=metrics)
+        res = component.process_bigdata(payload, metrics=metrics)
+        return await _coerce_async_result(res, mode="bigdata", component_type=getattr(component, "type", ""))
 
     monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
     monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
     monkeypatch.setattr(BigDataExecutionStrategy, "execute", bigdata_exec, raising=True)
-
 
 @pytest.fixture
 def schema_definition():
@@ -67,7 +87,6 @@ def schema_definition():
         ColumnDefinition(name="id", data_type=DataType.INTEGER),
         ColumnDefinition(name="name", data_type=DataType.STRING),
     ]
-
 
 @pytest.fixture
 def metrics() -> ComponentMetrics:

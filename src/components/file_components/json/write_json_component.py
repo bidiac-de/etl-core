@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Union
+from typing import Any, Dict, List, Literal, Union, AsyncGenerator
 from pydantic import Field, model_validator
 import pandas as pd
 
@@ -22,27 +22,27 @@ class WriteJSON(JSON):
 
     async def process_row(
             self, row: Dict[str, Any], metrics: ComponentMetrics
-    ) -> Dict[str, Any]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Write a single row and pass it downstream.
         """
         await self._receiver.write_row(self.filepath, metrics=metrics, row=row)
-        return row
+        yield row
 
     async def process_bulk(
             self, data: Union[List[Dict[str, Any]], pd.DataFrame], metrics: ComponentMetrics
-    ) -> Union[List[Dict[str, Any]], pd.DataFrame]:
+    ) -> AsyncGenerator[Union[List[Dict[str, Any]], pd.DataFrame], None]:
         """
         Write multiple rows (DataFrame or List[dict]).
         """
         await self._receiver.write_bulk(self.filepath, metrics=metrics, data=data)
-        return data
+        yield data
 
     async def process_bigdata(
             self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> Any:
+    ) -> AsyncGenerator[Any, None]:
         """
         Write big data (z. B. Dask DataFrame)."""
         await self._receiver.write_bigdata(self.filepath, metrics=metrics, data=chunk_iterable)
-        return chunk_iterable
+        yield chunk_iterable
 
