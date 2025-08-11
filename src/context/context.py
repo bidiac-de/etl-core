@@ -1,86 +1,70 @@
-from typing import List, Dict
-from src.context.environment import Environment
-from src.context.context_parameter import ContextParameter
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from src.context.context_provider import IContextProvider
+from src.context.context_parameter import ContextParameter
+from src.context.environment import Environment
 
 
-class Context(IContextProvider):
-    def __init__(
-        self,
-        id: int,
-        name: str,
-        environment: Environment,
-        parameters: List[ContextParameter],
-    ):
-        self._id = id
-        self._name = name
-        self._environment = environment
-        self._parameters: Dict[str, ContextParameter] = {p.key: p for p in parameters}
+class Context(BaseModel, IContextProvider):
+    """
+    Pydantic version of Context.
 
-    @property
-    def id(self) -> int:
-        """Get the context ID."""
-        return self._id
+    Keeps the old public API:
+      - properties: id, name, environment, parameters
+      - `parameters` can be passed as a list or as a dict keyed by `key`
+      - `get_parameter(key)` returns the parameter's value
+      - `set_parameter(key, value)` updates an existing parameter
+    """
 
-    @id.setter
-    def id(self, value: int):
-        """Set the context ID."""
-        self._id = value
+    model_config = ConfigDict(
+        extra="ignore",
+        validate_assignment=True,
+    )
 
-    @property
-    def name(self) -> str:
-        """Get the context name."""
-        return self._name
+    id: int
+    name: str
+    environment: Environment
+    parameters: Dict[str, ContextParameter] = Field(default_factory=dict)
 
-    @name.setter
-    def name(self, value: str):
-        """Set the context name."""
-        self._name = value
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_params(
+        cls, values: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Allow `parameters` to be provided as a list[ContextParameter] and turn it
+        into a dict keyed by `key` (matching the old constructor semantics).
+        """
+        params = values.get("parameters")
+        if params is None:
+            return values
 
-    @property
-    def environment(self) -> Environment:
-        """Get the associated environment."""
-        return self._environment
+        if isinstance(params, dict):
+            return values
 
-    @environment.setter
-    def environment(self, value: Environment):
-        """Set the associated environment."""
-        self._environment = value
+        if isinstance(params, list):
+            values["parameters"] = {p.key: p for p in params}
+            return values
 
-    @property
-    def parameters(self) -> List[ContextParameter]:
-        """Return all context parameters as a list."""
-        return list(self._parameters.values())
-
-    @parameters.setter
-    def parameters(self, params: List[ContextParameter]):
-        """Replace context parameters with a new list."""
-        self._parameters = {p.key: p for p in params}
+        raise TypeError(
+            "parameters must be a dict[str, ContextParameter] or a list[ContextParameter]"
+        )
 
     def get_parameter(self, key: str) -> str:
-        """
-        Retrieve the value of a parameter by its key.
-
-        :param key: The parameter key to look up
-        :return: The value of the parameter
-        :raises KeyError: If the parameter does not exist
-        """
         try:
-            return self._parameters[key].value
-        except KeyError:
+            return self.parameters[key].value
+        except KeyError as exc:  # pragma: no cover - parity with old message
             raise KeyError(
-                f"Parameter with key '{key}' not found in context '{self._name}'"
-            )
+                f"Parameter with key '{key}' not found in context '{self.name}'"
+            ) from exc
 
-    def set_parameter(self, key: str, value: str):
-        """
-        Update the value of an existing parameter.
-
-        :param key: The parameter key to update
-        :param value: The new value for the parameter
-        :raises KeyError: If the parameter does not exist
-        """
-        if key in self._parameters:
-            self._parameters[key].value = value
+    def set_parameter(self, key: str, value: str) -> None:
+        if key in self.parameters:
+            self.parameters[key].value = value
         else:
-            raise KeyError(f"Cannot set value, parameter with key '{key}' not found.")
+            raise KeyError(
+                f"Cannot set value, parameter with key '{key}' not found."
+            )
