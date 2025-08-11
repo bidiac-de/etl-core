@@ -1,23 +1,15 @@
 from typing import Annotated, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from src.api.dependencies import get_job_handler
+from src.api.helpers import _error_payload, _exc_meta, _sanitize_errors
 from src.persistance.configs.job_config import JobConfig
 from src.persistance.handlers.job_handler import JobHandler
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
-
-
-def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
-    sanitized: List[Dict] = []
-    for err in errors:
-        filtered: Dict = {}
-        for key in ("type", "loc", "msg", "url"):
-            if key in err:
-                filtered[key] = err[key]
-        sanitized.append(filtered)
-    return sanitized
 
 
 @router.post(
@@ -32,9 +24,54 @@ def create_job(
 ) -> str:
     try:
         entry = job_handler.create_job_entry(job_cfg)
+    except ValidationError as exc:
+        # Should rarely surface here (FastAPI validates first), but keep it.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_payload(
+                "JOB_CONFIG_INVALID",
+                "JobConfig validation failed.",
+                errors=_sanitize_errors(exc),
+                **_exc_meta(exc),
+            ),
+        ) from exc
+    except ValueError as exc:
+        # E.g. component next[] references missing names.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_payload(
+                "COMPONENT_REFERENCE_INVALID",
+                "Invalid component linkage in configuration.",
+                **_exc_meta(exc),
+            ),
+        ) from exc
+    except IntegrityError as exc:
+        # Conflicts / FK issues
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_error_payload(
+                "DB_INTEGRITY_ERROR",
+                "Database integrity error while persisting a job.",
+                **_exc_meta(exc),
+            ),
+        ) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "DB_ERROR",
+                "Database error while persisting a job.",
+                **_exc_meta(exc),
+            ),
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=500, detail=f"Failed to persist job: {exc}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "JOB_PERSIST_FAILED",
+                "Failed to persist job.",
+                **_exc_meta(exc),
+            ),
         ) from exc
     return entry.id
 
@@ -51,8 +88,25 @@ def get_job(
 ) -> Dict:
     record = job_handler.get_by_id(job_id)
     if not record:
-        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
-    job = job_handler.record_to_job(record)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "JOB_NOT_FOUND", f"Job {job_id!r} not found.", job_id=job_id
+            ),  # noqa: E501
+        )
+    try:
+        job = job_handler.record_to_job(record)
+    except ValueError as exc:
+        # Stale row: initial get_by_id succeeded, re-fetch failed
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "JOB_NOT_FOUND_ON_REFETCH",
+                f"Job {job_id!r} disappeared while loading.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
     result = job.model_dump()
     result["id"] = job.id
     return result
@@ -66,11 +120,54 @@ def update_job(
 ) -> str:
     try:
         row = job_handler.update(job_id, job_cfg)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_payload(
+                "JOB_CONFIG_INVALID",
+                "JobConfig validation failed.",
+                errors=_sanitize_errors(exc),
+                **_exc_meta(exc),
+            ),
+        ) from exc
     except ValueError as not_found:
-        raise HTTPException(status_code=404, detail=str(not_found)) from not_found
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "JOB_NOT_FOUND",
+                str(not_found),
+                job_id=job_id,
+            ),
+        ) from not_found
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_error_payload(
+                "DB_INTEGRITY_ERROR",
+                "Database integrity error while updating a job.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "DB_ERROR",
+                "Database error while updating a job.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=500, detail=f"Failed to update job: {exc}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "JOB_UPDATE_FAILED",
+                "Failed to update job.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
         ) from exc
     return row.id
 
@@ -87,12 +184,43 @@ def delete_job(
 ) -> Dict:
     record = job_handler.get_by_id(job_id)
     if not record:
-        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "JOB_NOT_FOUND", f"Job {job_id!r} not found.", job_id=job_id
+            ),  # noqa: E501
+        )
     try:
         job_handler.delete(job_id)
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_error_payload(
+                "DB_INTEGRITY_ERROR",
+                "Database integrity error while deleting a job.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "DB_ERROR",
+                "Database error while deleting a job.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=500, detail=f"Failed to delete job: {exc}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "JOB_DELETE_FAILED",
+                "Failed to delete job.",
+                job_id=job_id,
+                **_exc_meta(exc),
+            ),
         ) from exc
     return {"message": f"Job {job_id!r} deleted successfully"}
 
@@ -106,13 +234,41 @@ def delete_job(
 def list_jobs(
     job_handler: Annotated[JobHandler, Depends(get_job_handler)],
 ) -> List[Dict]:
-    records = job_handler.get_all()
+    try:
+        records = job_handler.get_all()
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "DB_ERROR",
+                "Database error while listing jobs.",
+                **_exc_meta(exc),
+            ),
+        ) from exc
+
     if not records:
         return []
 
     jobs: List[Dict] = []
     for record in records:
-        runtime_obj = job_handler.record_to_job(record)
+        try:
+            runtime_obj = job_handler.record_to_job(record)
+        except ValueError as exc:
+            # If a row vanished between queries, skip and continue with note
+            jobs.append(
+                {
+                    "id": record.id,
+                    "status": "unavailable",
+                    "error": _error_payload(
+                        "JOB_NOT_FOUND_ON_REFETCH",
+                        "Job disappeared while loading.",
+                        job_id=record.id,
+                        **_exc_meta(exc),
+                    ),
+                }
+            )
+            continue
+
         obj_dict = runtime_obj.model_dump(exclude={"components"})
         obj_dict["id"] = record.id
         jobs.append(obj_dict)

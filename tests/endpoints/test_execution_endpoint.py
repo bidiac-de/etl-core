@@ -1,11 +1,8 @@
-# tests/test_execution_endpoint.py
 from __future__ import annotations
-
 from typing import Dict
-
 from fastapi.testclient import TestClient
-
 from src.persistance.configs.job_config import JobConfig
+from tests.helpers import detail_message
 
 
 def _create_job(shared_job_handler, cfg: JobConfig) -> str:
@@ -48,8 +45,16 @@ def test_start_execution_simple_chain_ok(
 
 
 def test_start_execution_not_found(client: TestClient) -> None:
-    # Unknown id → router should translate to 404 using the real dependencies
     missing_id = "6d1f6c89-0b2a-4f6b-90e2-6b2b9f2f0f00"
     resp = client.post(f"/execution/{missing_id}")
     assert resp.status_code == 404
-    assert "not found" in resp.json().get("detail", "").lower()
+
+    body = resp.json()
+    assert "not found" in detail_message(body).lower()
+
+    # if structured, assert the machine-readable code as well
+    if isinstance(body.get("detail"), dict):
+        assert body["detail"].get("code") in {
+            "JOB_NOT_FOUND",
+            "JOB_NOT_FOUND_ON_REFETCH",
+        }

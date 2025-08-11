@@ -71,3 +71,12 @@ def runtime_job_from_config(
     # Wire component relationships in-memory
     _wire_components(job.components)
     return job
+
+
+def detail_message(payload: Dict[str, Any]) -> str:
+    detail = payload.get("detail")
+    if isinstance(detail, str):
+        return detail
+    if isinstance(detail, dict):
+        return str(detail.get("message", ""))
+    return ""
