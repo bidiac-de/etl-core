@@ -1,10 +1,11 @@
-from typing import Annotated, Any, Dict
+from typing import Any, Dict, Annotated
+from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.helpers import _error_payload, _exc_meta
 from src.api.dependencies import get_execution_handler, get_job_handler
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.persistance.handlers.job_handler import JobHandler
+from src.api.helpers import _error_payload, _exc_meta
 
 router = APIRouter(prefix="/execution", tags=["execution"])
 
@@ -14,48 +15,33 @@ router = APIRouter(prefix="/execution", tags=["execution"])
     summary="Start a job execution",
     status_code=status.HTTP_200_OK,
 )
-def start_job_execution(
+def start_execution(
     job_id: str,
     job_handler: Annotated[JobHandler, Depends(get_job_handler)],
     execution_handler: Annotated[JobExecutionHandler, Depends(get_execution_handler)],
 ) -> Dict[str, Any]:
-    # load job by id
-    record = job_handler.get_by_id(job_id)
-    if record is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload(
-                "JOB_NOT_FOUND",
-                f"Job {job_id!r} was not found.",
-                job_id=job_id,
-            ),
-        )
-
-    # rebuild runtime job
     try:
-        runtime = job_handler.record_to_job(record)
+        runtime_job = job_handler.load_runtime_job(job_id)
     except ValueError as exc:
-        # record existed in first query but not on re-fetch
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload(
-                "JOB_NOT_FOUND_ON_REFETCH",
-                f"Job {job_id!r} disappeared while preparing execution.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+            detail=_error_payload("JOB_NOT_FOUND", str(exc), job_id=job_id),
+        ) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload("DB_ERROR", "Failed to load job.", **_exc_meta(exc)),
         ) from exc
 
-    # execute the job
     try:
-        execution = execution_handler.execute_job(runtime)
+        execution = execution_handler.execute_job(runtime_job)
         return {
-            "started job with id": job_id,
+            "job_id": job_id,
             "status": "started",
             "execution_id": execution.id,
             "max_attempts": execution.max_attempts,
         }
-    except Exception as exc:  # pragma: no cover - safety net
+    except Exception as exc:  # pragma: no cover
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_error_payload(

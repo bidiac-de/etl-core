@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, List
+from typing import Annotated, Dict, List, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
@@ -84,32 +84,24 @@ def create_job(
 )
 def get_job(
     job_id: str,
-    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
-) -> Dict:
-    record = job_handler.get_by_id(job_id)
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload(
-                "JOB_NOT_FOUND", f"Job {job_id!r} not found.", job_id=job_id
-            ),  # noqa: E501
-        )
+    job_handler: JobHandler = Depends(get_job_handler),
+) -> Dict[str, Any]:
     try:
-        job = job_handler.record_to_job(record)
+        job = job_handler.load_runtime_job(job_id)
     except ValueError as exc:
-        # Stale row: initial get_by_id succeeded, re-fetch failed
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload(
-                "JOB_NOT_FOUND_ON_REFETCH",
-                f"Job {job_id!r} disappeared while loading.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+            detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
         ) from exc
-    result = job.model_dump()
-    result["id"] = job.id
-    return result
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "DB_ERROR", "message": "Failed to load job."},
+        ) from exc
+
+    data = job.model_dump()
+    data["id"] = job.id
+    return data
 
 
 @router.put("/{job_id}", response_model=str)
@@ -180,47 +172,19 @@ def update_job(
 )
 def delete_job(
     job_id: str,
-    job_handler: Annotated[JobHandler, Depends(get_job_handler)],
-) -> Dict:
-    record = job_handler.get_by_id(job_id)
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload(
-                "JOB_NOT_FOUND", f"Job {job_id!r} not found.", job_id=job_id
-            ),  # noqa: E501
-        )
+    job_handler: JobHandler = Depends(get_job_handler),
+) -> Dict[str, str]:
     try:
         job_handler.delete(job_id)
-    except IntegrityError as exc:
+    except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=_error_payload(
-                "DB_INTEGRITY_ERROR",
-                "Database integrity error while deleting a job.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
-        ) from exc
-    except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "DB_ERROR",
-                "Database error while deleting a job.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
         ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "JOB_DELETE_FAILED",
-                "Failed to delete job.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+            detail={"code": "DB_ERROR", "message": "Failed to delete job."},
         ) from exc
     return {"message": f"Job {job_id!r} deleted successfully"}
 
@@ -235,42 +199,13 @@ def list_jobs(
     job_handler: Annotated[JobHandler, Depends(get_job_handler)],
 ) -> List[Dict]:
     try:
-        records = job_handler.get_all()
+        return job_handler.list_jobs_brief()
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_error_payload(
                 "DB_ERROR",
-                "Database error while listing jobs.",
+                "Failed to list jobs.",
                 **_exc_meta(exc),
             ),
         ) from exc
-
-    if not records:
-        return []
-
-    jobs: List[Dict] = []
-    for record in records:
-        try:
-            runtime_obj = job_handler.record_to_job(record)
-        except ValueError as exc:
-            # If a row vanished between queries, skip and continue with note
-            jobs.append(
-                {
-                    "id": record.id,
-                    "status": "unavailable",
-                    "error": _error_payload(
-                        "JOB_NOT_FOUND_ON_REFETCH",
-                        "Job disappeared while loading.",
-                        job_id=record.id,
-                        **_exc_meta(exc),
-                    ),
-                }
-            )
-            continue
-
-        obj_dict = runtime_obj.model_dump(exclude={"components"})
-        obj_dict["id"] = record.id
-        jobs.append(obj_dict)
-
-    return jobs

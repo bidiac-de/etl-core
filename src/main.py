@@ -7,6 +7,7 @@ from .api.helpers import autodiscover_components
 from .persistance.handlers.job_handler import JobHandler
 from .job_execution.job_execution_handler import JobExecutionHandler
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()

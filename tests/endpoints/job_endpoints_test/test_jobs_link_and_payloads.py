@@ -73,9 +73,8 @@ def test_component_payload_hydrates_to_runtime(shared_job_handler) -> None:
     row = shared_job_handler.create_job_entry(cfg)
     job_id = row.id
 
-    record = shared_job_handler.get_by_id(job_id)
-    assert record is not None
-    runtime = shared_job_handler.record_to_job(record)
+    # Modernized: use the one-shot loader (no preflight + no refetch chains)
+    runtime = shared_job_handler.load_runtime_job(job_id)
 
     assert len(runtime.components) == 1
     comp = runtime.components[0]

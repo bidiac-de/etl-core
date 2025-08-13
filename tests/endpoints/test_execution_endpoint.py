@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from typing import Dict
+
 from fastapi.testclient import TestClient
+
 from src.persistance.configs.job_config import JobConfig
 from tests.helpers import detail_message
 
@@ -18,9 +21,10 @@ def test_start_execution_minimal_ok(client: TestClient, shared_job_handler) -> N
     assert resp.status_code == 200
 
     data: Dict = resp.json()
-    # Your endpoint returns a simple confirmation payload
     assert data.get("status") == "started"
-    assert data.get("started job with id") == job_id
+    assert data.get("job_id") == job_id
+    assert "execution_id" in data
+    assert "max_attempts" in data
 
 
 def test_start_execution_simple_chain_ok(
@@ -29,7 +33,6 @@ def test_start_execution_simple_chain_ok(
     # Real handler, real components (assumes 'test' component is registered)
     cfg = JobConfig(
         components=[
-            # downstream link exercised by execution handler (streaming pipeline)
             {"comp_type": "test", "name": "a", "description": "", "next": ["b"]},
             {"comp_type": "test", "name": "b", "description": "", "next": []},
         ]
@@ -41,7 +44,9 @@ def test_start_execution_simple_chain_ok(
 
     data: Dict = resp.json()
     assert data.get("status") == "started"
-    assert data.get("started job with id") == job_id
+    assert data.get("job_id") == job_id
+    assert "execution_id" in data
+    assert "max_attempts" in data
 
 
 def test_start_execution_not_found(client: TestClient) -> None:
@@ -52,9 +57,6 @@ def test_start_execution_not_found(client: TestClient) -> None:
     body = resp.json()
     assert "not found" in detail_message(body).lower()
 
-    # if structured, assert the machine-readable code as well
+    # If structured, assert the machine-readable code
     if isinstance(body.get("detail"), dict):
-        assert body["detail"].get("code") in {
-            "JOB_NOT_FOUND",
-            "JOB_NOT_FOUND_ON_REFETCH",
-        }
+        assert body["detail"].get("code") in {"JOB_NOT_FOUND"}
