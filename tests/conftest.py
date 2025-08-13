@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
-from src.api.main import app
+from src.main import app
 from src.api.dependencies import get_execution_handler, get_job_handler
 from src.persistance.db import engine
 from src.persistance.table_definitions import (
