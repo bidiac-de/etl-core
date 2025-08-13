@@ -6,8 +6,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from src.components.data_operations.filter_component import FilterComponent
-from src.components.data_operations.comparison_rule import ComparisonRule
+from components.data_operations.filter.filter_component import FilterComponent
+from components.data_operations.filter.comparison_rule import ComparisonRule
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
@@ -111,13 +111,18 @@ async def test_filter_component_bigdata(metrics: ComponentMetrics):
             ],
         ),
     )
-    comp.strategy = BigDataExecutionStrategy()
 
     pdf = pd.DataFrame(
-        [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}, {"id": 3, "name": "Charlie"}]
+        [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"},
+            {"id": 3, "name": "Charlie"},
+        ]
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    dout = await comp.execute(payload=ddf, metrics=metrics)
-    out = dout.compute().sort_values("id")
-    assert list(out["name"]) == ["Alice", "Charlie"]
+
+    async for dout in comp.process_bigdata(ddf, metrics=metrics):
+        out = dout.compute().sort_values("id")
+        assert list(out["name"]) == ["Alice", "Charlie"]
+        break

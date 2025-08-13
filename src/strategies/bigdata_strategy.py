@@ -15,10 +15,10 @@ class BigDataExecutionStrategy(ExecutionStrategy):
     """
 
     async def execute(
-        self,
-        component: "Component",
-        payload: Any,
-        metrics: ComponentMetrics,
+            self,
+            component: "Component",
+            payload: Any,
+            metrics: ComponentMetrics,
     ) -> AsyncIterator[dd.DataFrame]:
         ddf: dd.DataFrame = await component.process_bigdata(payload, metrics)
         yield ddf

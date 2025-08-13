@@ -8,7 +8,7 @@ import pytest
 
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.data_operations_receivers.filter_receiver import FilterReceiver
-from src.components.data_operations.comparison_rule import ComparisonRule
+from components.data_operations.filter.comparison_rule import ComparisonRule
 
 
 
@@ -114,13 +114,17 @@ async def test_filter_receiver_bulk_gt(metrics: ComponentMetrics):
 @pytest.mark.asyncio
 async def test_filter_receiver_bigdata_map_partitions(metrics: ComponentMetrics):
     pdf = pd.DataFrame(
-        [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}, {"id": 3, "name": "Charlie"}]
+        [{"id": 1, "name": "Alice"},
+         {"id": 2, "name": "Bob"},
+         {"id": 3, "name": "Charlie"}]
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
     rule = ComparisonRule(column="name", operator="contains", value="li")
 
     recv = FilterReceiver()
-    dout = await recv.process_bigdata(ddf, metrics=metrics, rule=rule)
-    out = dout.compute().sort_values("id")
+    parts = [d async for d in recv.process_bigdata(ddf, metrics=metrics, rule=rule)]
+    assert parts, "No bigdata result from receiver"
+    dout = parts[0]
 
+    out = dout.compute().sort_values("id")
     assert list(out["id"]) == [1, 3]

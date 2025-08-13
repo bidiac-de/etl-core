@@ -15,10 +15,10 @@ class BulkExecutionStrategy(ExecutionStrategy):
     """
 
     async def execute(
-        self,
-        component: "Component",
-        payload: Any,
-        metrics: ComponentMetrics,
+            self,
+            component: "Component",
+            payload: Any,
+            metrics: ComponentMetrics,
     ) -> AsyncIterator[pd.DataFrame]:
         df: pd.DataFrame = await component.process_bulk(payload, metrics)
         yield df

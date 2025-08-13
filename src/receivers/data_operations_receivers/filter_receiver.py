@@ -1,27 +1,38 @@
 from __future__ import annotations
-from typing import Any, AsyncIterator, Dict
-import asyncio
+
+from typing import Any, AsyncIterator, Mapping
+
 import pandas as pd
-import dask.dataframe as dd
 
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.receivers.data_operations_receivers.data_operations_receiver import DataOperationsReceiver
-from src.components.data_operations.comparison_rule import ComparisonRule
-from src.receivers.data_operations_receivers.filter_helper import eval_rule_on_row, eval_rule_on_frame
+try:
+    import dask.dataframe as dd
+except Exception:
+    dd = None
+from src.receivers.base_receiver import Receiver
+from src.components.data_operations.filter.comparison_rule import ComparisonRule
+from src.receivers.data_operations_receivers.filter_helper import (
+    eval_rule_on_frame,
+    eval_rule_on_row,
+)
+from src.metrics.component_metrics.data_operations_metrics.filter_metrics import FilterMetrics
 
 
-class FilterReceiver(DataOperationsReceiver):
-    """Applies filter rules to row/chunk streams or Dask DataFrames."""
+class FilterReceiver(Receiver):
+    """
+    Receiver that applies filter rules to all execution paths.
+    All public process_* methods are yield-only (streaming). No payload returns.
+    Metrics are forwarded unchanged (execution layer does the accounting).
+    """
 
     async def process_row(
             self,
-            rows: AsyncIterator[Dict[str, Any]],
+            rows: AsyncIterator[Mapping[str, Any]],
             *,
-            metrics: ComponentMetrics,
+            metrics: FilterMetrics,
             rule: ComparisonRule,
-            **_: Any,
-    ) -> AsyncIterator[Dict[str, Any]]:
-        """Filter incoming rows one by one."""
+    ) -> AsyncIterator[Mapping[str, Any]]:
+        """Yield each incoming row that matches the rule."""
+        _ = metrics
         async for row in rows:
             if eval_rule_on_row(row, rule):
                 yield row
@@ -30,29 +41,42 @@ class FilterReceiver(DataOperationsReceiver):
             self,
             frames: AsyncIterator[pd.DataFrame],
             *,
-            metrics: ComponentMetrics,
+            metrics: FilterMetrics,
             rule: ComparisonRule,
-            **_: Any,
     ) -> AsyncIterator[pd.DataFrame]:
-        """Filter incoming DataFrames in bulk."""
+        """
+        Consume incoming pandas DataFrame batches, filter them, and
+        yield a single concatenated DataFrame if any rows matched.
+        """
+        _ = metrics
+        parts: list[pd.DataFrame] = []
         async for pdf in frames:
-            mask = await asyncio.to_thread(eval_rule_on_frame, pdf, rule)
+            mask = eval_rule_on_frame(pdf, rule)
             out = pdf[mask]
             if not out.empty:
-                yield out
+                parts.append(out)
+
+        if parts:
+            yield pd.concat(parts, ignore_index=True)
+
 
     async def process_bigdata(
             self,
-            ddf: dd.DataFrame,
+            ddf: "dd.DataFrame",
             *,
-            metrics: ComponentMetrics,
+            metrics: FilterMetrics,
             rule: ComparisonRule,
-            **_: Any,
-    ) -> dd.DataFrame:
-        """Filter a large Dask DataFrame at the partition level."""
+    ) -> AsyncIterator["dd.DataFrame"]:
+        """
+        Build a lazily filtered Dask DataFrame and yield it exactly once.
+        """
+        _ = metrics
 
         def _apply(pdf: pd.DataFrame) -> pd.DataFrame:
             m = eval_rule_on_frame(pdf, rule)
             return pdf[m]
 
-        return ddf.map_partitions(_apply, meta=dd.utils.make_meta(ddf))
+        filtered = ddf.map_partitions(
+            _apply, meta=getattr(dd, "utils").make_meta(ddf)
+        )
+        yield filtered
