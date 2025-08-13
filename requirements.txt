@@ -3,3 +3,6 @@ pytest-cov
 fastapi
 pydantic == v2.5.3
 pandas
+pymongo
+sqlalchemy
+keyring
