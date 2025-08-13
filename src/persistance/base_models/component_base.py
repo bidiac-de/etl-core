@@ -1,7 +1,7 @@
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, Field
 
 
 class ComponentBase(SQLModel):
-    name: str
-    description: str
-    comp_type: str
+    name: str = Field(description="Unique name of the component.")
+    description: str = Field(description="A short description of the component.")
+    comp_type: str = Field(description="The registered type of the component.")
