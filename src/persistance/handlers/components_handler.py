@@ -8,6 +8,7 @@ from sqlmodel.sql.expression import Select
 
 from src.components.base_component import Component
 from src.components.component_registry import component_registry
+from src.persistance.errors import PersistLinkageError
 from src.persistance.handlers.dataclasses_handler import DataClassHandler
 from src.persistance.table_definitions import (
     ComponentNextLink,
@@ -55,7 +56,7 @@ class ComponentHandler:
         """
         Insert a single component row for job_record and wire its next links.
         cfg.next must reference existing component names on the same job,
-        or ValueError is raised.
+        or PersistLinkageError is raised.
         """
         ct = self._insert_component_row(session, job_record, cfg)
         session.flush()
@@ -63,7 +64,7 @@ class ComponentHandler:
         name_to_id = self._fetch_component_name_id_map(session, job_record)
         missing = [n for n in cfg.next if n not in name_to_id]
         if missing:
-            raise ValueError(
+            raise PersistLinkageError(
                 f"Unknown next-component(s) for '{cfg.name}': {sorted(missing)}"
             )
 
@@ -201,8 +202,10 @@ class ComponentHandler:
         for comp in runtime_comps:
             try:
                 next_objs = [name_map[n] for n in comp.next]
-            except KeyError as e:
-                raise ValueError(f"Unknown next‐component name: {e.args[0]!r}")
+            except KeyError as exc:
+                raise PersistLinkageError(
+                    f"Unknown next-component name: {exc.args[0]!r}"
+                ) from exc
             comp.next_components = next_objs
             for nxt in next_objs:
                 nxt.prev_components.append(comp)
@@ -269,7 +272,7 @@ class ComponentHandler:
         for nxt in next_names:
             dst_id = name_to_id.get(nxt)
             if dst_id is None:
-                raise ValueError(
+                raise PersistLinkageError(
                     f"Component '{source_name}' references unknown next '{nxt}'"
                 )
             session.add(

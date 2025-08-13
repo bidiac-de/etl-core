@@ -1,9 +1,11 @@
 from typing import Any, Dict, Annotated
+
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.api.dependencies import get_execution_handler, get_job_handler
 from src.job_execution.job_execution_handler import JobExecutionHandler
+from src.persistance.errors import PersistNotFoundError
 from src.persistance.handlers.job_handler import JobHandler
 from src.api.helpers import _error_payload, _exc_meta
 
@@ -22,7 +24,7 @@ def start_execution(
 ) -> Dict[str, Any]:
     try:
         runtime_job = job_handler.load_runtime_job(job_id)
-    except ValueError as exc:
+    except PersistNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_error_payload("JOB_NOT_FOUND", str(exc), job_id=job_id),

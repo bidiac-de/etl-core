@@ -1,6 +1,7 @@
 from typing import Any, Dict, Union
 from sqlmodel import Session
 
+from src.persistance.errors import PersistNotFoundError
 from src.persistance.table_definitions import MetaDataTable, LayoutTable
 
 RowOrId = Union[str, MetaDataTable, LayoutTable]
@@ -34,7 +35,7 @@ class DataClassHandler:
             else session.get(MetaDataTable, meta)
         )
         if row is None:
-            raise ValueError("MetaData row not found")
+            raise PersistNotFoundError("MetaData row not found")
         for k, v in data.items():
             if hasattr(row, k):
                 setattr(row, k, v)
@@ -51,7 +52,7 @@ class DataClassHandler:
             else session.get(LayoutTable, layout)
         )
         if row is None:
-            raise ValueError("Layout row not found")
+            raise PersistNotFoundError("Layout row not found")
         for k, v in data.items():
             if hasattr(row, k):
                 setattr(row, k, v)

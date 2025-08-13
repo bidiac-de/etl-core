@@ -6,6 +6,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from src.api.dependencies import get_job_handler
 from src.api.helpers import _error_payload, _exc_meta, _sanitize_errors
+from src.persistance.errors import (
+    PersistLinkageError,
+    PersistNotFoundError,
+)
 from src.persistance.configs.job_config import JobConfig
 from src.persistance.handlers.job_handler import JobHandler
 
@@ -25,7 +29,6 @@ def create_job(
     try:
         entry = job_handler.create_job_entry(job_cfg)
     except ValidationError as exc:
-        # Should rarely surface here (FastAPI validates first), but keep it.
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_payload(
@@ -35,8 +38,7 @@ def create_job(
                 **_exc_meta(exc),
             ),
         ) from exc
-    except ValueError as exc:
-        # E.g. component next[] references missing names.
+    except PersistLinkageError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_payload(
@@ -46,7 +48,6 @@ def create_job(
             ),
         ) from exc
     except IntegrityError as exc:
-        # Conflicts / FK issues
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_error_payload(
@@ -88,7 +89,7 @@ def get_job(
 ) -> Dict[str, Any]:
     try:
         job = job_handler.load_runtime_job(job_id)
-    except ValueError as exc:
+    except PersistNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
@@ -122,7 +123,7 @@ def update_job(
                 **_exc_meta(exc),
             ),
         ) from exc
-    except ValueError as not_found:
+    except PersistNotFoundError as not_found:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_error_payload(
@@ -176,7 +177,7 @@ def delete_job(
 ) -> Dict[str, str]:
     try:
         job_handler.delete(job_id)
-    except ValueError as exc:
+    except PersistNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
