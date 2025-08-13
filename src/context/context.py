@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from src.context.context_provider import IContextProvider
@@ -31,9 +31,7 @@ class Context(BaseModel, IContextProvider):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalize_params(
-        cls, values: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _normalize_params(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         """
         Allow `parameters` to be provided as a list[ContextParameter] and turn it
         into a dict keyed by `key` (matching the old constructor semantics).
@@ -50,7 +48,8 @@ class Context(BaseModel, IContextProvider):
             return values
 
         raise TypeError(
-            "parameters must be a dict[str, ContextParameter] or a list[ContextParameter]"
+            "parameters must be a dict[str, ContextParameter] or a "
+            "list[ContextParameter]"
         )
 
     def get_parameter(self, key: str) -> str:
@@ -65,6 +64,4 @@ class Context(BaseModel, IContextProvider):
         if key in self.parameters:
             self.parameters[key].value = value
         else:
-            raise KeyError(
-                f"Cannot set value, parameter with key '{key}' not found."
-            )
+            raise KeyError(f"Cannot set value, parameter with key '{key}' not found.")
