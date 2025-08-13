@@ -12,3 +12,4 @@ dotenv
 pyarrow
 sqlalchemy
 pytest
+psutil
