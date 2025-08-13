@@ -41,8 +41,17 @@ class ConnectionHandler:
                 masked_url = real_url
             else:
 
-                if not all([user, password, host, port, database]):
-                    raise ValueError(f"{db} requires user, password, host, port, and database.")
+                if not all([host, port, database]):
+                    raise ValueError(f"{db} requires host, port, and database.")
+                
+                # Credentials can be provided later
+                if not user or not password:
+                    # Create connection without authentication for now
+                    real_url = f"{driver}://{host}:{port}/{database}"
+                    masked_url = f"{driver}://{host}:{port}/{database}"
+                else:
+                    real_url = f"{driver}://{user}:{password}@{host}:{port}/{database}"
+                    masked_url = f"{driver}://{user}:***@{host}:{port}/{database}"
 
 
                 real_url = f"{driver}://{user}:{password}@{host}:{port}/{database}"

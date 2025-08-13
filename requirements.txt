@@ -1,4 +1,41 @@
+# Development and Testing
 pre-commit
+pytest
 pytest-cov
+pytest-asyncio
+
+# Web Framework
 fastapi
+uvicorn
+
+# Data Validation and Models
 pydantic == v2.5.3
+
+# Database and ORM
+sqlalchemy
+mysql-connector-python
+pymongo
+
+# Data Processing
+pandas
+numpy
+dask
+pyarrow
+
+# Async Support
+asyncio
+aiofiles
+
+# Utilities
+python-dotenv
+click
+rich
+
+# Type Checking
+mypy
+types-requests
+
+# Code Quality
+black
+flake8
+isort
