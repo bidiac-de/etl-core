@@ -7,6 +7,7 @@ router = APIRouter(
     tags=["setup"],
 )
 
+# ToDo: IMPLEMENT VALIDATION LOGIC AND REPLACE VALID_KEY WITH A REAL VALIDATION MECHANISM
 VALID_KEY: Final[str] = "VALID_KEY"
 
 
