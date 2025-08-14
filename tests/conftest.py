@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Generator
 
 import pytest
+import os
+import importlib
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
@@ -25,6 +27,24 @@ def client() -> Generator[TestClient, None, None]:
     """
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(scope="session", autouse=True)
+def enable_stub_components():
+    """
+    Automatically run before any tests.
+    Sets the registry mode to 'test' so stub components are visible.
+    """
+    os.environ["ETL_COMPONENT_MODE"] = "test"
+
+    # If src.main was already imported in some tests, reload it so
+    # lifespan picks up the correct mode.
+    import sys
+
+    if "src.main" in sys.modules:
+        import src.main
+
+        importlib.reload(src.main)
 
 
 @pytest.fixture(autouse=True)

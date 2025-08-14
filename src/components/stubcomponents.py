@@ -10,7 +10,7 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 
 
-@register_component("test")
+@register_component("test", hidden=True)
 class StubComponent(Component):
     def _build_objects(self) -> "StubComponent":
         """Wire a trivial receiver."""
@@ -40,7 +40,7 @@ class StubComponent(Component):
         return chunk_iterable
 
 
-@register_component("failtest")
+@register_component("failtest", hidden=True)
 class FailStubComponent(StubComponent):
     def _build_objects(self) -> "FailStubComponent":
         """Wire a trivial receiver."""
@@ -61,7 +61,7 @@ class FailStubComponent(StubComponent):
         raise RuntimeError("fail stubcomponent failed")
 
 
-@register_component("stub_fail_once")
+@register_component("stub_fail_once", hidden=True)
 class StubFailOnce(Component):
     """Fails the first time, succeeds on the next try."""
 
@@ -104,7 +104,7 @@ class StubReceiver(Receiver):
         return data
 
 
-@register_component("multi_source")
+@register_component("multi_source", hidden=True)
 class MultiSource(Component):
     """
     Emits multiple rows in a streaming fashion; used by pipeline tests.
@@ -137,7 +137,7 @@ class MultiSource(Component):
         raise NotImplementedError
 
 
-@register_component("multi_echo")
+@register_component("multi_echo", hidden=True)
 class MultiEcho(Component):
     """
     Echoes each received row downstream; used by pipeline tests.
