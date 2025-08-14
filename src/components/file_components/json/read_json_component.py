@@ -13,6 +13,7 @@ from src.metrics.component_metrics import ComponentMetrics
 @register_component("read_json")
 class ReadJSON(JSON):
     """Component that reads data from a JSON/NDJSON file (async streaming)."""
+    type: Literal["read_json"] = "read_json"
 
     @model_validator(mode="after")
     def _build_objects(self):

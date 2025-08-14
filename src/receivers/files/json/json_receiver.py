@@ -4,11 +4,11 @@ import pandas as pd
 import dask.dataframe as dd
 import asyncio
 
-from src.metrics.component_metrics import ComponentMetrics
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.files.read_file_receiver import ReadFileReceiver
 from src.receivers.files.write_file_receiver import WriteFileReceiver
 from src.receivers.files.file_helper import ensure_exists
-from src.receivers.files.json.json_helper import load_json_records, dump_json_records
+from src.receivers.files.json.json_helper import load_json_records, dump_json_records, read_json_row
 
 
 class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
@@ -16,12 +16,19 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
     async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         """
-        Stream JSON rows as dictionaries (async generator).
+        True streaming: pulls exactly one JSON record at a time,
+        advancing a synchronous generator on a worker thread.
+        No full-file buffering.
         """
         ensure_exists(filepath)
 
-        records: List[Dict[str, Any]] = await asyncio.to_thread(load_json_records, filepath)
-        for rec in records:
+        it = read_json_row(filepath)
+        while True:
+            try:
+                rec = await asyncio.to_thread(next, it)
+            except StopIteration:
+                break
+            metrics.lines_received += 1
             yield rec
 
     async def read_bulk(self, filepath: Path, metrics: ComponentMetrics) -> pd.DataFrame:
@@ -36,7 +43,9 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                 return pd.read_json(filepath, lines=True)
             return pd.read_json(filepath, orient="records")
 
-        return await asyncio.to_thread(_read)
+        df = await asyncio.to_thread(_read)
+        metrics.lines_received += len(df)
+        return df
 
     async def read_bigdata(self, filepath: Path, metrics: ComponentMetrics) -> dd.DataFrame:
         """
@@ -50,7 +59,9 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                 return dd.read_json(p, lines=True, blocksize="64MB")
             return dd.read_json(p, orient="records", blocksize="64MB")
 
-        return await asyncio.to_thread(_read)
+        ddf = await asyncio.to_thread(_read)
+        metrics.lines_received += int(ddf.map_partitions(len).sum().compute())
+        return ddf
 
     async def write_row(self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]):
         """
@@ -66,6 +77,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                 dump_json_records(filepath, [row], indent=2)
 
         await asyncio.to_thread(_write)
+        metrics.lines_received += 1
 
     async def write_bulk(self, filepath: Path, metrics: ComponentMetrics,
                          data: Union[pd.DataFrame, List[Dict[str, Any]]]):
@@ -81,6 +93,12 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                 dump_json_records(filepath, [], indent=2)
 
         await asyncio.to_thread(_write)
+        if isinstance(data, pd.DataFrame):
+            metrics.lines_received += int(data.shape[0])
+        elif isinstance(data, list):
+            metrics.lines_received += len(data)
+        else:
+            metrics.lines_received += 0
 
     async def write_bigdata(self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame):
         """
@@ -91,4 +109,5 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             data.to_json(str(filepath / "part-*.json"), orient="records", lines=True, force_ascii=False)
 
         await asyncio.to_thread(_write)
+        metrics.lines_received += int(data.map_partitions(len).sum().compute())
 
