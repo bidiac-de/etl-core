@@ -10,23 +10,25 @@ from src.receivers.files.write_file_receiver import WriteFileReceiver
 from src.receivers.files.file_helper import ensure_exists
 from src.receivers.files.json.json_helper import load_json_records, dump_json_records, read_json_row
 
+from typing import Any
+
+_SENTINEL: Any = object()
+
+def _next_or_sentinel(it):
+    try:
+        return next(it)
+    except StopIteration:
+        return _SENTINEL
 
 class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     """Receiver for JSON / NDJSON files with Pandas (bulk) and Dask (bigdata)."""
 
     async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
-        """
-        True streaming: pulls exactly one JSON record at a time,
-        advancing a synchronous generator on a worker thread.
-        No full-file buffering.
-        """
         ensure_exists(filepath)
-
         it = read_json_row(filepath)
         while True:
-            try:
-                rec = await asyncio.to_thread(next, it)
-            except StopIteration:
+            rec = await asyncio.to_thread(_next_or_sentinel, it)
+            if rec is _SENTINEL:
                 break
             metrics.lines_received += 1
             yield rec
@@ -55,12 +57,24 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
         def _read() -> dd.DataFrame:
             p = str(filepath)
-            if p.endswith((".jsonl", ".ndjson")):
+            if p.endswith((".jsonl", ".ndjson", ".jsonl.gz", ".ndjson.gz")):
                 return dd.read_json(p, lines=True, blocksize="64MB")
             return dd.read_json(p, orient="records", blocksize="64MB")
 
         ddf = await asyncio.to_thread(_read)
-        metrics.lines_received += int(ddf.map_partitions(len).sum().compute())
+
+        try:
+            row_count = int(ddf.shape[0].compute())
+        except Exception:
+            try:
+                row_count = int(ddf.index.size.compute())
+            except Exception:
+                import pandas as pd
+                row_count = int(
+                    ddf.map_partitions(lambda df: pd.Series([len(df)])).compute().sum()
+                )
+
+        metrics.lines_received += row_count
         return ddf
 
     async def write_row(self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]):
@@ -109,5 +123,17 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             data.to_json(str(filepath / "part-*.json"), orient="records", lines=True, force_ascii=False)
 
         await asyncio.to_thread(_write)
-        metrics.lines_received += int(data.map_partitions(len).sum().compute())
+
+        try:
+            row_count = int(data.shape[0].compute())
+        except Exception:
+            try:
+                row_count = int(data.index.size.compute())
+            except Exception:
+                import pandas as pd
+                row_count = int(
+                    data.map_partitions(lambda df: pd.Series([len(df)])).compute().sum()
+                )
+
+        metrics.lines_received += row_count
 
