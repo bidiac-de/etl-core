@@ -1,27 +1,53 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Generator
-from src.receivers.base_receiver import Receiver
+from typing import Any, Dict
+
+import pandas as pd
+from dask import dataframe as dd
 
 
-class WriteDatabaseReceiver(Receiver, ABC):
-    """Abstract receiver for writing data."""
-
-    def __init__(self, id: int = 0):
-        super().__init__(id)
-
-    @abstractmethod
-    async def write_row(self, row: Dict[str, Any]):
-        """Writes a single row."""
-        pass
+class WriteDatabaseReceiver(ABC):
+    """
+    Generic, DB-agnostic write receiver.
+    **driver_kwargs is a generic passthrough for engine-specific options.
+    Generic implementations should ignore unknown keys.
+    """
 
     @abstractmethod
-    async def write_bulk(self, data: List[Dict[str, Any]]):
-        """Writes bulk data as list of rows."""
-        pass
+    async def write_row(
+        self,
+        *,
+        db: Any,
+        entity_name: str,
+        row: Dict[str, Any],
+        metrics: Any,
+        **driver_kwargs: Any,
+    ) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def write_bulk(
+        self,
+        *,
+        db: Any,
+        entity_name: str,
+        frame: pd.DataFrame,
+        metrics: Any,
+        chunk_size: int = 50_000,
+        **driver_kwargs: Any,
+    ) -> pd.DataFrame:
+        raise NotImplementedError
 
     @abstractmethod
     async def write_bigdata(
-        self, chunk_iterable: Generator[Dict[str, Any], None, None]
-    ):
-        """Writes data in chunks (e.g. generator)."""
-        pass
+        self,
+        *,
+        db: Any,
+        entity_name: str,
+        frame: "dd.DataFrame",
+        metrics: Any,
+        partition_chunk_size: int = 50_000,
+        **driver_kwargs: Any,
+    ) -> "dd.DataFrame":
+        raise NotImplementedError

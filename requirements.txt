@@ -6,3 +6,4 @@ pandas
 pymongo
 sqlalchemy
 keyring
+dask
