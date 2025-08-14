@@ -9,6 +9,11 @@ import typer
 from src.persistance.handlers.job_handler import JobHandler
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.persistance.errors import PersistNotFoundError
+from src.singletons import (
+    job_handler as _jh_singleton,
+    execution_handler as _eh_singleton,
+)
+
 
 app = typer.Typer(help="ETL control CLI using the same core as the API.")
 
@@ -31,7 +36,7 @@ class ExecutionPort(Protocol):
 
 class LocalJobsClient(JobsPort):
     def __init__(self, job_handler: Optional[JobHandler] = None) -> None:
-        self.job_handler = job_handler or JobHandler()
+        self.job_handler = job_handler or _jh_singleton()
 
     def create(self, cfg: Dict[str, Any]) -> str:
         # Accept raw dict so CLI can pass JSON directly;
@@ -61,7 +66,7 @@ class LocalJobsClient(JobsPort):
 
 class LocalExecutionClient(ExecutionPort):
     def __init__(self, exec_handler: Optional[JobExecutionHandler] = None) -> None:
-        self.exec_handler = exec_handler or JobExecutionHandler()
+        self.exec_handler = exec_handler or _eh_singleton()
         self.jobs = LocalJobsClient()
 
     def start(self, job_id: str) -> Dict[str, Any]:
