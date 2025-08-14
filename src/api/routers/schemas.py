@@ -1,23 +1,95 @@
 from __future__ import annotations
 
-from typing import List, Dict, Any
+from threading import RLock
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import ValidationError
 
-from src.persistance.base_models.job_base import JobBase
-from src.api.helpers import inline_defs, _error_payload, _exc_meta
+from src.api.helpers import _error_payload, _exc_meta, inline_defs
 from src.components.component_registry import (
-    component_registry,
-    public_component_types,
-    component_meta,
-    get_registry_mode,
     RegistryMode,
+    component_meta,
+    component_registry,
+    get_registry_mode,
+    public_component_types,
 )
+from src.persistance.base_models.job_base import JobBase
 
 router = APIRouter(prefix="/configs", tags=["configs"])
 
+# Simple, thread-safe in-process caches
+# Keys include registry mode so dev/test <-> production switches don't leak.
+_JOB_SCHEMA_CACHE: Dict[str, Dict[str, Any]] = {}
+_COMPONENT_SCHEMA_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
+_CACHE_LOCK = RLock()
+
+
+def invalidate_schema_caches() -> None:
+    """Clear all schema caches. Call after changing registry mode/registry."""
+    with _CACHE_LOCK:
+        _JOB_SCHEMA_CACHE.clear()
+        _COMPONENT_SCHEMA_CACHE.clear()
+
+
+def _cached_job_schema() -> Dict[str, Any]:
+    mode = get_registry_mode()
+    mode_key = getattr(mode, "value", str(mode))
+    with _CACHE_LOCK:
+        hit = _JOB_SCHEMA_CACHE.get(mode_key)
+        if hit is not None:
+            return hit
+    # Compute outside dict mutation to minimize lock hold time
+    computed = inline_defs(JobBase.model_json_schema())
+    with _CACHE_LOCK:
+        _JOB_SCHEMA_CACHE[mode_key] = computed
+    return computed
+
+
+def _cached_component_schema(comp_type: str) -> Dict[str, Any]:
+    mode = get_registry_mode()
+    mode_key = getattr(mode, "value", str(mode))
+    cache_key = (comp_type, mode_key)
+
+    with _CACHE_LOCK:
+        hit = _COMPONENT_SCHEMA_CACHE.get(cache_key)
+        if hit is not None:
+            return hit
+
+    # Visibility/existence checks must still run (especially for prod mode)
+    meta = component_meta(comp_type)
+    if mode == RegistryMode.PRODUCTION and (meta is None or meta.hidden):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEMA_COMPONENT_HIDDEN",
+                f"Unknown component {comp_type!r}",
+                comp_type=comp_type,
+                registry_mode=mode_key,
+            ),
+        )
+
+    cls = component_registry.get(comp_type)
+    if cls is None:
+        # Non-production: still 404, but distinct error code
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEMA_COMPONENT_UNKNOWN",
+                f"Unknown component {comp_type!r}",
+                comp_type=comp_type,
+                registry_mode=mode_key,
+            ),
+        )
+
+    computed = inline_defs(cls.model_json_schema())
+    with _CACHE_LOCK:
+        _COMPONENT_SCHEMA_CACHE[cache_key] = computed
+    return computed
+
+
+# Routes
 @router.get(
     "/job",
     response_model=dict,
@@ -25,10 +97,8 @@ router = APIRouter(prefix="/configs", tags=["configs"])
 )
 def get_job_schema() -> Dict[str, Any]:
     try:
-        schema = JobBase.model_json_schema()
-        return inline_defs(schema)
+        return _cached_job_schema()
     except ValidationError as exc:
-        # Extremely rare here, but keep parity with /jobs
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_payload(
@@ -55,7 +125,6 @@ def get_job_schema() -> Dict[str, Any]:
 )
 def list_component_types() -> List[str]:
     try:
-        # Only show non-hidden components to the GUI
         return public_component_types()
     except Exception as exc:
         raise HTTPException(
@@ -75,41 +144,10 @@ def list_component_types() -> List[str]:
 )
 def get_component_schema(comp_type: str) -> Dict[str, Any]:
     try:
-        mode = get_registry_mode()
-        meta = component_meta(comp_type)
-
-        # In production, hidden or unknown components must 404
-        if mode == RegistryMode.PRODUCTION and (meta is None or meta.hidden):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=_error_payload(
-                    "SCHEMA_COMPONENT_HIDDEN",
-                    f"Unknown component {comp_type!r}",
-                    comp_type=comp_type,
-                    registry_mode=mode.value if hasattr(mode, "value") else str(mode),
-                ),
-            )
-
-        cls = component_registry.get(comp_type)
-        if cls is None:
-            # Outside production we still emit a 404, but with a different code
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=_error_payload(
-                    "SCHEMA_COMPONENT_UNKNOWN",
-                    f"Unknown component {comp_type!r}",
-                    comp_type=comp_type,
-                    registry_mode=mode.value if hasattr(mode, "value") else str(mode),
-                ),
-            )
-
-        return inline_defs(cls.model_json_schema())
-
+        return _cached_component_schema(comp_type)
     except HTTPException:
-        # Re-raise cleanly to preserve our intended payloads/status
         raise
     except ValidationError as exc:
-        # If the components Pydantic model fails to produce a schema
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_payload(
