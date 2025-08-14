@@ -5,10 +5,10 @@ import dask.dataframe as dd
 import asyncio
 
 from src.metrics.component_metrics import ComponentMetrics
-from src.receivers.read_file_receiver import ReadFileReceiver
-from src.receivers.write_file_receiver import WriteFileReceiver
+from src.receivers.files.read_file_receiver import ReadFileReceiver
+from src.receivers.files.write_file_receiver import WriteFileReceiver
 from src.receivers.files.file_helper import ensure_exists
-from src.receivers.files.json_helper import load_json_records, dump_json_records
+from src.receivers.files.json.json_helper import load_json_records, dump_json_records
 
 
 class JSONReceiver(ReadFileReceiver, WriteFileReceiver):

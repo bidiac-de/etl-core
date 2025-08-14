@@ -4,10 +4,10 @@ import pandas as pd
 import dask.dataframe as dd
 import asyncio
 
-from src.receivers.read_file_receiver import ReadFileReceiver
-from src.receivers.write_file_receiver import WriteFileReceiver
+from src.receivers.files.read_file_receiver import ReadFileReceiver
+from src.receivers.files.write_file_receiver import WriteFileReceiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.receivers.files.csv_helper import (
+from src.receivers.files.csv.csv_helper import (
     read_csv_row, read_csv_bulk, read_csv_bigdata,
     write_csv_row, write_csv_bulk, write_csv_bigdata,
 )
