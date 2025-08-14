@@ -1,36 +1,77 @@
-from typing import Any, Dict, List, Literal
-from pydantic import Field
+from __future__ import annotations
+
+from typing import Any, AsyncGenerator, Dict, List
+
+import dask.dataframe as dd
+import pandas as pd
+from pydantic import model_validator
 
 from src.components.file_components.excel.excel_component import Excel
-from src.components.dataclasses import Layout, MetaData
-from src.components.base_component import get_strategy
-from src.components.component_registry  import register_component
-from src.receivers.files.excel_receiver import ExcelReceiver
+from src.components.component_registry import register_component
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.receivers.files.excel.excel_receiver import ExcelReceiver
 
 
 @register_component("write_excel")
 class WriteExcel(Excel):
-    """Component that writes data to an Excel file."""
+    """Excel writer supporting row, bulk, and bigdata modes (yield-only)."""
 
-    type: Literal["write_excel"] = Field(default="write_excel")
+    _receiver: ExcelReceiver | None = None
 
-    @classmethod
-    def build_objects(cls, values):
-        values.setdefault("layout", Layout())
-        values["strategy"] = get_strategy(values["strategy_type"])
-        values["receiver"] = ExcelReceiver(filepath=values["filepath"])
-        values.setdefault("metadata", MetaData())
-        return values
+    # --- required by abstract base (Component) ---
+    def _build_objects(self) -> "WriteExcel":
+        """Initialize receiver; called by frameworks expecting this hook."""
+        self._receiver = ExcelReceiver()
+        return self
 
-    def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
-        self.receiver.write_row(row=row, metrics=metrics)
-        return row
+    @model_validator(mode="after")
+    def _after_validate(self) -> "WriteExcel":
+        """Writers may create new files: no exists() check."""
+        if self._receiver is None:
+            self._receiver = ExcelReceiver()
+        return self
 
-    def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
-        self.receiver.write_bulk(data=data, metrics=metrics)
-        return data
+    async def process_row(
+            self,
+            row: Dict[str, Any],
+            metrics: ComponentMetrics,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Write a single row and yield it."""
+        assert self._receiver is not None
+        async for out in self._receiver.write_row(
+                filepath=self.filepath,
+                sheet_name=self.sheet_name,
+                row=row,
+                metrics=metrics,
+        ):
+            yield out
 
-    def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
-        self.receiver.write_bigdata(data=chunk_iterable, metrics=metrics)
-        return chunk_iterable
+    async def process_bulk(
+            self,
+            data: pd.DataFrame | List[Dict[str, Any]] | None,
+            metrics: ComponentMetrics,
+    ) -> AsyncGenerator[pd.DataFrame, None]:
+        """Write a full DataFrame (or list-of-dicts) and yield the DataFrame."""
+        assert self._receiver is not None
+        async for df in self._receiver.write_bulk(
+                filepath=self.filepath,
+                sheet_name=self.sheet_name,
+                data=data,
+                metrics=metrics,
+        ):
+            yield df
+
+    async def process_bigdata(
+            self,
+            chunk_iterable: dd.DataFrame,
+            metrics: ComponentMetrics,
+    ) -> AsyncGenerator[dd.DataFrame, None]:
+        """Write a Dask DataFrame and yield it (unchanged)."""
+        assert self._receiver is not None
+        async for ddf in self._receiver.write_bigdata(
+                filepath=self.filepath,
+                sheet_name=self.sheet_name,
+                data=chunk_iterable,
+                metrics=metrics,
+        ):
+            yield ddf
