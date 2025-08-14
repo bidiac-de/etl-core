@@ -4,6 +4,10 @@ from typing import Any, Dict, List, Optional
 
 
 def _sanitize_errors(errors: List[Dict]) -> List[Dict]:
+    """
+    Sanitize error details for API responses by filtering typical keys
+     from error dicts.
+    """
     sanitized: List[Dict] = []
     for err in errors:
         filtered: Dict = {}
@@ -42,6 +46,10 @@ def inline_defs(schema: dict) -> dict:
 
 
 def autodiscover_components(package_name: str) -> None:
+    """
+    Recursively import all components in the given package, so that they
+    are registered by the decorator from the registry.
+    """
     pkg = importlib.import_module(package_name)
     for finder, mod_name, is_pkg in pkgutil.walk_packages(
         pkg.__path__, pkg.__name__ + "."

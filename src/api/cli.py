@@ -15,7 +15,11 @@ from src.singletons import (
 )
 
 
-app = typer.Typer(help="ETL control CLI using the same core as the API.")
+app = typer.Typer(
+    help="ETL control CLI as alternative to the API/Studio, using the same"
+    " core as the API to manage job creation, execution, and monitoring. "
+    "can be used locally or remotely via HTTP."
+)
 
 
 # capabilities CLI needs
