@@ -6,6 +6,7 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
+
 from src.receivers.files.csv.csv_receiver import CSVReceiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
@@ -27,9 +28,6 @@ def sample_csv_file() -> Path:
         Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
     )
 
-
-import asyncio
-import pytest
 
 
 @pytest.mark.asyncio

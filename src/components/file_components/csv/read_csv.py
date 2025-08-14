@@ -30,8 +30,8 @@ class ReadCSV(CSV):
 
     async def process_bulk(
         self,
-        metrics: ComponentMetrics,
         dataframe: pd.DataFrame,
+        metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Read whole CSV as a pandas DataFrame."""
         df = await self._receiver.read_bulk(self.filepath, metrics=metrics)
@@ -39,8 +39,8 @@ class ReadCSV(CSV):
 
     async def process_bigdata(
         self,
-        metrics: ComponentMetrics,
         dataframe: pd.DataFrame,
+        metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """Read large CSV as a Dask DataFrame."""
         ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
