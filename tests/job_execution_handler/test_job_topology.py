@@ -146,7 +146,7 @@ def test_fan_in_topology():
     assert comp1_metrics.status == RuntimeState.SUCCESS
     assert comp2_metrics.lines_received == 1
     assert comp2_metrics.status == RuntimeState.SUCCESS
-    assert comp3_metrics.lines_received == 1
+    assert comp3_metrics.lines_received == 2  # both a and b send one row to c
     assert comp3_metrics.status == RuntimeState.SUCCESS
 
 
@@ -231,5 +231,5 @@ def test_diamond_topology():
     assert comp2_metrics.status == RuntimeState.SUCCESS
     assert comp3_metrics.lines_received == 1
     assert comp3_metrics.status == RuntimeState.SUCCESS
-    assert comp4_metrics.lines_received == 1
+    assert comp4_metrics.lines_received == 2
     assert comp4_metrics.status == RuntimeState.SUCCESS
