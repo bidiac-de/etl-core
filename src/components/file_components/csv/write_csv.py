@@ -6,7 +6,7 @@ from pydantic import Field, model_validator
 from src.components.file_components.csv.csv_component import CSV
 from src.components.registry import register_component
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.receivers.files.csv_receiver import CSVReceiver
+from src.receivers.files.csv.csv_receiver import CSVReceiver
 
 
 @register_component("write_csv")

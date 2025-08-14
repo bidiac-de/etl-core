@@ -6,7 +6,7 @@ import dask.dataframe as dd
 from src.components.file_components.json.json_component import JSON
 from src.components.dataclasses import Layout, MetaData
 from src.components.registry import register_component
-from src.receivers.files.json_receiver import JSONReceiver
+from src.receivers.files.json.json_receiver import JSONReceiver
 from src.metrics.component_metrics import ComponentMetrics
 
 
