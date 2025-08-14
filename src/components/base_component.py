@@ -174,7 +174,11 @@ class Component(BaseModel, ABC):
         return self.strategy.execute(self, payload, metrics)
 
     @abstractmethod
-    async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    @abstractmethod
+    async def process_row(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Async generator: yield dict rows."""
         raise NotImplementedError
 
     @abstractmethod
