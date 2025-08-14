@@ -14,6 +14,9 @@ from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.components import Schema
+import sys
+import logging as std_logging
+sys.modules['logging'] = std_logging
 
 DATA_DIR = Path(__file__).parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"
