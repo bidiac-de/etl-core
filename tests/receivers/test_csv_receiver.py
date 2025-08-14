@@ -26,10 +26,21 @@ def sample_csv_file() -> Path:
     return Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
 
 
+import asyncio
+import pytest
+
 @pytest.mark.asyncio
 async def test_readcsv_row(sample_csv_file: Path, metrics: ComponentMetrics):
     r = CSVReceiver()
-    rows = [row async for row in r.read_row(filepath=sample_csv_file, metrics=metrics)]
+
+    async def drain():
+        out = []
+        async for row in r.read_row(filepath=sample_csv_file, metrics=metrics):
+            out.append(row)
+        return out
+
+    rows = await asyncio.wait_for(drain(), timeout=3.0)
+
     assert isinstance(rows, list)
     assert len(rows) >= 1
     assert rows[0]["id"] == "1"
