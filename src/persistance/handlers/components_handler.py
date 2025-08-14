@@ -172,7 +172,7 @@ class ComponentHandler:
         session.flush()
         session.expire(job_record, ["components"])
 
-    def build_runtime_for_all(self, job_record) -> List:
+    def build_runtime_for_all(self, job_record) -> List[Component]:
         """
         Build domain components from a job_record with relationships loaded.
         """
@@ -185,7 +185,6 @@ class ComponentHandler:
                 "comp_type": ct.comp_type,
                 "next": [n.name for n in ct.next_components],
                 "layout": self.dc.dump_layout(ct.layout),
-                # Keep key name as in your current code:
                 "metadata": self.dc.dump_metadata(ct.metadata_),
             }
             # Merge payload with base, base > payload on collisions.
@@ -193,7 +192,7 @@ class ComponentHandler:
 
             cls = component_registry[ct.comp_type]
             obj = cls(**data)
-            # restore private id so the runtime matches DB row ids
+            # restore private id so runtime matches DB row ids
             object.__setattr__(obj, "_id", ct.id)
             runtime_comps.append(obj)
 

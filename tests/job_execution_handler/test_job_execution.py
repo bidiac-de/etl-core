@@ -1,12 +1,12 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
-import src.job_execution.runtimejob as job_module
+import src.job_execution.runtimejob as runtimejob_module
 from src.components.stubcomponents import StubComponent
 from datetime import datetime
 from tests.helpers import get_component_by_name, runtime_job_from_config
 
 # ensure Job._build_components() can find TestComponent
-job_module.TestComponent = StubComponent
+runtimejob_module.TestComponent = StubComponent
 
 
 def test_execute_job_single_test_component():
@@ -39,15 +39,15 @@ def test_execute_job_single_test_component():
         ],
     }
 
-    job = runtime_job_from_config(config)
+    runtime_job = runtime_job_from_config(config)
 
-    execution = handler.execute_job(job)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
-    comp = get_component_by_name(job, "test1")
+    comp = get_component_by_name(runtime_job, "test1")
 
     comp_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp.id)
     assert comp_metrics.status == RuntimeState.SUCCESS
@@ -95,19 +95,19 @@ def test_execute_job_chain_components_file_logging():
         ],
     }
 
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    assert job.file_logging is True
+    assert runtime_job.file_logging is True
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
     # both components ran and metrics recorded
-    comp1 = get_component_by_name(job, "comp1")
-    comp2 = get_component_by_name(job, "comp2")
+    comp1 = get_component_by_name(runtime_job, "comp1")
+    comp2 = get_component_by_name(runtime_job, "comp2")
 
     assert mh.get_comp_metrics(execution.id, attempt.id, comp1.id).lines_received == 1
     assert (
@@ -164,8 +164,8 @@ def test_execute_job_failing_and_cancelled_components():
         ],
     }
 
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
@@ -176,8 +176,8 @@ def test_execute_job_failing_and_cancelled_components():
     assert ("fail stubcomponent failed") in attempt.error
 
     # Component-level assertions
-    comp1 = get_component_by_name(job, "comp1")
-    comp2 = get_component_by_name(job, "comp2")
+    comp1 = get_component_by_name(runtime_job, "comp1")
+    comp2 = get_component_by_name(runtime_job, "comp2")
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
     assert (
@@ -211,15 +211,15 @@ def test_retry_logic_and_metrics():
             }
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[1]
     assert len(execution.attempts) == 2
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     # lines_received comes from second execution
-    comp = get_component_by_name(job, "c1")
+    comp = get_component_by_name(runtime_job, "c1")
     assert mh.get_comp_metrics(execution.id, attempt.id, comp.id).lines_received == 1
 
 
@@ -284,19 +284,19 @@ def test_execute_job_linear_chain():
         ],
     }
 
-    job = runtime_job_from_config(config)
+    runtime_job = runtime_job_from_config(config)
     # Allow up to 4 workers, but dependencies enforce sequential execution
-    execution = handler.execute_job(job)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "c1")
-    comp2 = get_component_by_name(job, "c2")
-    comp3 = get_component_by_name(job, "c3")
-    comp4 = get_component_by_name(job, "c4")
+    comp1 = get_component_by_name(runtime_job, "c1")
+    comp2 = get_component_by_name(runtime_job, "c2")
+    comp3 = get_component_by_name(runtime_job, "c3")
+    comp4 = get_component_by_name(runtime_job, "c4")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
@@ -363,17 +363,17 @@ def test_execute_linear_chain_with_retry_metrics():
             },
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
 
     # should have retried exactly once
     assert len(execution.attempts) == 2
     mh = handler.job_info.metrics_handler
 
     # grab the two components
-    comp1 = get_component_by_name(job, "c1")
-    comp2 = get_component_by_name(job, "c2")
-    comp3 = get_component_by_name(job, "c3")
+    comp1 = get_component_by_name(runtime_job, "c1")
+    comp2 = get_component_by_name(runtime_job, "c2")
+    comp3 = get_component_by_name(runtime_job, "c3")
     first = execution.attempts[0]
     second = execution.attempts[1]
 

@@ -1,12 +1,12 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
-import src.job_execution.runtimejob as job_module
+import src.job_execution.runtimejob as runtimejob_module
 from src.components.stubcomponents import StubComponent
 from tests.helpers import get_component_by_name, runtime_job_from_config
 from datetime import datetime
 
 # ensure Job._build_components() can find TestComponent
-job_module.TestComponent = StubComponent
+runtimejob_module.TestComponent = StubComponent
 
 
 def test_fan_out_topology():
@@ -55,17 +55,17 @@ def test_fan_out_topology():
             },
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "root")
-    comp2 = get_component_by_name(job, "child1")
-    comp3 = get_component_by_name(job, "child2")
+    comp1 = get_component_by_name(runtime_job, "root")
+    comp2 = get_component_by_name(runtime_job, "child1")
+    comp3 = get_component_by_name(runtime_job, "child2")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
@@ -126,17 +126,17 @@ def test_fan_in_topology():
             },
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "a")
-    comp2 = get_component_by_name(job, "b")
-    comp3 = get_component_by_name(job, "c")
+    comp1 = get_component_by_name(runtime_job, "a")
+    comp2 = get_component_by_name(runtime_job, "b")
+    comp3 = get_component_by_name(runtime_job, "c")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
@@ -207,18 +207,18 @@ def test_diamond_topology():
             },
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "root")
-    comp2 = get_component_by_name(job, "a")
-    comp3 = get_component_by_name(job, "b")
-    comp4 = get_component_by_name(job, "c")
+    comp1 = get_component_by_name(runtime_job, "root")
+    comp2 = get_component_by_name(runtime_job, "a")
+    comp3 = get_component_by_name(runtime_job, "b")
+    comp4 = get_component_by_name(runtime_job, "c")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)

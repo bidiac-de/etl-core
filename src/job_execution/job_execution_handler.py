@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Set
 from collections import deque
 
 from src.components.runtime_state import RuntimeState
-from src.job_execution.runtimejob import RuntimeJob, JobExecution, _Sentinel
+from src.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
@@ -265,7 +265,7 @@ class JobExecutionHandler:
 
         while remaining:
             item = await queue.get()
-            if isinstance(item, _Sentinel):
+            if isinstance(item, Sentinel):
                 remaining.discard(item.component_id)
             else:
                 await self._run_component(component, item, metrics, out_queues)

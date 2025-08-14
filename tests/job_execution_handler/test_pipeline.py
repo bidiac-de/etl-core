@@ -1,13 +1,13 @@
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
 from tests.helpers import get_component_by_name, runtime_job_from_config
-import src.job_execution.runtimejob as job_module
+import src.job_execution.runtimejob as runtimejob_module
 from src.components.stubcomponents import MultiSource, MultiEcho
 from datetime import datetime
 
 # ensure Job._build_components() can find TestComponent
-job_module.MultiSourceComponent = MultiSource
-job_module.MultiEchoComponent = MultiEcho
+runtimejob_module.MultiSourceComponent = MultiSource
+runtimejob_module.MultiEchoComponent = MultiEcho
 
 
 def test_linear_stream_multiple_rows():
@@ -43,15 +43,15 @@ def test_linear_stream_multiple_rows():
             },
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    src_comp = get_component_by_name(job, "source")
-    echo_comp = get_component_by_name(job, "echo")
+    src_comp = get_component_by_name(runtime_job, "source")
+    echo_comp = get_component_by_name(runtime_job, "echo")
 
     src_metrics = mh.get_comp_metrics(execution.id, attempt.id, src_comp.id)
     echo_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo_comp.id)
@@ -105,16 +105,16 @@ def test_fan_out_multiple_rows():
             },
         ],
     }
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    source = get_component_by_name(job, "source")
-    echo1 = get_component_by_name(job, "echo1")
-    echo2 = get_component_by_name(job, "echo2")
+    source = get_component_by_name(runtime_job, "source")
+    echo1 = get_component_by_name(runtime_job, "echo1")
+    echo2 = get_component_by_name(runtime_job, "echo2")
 
     src_metrics = mh.get_comp_metrics(execution.id, attempt.id, source.id)
     e1_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo1.id)
@@ -169,16 +169,16 @@ def test_fan_in_multiple_rows():
         ],
     }
 
-    job = runtime_job_from_config(config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    src1 = get_component_by_name(job, "src1")
-    src2 = get_component_by_name(job, "src2")
-    echo = get_component_by_name(job, "echo")
+    src1 = get_component_by_name(runtime_job, "src1")
+    src2 = get_component_by_name(runtime_job, "src2")
+    echo = get_component_by_name(runtime_job, "echo")
 
     e_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo.id)
     expected = src1.count + src2.count

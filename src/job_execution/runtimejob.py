@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger("job.ExecutionHandler")
 
 
-class _Sentinel:
+class Sentinel:
     """Unique end-of-stream marker for each component."""
 
     __slots__ = ("component_id",)
@@ -74,8 +74,8 @@ class JobExecution:
         self._attempts: List[ExecutionAttempt] = []
 
         # each component gets its own sentinel instance
-        self._sentinels: Dict[str, _Sentinel] = {
-            comp.id: _Sentinel(comp.id) for comp in job.components
+        self._sentinels: Dict[str, Sentinel] = {
+            comp.id: Sentinel(comp.id) for comp in job.components
         }
 
     def start_attempt(self):
@@ -113,7 +113,7 @@ class JobExecution:
         return self._retry_strategy
 
     @property
-    def sentinels(self) -> Dict[str, _Sentinel]:
+    def sentinels(self) -> Dict[str, Sentinel]:
         """
         Returns a mapping of component IDs to their sentinels.
         Sentinels are used to mark the end of a stream for each component.
