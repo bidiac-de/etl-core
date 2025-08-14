@@ -8,13 +8,15 @@ import dask.dataframe as dd
 from src.receivers.files.file_helper import resolve_file_path, ensure_exists, open_file
 
 
-def read_csv_row(path: Path) -> Generator[Dict[str, Any], None, None]:
+def read_csv_row(path: Path, separator: str = ",") -> Generator[Dict[str, Any], None, None]:
+
     """Yield CSV rows as dictionaries (synchronous generator)."""
     path = resolve_file_path(path)
     ensure_exists(path)
     with open_file(path, "r", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+        reader = csv.DictReader(f, delimiter=separator)
+
+    for row in reader:
             yield row
 
 

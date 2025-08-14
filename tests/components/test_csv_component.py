@@ -18,6 +18,7 @@ import sys
 import logging as std_logging
 sys.modules['logging'] = std_logging
 
+
 DATA_DIR = Path(__file__).parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"
 MISSING_VALUES_CSV = DATA_DIR / "test_data_missing_values.csv"

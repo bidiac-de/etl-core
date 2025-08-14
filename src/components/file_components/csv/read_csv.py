@@ -21,8 +21,11 @@ class ReadCSV(CSV):
             self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Read rows one-by-one (streaming)."""
-        async for result in self._receiver.read_row(self.filepath, metrics=metrics):
-            yield result
+        sep = getattr(self.separator, "value", self.separator)
+        async for result in self._receiver.read_row(
+             self.filepath, metrics=metrics, separator=sep
+             ):
+         yield result
 
     async def process_bulk(
             self,

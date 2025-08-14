@@ -12,17 +12,20 @@ from src.receivers.files.csv.csv_helper import (
     write_csv_row, write_csv_bulk, write_csv_bigdata,
 )
 
+
 class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
     """Receiver for CSV files."""
 
     async def read_row(
-            self, filepath: Path, metrics: ComponentMetrics
+            self, filepath: Path, metrics: ComponentMetrics, *, separator: str = ",",
+
     ) -> AsyncIterator[Dict[str, Any]]:
         """
         True streaming: pull one row at a time by stepping the sync generator
         on a worker thread. No full-file buffering.
         """
-        it = read_csv_row(filepath)
+        it = read_csv_row(filepath, separator=separator)
+
         while True:
             try:
                 row = await asyncio.to_thread(next, it)
