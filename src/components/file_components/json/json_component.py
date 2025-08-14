@@ -7,6 +7,7 @@ from src.components.file_components.file_component import FileComponent
 from src.components.column_definition import ColumnDefinition
 from src.metrics.component_metrics import ComponentMetrics
 
+
 class JSON(FileComponent, ABC):
     """Abstract JSON component, async + streaming (yield)."""
 
@@ -15,10 +16,9 @@ class JSON(FileComponent, ABC):
         extra="ignore",
     )
 
-
     @abstractmethod
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
         """
         Yield single rows (dict) from file.
@@ -27,7 +27,7 @@ class JSON(FileComponent, ABC):
 
     @abstractmethod
     async def process_bulk(
-            self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
     ) -> AsyncIterator[Any]:
         """
         Yield pandas DataFrame chunks.
@@ -36,7 +36,7 @@ class JSON(FileComponent, ABC):
 
     @abstractmethod
     async def process_bigdata(
-            self, chunk_iterable: Any, metrics: ComponentMetrics
+        self, chunk_iterable: Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Any]:
         """
         Yield pandas DataFrame per (big) chunk/partition (e.g., from Dask).

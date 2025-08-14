@@ -13,6 +13,7 @@ from src.metrics.component_metrics import ComponentMetrics
 @register_component("read_json")
 class ReadJSON(JSON):
     """Component that reads data from a JSON/NDJSON file (async streaming)."""
+
     type: Literal["read_json"] = "read_json"
 
     @model_validator(mode="after")
@@ -21,7 +22,7 @@ class ReadJSON(JSON):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yield one row (dict) at a time.
@@ -30,7 +31,7 @@ class ReadJSON(JSON):
             yield rec
 
     async def process_bulk(
-            self, data: Any, metrics: ComponentMetrics
+        self, data: Any, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """
         Yield pandas DataFrame-Chunks.
@@ -39,7 +40,7 @@ class ReadJSON(JSON):
         yield df
 
     async def process_bigdata(
-            self, chunk_iterable: Any, metrics: ComponentMetrics
+        self, chunk_iterable: Any, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """
         Yield pandas DataFrame pro (Dask-)Partition.

@@ -11,8 +11,9 @@ def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
     """
     p = str(path)
     if p.endswith(".gz"):
-        return io.TextIOWrapper(gzip.open(p, mode.replace("t","")), encoding=encoding)
+        return io.TextIOWrapper(gzip.open(p, mode.replace("t", "")), encoding=encoding)
     return open(path, mode, encoding=encoding)
+
 
 def load_json_records(path: Path) -> List[Dict[str, Any]]:
     """Load JSON as a list of record dictionaries.
@@ -36,48 +37,67 @@ def load_json_records(path: Path) -> List[Dict[str, Any]]:
         obj = json.loads(text)
         return obj if isinstance(obj, list) else [obj]
 
+
 def dump_json_records(path: Path, records: List[Dict[str, Any]], indent: int = 2):
     """Write a list of record dictionaries as a JSON array (UTF-8, ensure_ascii=False)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open_text_auto(path, "wt") as f:
         json.dump(records, f, indent=indent, ensure_ascii=False)
 
+
 from typing import Iterator, Dict, Any, Optional, Tuple
 from pathlib import Path
 import json
 
+
 def _is_ndjson_path(p: str) -> bool:
     return p.endswith((".jsonl", ".ndjson", ".jsonl.gz", ".ndjson.gz"))
+
 
 def _append_next_chunk(buf: str, f, size: int) -> Tuple[str, bool]:
     more = f.read(size)
     return (buf + more, False) if more else (buf, True)
 
+
 def _detect_top_level(buf: str) -> Optional[str]:
     i = 0
-    while i < len(buf) and buf[i].isspace(): i += 1
-    if i >= len(buf): return None
-    if buf[i] == "[": return "array"
-    if buf[i] == "{": return "object"
+    while i < len(buf) and buf[i].isspace():
+        i += 1
+    if i >= len(buf):
+        return None
+    if buf[i] == "[":
+        return "array"
+    if buf[i] == "{":
+        return "object"
     raise ValueError("Top-level JSON must be '[' or '{'.")
 
+
 def _skip_seps(buf: str, i: int = 0) -> int:
-    while i < len(buf) and (buf[i].isspace() or buf[i] == ","): i += 1
+    while i < len(buf) and (buf[i].isspace() or buf[i] == ","):
+        i += 1
     return i
 
+
 def _try_decode(dec: json.JSONDecoder, buf: str, i: int):
-    try: return dec.raw_decode(buf, idx=i)
-    except json.JSONDecodeError: return None
+    try:
+        return dec.raw_decode(buf, idx=i)
+    except json.JSONDecodeError:
+        return None
+
 
 def _iter_ndjson(path: Path) -> Iterator[Dict[str, Any]]:
     with open_text_auto(path, "rt") as f:
         for line in f:
             s = line.strip()
-            if not s: continue
+            if not s:
+                continue
             obj = json.loads(s)
             yield obj if isinstance(obj, dict) else {"_value": obj}
 
-def _iter_single_object(dec: json.JSONDecoder, buf: str, f, size: int, i: int) -> Iterator[Dict[str, Any]]:
+
+def _iter_single_object(
+    dec: json.JSONDecoder, buf: str, f, size: int, i: int
+) -> Iterator[Dict[str, Any]]:
     while True:
         d = _try_decode(dec, buf, i)
         if d:
@@ -85,11 +105,14 @@ def _iter_single_object(dec: json.JSONDecoder, buf: str, f, size: int, i: int) -
             yield obj if isinstance(obj, dict) else {"_value": obj}
             return
         buf, eof = _append_next_chunk(buf, f, size)
-        if eof: raise ValueError("Unexpected EOF in single JSON object.")
+        if eof:
+            raise ValueError("Unexpected EOF in single JSON object.")
+
 
 def _need_more_data(buf: str, j: int) -> bool:
     """Gibt True zurück, wenn nach dem Überspringen von Trennern/Whitespace kein Token im Buffer steht."""
     return j >= len(buf)
+
 
 def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
     """
@@ -101,6 +124,7 @@ def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
         # Signal: wirklich nichts Sinnvolles mehr im Buffer
         return buf, True
     return buf, False
+
 
 def _ensure_token(buf: str, f, size: int) -> Tuple[Optional[int], str]:
     """
@@ -116,7 +140,10 @@ def _ensure_token(buf: str, f, size: int) -> Tuple[Optional[int], str]:
             # Kein weiteres Token mehr -> leeres/komplett gelesenes Array
             return None, buf
 
-def _decode_or_read(dec: json.JSONDecoder, buf: str, start: int, f, size: int) -> Tuple[Dict[str, Any], str]:
+
+def _decode_or_read(
+    dec: json.JSONDecoder, buf: str, start: int, f, size: int
+) -> Tuple[Dict[str, Any], str]:
     """
     Versucht ab 'start' zu decodieren und lädt bei Bedarf weitere Chunks nach,
     bis ein vollständiges JSON-Element vorliegt oder EOF als Fehler gewertet wird.
@@ -132,7 +159,10 @@ def _decode_or_read(dec: json.JSONDecoder, buf: str, start: int, f, size: int) -
         if eof:
             raise ValueError("JSON array not properly closed.")
 
-def _iter_array(dec: json.JSONDecoder, buf: str, f, size: int) -> Iterator[Dict[str, Any]]:
+
+def _iter_array(
+    dec: json.JSONDecoder, buf: str, f, size: int
+) -> Iterator[Dict[str, Any]]:
     while True:
         j, buf = _ensure_token(buf, f, size)
         if j is None:
@@ -143,6 +173,7 @@ def _iter_array(dec: json.JSONDecoder, buf: str, f, size: int) -> Iterator[Dict[
             return
         obj, buf = _decode_or_read(dec, buf, j, f, size)
         yield obj
+
 
 def _prime_top_level(f, size: int, buf: str) -> Tuple[Optional[str], str, int]:
     """
@@ -187,7 +218,7 @@ def read_json_row(path: Path, chunk_size: int = 65536) -> Iterator[Dict[str, Any
 
         if top == "array":
             if i < len(buf) and buf[i] == "[":
-                buf = buf[i + 1:]
+                buf = buf[i + 1 :]
             yield from _iter_array(dec, buf, f, chunk_size)
             return
 

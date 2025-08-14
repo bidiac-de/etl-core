@@ -8,13 +8,13 @@ from src.context.context import Context
 
 class DatabaseComponent(Component, ABC):
     def __init__(
-            self,
-            id: int,
-            name: str,
-            description: str,
-            context: Context,
-            connection_handler: ConnectionHandler,
-            schema_definition: List[ColumnDefinition],
+        self,
+        id: int,
+        name: str,
+        description: str,
+        context: Context,
+        connection_handler: ConnectionHandler,
+        schema_definition: List[ColumnDefinition],
     ):
         super().__init__(id=id, name=name, description=description, type="database")
         self._context = context
@@ -48,7 +48,9 @@ class DatabaseComponent(Component, ABC):
     @schema_definition.setter
     def schema_definition(self, value: List[ColumnDefinition]):
         if not all(isinstance(c, ColumnDefinition) for c in value):
-            raise TypeError("schema_definition must be a list of ColumnDefinition instances")
+            raise TypeError(
+                "schema_definition must be a list of ColumnDefinition instances"
+            )
         self._schema_definition = value
 
     @abstractmethod

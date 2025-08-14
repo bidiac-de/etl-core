@@ -5,7 +5,13 @@ from src.context.context_provider import IContextProvider
 
 
 class Context(IContextProvider):
-    def __init__(self, id: int, name: str, environment: Environment, parameters: List[ContextParameter]):
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        environment: Environment,
+        parameters: List[ContextParameter],
+    ):
         self._id = id
         self._name = name
         self._environment = environment
@@ -62,7 +68,9 @@ class Context(IContextProvider):
         try:
             return self._parameters[key].value
         except KeyError:
-            raise KeyError(f"Parameter with key '{key}' not found in context '{self._name}'")
+            raise KeyError(
+                f"Parameter with key '{key}' not found in context '{self._name}'"
+            )
 
     def set_parameter(self, key: str, value: str):
         """

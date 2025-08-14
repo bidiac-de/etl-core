@@ -5,6 +5,7 @@ from src.components.column_definition import ColumnDefinition
 
 class Schema(BaseModel):
     """Defines a reusable schema consisting of multiple columns."""
+
     columns: List[ColumnDefinition]
 
     model_config = ConfigDict(

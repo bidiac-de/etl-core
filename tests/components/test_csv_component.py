@@ -88,6 +88,7 @@ def metrics():
         lines_forwarded=0,
     )
 
+
 @pytest.mark.asyncio
 async def test_readcsv_valid_bulk(schema_definition, metrics):
     comp = ReadCSV(

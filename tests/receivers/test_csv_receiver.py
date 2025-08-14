@@ -23,11 +23,14 @@ def metrics() -> ComponentMetrics:
 
 @pytest.fixture
 def sample_csv_file() -> Path:
-    return Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
+    return (
+        Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
+    )
 
 
 import asyncio
 import pytest
+
 
 @pytest.mark.asyncio
 async def test_readcsv_row(sample_csv_file: Path, metrics: ComponentMetrics):
@@ -72,8 +75,12 @@ async def test_writecsv_row(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.csv"
     r = CSVReceiver()
 
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"})
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"})
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"}
+    )
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"}
+    )
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics)
     assert len(df) == 2

@@ -24,22 +24,14 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_json_file() -> Path:
     return (
-            Path(__file__).parent.parent
-            / "components"
-            / "data"
-            / "json"
-            / "testdata.json"
+        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.json"
     )
 
 
 @pytest.fixture
 def sample_ndjson_file() -> Path:
     return (
-            Path(__file__).parent.parent
-            / "components"
-            / "data"
-            / "json"
-            / "testdata.jsonl"
+        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.jsonl"
     )
 
 
@@ -78,8 +70,12 @@ async def test_writejson_row(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.json"
     r = JSONReceiver()
 
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"})
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"})
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"}
+    )
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"}
+    )
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics)
     assert len(df) == 2
