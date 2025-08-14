@@ -5,6 +5,9 @@ from src.api.helpers import inline_defs
 from src.components.component_registry import (
     component_registry,
     public_component_types,
+    component_meta,
+    get_registry_mode,
+    RegistryMode,
 )
 
 router = APIRouter(prefix="/configs", tags=["configs"])
@@ -36,6 +39,12 @@ def list_component_types() -> List[str]:
     summary="Get JSON Schema for a specific component (inlined)",
 )
 def get_component_schema(comp_type: str) -> dict:
+    # Respect production visibility: hidden components must 404 in production
+    mode = get_registry_mode()
+    meta = component_meta(comp_type)
+    if mode == RegistryMode.PRODUCTION and (meta is None or meta.hidden):
+        raise HTTPException(status_code=404, detail=f"Unknown component {comp_type!r}")
+
     cls = component_registry.get(comp_type)
     if cls is None:
         raise HTTPException(status_code=404, detail=f"Unknown component {comp_type!r}")

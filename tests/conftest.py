@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Generator
+from typing import Generator, Callable, Iterable
 
 import pytest
 import os
 import importlib
+import sys
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
@@ -17,6 +18,47 @@ from src.persistance.table_definitions import (
     ComponentTable,
     LayoutTable,
 )
+
+
+def _purge_modules(prefixes: Iterable[str]) -> None:
+    keys = list(sys.modules.keys())
+    to_delete = [
+        name
+        for name in keys
+        if any(name == p or name.startswith(p + ".") for p in prefixes)
+    ]
+    for name in to_delete:
+        sys.modules.pop(name, None)
+
+
+@pytest.fixture
+def fresh_client(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> Callable[[str], TestClient]:
+    """
+    Build a brand‑new FastAPI TestClient for the given mode and ENSURE:
+      - all app, component, and router modules are re-imported cleanly
+      - the app lifespan runs (so set_registry_mode(...) takes effect)
+    """
+
+    def _make(mode: str) -> TestClient:
+        monkeypatch.setenv("ETL_COMPONENT_MODE", mode)
+        _purge_modules(
+            (
+                "src.main",
+                "src.components",  # component registry and implementations
+                "src.api.routers",  # routers (schemas/jobs/execution/setup)
+            )
+        )
+        importlib.invalidate_caches()
+        import src.main as main
+
+        client = TestClient(main.app)
+        client.__enter__()  # run lifespan
+        request.addfinalizer(lambda: client.__exit__(None, None, None))
+        return client
+
+    return _make
 
 
 @pytest.fixture()
@@ -36,10 +78,6 @@ def enable_stub_components():
     Sets the registry mode to 'test' so stub components are visible.
     """
     os.environ["ETL_COMPONENT_MODE"] = "test"
-
-    # If src.main was already imported in some tests, reload it so
-    # lifespan picks up the correct mode.
-    import sys
 
     if "src.main" in sys.modules:
         import src.main

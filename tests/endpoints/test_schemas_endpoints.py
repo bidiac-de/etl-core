@@ -1,11 +1,8 @@
-from src.main import app
+from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
-client = TestClient(app)
-
-
-def test_get_job_schema_structure():
+def test_get_job_schema_structure(client: TestClient) -> None:
     response = client.get("/configs/job")
     assert response.status_code == 200
     schema = response.json()
@@ -17,7 +14,7 @@ def test_get_job_schema_structure():
     assert "$defs" not in schema
 
 
-def test_schema_component_types():
+def test_schema_component_types(client: TestClient) -> None:
     response = client.get("/configs/component_types")
     assert response.status_code == 200
     types = response.json()
@@ -25,7 +22,7 @@ def test_schema_component_types():
     assert all(isinstance(t, str) for t in types)
 
 
-def test_get_specific_schema_valid():
+def test_get_specific_schema_valid(client: TestClient) -> None:
     comp_types = client.get("/configs/component_types").json()
     valid = comp_types[0]
     response = client.get(f"/configs/{valid}")
@@ -33,7 +30,7 @@ def test_get_specific_schema_valid():
     assert isinstance(response.json(), dict)
 
 
-def test_get_specific_schema_invalid():
+def test_get_specific_schema_invalid(client: TestClient) -> None:
     response = client.get("/configs/unknown")
     assert response.status_code == 404
     assert "detail" in response.json()

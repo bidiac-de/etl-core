@@ -1,4 +1,3 @@
-# tests/endpoints/test_jobs_create_and_update.py
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
