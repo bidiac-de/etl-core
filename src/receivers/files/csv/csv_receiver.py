@@ -83,7 +83,19 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_received += len(data) if data else 0
 
     async def write_bigdata(
-        self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
+            self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
     ):
         """Write large dataset to a CSV file."""
         await asyncio.to_thread(write_csv_bigdata, filepath, data)
+
+        try:
+            row_count = int(data.shape[0].compute())
+        except Exception:
+            try:
+                row_count = int(data.index.size.compute())
+            except Exception:
+                import pandas as pd
+                row_count = int(
+                    data.map_partitions(lambda df: pd.Series([len(df)])).compute().sum()
+                )
+        metrics.lines_received += row_count
