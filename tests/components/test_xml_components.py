@@ -3,7 +3,7 @@ import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal, AsyncGenerator
 
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
@@ -34,28 +34,67 @@ def build_minimal_schema() -> Schema:
         ]
     )
 
+
+Mode = Literal["row", "bulk", "bigdata"]
+
+
+async def _consume_async_gen(gen: AsyncGenerator):
+    items = []
+    async for item in gen:
+        items.append(item)
+    return items
+
+
+async def _coerce_async_result(res: Any, *, mode: Mode, component_type: str):
+    """
+    Standardizes behavior to match the JSON tests:
+    - Row: for write_* with exactly 1 item → return that item; otherwise return a list
+    - Bulk/Bigdata: if there's a single chunk, return it as a standalone object (df/ddf)
+    """
+    if hasattr(res, "__aiter__"):
+        items = await _consume_async_gen(res)
+        if mode == "row":
+            return (
+                items[0]
+                if (component_type == "write_xml" and len(items) == 1)
+                else items
+            )
+        return items[0] if items else None
+
+    if hasattr(res, "__await__"):
+        return await res
+
+    return res
+
+
 @pytest.fixture(autouse=True)
 def patch_strategies(monkeypatch):
+    from src.strategies.row_strategy import RowExecutionStrategy
+    from src.strategies.bulk_strategy import BulkExecutionStrategy
+    from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+
     async def row_exec(self, component, payload, metrics):
         res = component.process_row(payload, metrics=metrics)
-        if hasattr(res, "__aiter__"):
-            items = []
-            async for item in res:
-                items.append(item)
-            return items
-        if hasattr(res, "__await__"):
-            return await res
-        return res
+        return await _coerce_async_result(
+            res, mode="row", component_type=getattr(component, "type", "")
+        )
 
     async def bulk_exec(self, component, payload, metrics):
-        return await component.process_bulk(payload, metrics=metrics)
+        res = component.process_bulk(payload, metrics=metrics)
+        return await _coerce_async_result(
+            res, mode="bulk", component_type=getattr(component, "type", "")
+        )
 
     async def bigdata_exec(self, component, payload, metrics):
-        return await component.process_bigdata(payload, metrics=metrics)
+        res = component.process_bigdata(payload, metrics=metrics)
+        return await _coerce_async_result(
+            res, mode="bigdata", component_type=getattr(component, "type", "")
+        )
 
     monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
     monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
     monkeypatch.setattr(BigDataExecutionStrategy, "execute", bigdata_exec, raising=True)
+
 
 @pytest.fixture
 def schema_definition():
@@ -63,6 +102,7 @@ def schema_definition():
         ColumnDefinition(name="id", data_type=DataType.STRING),
         ColumnDefinition(name="name", data_type=DataType.STRING),
     ]
+
 
 @pytest.fixture
 def metrics() -> ComponentMetrics:
@@ -73,6 +113,7 @@ def metrics() -> ComponentMetrics:
         lines_received=0,
         lines_forwarded=0,
     )
+
 
 @pytest.mark.asyncio
 async def test_readxml_valid_bulk(schema_definition, metrics):
@@ -92,6 +133,7 @@ async def test_readxml_valid_bulk(schema_definition, metrics):
     assert set(df.columns) >= {"id", "name"}
     assert set(df["name"]) == {"Alice", "Bob", "Charlie"}
 
+
 @pytest.mark.asyncio
 async def test_readxml_invalid_content_raises(schema_definition, metrics):
     comp = ReadXML(
@@ -106,6 +148,7 @@ async def test_readxml_invalid_content_raises(schema_definition, metrics):
 
     with pytest.raises(Exception):
         _ = await comp.execute(payload=None, metrics=metrics)
+
 
 @pytest.mark.asyncio
 async def test_readxml_bulk_extra_missing(schema_definition, metrics):
@@ -125,6 +168,7 @@ async def test_readxml_bulk_extra_missing(schema_definition, metrics):
     assert {"city", "age"}.issubset(df.columns)
     assert df.isna().any().any()
 
+
 @pytest.mark.asyncio
 async def test_readxml_bulk_mixed_types(schema_definition, metrics):
     comp = ReadXML(
@@ -140,6 +184,7 @@ async def test_readxml_bulk_mixed_types(schema_definition, metrics):
     df = await comp.execute(payload=None, metrics=metrics)
     assert "score" in df.columns
     pd.to_numeric(df["score"], errors="coerce")
+
 
 @pytest.mark.asyncio
 async def test_readxml_bulk_nested_is_flat_by_default(schema_definition, metrics):
@@ -214,7 +259,6 @@ async def test_writexml_row(tmp_path: Path, schema_definition, metrics):
     assert result == row
     assert out_fp.exists()
 
-    # read-back
     reader = ReadXML(
         name="ReadBack_Row_XML",
         description="Read back single",
@@ -226,6 +270,7 @@ async def test_writexml_row(tmp_path: Path, schema_definition, metrics):
     reader.strategy = BulkExecutionStrategy()
     df = await reader.execute(payload=None, metrics=metrics)
     assert len(df) == 1 and df.iloc[0]["name"] == "Zoe"
+
 
 @pytest.mark.asyncio
 async def test_writexml_bulk(tmp_path: Path, schema_definition, metrics):
@@ -262,6 +307,7 @@ async def test_writexml_bulk(tmp_path: Path, schema_definition, metrics):
     df = await reader.execute(payload=None, metrics=metrics)
     assert list(df.sort_values("id")["name"]) == ["A", "B", "C"]
 
+
 @pytest.mark.asyncio
 async def test_writexml_bigdata(tmp_path: Path, schema_definition, metrics):
     out_dir = tmp_path / "big_out"
@@ -277,10 +323,15 @@ async def test_writexml_bigdata(tmp_path: Path, schema_definition, metrics):
     )
     comp.strategy = BigDataExecutionStrategy()
 
-    ddf_in = dd.from_pandas(pd.DataFrame([
-        {"id": "10", "name": "Nina"},
-        {"id": "11", "name": "Omar"},
-    ]), npartitions=2)
+    ddf_in = dd.from_pandas(
+        pd.DataFrame(
+            [
+                {"id": "10", "name": "Nina"},
+                {"id": "11", "name": "Omar"},
+            ]
+        ),
+        npartitions=2,
+    )
 
     result = await comp.execute(payload=ddf_in, metrics=metrics)
     assert isinstance(result, dd.DataFrame)
