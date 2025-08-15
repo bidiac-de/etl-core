@@ -76,6 +76,16 @@ def test_create_job_with_test_component():
                 "name": "test1",
                 "comp_type": "test",
                 "description": "test dummy",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             }
         ],
     }

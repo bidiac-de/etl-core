@@ -32,16 +32,46 @@ def test_branch_skip_fan_out(tmp_path):
                 "comp_type": "failtest",  # will throw
                 "description": "",
                 "next": ["child1", "child2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "child1",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "child2",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -97,17 +127,47 @@ def test_branch_skip_fan_in(tmp_path):
                 "comp_type": "test",
                 "description": "",
                 "next": ["join"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "fail_root",
                 "comp_type": "failtest",
                 "description": "",
                 "next": ["join"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "join",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -163,17 +223,47 @@ def test_chain_skip_linear():
                 "comp_type": "failtest",
                 "description": "",
                 "next": ["middle"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "middle",
                 "comp_type": "test",
                 "description": "",
                 "next": ["leaf"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "leaf",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -228,23 +318,63 @@ def test_skip_diamond():
                 "comp_type": "failtest",
                 "description": "",
                 "next": ["b", "c"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
                 "next": ["d"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
                 "next": ["d"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "d",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }

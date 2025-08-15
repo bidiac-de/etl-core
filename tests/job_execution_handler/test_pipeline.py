@@ -22,8 +22,32 @@ def test_linear_stream_multiple_rows():
                 "comp_type": "multi_source",
                 "description": "",
                 "next": ["echo"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
-            {"name": "echo", "comp_type": "multi_echo", "description": ""},
+            {
+                "name": "echo",
+                "comp_type": "multi_echo",
+                "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+            },
         ],
     }
     job = Job(**config)
@@ -59,9 +83,47 @@ def test_fan_out_multiple_rows():
                 "comp_type": "multi_source",
                 "description": "",
                 "next": ["echo1", "echo2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
-            {"name": "echo1", "comp_type": "multi_echo", "description": ""},
-            {"name": "echo2", "comp_type": "multi_echo", "description": ""},
+            {
+                "name": "echo1",
+                "comp_type": "multi_echo",
+                "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+            },
+            {
+                "name": "echo2",
+                "comp_type": "multi_echo",
+                "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+            },
         ],
     }
     job = Job(**config)
@@ -97,14 +159,48 @@ def test_fan_in_multiple_rows():
                 "comp_type": "multi_source",
                 "description": "",
                 "next": ["echo"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "src2",
                 "comp_type": "multi_source",
                 "description": "",
                 "next": ["echo"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
-            {"name": "echo", "comp_type": "multi_echo", "description": ""},
+            {
+                "name": "echo",
+                "comp_type": "multi_echo",
+                "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+            },
         ],
     }
 

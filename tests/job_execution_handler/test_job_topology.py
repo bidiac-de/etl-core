@@ -31,16 +31,46 @@ def test_fan_out_topology():
                 "comp_type": "test",
                 "description": "",
                 "next": ["child1", "child2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "child1",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "child2",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -89,17 +119,47 @@ def test_fan_in_topology():
                 "comp_type": "test",
                 "description": "",
                 "next": ["c"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
                 "next": ["c"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -148,23 +208,63 @@ def test_diamond_topology():
                 "comp_type": "test",
                 "description": "",
                 "next": ["a", "b"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "a",
                 "comp_type": "test",
                 "description": "",
                 "next": ["c"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
                 "next": ["c"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List, Any, Dict, AsyncIterator
+from typing import Optional, List, Any, Dict, AsyncIterator, TypeVar, Generic
 from uuid import uuid4
 from pydantic import (
     BaseModel,
@@ -12,6 +12,7 @@ from pydantic import (
 from enum import Enum
 
 from src.components.dataclasses import MetaData, Layout
+from src.components.schema import Schema
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 from src.strategies.base_strategy import ExecutionStrategy
@@ -31,7 +32,12 @@ class StrategyType(str, Enum):
     BIGDATA = "bigdata"
 
 
-class Component(BaseModel, ABC):
+# either list or single Schema
+InS = TypeVar("InS", Schema, List[Schema])
+OutS = TypeVar("OutS", Schema, List[Schema])
+
+
+class Component(BaseModel, Generic[InS, OutS], ABC):
     """
     Base class for all components in the system
     """
@@ -45,6 +51,10 @@ class Component(BaseModel, ABC):
     name: str
     description: str
     comp_type: str
+    in_schema: InS = Field(..., description="Component input schema; single or list.")
+    out_schema: OutS = Field(
+        ..., description="Component output schema; single or list."
+    )
     next: List[str] = []  # List of names of next components from config
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
@@ -84,6 +94,28 @@ class Component(BaseModel, ABC):
             # let MetaData do its own validation on timestamps, ids, etc.
             return MetaData(**v)
         raise TypeError(f"metadata must be MetaData or dict, got {type(v).__name__}")
+
+    @staticmethod
+    def _validate_schema_variant(v: Any) -> Any:
+        if isinstance(v, Schema):
+            return v
+        if isinstance(v, list):
+            if not v:
+                raise ValueError("List of Schema must not be empty.")
+            if not all(isinstance(s, Schema) for s in v):
+                raise TypeError("All items must be Schema instances.")
+            return v
+        raise TypeError("Expected Schema or list[Schema].")
+
+    @field_validator("in_schema")
+    @classmethod
+    def _validate_in_schema(cls, v: Any) -> Any:
+        return cls._validate_schema_variant(v)
+
+    @field_validator("out_schema")
+    @classmethod
+    def _validate_out_schema(cls, v: Any) -> Any:
+        return cls._validate_schema_variant(v)
 
     @field_validator("layout", mode="before")
     @classmethod
@@ -171,7 +203,6 @@ class Component(BaseModel, ABC):
         """
         return self.strategy.execute(self, payload, metrics)
 
-    @abstractmethod
     @abstractmethod
     async def process_row(
         self, *args: Any, **kwargs: Any

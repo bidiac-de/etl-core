@@ -2,16 +2,21 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List
 
-from pydantic import PrivateAttr
+from pydantic import Field, PrivateAttr
 
 from src.components.base_component import Component
 from src.components.component_registry import register_component
+from src.components.schema import Schema
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
 
 
 @register_component("test")
-class StubComponent(Component):
+class StubComponent(Component[Schema, Schema]):
+    # Require single in/out schema for all stubs
+    in_schema: Schema = Field(...)
+    out_schema: Schema = Field(...)
+
     def _build_objects(self) -> "StubComponent":
         """Wire a trivial receiver."""
         self._receiver = StubReceiver()
@@ -54,15 +59,14 @@ class FailStubComponent(StubComponent):
         Fail immediately on first iteration while still conforming to the
         async-iterator contract (so the strategy can `async for` cleanly).
         """
-        # keep generator semantics without unreachable-after-raise code
-        for _ in ():  # no iterations; presence of `yield` makes this an async-gen
-            # this branch never runs, but keeps the function an async generator
-            yield {}  # noqa: B901 (intentional: establish generator type)
+        # Keep generator semantics without unreachable-after-raise code
+        for _ in ():  # presence of `yield` keeps this an async generator
+            yield {}  # noqa: B901 (intentional to establish generator type)
         raise RuntimeError("fail stubcomponent failed")
 
 
 @register_component("stub_fail_once")
-class StubFailOnce(Component):
+class StubFailOnce(StubComponent):
     """Fails the first time, succeeds on the next try."""
 
     _called: bool = PrivateAttr(default=False)
@@ -80,23 +84,12 @@ class StubFailOnce(Component):
         """
         if not self._called:
             self._called = True
-            # same pattern as above to preserve async-generator contract
             for _ in ():
                 yield {}
             raise RuntimeError("fail first time")
 
         metrics.lines_received += 1
         yield {"recovered": True}
-
-    async def process_bulk(
-        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
-    ) -> List[Dict[str, Any]]:
-        return data
-
-    async def process_bigdata(
-        self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> Any:
-        return chunk_iterable
 
 
 class StubReceiver(Receiver):
@@ -105,7 +98,7 @@ class StubReceiver(Receiver):
 
 
 @register_component("multi_source")
-class MultiSource(Component):
+class MultiSource(StubComponent):
     """
     Emits multiple rows in a streaming fashion; used by pipeline tests.
     """
@@ -138,7 +131,7 @@ class MultiSource(Component):
 
 
 @register_component("multi_echo")
-class MultiEcho(Component):
+class MultiEcho(StubComponent):
     """
     Echoes each received row downstream; used by pipeline tests.
     """

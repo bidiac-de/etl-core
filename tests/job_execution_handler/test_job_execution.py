@@ -32,6 +32,16 @@ def test_execute_job_single_test_component():
                 "name": "test1",
                 "comp_type": "test",
                 "description": "a test comp",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             }
         ],
     }
@@ -75,11 +85,31 @@ def test_execute_job_chain_components_file_logging():
                 "comp_type": "test",
                 "description": "first",
                 "next": ["comp2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "comp2",
                 "comp_type": "test",
                 "description": "second",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -136,11 +166,31 @@ def test_execute_job_failing_and_cancelled_components():
                 "comp_type": "failtest",  # our failing component
                 "description": "will fail",
                 "next": ["comp2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "comp2",
                 "comp_type": "test",
                 "description": "should be cancelled",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -185,6 +235,16 @@ def test_retry_logic_and_metrics():
                 "name": "c1",
                 "comp_type": "stub_fail_once",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             }
         ],
     }
@@ -224,23 +284,63 @@ def test_execute_job_linear_chain():
                 "comp_type": "test",
                 "description": "",
                 "next": ["c2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "c2",
                 "comp_type": "test",
                 "description": "",
                 "next": ["c3"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "c3",
                 "comp_type": "test",
                 "description": "",
                 "next": ["c4"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
             {
                 "name": "c4",
                 "comp_type": "test",
                 "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
         ],
     }
@@ -298,9 +398,48 @@ def test_execute_linear_chain_with_retry_metrics():
                 "comp_type": "stub_fail_once",
                 "description": "",
                 "next": ["c2"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
             },
-            {"name": "c2", "comp_type": "test", "description": "", "next": ["c3"]},
-            {"name": "c3", "comp_type": "test", "description": ""},
+            {
+                "name": "c2",
+                "comp_type": "test",
+                "description": "",
+                "next": ["c3"],
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+            },
+            {
+                "name": "c3",
+                "comp_type": "test",
+                "description": "",
+                "in_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+                "out_schema": {
+                    "fields": [
+                        {"name": "id", "data_type": "integer", "nullable": False}
+                    ]
+                },
+            },
         ],
     }
     job = Job(**config)
