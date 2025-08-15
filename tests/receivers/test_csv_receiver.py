@@ -6,7 +6,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from src.receivers.files.csv_receiver import CSVReceiver
+
+from src.receivers.files.csv.csv_receiver import CSVReceiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
@@ -23,13 +24,24 @@ def metrics() -> ComponentMetrics:
 
 @pytest.fixture
 def sample_csv_file() -> Path:
-    return Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
+    return (
+        Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
+    )
+
 
 
 @pytest.mark.asyncio
 async def test_readcsv_row(sample_csv_file: Path, metrics: ComponentMetrics):
     r = CSVReceiver()
-    rows = [row async for row in r.read_row(filepath=sample_csv_file, metrics=metrics)]
+
+    async def drain():
+        out = []
+        async for row in r.read_row(filepath=sample_csv_file, metrics=metrics):
+            out.append(row)
+        return out
+
+    rows = await asyncio.wait_for(drain(), timeout=3.0)
+
     assert isinstance(rows, list)
     assert len(rows) >= 1
     assert rows[0]["id"] == "1"
@@ -61,8 +73,12 @@ async def test_writecsv_row(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.csv"
     r = CSVReceiver()
 
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"})
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"})
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"}
+    )
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"}
+    )
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics)
     assert len(df) == 2

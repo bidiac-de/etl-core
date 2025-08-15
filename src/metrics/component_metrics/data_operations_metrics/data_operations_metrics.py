@@ -8,13 +8,13 @@ class DataOperationsMetrics(ComponentMetrics):
     """
 
     def __init__(
-            self,
-            started_at: datetime,
-            processing_time: timedelta,
-            error_count: int,
-            lines_received: int = 0,
-            lines_forwarded: int = 0,
-            lines_processed: int = 0,
+        self,
+        started_at: datetime,
+        processing_time: timedelta,
+        error_count: int,
+        lines_received: int = 0,
+        lines_forwarded: int = 0,
+        lines_processed: int = 0,
     ):
         super().__init__(
             started_at, processing_time, error_count, lines_received, lines_forwarded
@@ -42,14 +42,14 @@ class FilterMetrics(DataOperationsMetrics):
     """
 
     def __init__(
-            self,
-            started_at: datetime,
-            processing_time: timedelta,
-            error_count: int,
-            lines_received: int = 0,
-            lines_forwarded: int = 0,
-            lines_processed: int = 0,
-            lines_dismissed: int = 0,
+        self,
+        started_at: datetime,
+        processing_time: timedelta,
+        error_count: int,
+        lines_received: int = 0,
+        lines_forwarded: int = 0,
+        lines_processed: int = 0,
+        lines_dismissed: int = 0,
     ):
         super().__init__(
             started_at,

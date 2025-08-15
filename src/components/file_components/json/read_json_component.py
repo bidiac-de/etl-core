@@ -6,7 +6,7 @@ import dask.dataframe as dd
 from src.components.file_components.json.json_component import JSON
 from src.components.dataclasses import Layout, MetaData
 from src.components.registry import register_component
-from src.receivers.files.json_receiver import JSONReceiver
+from src.receivers.files.json.json_receiver import JSONReceiver
 from src.metrics.component_metrics import ComponentMetrics
 
 
@@ -14,7 +14,7 @@ from src.metrics.component_metrics import ComponentMetrics
 class ReadJSON(JSON):
     """Component that reads data from a JSON/NDJSON file (async streaming)."""
 
-    type: Literal["read_json"] = Field(default="read_json")
+    type: Literal["read_json"] = "read_json"
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -22,7 +22,7 @@ class ReadJSON(JSON):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yield one row (dict) at a time.
@@ -31,17 +31,19 @@ class ReadJSON(JSON):
             yield rec
 
     async def process_bulk(
-            self, data: Any, metrics: ComponentMetrics
-    ) -> pd.DataFrame:
+        self, data: Any, metrics: ComponentMetrics
+    ) -> AsyncGenerator[pd.DataFrame, None]:
         """
         Yield pandas DataFrame-Chunks.
         """
-        return await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        df = await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        yield df
 
     async def process_bigdata(
-            self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> dd.DataFrame:
+        self, chunk_iterable: Any, metrics: ComponentMetrics
+    ) -> AsyncGenerator[dd.DataFrame, None]:
         """
         Yield pandas DataFrame pro (Dask-)Partition.
         """
-        return await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        yield ddf

@@ -1,12 +1,10 @@
-# tests/components/test_json_components.py
-
 import json
 import pytest
 import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal, AsyncGenerator
 
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
@@ -19,15 +17,15 @@ from src.components.column_definition import ColumnDefinition, DataType
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components import Schema
 
-# Testdaten
-DATA_DIR = Path(__file__).parent / "data"
-VALID_JSON = DATA_DIR / "testdata.json"                # Array-of-records JSON
-VALID_NDJSON = DATA_DIR / "testdata.jsonl"            # NDJSON
+
+DATA_DIR = Path(__file__).parent / "data" / "json"
+VALID_JSON = DATA_DIR / "testdata.json"
+VALID_NDJSON = DATA_DIR / "testdata.jsonl"
 EXTRA_MISSING_JSON = DATA_DIR / "testdata_extra_missing.json"
 MIXED_TYPES_JSON = DATA_DIR / "testdata_mixed_types.json"
 NESTED_JSON = DATA_DIR / "testdata_nested.json"
-INVALID_JSON_FILE = DATA_DIR / "testdata_bad.json"    # malformed JSON
-BAD_LINE_JSONL = DATA_DIR / "testdata_bad_line.jsonl" # NDJSON mit kaputter Zeile
+INVALID_JSON_FILE = DATA_DIR / "testdata_bad.json"
+BAD_LINE_JSONL = DATA_DIR / "testdata_bad_line.jsonl"
 MIXED_SCHEMA_JSONL = DATA_DIR / "testdata_mixed_schema.jsonl"
 
 
@@ -40,24 +38,56 @@ def build_minimal_schema() -> Schema:
     )
 
 
+Mode = Literal["row", "bulk", "bigdata"]
+
+
+async def _consume_async_gen(gen: AsyncGenerator):
+    items = []
+    async for item in gen:
+        items.append(item)
+    return items
+
+
+async def _coerce_async_result(res: Any, *, mode: Mode, component_type: str):
+    if hasattr(res, "__aiter__"):
+        items = await _consume_async_gen(res)
+        if mode == "row":
+            return (
+                items[0]
+                if (component_type == "write_json" and len(items) == 1)
+                else items
+            )
+        return items[0] if items else None
+
+    if hasattr(res, "__await__"):
+        return await res
+
+    return res
+
+
 @pytest.fixture(autouse=True)
 def patch_strategies(monkeypatch):
+    from src.strategies.row_strategy import RowExecutionStrategy
+    from src.strategies.bulk_strategy import BulkExecutionStrategy
+    from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+
     async def row_exec(self, component, payload, metrics):
         res = component.process_row(payload, metrics=metrics)
-        if hasattr(res, "__aiter__"):
-            items = []
-            async for item in res:
-                items.append(item)
-            return items
-        if hasattr(res, "__await__"):
-            return await res
-        return res
+        return await _coerce_async_result(
+            res, mode="row", component_type=getattr(component, "type", "")
+        )
 
     async def bulk_exec(self, component, payload, metrics):
-        return await component.process_bulk(payload, metrics=metrics)
+        res = component.process_bulk(payload, metrics=metrics)
+        return await _coerce_async_result(
+            res, mode="bulk", component_type=getattr(component, "type", "")
+        )
 
     async def bigdata_exec(self, component, payload, metrics):
-        return await component.process_bigdata(payload, metrics=metrics)
+        res = component.process_bigdata(payload, metrics=metrics)
+        return await _coerce_async_result(
+            res, mode="bigdata", component_type=getattr(component, "type", "")
+        )
 
     monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
     monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
@@ -82,8 +112,6 @@ def metrics() -> ComponentMetrics:
         lines_forwarded=0,
     )
 
-
-# ---------- Read: Bulk ----------
 
 @pytest.mark.asyncio
 async def test_readjson_valid_bulk(schema_definition, metrics):
@@ -223,8 +251,6 @@ async def test_readjson_ndjson_mixed_schema(schema_definition, metrics):
     assert set(df.columns) >= {"id", "name", "nickname", "active"}
 
 
-# ---------- Read: Row (Streaming) ----------
-
 @pytest.mark.asyncio
 async def test_readjson_row_streaming(schema_definition, metrics):
     comp = ReadJSON(
@@ -242,8 +268,6 @@ async def test_readjson_row_streaming(schema_definition, metrics):
     assert len(rows) == 3
     assert set(rows[0].keys()) >= {"id", "name"}
 
-
-# ---------- Read: BigData (Dask) ----------
 
 @pytest.mark.asyncio
 async def test_readjson_bigdata(schema_definition, metrics):
@@ -263,8 +287,6 @@ async def test_readjson_bigdata(schema_definition, metrics):
     assert len(df) == 3
     assert {"Alice", "Bob", "Charlie"}.issubset(set(df["name"]))
 
-
-# ---------- Write ----------
 
 @pytest.mark.asyncio
 async def test_writejson_row(tmp_path: Path, schema_definition, metrics):
@@ -312,7 +334,6 @@ async def test_writejson_bulk(tmp_path: Path, schema_definition, metrics):
     assert isinstance(res, list) and len(res) == 3
     assert out_fp.exists()
 
-    # read-back
     reader = ReadJSON(
         name="ReadBack_Bulk_JSON",
         description="Read back bulk JSON",
@@ -341,10 +362,15 @@ async def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics):
     )
     comp.strategy = BigDataExecutionStrategy()
 
-    ddf_in = dd.from_pandas(pd.DataFrame([
-        {"id": 10, "name": "Nina"},
-        {"id": 11, "name": "Omar"},
-    ]), npartitions=2)
+    ddf_in = dd.from_pandas(
+        pd.DataFrame(
+            [
+                {"id": 10, "name": "Nina"},
+                {"id": 11, "name": "Omar"},
+            ]
+        ),
+        npartitions=2,
+    )
 
     result = await comp.execute(payload=ddf_in, metrics=metrics)
     assert isinstance(result, dd.DataFrame)
@@ -352,7 +378,6 @@ async def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics):
     parts = sorted(out_dir.glob("part-*.json"))
     assert parts, "No partition files written."
 
-    # read back via dask
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
     df_out = ddf_out.compute().sort_values("id")
     assert list(df_out["name"]) == ["Nina", "Omar"]

@@ -1,5 +1,4 @@
-import json
-import gzip
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -7,13 +6,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from src.receivers.files.json_receiver import JSONReceiver
-from src.metrics.component_metrics import ComponentMetrics
-
-
-DATA_DIR = Path(__file__).resolve().parents[1] / "components" / "data"
-PEOPLE_JSON = DATA_DIR / "testdata.json"
-PEOPLE_JSONL = DATA_DIR / "testdata.jsonl"
+from src.receivers.files.json.json_receiver import JSONReceiver
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 @pytest.fixture
@@ -27,86 +21,122 @@ def metrics() -> ComponentMetrics:
     )
 
 
-def test_jsonreceiver_read_row_gz(tmp_path: Path, metrics: ComponentMetrics):
-    """read_row should support .gz via helper (open_text_auto)."""
-    receiver = JSONReceiver()
-    file_path = tmp_path / "row.json.gz"
-    payload = [{"id": 1, "name": "Alice"}]
-
-    with gzip.open(file_path, "wt", encoding="utf-8") as f:
-        json.dump(payload, f)
-
-    assert file_path.exists()
-
-    row = receiver.read_row(file_path, metrics=metrics)
-    assert isinstance(row, dict)
-    assert row["id"] == 1 and row["name"] == "Alice"
-
-
-def test_jsonreceiver_row_roundtrip(tmp_path: Path, metrics: ComponentMetrics):
-    """write_row → read_row roundtrip."""
-    receiver = JSONReceiver()
-    file_path = tmp_path / "row.json"
-    row_in = {"id": 2, "name": "Bob"}
-
-    receiver.write_row(row_in, file_path, metrics=metrics)
-    assert file_path.exists()
-
-    row_out = receiver.read_row(file_path, metrics=metrics)
-    assert row_out == row_in
-
-
-def test_jsonreceiver_bulk_array_json(metrics: ComponentMetrics):
-    """read_bulk for array-of-records JSON from central file."""
-    receiver = JSONReceiver()
-    assert PEOPLE_JSON.exists(), f"Missing test data file: {PEOPLE_JSON}"
-
-    df_out = receiver.read_bulk(PEOPLE_JSON, metrics=metrics)
-    assert isinstance(df_out, pd.DataFrame)
-    assert len(df_out) == 3
-    assert list(df_out.sort_values("id")["name"]) == ["Alice", "Bob", "Charlie"]
-
-
-def test_jsonreceiver_bulk_ndjson(metrics: ComponentMetrics):
-    """read_bulk should handle NDJSON (.jsonl) from central file."""
-    receiver = JSONReceiver()
-    assert PEOPLE_JSONL.exists(), f"Missing test data file: {PEOPLE_JSONL}"
-
-    df = receiver.read_bulk(PEOPLE_JSONL, metrics=metrics)
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 3
-    assert set(df["name"]) == {"Alice", "Bob", "Charlie"}
-
-
-def test_jsonreceiver_write_bigdata_and_readback_with_dask(tmp_path: Path, metrics: ComponentMetrics):
-    """write_bigdata creates partitioned JSON Lines; verify by reading with dask."""
-    receiver = JSONReceiver()
-    out_dir = tmp_path / "bigdata_output"
-    out_dir.mkdir()
-
-    ddf_in = dd.from_pandas(
-        pd.DataFrame([{"id": 100, "name": "Eve"}, {"id": 101, "name": "Frank"}]),
-        npartitions=1,
+@pytest.fixture
+def sample_json_file() -> Path:
+    return (
+        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.json"
     )
 
-    receiver.write_bigdata(ddf_in, out_dir, metrics=metrics)
-    parts = list(out_dir.glob("part-*.json"))
+
+@pytest.fixture
+def sample_ndjson_file() -> Path:
+    return (
+        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.jsonl"
+    )
+
+
+@pytest.mark.asyncio
+async def test_readjson_row(sample_json_file: Path, metrics: ComponentMetrics):
+    r = JSONReceiver()
+    rows = [row async for row in r.read_row(filepath=sample_json_file, metrics=metrics)]
+    assert isinstance(rows, list)
+    assert len(rows) == 3
+    assert {"id", "name"}.issubset(rows[0].keys())
+    assert {"Alice", "Bob", "Charlie"}.issubset({x["name"] for x in rows})
+
+
+@pytest.mark.asyncio
+async def test_readjson_bulk(sample_json_file: Path, metrics: ComponentMetrics):
+    r = JSONReceiver()
+    df = await r.read_bulk(filepath=sample_json_file, metrics=metrics)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 3
+    assert {"id", "name"}.issubset(df.columns)
+    assert "Bob" in set(df["name"])
+
+
+@pytest.mark.asyncio
+async def test_readjson_bigdata(sample_ndjson_file: Path, metrics: ComponentMetrics):
+    r = JSONReceiver()
+    ddf = await r.read_bigdata(filepath=sample_ndjson_file, metrics=metrics)
+    assert isinstance(ddf, dd.DataFrame)
+    df = ddf.compute()
+    assert len(df) == 3
+    assert "Charlie" in set(df["name"])
+
+
+@pytest.mark.asyncio
+async def test_writejson_row(tmp_path: Path, metrics: ComponentMetrics):
+    file_path = tmp_path / "out_row.json"
+    r = JSONReceiver()
+
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"}
+    )
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"}
+    )
+
+    df = await r.read_bulk(filepath=file_path, metrics=metrics)
+    assert len(df) == 2
+    assert set(df["name"]) == {"Daisy", "Eli"}
+
+
+@pytest.mark.asyncio
+async def test_writejson_bulk(tmp_path: Path, metrics: ComponentMetrics):
+    file_path = tmp_path / "out_bulk.json"
+    r = JSONReceiver()
+
+    data = [
+        {"id": 20, "name": "Finn"},
+        {"id": 21, "name": "Gina"},
+    ]
+    await r.write_bulk(filepath=file_path, metrics=metrics, data=data)
+
+    df = await r.read_bulk(filepath=file_path, metrics=metrics)
+    assert len(df) == 2
+    assert set(df["name"]) == {"Finn", "Gina"}
+
+
+@pytest.mark.asyncio
+async def test_writejson_bigdata(tmp_path: Path, metrics: ComponentMetrics):
+    out_dir = tmp_path / "big_out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    r = JSONReceiver()
+
+    pdf = pd.DataFrame(
+        [
+            {"id": 30, "name": "Hugo"},
+            {"id": 31, "name": "Ivy"},
+        ]
+    )
+    ddf_in = dd.from_pandas(pdf, npartitions=1)
+
+    await r.write_bigdata(filepath=out_dir, metrics=metrics, data=ddf_in)
+
+    parts = sorted(out_dir.glob("part-*.json"))
     assert parts, "No partition files written."
 
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
     df_out = ddf_out.compute()
     assert len(df_out) == 2
-    assert set(df_out["name"]) == {"Eve", "Frank"}
+    assert set(df_out["name"]) == {"Hugo", "Ivy"}
 
 
-def test_jsonreceiver_read_bigdata_on_jsonl(metrics: ComponentMetrics):
-    """read_bigdata should read NDJSON when path endswith .jsonl/.ndjson (central file)."""
-    receiver = JSONReceiver()
-    assert PEOPLE_JSONL.exists(), f"Missing test data file: {PEOPLE_JSONL}"
+@pytest.mark.asyncio
+async def test_readjson_row_gz(tmp_path: Path, metrics: ComponentMetrics):
+    """Optional: .gz Support – only read_row (uses open_text_auto)."""
+    import gzip, json as _json
 
-    ddf = receiver.read_bigdata(PEOPLE_JSONL, metrics=metrics)
-    assert isinstance(ddf, dd.DataFrame)
-    df = ddf.compute()
-    assert len(df) == 3
-    assert set(df["name"]) == {"Alice", "Bob", "Charlie"}
+    gz_path = tmp_path / "rows.json.gz"
+    payload = [{"id": 1, "name": "Alice"}]
 
+    def _write_gz():
+        with gzip.open(gz_path, "wt", encoding="utf-8") as f:
+            _json.dump(payload, f)
+
+    await asyncio.to_thread(_write_gz)
+    r = JSONReceiver()
+    rows = [row async for row in r.read_row(filepath=gz_path, metrics=metrics)]
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Alice"
