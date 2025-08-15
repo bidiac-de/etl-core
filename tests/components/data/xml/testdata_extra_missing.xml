@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rows>
+    <row>
+        <id>1</id>
+        <name>Alice</name>
+        <city>Berlin</city>
+    </row>
+    <row>
+        <id>2</id>
+    </row>
+    <row>
+        <id>3</id>
+        <name>Charlie</name>
+        <age>30</age>
+    </row>
+</rows>
