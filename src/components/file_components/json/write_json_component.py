@@ -13,8 +13,6 @@ from src.metrics.component_metrics import ComponentMetrics
 class WriteJSON(JSON):
     """Component that writes data to a JSON/NDJSON file (async streaming)."""
 
-    type: Literal["write_json"] = Field(default="write_json")
-
     @model_validator(mode="after")
     def _build_objects(self):
         self._receiver = JSONReceiver()

@@ -35,7 +35,6 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         self,
         filepath: Path,
         metrics: ComponentMetrics,
-        *,
         separator: str = ",",
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream CSV rows sequentially in a thread."""
