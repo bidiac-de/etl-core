@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from src.logging.logging_setup import setup_logging
+from .logging.logging_setup import setup_logging
 
 app = FastAPI()
 

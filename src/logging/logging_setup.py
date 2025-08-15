@@ -1,7 +1,6 @@
 import os
 import yaml
 import logging
-import logging.config
 
 
 def setup_logging(
