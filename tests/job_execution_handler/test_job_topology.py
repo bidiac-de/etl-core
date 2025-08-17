@@ -1,13 +1,18 @@
+from datetime import datetime
+
 from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.components.runtime_state import RuntimeState
 import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
 from src.job_execution.job import Job
 from tests.helpers import get_component_by_name
-from datetime import datetime
 
-# ensure Job._build_components() can find TestComponent
+# ensure Job can resolve "test" to the stub component in registry
 job_module.TestComponent = StubComponent
+
+
+def _schema():
+    return {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
 
 
 def test_fan_out_topology():
@@ -30,47 +35,25 @@ def test_fan_out_topology():
                 "name": "root",
                 "comp_type": "test",
                 "description": "",
-                "next": ["child1", "child2"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["child1", "child2"]},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "child1",
                 "comp_type": "test",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "child2",
                 "comp_type": "test",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -118,48 +101,25 @@ def test_fan_in_topology():
                 "name": "a",
                 "comp_type": "test",
                 "description": "",
-                "next": ["c"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["c"]},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
-                "next": ["c"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["c"]},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -207,64 +167,33 @@ def test_diamond_topology():
                 "name": "root",
                 "comp_type": "test",
                 "description": "",
-                "next": ["a", "b"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["a", "b"]},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "a",
                 "comp_type": "test",
                 "description": "",
-                "next": ["c"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["c"]},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
-                "next": ["c"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["c"]},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
         ],
     }

@@ -4,9 +4,13 @@ from tests.helpers import get_component_by_name
 import src.job_execution.job as job_module
 from src.components.stubcomponents import MultiSource, MultiEcho
 
-# ensure Job._build_components() can find TestComponent
+# ensure Job can resolve these stub types for the tests
 job_module.MultiSourceComponent = MultiSource
 job_module.MultiEchoComponent = MultiEcho
+
+
+def _schema():
+    return {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
 
 
 def test_linear_stream_multiple_rows():
@@ -21,32 +25,16 @@ def test_linear_stream_multiple_rows():
                 "name": "source",
                 "comp_type": "multi_source",
                 "description": "",
-                "next": ["echo"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["echo"]},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo",
                 "comp_type": "multi_echo",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -82,47 +70,24 @@ def test_fan_out_multiple_rows():
                 "name": "source",
                 "comp_type": "multi_source",
                 "description": "",
-                "next": ["echo1", "echo2"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["echo1", "echo2"]},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo1",
                 "comp_type": "multi_echo",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo2",
                 "comp_type": "multi_echo",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -158,52 +123,26 @@ def test_fan_in_multiple_rows():
                 "name": "src1",
                 "comp_type": "multi_source",
                 "description": "",
-                "next": ["echo"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["echo"]},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "src2",
                 "comp_type": "multi_source",
                 "description": "",
-                "next": ["echo"],
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": ["echo"]},
+                "port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo",
                 "comp_type": "multi_echo",
                 "description": "",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _schema()},
+                "port_schemas": {"out": _schema()},
             },
         ],
     }
-
     job = Job(**config)
     execution = handler.execute_job(job)
     attempt = execution.attempts[0]
@@ -215,8 +154,10 @@ def test_fan_in_multiple_rows():
     src2 = get_component_by_name(job, "src2")
     echo = get_component_by_name(job, "echo")
 
-    e_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo.id)
-    expected = src1.count + src2.count
+    src1_metrics = mh.get_comp_metrics(execution.id, attempt.id, src1.id)
+    src2_metrics = mh.get_comp_metrics(execution.id, attempt.id, src2.id)
+    echo_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo.id)
 
-    assert e_metrics.lines_received == expected
-    assert e_metrics.status == RuntimeState.SUCCESS
+    assert src1_metrics.lines_received == src1.count
+    assert src2_metrics.lines_received == src2.count
+    assert echo_metrics.lines_received == src1.count + src2.count

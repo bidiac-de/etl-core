@@ -5,8 +5,13 @@ import src.job_execution.job as job_module
 from src.components.stubcomponents import StubComponent
 from datetime import datetime
 
-# ensure Job._build_components() can find TestComponent
+# ensure Job can resolve "test" to the stub component in registry
 job_module.TestComponent = StubComponent
+
+
+def _simple_schema():
+    # minimal single-field schema, used for all tests
+    return {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
 
 
 def test_create_job_with_complete_config():
@@ -58,7 +63,7 @@ def test_create_job_with_invalid_config_type():
     Passing a non-dict as a positional argument should raise a TypeError
     """
     with pytest.raises(TypeError):
-        Job(None)
+        Job(None)  # type: ignore[arg-type]
 
 
 def test_create_job_with_test_component():
@@ -76,16 +81,9 @@ def test_create_job_with_test_component():
                 "name": "test1",
                 "comp_type": "test",
                 "description": "test dummy",
-                "in_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
-                "out_schema": {
-                    "fields": [
-                        {"name": "id", "data_type": "integer", "nullable": False}
-                    ]
-                },
+                "routes": {"out": []},
+                "in_port_schemas": {"in": _simple_schema()},
+                "port_schemas": {"out": _simple_schema()},
             }
         ],
     }
