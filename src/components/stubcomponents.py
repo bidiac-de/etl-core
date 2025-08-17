@@ -209,12 +209,12 @@ class TestSource(Component):
             yield Out("out", {"i": i, "status": status})
 
     async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
+        for _ in ():
             yield Out("out", None)
 
     async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("out", None)
+        for _ in ():
+            yield Out("out_bigdata", None)
 
 
 @register_component("test_router_dynamic_ports")
@@ -246,12 +246,12 @@ class TestRouter(Component):
         yield Out(str(port), row)
 
     async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("unused", None)
+        for _ in ():
+            yield Out("unused_bulk", None)
 
     async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("unused", None)
+        for _ in ():
+            yield Out("unused_bigdata", None)
 
 
 @register_component("test_sink_dynamic_ports")
@@ -277,16 +277,16 @@ class TestSink(Component):
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
-        if False:
+        for _ in ():
             yield Out("unused", None)
 
     async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("unused", None)
+        for _ in ():
+            yield Out("unused_bulk", None)
 
     async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("unused", None)
+        for _ in ():
+            yield Out("unused_bigdata", None)
 
 
 @register_component("test_merge_dynamic_inputs")
@@ -313,13 +313,13 @@ class TestMerge(Component):
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
-        if False:
+        for _ in ():
             yield Out("unused", None)
 
     async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("unused", None)
+        for _ in ():
+            yield Out("unused_bulk", None)
 
     async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
-        if False:
-            yield Out("unused", None)
+        for _ in ():
+            yield Out("unused_bigdata", None)
