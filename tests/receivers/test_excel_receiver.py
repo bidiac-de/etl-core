@@ -1,9 +1,12 @@
-import pytest
-import pandas as pd
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.receivers.files.excel_receiver import ExcelReceiver
+import dask.dataframe as dd
+import pandas as pd
+import pytest
+
+from src.receivers.files.excel.excel_receiver import ExcelReceiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
@@ -18,61 +21,97 @@ def metrics() -> ComponentMetrics:
     )
 
 
-def test_excelreceiver_row_roundtrip(tmp_path: Path, metrics: ComponentMetrics):
-    """write_row → read_row roundtrip."""
-    file_path = tmp_path / "row.xlsx"
-    receiver = ExcelReceiver(file_path)
-
-    row_in = {"id": 1, "name": "Alice"}
-    receiver.write_row(metrics, row_in)
-    assert file_path.exists()
-
-    row_out = receiver.read_row(metrics, row_index=0)
-    assert isinstance(row_out, dict)
-    assert row_out == row_in
+@pytest.fixture
+def sample_excel_file() -> Path:
+    return Path(__file__).parent.parent / "components" / "files" / "data" / "test_data.xlsx"
 
 
-def test_excelreceiver_bulk_roundtrip(tmp_path: Path, metrics: ComponentMetrics):
-    """write_bulk → read_bulk roundtrip."""
-    file_path = tmp_path / "bulk.xlsx"
-    receiver = ExcelReceiver(file_path)
+@pytest.mark.asyncio
+async def test_readexcel_row(sample_excel_file: Path, metrics: ComponentMetrics):
+    r = ExcelReceiver()
 
-    data_in = [
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"},
-        {"id": 3, "name": "Charlie"},
+    async def drain():
+        out = []
+        async for row in r.read_row(filepath=sample_excel_file, metrics=metrics):
+            out.append(row)
+        return out
+
+    rows = await asyncio.wait_for(drain(), timeout=3.0)
+
+    assert isinstance(rows, list)
+    assert len(rows) >= 1
+    assert "id" in rows[0] and "name" in rows[0]
+
+
+@pytest.mark.asyncio
+async def test_readexcel_bulk(sample_excel_file: Path, metrics: ComponentMetrics):
+    r = ExcelReceiver()
+    df = await r.read_bulk(filepath=sample_excel_file, metrics=metrics)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) >= 1
+    assert {"id", "name"}.issubset(set(df.columns))
+
+
+@pytest.mark.asyncio
+async def test_readexcel_bigdata(sample_excel_file: Path, metrics: ComponentMetrics):
+    r = ExcelReceiver()
+    ddf = await r.read_bigdata(filepath=sample_excel_file, metrics=metrics)
+    assert isinstance(ddf, dd.DataFrame)
+    df = ddf.compute()
+    assert len(df) >= 1
+    assert {"id", "name"}.issubset(set(df.columns))
+
+
+@pytest.mark.asyncio
+async def test_writeexcel_row(tmp_path: Path, metrics: ComponentMetrics):
+    file_path = tmp_path / "out_row.xlsx"
+    r = ExcelReceiver()
+
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"}
+    )
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"}
+    )
+
+    df = await r.read_bulk(filepath=file_path, metrics=metrics)
+    assert len(df) == 2
+    assert set(df["name"]) == {"Daisy", "Eli"}
+
+
+@pytest.mark.asyncio
+async def test_writeexcel_bulk(tmp_path: Path, metrics: ComponentMetrics):
+    file_path = tmp_path / "out_bulk.xlsx"
+    file_path.touch()
+    r = ExcelReceiver()
+
+    data = [
+        {"id": "20", "name": "Finn"},
+        {"id": "21", "name": "Gina"},
     ]
-    receiver.write_bulk(metrics, data_in)
-    assert file_path.exists()
+    await r.write_bulk(filepath=file_path, metrics=metrics, data=data)
 
-    df_out = receiver.read_bulk(metrics).sort_values("id")
-    assert isinstance(df_out, pd.DataFrame)
-    assert list(df_out["name"]) == ["Alice", "Bob", "Charlie"]
+    df = await r.read_bulk(filepath=file_path, metrics=metrics)
+    assert len(df) == 2
+    assert set(df["name"]) == {"Finn", "Gina"}
 
 
-def test_excelreceiver_bigdata_write_and_read(tmp_path: Path, metrics: ComponentMetrics):
-    """write_bigdata with DataFrame → read_bulk."""
-    file_path = tmp_path / "bigdata.xlsx"
-    receiver = ExcelReceiver(file_path)
+@pytest.mark.asyncio
+async def test_writeexcel_bigdata(tmp_path: Path, metrics: ComponentMetrics):
+    file_path = tmp_path / "out_big.xlsx"
+    file_path.touch()
+    r = ExcelReceiver()
 
-    df_in = pd.DataFrame([{"id": 100, "name": "Eve"}, {"id": 101, "name": "Frank"}])
-    receiver.write_bigdata(metrics, df_in)
-    assert file_path.exists()
+    pdf = pd.DataFrame(
+        [
+            {"id": 30, "name": "Hugo"},
+            {"id": 31, "name": "Ivy"},
+        ]
+    )
+    ddf_in = dd.from_pandas(pdf, npartitions=1)
 
-    df_out = receiver.read_bulk(metrics)
+    await r.write_bigdata(filepath=file_path, metrics=metrics, data=ddf_in)
+
+    df_out = await r.read_bulk(filepath=file_path, metrics=metrics)
     assert len(df_out) == 2
-    assert set(df_out["name"]) == {"Eve", "Frank"}
-
-
-def test_excelreceiver_read_bigdata(tmp_path: Path, metrics: ComponentMetrics):
-    """read_bigdata should yield dicts row by row."""
-    file_path = tmp_path / "bigdata_read.xlsx"
-    receiver = ExcelReceiver(file_path)
-
-    data = [{"id": i, "name": f"User{i}"} for i in range(5)]
-    receiver.write_bulk(metrics, data)
-
-    rows = list(receiver.read_bigdata(metrics))
-    assert len(rows) == 5
-    assert all(isinstance(row, dict) for row in rows)
-    assert rows[0]["id"] == 0 and rows[-1]["id"] == 4
+    assert set(df_out["name"]) == {"Hugo", "Ivy"}

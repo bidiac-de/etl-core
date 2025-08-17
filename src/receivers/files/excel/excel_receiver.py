@@ -1,145 +1,125 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Iterable, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
+import asyncio
 import dask.dataframe as dd
 import pandas as pd
 
+from src.receivers.base_receiver import Receiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.receivers.files.excel.excel_helper import ExcelHelper
+from src.receivers.files.file_helper import ensure_exists
+from src.receivers.files.excel.excel_helper import (
+    read_excel_rows,
+    read_excel_bulk,
+    read_excel_bigdata,
+    write_excel_row,
+    write_excel_bulk,
+    write_excel_bigdata,
+)
+
+_SENTINEL: Any = object()
 
 
-class ExcelReceiver:
-    """
-    Stateless receiver for Excel I/O.
-    """
+def _next_or_sentinel(it):
+    """Return next item from iterator or sentinel."""
+    try:
+        return next(it)
+    except StopIteration:
+        return _SENTINEL
+
+
+class ExcelReceiver(Receiver):
+    """Stateless receiver for Excel I/O."""
 
     async def read_row(
             self,
-            *,
             filepath: Path,
             metrics: ComponentMetrics,
-            sheet_name: Optional[str | int] = 0,
-            start_index: int = 0,
+            sheet_name: Optional[str] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
-        """
-        Yield one row (dict) at a time from the given Excel file/sheet.
-        """
-        _ = metrics
-        df = ExcelHelper.read_excel(filepath, sheet_name=sheet_name)
-        start = max(0, int(start_index))
-        for _, row in df.iloc[start:].iterrows():
-            yield row.to_dict()
+        """Stream rows from an Excel sheet as dicts."""
+        ensure_exists(filepath)
+        it = read_excel_rows(filepath, sheet_name=sheet_name)
+        while True:
+            row = await asyncio.to_thread(_next_or_sentinel, it)
+            if row is _SENTINEL:
+                break
+            metrics.lines_received += 1
+            yield row
 
     async def read_bulk(
             self,
-            *,
             filepath: Path,
             metrics: ComponentMetrics,
-            sheet_name: Optional[str | int] = 0,
-    ) -> AsyncIterator[pd.DataFrame]:
-        """
-        Yield a single pandas DataFrame from the given Excel file/sheet.
-        """
-        _ = metrics
-        df = ExcelHelper.read_excel(filepath, sheet_name=sheet_name)
-        yield df
+            sheet_name: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Read entire Excel sheet into DataFrame."""
+        ensure_exists(filepath)
+        df = await asyncio.to_thread(read_excel_bulk, filepath, sheet_name)
+        metrics.lines_received += len(df)
+        return df
 
     async def read_bigdata(
             self,
-            *,
             filepath: Path,
             metrics: ComponentMetrics,
-            sheet_name: Optional[str | int] = 0,
-            npartitions: Optional[int] = None,
-    ) -> AsyncIterator[dd.DataFrame]:
-        """
-        Yield a Dask DataFrame built from the Excel content.
-
-        Implementation detail:
-        - Load via pandas and partition with dask.from_pandas.
-        """
-        _ = metrics
-        pdf = ExcelHelper.read_excel(filepath, sheet_name=sheet_name)
-
-        if npartitions is None:
-            rows = max(1, len(pdf))
-            npartitions = max(1, rows // 100_000)
-
-        ddf = dd.from_pandas(pdf, npartitions=npartitions)
-        yield ddf
-
+            sheet_name: Optional[str] = None,
+    ) -> dd.DataFrame:
+        """Read Excel sheet as Dask DataFrame."""
+        ensure_exists(filepath)
+        ddf = await asyncio.to_thread(read_excel_bigdata, filepath, sheet_name)
+        try:
+            metrics.lines_received += int(ddf.map_partitions(len).sum().compute())
+        except Exception:
+            pass
+        return ddf
 
     async def write_row(
             self,
-            *,
             filepath: Path,
             metrics: ComponentMetrics,
             row: Dict[str, Any],
-            sheet_name: Optional[str] = "Sheet1",
-            append: bool = True,
-    ) -> AsyncIterator[Dict[str, Any]]:
-        """
-        Write a single row (append by default for .xlsx/.xlsm) and yield it back.
-
-        For .xls, append falls back to overwrite due to engine limitations.
-        """
-        _ = metrics
-        df = pd.DataFrame([row])
-        ExcelHelper.write_excel(
-            df,
-            filepath,
-            sheet_name=sheet_name,
-            append=append,
-        )
-        yield row
+            sheet_name: Optional[str] = None,
+    ) -> None:
+        """Append one row to Excel file."""
+        await asyncio.to_thread(write_excel_row, filepath, row, sheet_name)
+        metrics.lines_received += 1
 
     async def write_bulk(
             self,
-            *,
             filepath: Path,
             metrics: ComponentMetrics,
-            data: pd.DataFrame | Iterable[Dict[str, Any]] | None,
-            sheet_name: Optional[str] = "Sheet1",
-            append: bool = False,
-    ) -> AsyncIterator[pd.DataFrame]:
-        """
-        Write a DataFrame or iterable of dicts and yield a DataFrame once.
-
-        - If 'data' is an iterable of dicts, it is normalized to a DataFrame.
-        - 'append=True' only applies to .xlsx/.xlsm; .xls will be overwritten.
-        """
-        _ = metrics
+            data: Union[pd.DataFrame, List[Dict[str, Any]]],
+            sheet_name: Optional[str] = None,
+    ) -> None:
+        """Write multiple rows/DataFrame to Excel file."""
+        await asyncio.to_thread(write_excel_bulk, filepath, data, sheet_name)
         if isinstance(data, pd.DataFrame):
-            df = data
+            metrics.lines_received += len(data)
         else:
-            recs = list(data or [])
-            df = pd.DataFrame(recs)
-
-        ExcelHelper.write_excel(
-            df,
-            filepath,
-            sheet_name=sheet_name,
-            append=append,
-        )
-        yield df
+            metrics.lines_received += len(data) if data else 0
 
     async def write_bigdata(
             self,
-            *,
             filepath: Path,
             metrics: ComponentMetrics,
             data: dd.DataFrame,
-            sheet_name: Optional[str] = "Sheet1",
-    ) -> AsyncIterator[dd.DataFrame]:
-        """
-        Write a Dask DataFrame to a single Excel sheet and yield it once.
+            sheet_name: Optional[str] = None,
+    ) -> None:
+        """Write Dask DataFrame to Excel file."""
+        await asyncio.to_thread(write_excel_bigdata, filepath, data, sheet_name)
+        try:
+            metrics.lines_received += int(data.shape[0].compute())
+        except Exception:
+            try:
+                metrics.lines_received += int(data.index.size.compute())
+            except Exception:
+                import pandas as _pd
 
-        Note:
-        - Excel is not ideal for partitioned data; we materialize to pandas.
-        """
-        _ = metrics
-        pdf = data.compute()
-        ExcelHelper.write_excel(pdf, filepath, sheet_name=sheet_name, append=False)
-        yield data
+                metrics.lines_received += int(
+                    data.map_partitions(
+                        lambda df: _pd.Series([len(df)])
+                    ).compute().sum()
+                )
