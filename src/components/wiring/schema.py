@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List
 from pydantic import BaseModel, Field, model_validator
 
-from src.components.column_definition import FieldDef
+from src.components.wiring.column_definition import FieldDef
 
 
 class Schema(BaseModel):

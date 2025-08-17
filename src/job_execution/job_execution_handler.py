@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 from collections import deque
 
 from src.components.runtime_state import RuntimeState
@@ -11,6 +11,7 @@ from src.job_execution.job_information_handler import JobInformationHandler
 from src.metrics.system_metrics import SystemMetricsHandler
 from src.metrics.metrics_registry import get_metrics_class
 from src.metrics.execution_metrics import ExecutionMetrics
+from src.components.envelopes import InTagged, Out
 
 
 class JobExecutionHandler:
@@ -107,86 +108,145 @@ class JobExecutionHandler:
 
         return execution
 
-    async def _run_latest_attempt(
-        self, execution: JobExecution
-    ) -> Dict[str, asyncio.Task]:
+    async def _run_latest_attempt(self, execution) -> Dict[str, asyncio.Task]:
         """
-        Launch one Task per component, track them in a dict, and await them.
-        Returns the mapping from component.id to Task so failures can cancel
-        downstream tasksin case of component failure.
+        Wire queues, create workers, and store tasks for cancellation.
         """
         job = execution.job
 
-        # Prepare queues
-        queues: Dict[str, asyncio.Queue] = {
+        # Single inbound queue per component
+        in_queues: Dict[str, asyncio.Queue] = {
             comp.name: asyncio.Queue() for comp in job.components
         }
 
-        # spawn all component workers under one TaskGroup
+        # out_edges: comp_name -> out_port ->
+        # List[(dest_queue, dest_in_port, needs_tag)]
+        out_edges: Dict[str, Dict[str, List[Tuple[asyncio.Queue, str, bool]]]] = {}
+
+        for comp in job.components:
+            by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]] = {}
+            for outp, targets in comp.out_routes.items():
+                triples: List[Tuple[asyncio.Queue, str, bool]] = []
+                in_ports = comp.out_edges_in_ports.get(outp, [])
+                for dst, in_port in zip(targets, in_ports):
+                    # destination declares multi-input?
+                    multi_in = len(dst.expected_in_port_names()) > 1
+                    triples.append((in_queues[dst.name], in_port, multi_in))
+                by_port[outp] = triples
+            out_edges[comp.name] = by_port
+
         async with asyncio.TaskGroup() as tg:
             for comp in job.components:
-                out_queues = [queues[n.name] for n in comp.next_components]
-                in_queues = [queues[comp.name]] if comp.prev_components else []
-                metrics_cls = get_metrics_class(comp.comp_type)
+                inputs = [in_queues[comp.name]] if comp.prev_components else []
+                outputs = out_edges[comp.name]
                 metrics = self.job_info.metrics_handler.create_component_metrics(
                     execution.id,
                     execution.latest_attempt().id,
                     comp.id,
-                    metrics_cls,
+                    get_metrics_class(comp.comp_type),
                 )
                 task = tg.create_task(
-                    self._worker(execution, comp, in_queues, out_queues, metrics),
+                    self._worker(execution, comp, inputs, outputs, metrics),
                     name=f"worker-{comp.name}",
                 )
                 execution.latest_attempt().current_tasks[comp.id] = task
 
-        # once the with block exits, all workers are done (or cancelled)
         return execution.latest_attempt().current_tasks
 
     async def _worker(
         self,
-        execution: JobExecution,
+        execution,
         component: Component,
         in_queues: List[asyncio.Queue],
-        out_queues: List[asyncio.Queue],
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
         metrics: ComponentMetrics,
     ) -> None:
         """
-        Runs one component; if upstream cancellation has already marked this
-        metrics as CANCELLED, we just fan out the sentinel.
+        async Worker loop per component.
         """
         attempt = execution.latest_attempt()
         sentinel = execution.sentinels[component.id]
 
-        # if already marked canceled, short-circuit
         if metrics.status == RuntimeState.CANCELLED:
-            await self._fan_out(sentinel, out_queues)
+            await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
             return
 
         try:
-            # run without payload, comp is a root
             if not in_queues:
-                await self._run_component(component, None, metrics, out_queues)
+                await self._run_component(component, None, metrics, out_edges_by_port)
             else:
-                await self._merge_and_run(component, metrics, in_queues, out_queues)
-
+                await self._consume_and_run(
+                    component, metrics, in_queues, out_edges_by_port
+                )
         except asyncio.CancelledError:
-            # mark cancelled in our metrics, then re-raise so upstream sees it
             metrics.status = RuntimeState.CANCELLED
             raise
-
         except Exception as exc:
-            # component failure: mark FAILED, increment error, cancel successors
             self._handle_worker_exception(component, exc, metrics, execution, attempt)
             raise
-
         else:
             if metrics.status != RuntimeState.CANCELLED:
                 metrics.status = RuntimeState.SUCCESS
-
         finally:
-            # always tell downstream there's no more data
-            await self._fan_out(sentinel, out_queues)
+            await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
+
+    async def _broadcast_to_next_inputs(
+        self, item: Any, edges: Dict[str, List[Tuple[asyncio.Queue, str, bool]]]
+    ) -> None:
+        """
+        Fan-out an item to all successor input queues.
+        """
+        for pairs in edges.values():
+            for q, _in_port, needs_tag in pairs:
+                await q.put(item)
+
+    async def _run_component(
+        self,
+        component: Component,
+        payload: Any,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+    ) -> None:
+        """
+        Execute the component and route its results.
+        """
+        metrics.set_started()
+        async for batch in component.execute(payload, metrics):
+            if not isinstance(batch, Out):
+                raise TypeError(
+                    f"{component.name} must yield Out(port, payload) with port routing"
+                )
+            for q, dest_in, needs_tag in out_edges_by_port.get(batch.port, []):
+                await q.put(
+                    batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
+                )
+
+    async def _consume_and_run(
+        self,
+        component: Component,
+        metrics: ComponentMetrics,
+        in_queues: List[asyncio.Queue],
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+    ) -> None:
+        """
+        Consume from a single inbound queue, handle fan-in via sentinels.
+        """
+        queue = in_queues[0]
+        remaining = {p.id for p in component.prev_components}
+
+        while remaining:
+            item = await queue.get()
+
+            # End-of-stream sentinel from a predecessor
+            if isinstance(item, _Sentinel) and item.component_id in remaining:
+                remaining.discard(item.component_id)
+                continue
+
+            # If this is a tagged envelope, unwrap to the payload
+            if isinstance(item, InTagged):
+                item = item.payload
+
+            await self._run_component(component, item, metrics, out_edges_by_port)
 
     def _handle_worker_exception(
         self,
@@ -224,42 +284,6 @@ class JobExecutionHandler:
             if dm.status not in (RuntimeState.SUCCESS, RuntimeState.FAILED):
                 dm.status = RuntimeState.CANCELLED
             dq.extend(nxt.next_components)
-
-    async def _fan_out(self, item: Any, queues: List[asyncio.Queue]) -> None:
-        """
-        Fan out a batch or sentinel to all downstream queues.
-        """
-        for q in queues:
-            await q.put(item)
-
-    async def _run_component(
-        self,
-        component: Component,
-        payload: Any,
-        metrics: ComponentMetrics,
-        out_queues: List[asyncio.Queue],
-    ) -> None:
-        """
-        Run a single component with the given payload and metrics
-        """
-        # mark start and stream all batches
-        metrics.set_started()
-        async for batch in component.execute(payload, metrics):
-            await self._fan_out(batch, out_queues)
-
-    async def _merge_and_run(self, component, metrics, in_queues, out_queues):
-        """
-        Merge payloads from multiple input queues and run the component.
-        """
-        queue = in_queues[0]
-        remaining = {p.id for p in component.prev_components}
-
-        while remaining:
-            item = await queue.get()
-            if isinstance(item, _Sentinel):
-                remaining.discard(item.component_id)
-            else:
-                await self._run_component(component, item, metrics, out_queues)
 
     def _cancel_successors(
         self,
