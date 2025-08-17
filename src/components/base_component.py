@@ -107,14 +107,9 @@ class Component(BaseModel, Generic[InS, OutS], ABC):
             return v
         raise TypeError("Expected Schema or list[Schema].")
 
-    @field_validator("in_schema")
+    @field_validator("in_schema", "out_schema")
     @classmethod
     def _validate_in_schema(cls, v: Any) -> Any:
-        return cls._validate_schema_variant(v)
-
-    @field_validator("out_schema")
-    @classmethod
-    def _validate_out_schema(cls, v: Any) -> Any:
         return cls._validate_schema_variant(v)
 
     @field_validator("layout", mode="before")
