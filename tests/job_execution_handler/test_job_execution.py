@@ -39,7 +39,7 @@ def test_execute_job_single_test_component():
                 "description": "a test comp",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             }
         ],
     }
@@ -84,7 +84,7 @@ def test_execute_job_chain_components_file_logging():
                 "description": "first",
                 "routes": {"out": ["comp2"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "comp2",
@@ -92,7 +92,7 @@ def test_execute_job_chain_components_file_logging():
                 "description": "second",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -148,7 +148,7 @@ def test_execute_job_failing_and_cancelled_components():
                 "description": "will fail",
                 "routes": {"out": ["comp2"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "comp2",
@@ -156,7 +156,7 @@ def test_execute_job_failing_and_cancelled_components():
                 "description": "should be cancelled",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -199,7 +199,7 @@ def test_retry_logic_and_metrics():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             }
         ],
     }
@@ -239,7 +239,7 @@ def test_execute_job_linear_chain():
                 "description": "",
                 "routes": {"out": ["c2"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "c2",
@@ -247,7 +247,7 @@ def test_execute_job_linear_chain():
                 "description": "",
                 "routes": {"out": ["c3"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "c3",
@@ -255,7 +255,7 @@ def test_execute_job_linear_chain():
                 "description": "",
                 "routes": {"out": ["c4"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "c4",
@@ -263,7 +263,7 @@ def test_execute_job_linear_chain():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }

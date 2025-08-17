@@ -7,6 +7,7 @@ from typing import (
     AsyncIterator,
     ClassVar,
     Sequence,
+    Iterable,
 )
 from uuid import uuid4
 
@@ -45,6 +46,10 @@ class StrategyType(str, Enum):
 class Component(BaseModel, ABC):
     """
     Base class for all components in the system.
+
+    Supports both static (class-level) and dynamic (instance-level) ports.
+    - Class-level declarations keep simple components declarative.
+    - Instance-level extras come from config and are merged during validation.
     """
 
     # declarations (overridable in subclasses)
@@ -67,13 +72,25 @@ class Component(BaseModel, ABC):
         description="out_port -> [EdgeRef|target_name]. Use EdgeRef to "
         "specify target input port.",
     )
-    port_schemas: Dict[str, Schema] = Field(
+    out_port_schemas: Dict[str, Schema] = Field(
         default_factory=dict,
         description="out_port -> Schema emitted on the port.",
     )
     in_port_schemas: Dict[str, Schema] = Field(
         default_factory=dict,
         description="in_port -> Schema expected on the port.",
+    )
+
+    # dynamic ports supplied via config (merged with class-level ports)
+    extra_output_ports: List[OutPortSpec] = Field(
+        default_factory=list,
+        description="Additional output ports declared by config "
+        "(merged with class-level OUTPUT_PORTS).",
+    )
+    extra_input_ports: List[InPortSpec] = Field(
+        default_factory=list,
+        description="Additional input ports declared by config "
+        "(merged with class-level INPUT_PORTS).",
     )
 
     layout: Layout = Field(default_factory=lambda: Layout())
@@ -89,6 +106,92 @@ class Component(BaseModel, ABC):
     # these need to be created on the concrete component classes
     _strategy: Optional[ExecutionStrategy] = PrivateAttr(default=None)
     _receiver: Optional[Receiver] = PrivateAttr(default=None)
+
+    @field_validator("extra_output_ports", mode="before")
+    @classmethod
+    def _coerce_extra_output_ports(
+        cls, v: Iterable[OutPortSpec | str | dict] | None
+    ) -> List[OutPortSpec]:
+        """
+        Accept List[OutPortSpec] | List[str] | List[dict], cast to List[OutPortSpec].
+        """
+        if v is None:
+            return []
+        result: List[OutPortSpec] = []
+        for item in v:
+            if isinstance(item, OutPortSpec):
+                result.append(item)
+            elif isinstance(item, str):
+                result.append(OutPortSpec(name=item))
+            elif isinstance(item, dict):
+                result.append(OutPortSpec(**item))
+            else:
+                raise TypeError(
+                    "extra_output_ports items must be OutPortSpec | str | dict"
+                )
+        return result
+
+    @field_validator("extra_input_ports", mode="before")
+    @classmethod
+    def _coerce_extra_input_ports(
+        cls, v: Iterable[InPortSpec | str | dict] | None
+    ) -> List[InPortSpec]:
+        """
+        Accept List[InPortSpec] | List[str] | List[dict], cast to List[InPortSpec].
+        """
+        if v is None:
+            return []
+        result: List[InPortSpec] = []
+        for item in v:
+            if isinstance(item, InPortSpec):
+                result.append(item)
+            elif isinstance(item, str):
+                result.append(InPortSpec(name=item))
+            elif isinstance(item, dict):
+                result.append(InPortSpec(**item))
+            else:
+                raise TypeError(
+                    "extra_input_ports items must be InPortSpec | str | dict"
+                )
+        return result
+
+    def _merged_out_specs(self) -> List[OutPortSpec]:
+        """
+        Merge class-level OUTPUT_PORTS with extra_output_ports.
+        Deduplicate by name with instance extras winning last.
+        """
+        merged: Dict[str, OutPortSpec] = {p.name: p for p in self._class_out_specs()}
+        for p in self.extra_output_ports:
+            merged[p.name] = p
+        return list(merged.values())
+
+    def _merged_in_specs(self) -> List[InPortSpec]:
+        """
+        Merge class-level INPUT_PORTS with extra_input_ports.
+        Deduplicate by name with instance extras winning last.
+        """
+        merged: Dict[str, InPortSpec] = {p.name: p for p in self._class_in_specs()}
+        for p in self.extra_input_ports:
+            merged[p.name] = p
+        return list(merged.values())
+
+    @classmethod
+    def _class_out_specs(cls) -> List[OutPortSpec]:
+        return list(cls.OUTPUT_PORTS)
+
+    @classmethod
+    def _class_in_specs(cls) -> List[InPortSpec]:
+        return list(cls.INPUT_PORTS)
+
+    # public instance methods used by wiring/runtime
+    def expected_ports(self) -> List[OutPortSpec]:
+        return self._merged_out_specs()
+
+    def expected_in_ports(self) -> List[InPortSpec]:
+        return self._merged_in_specs()
+
+    def expected_in_port_names(self) -> List[str]:
+        return [p.name for p in self._merged_in_specs()]
 
     @model_validator(mode="after")
     @abstractmethod
@@ -138,7 +241,8 @@ class Component(BaseModel, ABC):
         if not has_inputs and not getattr(self, "ALLOW_NO_INPUTS", False):
             raise ValueError(
                 f"{self.name}: must declare at least one input port via INPUT_PORTS "
-                "or set ALLOW_NO_INPUTS = True for a root/source component."
+                "or extra_input_ports, or set ALLOW_NO_INPUTS = True for a "
+                "root/source component."
             )
         return self
 
@@ -151,7 +255,7 @@ class Component(BaseModel, ABC):
             raise ValueError("routes may not contain empty port names")
         return v
 
-    @field_validator("port_schemas")
+    @field_validator("out_port_schemas")
     @classmethod
     def _no_empty_port_schema_names(cls, v: Dict[str, Schema]) -> Dict[str, Schema]:
         if any(not k for k in v):
@@ -170,8 +274,6 @@ class Component(BaseModel, ABC):
         """
         If component declares ports, disallow typos in
         routes/port_schemas/in_port_schemas.
-        Also auto-create empty lists for declared out and
-        ports so UIs can render them.
         """
         out_declared = {p.name for p in self.expected_ports()}
         in_declared = {p.name for p in self.expected_in_ports()}
@@ -184,7 +286,7 @@ class Component(BaseModel, ABC):
                     f"{sorted(unknown_routes)}"
                 )
             unknown_out_schemas = [
-                k for k in self.port_schemas if k not in out_declared
+                k for k in self.out_port_schemas if k not in out_declared
             ]
             if unknown_out_schemas:
                 raise ValueError(
@@ -205,18 +307,6 @@ class Component(BaseModel, ABC):
                     f"{sorted(unknown_in_schemas)}"
                 )
         return self
-
-    @classmethod
-    def expected_ports(cls) -> List[OutPortSpec]:
-        return list(cls.OUTPUT_PORTS)
-
-    @classmethod
-    def expected_in_ports(cls) -> List[InPortSpec]:
-        return list(cls.INPUT_PORTS)
-
-    @classmethod
-    def expected_in_port_names(cls) -> List[str]:
-        return [p.name for p in cls.INPUT_PORTS]
 
     @property
     def id(self) -> str:
@@ -307,7 +397,7 @@ class Component(BaseModel, ABC):
         return self._out_edges_in_ports
 
     def schema_for_out_port(self, port: str) -> Optional[Schema]:
-        return self.port_schemas.get(port)
+        return self.out_port_schemas.get(port)
 
     def schema_for_in_port(self, port: str) -> Optional[Schema]:
         return self.in_port_schemas.get(port)
@@ -322,7 +412,7 @@ class Component(BaseModel, ABC):
         Kept small to stay below complexity limits.
         """
         for p, n in used_out_ports.items():
-            if n > 0 and p not in self.port_schemas:
+            if n > 0 and p not in self.out_port_schemas:
                 raise ValueError(
                     f"Component {self.name}: out port {p!r} routes to"
                     f" {n} target(s) "
@@ -370,9 +460,8 @@ def get_strategy(strategy_type: str) -> ExecutionStrategy:
     """
     if strategy_type == StrategyType.ROW:
         return RowExecutionStrategy()
-    elif strategy_type == StrategyType.BULK:
+    if strategy_type == StrategyType.BULK:
         return BulkExecutionStrategy()
-    elif strategy_type == StrategyType.BIGDATA:
+    if strategy_type == StrategyType.BIGDATA:
         return BigDataExecutionStrategy()
-    else:
-        raise ValueError(f"Unknown strategy type: {strategy_type}")
+    raise ValueError(f"Unknown strategy type: {strategy_type}")

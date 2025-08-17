@@ -31,7 +31,7 @@ def test_branch_skip_fan_out() -> None:
                 "comp_type": "failtest",
                 "description": "",
                 "routes": {"out": ["child1", "child2"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "child1",
@@ -94,14 +94,14 @@ def test_branch_skip_fan_in() -> None:
                 "comp_type": "test",
                 "description": "",
                 "routes": {"out": ["join"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "fail_root",
                 "comp_type": "failtest",
                 "description": "",
                 "routes": {"out": ["join"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "join",
@@ -157,7 +157,7 @@ def test_chain_skip_linear() -> None:
                 "comp_type": "failtest",
                 "description": "",
                 "routes": {"out": ["middle"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "middle",
@@ -165,7 +165,7 @@ def test_chain_skip_linear() -> None:
                 "description": "",
                 "routes": {"out": ["leaf"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "leaf",
@@ -221,7 +221,7 @@ def test_skip_diamond() -> None:
                 "comp_type": "failtest",
                 "description": "",
                 "routes": {"out": ["b", "c"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "b",
@@ -229,7 +229,7 @@ def test_skip_diamond() -> None:
                 "description": "",
                 "routes": {"out": ["d"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "c",
@@ -237,7 +237,7 @@ def test_skip_diamond() -> None:
                 "description": "",
                 "routes": {"out": ["d"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "d",

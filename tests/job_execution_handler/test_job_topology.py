@@ -37,7 +37,7 @@ def test_fan_out_topology():
                 "description": "",
                 "routes": {"out": ["child1", "child2"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "child1",
@@ -45,7 +45,7 @@ def test_fan_out_topology():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "child2",
@@ -53,7 +53,7 @@ def test_fan_out_topology():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -103,7 +103,7 @@ def test_fan_in_topology():
                 "description": "",
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "b",
@@ -111,7 +111,7 @@ def test_fan_in_topology():
                 "description": "",
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "c",
@@ -119,7 +119,7 @@ def test_fan_in_topology():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -169,7 +169,7 @@ def test_diamond_topology():
                 "description": "",
                 "routes": {"out": ["a", "b"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "a",
@@ -177,7 +177,7 @@ def test_diamond_topology():
                 "description": "",
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "b",
@@ -185,7 +185,7 @@ def test_diamond_topology():
                 "description": "",
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "c",
@@ -193,7 +193,7 @@ def test_diamond_topology():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }

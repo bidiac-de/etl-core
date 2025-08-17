@@ -26,7 +26,7 @@ def test_linear_stream_multiple_rows():
                 "comp_type": "multi_source",
                 "description": "",
                 "routes": {"out": ["echo"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo",
@@ -34,7 +34,7 @@ def test_linear_stream_multiple_rows():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -71,7 +71,7 @@ def test_fan_out_multiple_rows():
                 "comp_type": "multi_source",
                 "description": "",
                 "routes": {"out": ["echo1", "echo2"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo1",
@@ -79,7 +79,7 @@ def test_fan_out_multiple_rows():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo2",
@@ -87,7 +87,7 @@ def test_fan_out_multiple_rows():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }
@@ -124,14 +124,14 @@ def test_fan_in_multiple_rows():
                 "comp_type": "multi_source",
                 "description": "",
                 "routes": {"out": ["echo"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "src2",
                 "comp_type": "multi_source",
                 "description": "",
                 "routes": {"out": ["echo"]},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
             {
                 "name": "echo",
@@ -139,7 +139,7 @@ def test_fan_in_multiple_rows():
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
-                "port_schemas": {"out": _schema()},
+                "out_port_schemas": {"out": _schema()},
             },
         ],
     }

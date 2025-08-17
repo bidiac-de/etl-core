@@ -174,3 +174,152 @@ class MultiEcho(StubComponent):
         self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         yield Out("out", chunk_iterable)
+
+
+@register_component("test_source_dynamic_ports")
+class TestSource(Component):
+    """
+    Simple source that emits a few rows.
+    Declares a single out port "out". No inputs.
+    """
+
+    INPUT_PORTS: ClassVar[tuple[InPortSpec, ...]] = ()
+    OUTPUT_PORTS: ClassVar[tuple[OutPortSpec, ...]] = (OutPortSpec(name="out"),)
+    ALLOW_NO_INPUTS: ClassVar[bool] = True
+
+    count: int = 3
+
+    def _build_objects(self) -> "TestSource":
+        return self
+
+    def ensure_schemas_for_used_ports(
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
+    ) -> None:
+        # tests focus on port behavior; skip schema enforcement
+        return
+
+    async def process_row(
+        self, payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        for i in range(self.count):
+            metrics.lines_received = i + 1
+            status = "ok" if i % 2 == 0 else "err"
+            yield Out("out", {"i": i, "status": status})
+
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("out", None)
+
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("out", None)
+
+
+@register_component("test_router_dynamic_ports")
+class TestRouter(Component):
+    """
+    Router that sends row to Out(row['status'], row).
+    - Has a single input port "in".
+    - OUTPUT ports are provided dynamically via extra_output_ports in config.
+    """
+
+    INPUT_PORTS: ClassVar[tuple[InPortSpec, ...]] = (InPortSpec(name="in"),)
+    # OUTPUT_PORTS intentionally not set as class-level; extra_output_ports is used.
+
+    def _build_objects(self) -> "TestRouter":
+        return self
+
+    def ensure_schemas_for_used_ports(
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
+    ) -> None:
+        return
+
+    async def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        metrics.lines_received += 1
+        port = row.get("status", "default")
+        yield Out(str(port), row)
+
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("unused", None)
+
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("unused", None)
+
+
+@register_component("test_sink_dynamic_ports")
+class TestSink(Component):
+    """
+    Sink with a single input port "in". No outputs needed for these tests.
+    """
+
+    INPUT_PORTS: ClassVar[tuple[InPortSpec, ...]] = (InPortSpec(name="in"),)
+    OUTPUT_PORTS: ClassVar[tuple[OutPortSpec, ...]] = ()
+
+    def _build_objects(self) -> "TestSink":
+        return self
+
+    def ensure_schemas_for_used_ports(
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
+    ) -> None:
+        return
+
+    async def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        metrics.lines_received += 1
+        if False:
+            yield Out("unused", None)
+
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("unused", None)
+
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("unused", None)
+
+
+@register_component("test_merge_dynamic_inputs")
+class TestMerge(Component):
+    """
+    Component with dynamic input ports (extra_input_ports).
+    It just accepts inputs and yields nothing.
+    """
+
+    INPUT_PORTS: ClassVar[tuple[InPortSpec, ...]] = ()
+    OUTPUT_PORTS: ClassVar[tuple[OutPortSpec, ...]] = ()
+
+    def _build_objects(self) -> "TestMerge":
+        return self
+
+    def ensure_schemas_for_used_ports(  # type: ignore[override]
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
+    ) -> None:
+        return
+
+    async def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        metrics.lines_received += 1
+        if False:
+            yield Out("unused", None)
+
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("unused", None)
+
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[Out]:
+        if False:
+            yield Out("unused", None)
