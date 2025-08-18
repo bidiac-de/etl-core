@@ -2,3 +2,14 @@ pre-commit
 pytest-cov
 fastapi
 pydantic == v2.5.3
+typer
+requests
+sqlmodel
+dask
+uvicorn
+pandas
+dotenv
+pyarrow
+sqlalchemy
+pytest
+psutil

@@ -1,10 +1,12 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator, ConfigDict, PrivateAttr
+from pydantic import field_validator, ConfigDict, PrivateAttr
 from uuid import uuid4
+from typing import Optional
+
+from src.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
 
 
-class Layout(BaseModel):
+class Layout(LayoutBase):
     """
     Layout class to define the position of a component
     """
@@ -12,8 +14,6 @@ class Layout(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    x_coordinate: float = Field(default=0, alias="x_coord")
-    y_coordinate: float = Field(default=0, alias="y_coord")
 
     @field_validator("x_coordinate", "y_coordinate", mode="before")
     @classmethod
@@ -40,7 +40,7 @@ class Layout(BaseModel):
         )
 
 
-class MetaData(BaseModel):
+class MetaData(MetaDataBase):
     """
     Metadata class to store additional information about
     a job or a component
@@ -49,27 +49,35 @@ class MetaData(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: Optional[datetime] = Field(default=None, exclude=True)
-    created_by: int = Field(default=0)
-    updated_by: Optional[int] = Field(default=None)
 
-    @field_validator("created_at", "updated_at", mode="before")
+    @field_validator("timestamp", mode="before")
     @classmethod
     def validate_timestamps(cls, value: datetime) -> datetime:
         """
         Validate that datetime values are not in the future
         """
+        # If string (from JSON): parse
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value)
+            except ValueError:
+                raise ValueError(
+                    "Timestamp must be ISO-format datetime string"
+                    " or datetime object."
+                )
+
         if value > datetime.now():
             raise ValueError("Timestamp cannot be in the future.")
         return value
 
-    @field_validator("created_by", "updated_by", mode="before")
+    @field_validator("user_id", mode="before")
     @classmethod
-    def validate_user_ids(cls, value: int) -> int:
+    def validate_user_ids(cls, value: Optional[int]):
         """
-        Validate that user IDs are non-negative integers
+        Validate that set user IDs are non-negative integers
         """
+        if value is None:
+            return None
         if not isinstance(value, int) or value < 0:
             raise ValueError("User ID must be a non-negative integer.")
         return value
