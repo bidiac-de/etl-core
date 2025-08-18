@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
+from starlette.config import Config
 
 from fastapi import FastAPI
 
@@ -13,13 +13,14 @@ from .components.component_registry import (
     set_registry_mode,
 )
 
+config = Config(".env")  # loads env and .env file if present
+
 
 def _resolve_registry_mode() -> RegistryMode:
-    raw = os.getenv("ETL_COMPONENT_MODE", RegistryMode.PRODUCTION.value).lower()
+    raw = config("ETL_COMPONENT_MODE", cast=str)
     try:
-        return RegistryMode(raw)
+        return RegistryMode(raw.lower())
     except ValueError:
-        # Fall back safely if misconfigured
         return RegistryMode.PRODUCTION
 
 
