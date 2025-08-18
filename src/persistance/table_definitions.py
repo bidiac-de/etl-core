@@ -1,5 +1,3 @@
-# NOTE: intentionally no `from __future__ import annotations` here
-
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -11,7 +9,7 @@ from src.persistance.base_models.component_base import ComponentBase
 from src.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
 from src.persistance.base_models.job_base import JobBase
 
-_FOREIGN_KEY_COMPONENT_TABLE = "componenttable"
+_FOREIGN_KEY_COMPONENT_TABLE = "componenttable.id"
 _CASCADE_ALL = "all, delete-orphan"
 
 
@@ -128,7 +126,7 @@ class MetaDataTable(MetaDataBase, table=True):
     component_id: Optional[str] = Field(
         default=None,
         sa_column=Column(
-            ForeignKey("componenttable.id", ondelete="CASCADE"),
+            ForeignKey(_FOREIGN_KEY_COMPONENT_TABLE, ondelete="CASCADE"),
             unique=True,
             nullable=True,
         ),
@@ -143,7 +141,7 @@ class LayoutTable(LayoutBase, table=True):
 
     component_id: str = Field(
         sa_column=Column(
-            ForeignKey("componenttable.id", ondelete="CASCADE"),
+            ForeignKey(_FOREIGN_KEY_COMPONENT_TABLE, ondelete="CASCADE"),
             unique=True,
             nullable=False,
         ),

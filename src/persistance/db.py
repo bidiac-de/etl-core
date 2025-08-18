@@ -40,5 +40,5 @@ def _set_sqlite_pragmas(dbapi_conn: Any, _: Any) -> None:
     cur.close()
 
 
-# SQLModel.metadata.drop_all(engine)
+SQLModel.metadata.drop_all(engine)
 SQLModel.metadata.create_all(engine)
