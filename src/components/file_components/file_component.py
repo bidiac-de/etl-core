@@ -12,7 +12,6 @@ class FileComponent(Component, ABC):
 
     filepath: Path = Field(..., description="Path to the file")
 
-
     @model_validator(mode="after")
     def validate_filepath(self) -> "FileComponent":
         if not isinstance(self.filepath, Path):

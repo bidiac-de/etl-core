@@ -1,67 +1,92 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
-import pandas as pd
 import dask.dataframe as dd
+import pandas as pd
 
-try:
-    import openpyxl
-except Exception:
-    openpyxl = None
-
-from src.receivers.files.file_helper import (
-    ensure_exists,
-    resolve_file_path,
-)
-
-SUPPORTED_EXTS = {".xlsx", ".xlsm"}
+from src.receivers.files.file_helper import ensure_exists, resolve_file_path
 
 
-def _validate_ext(path: Path) -> None:
-    """Allow only .xlsx and .xlsm; raise for .xls and others."""
-    ext = path.suffix.lower()
-    if ext not in SUPPORTED_EXTS:
-        raise ValueError(
-            f"Unsupported Excel extension '{ext}'. "
-            "Supported: .xlsx, .xlsm"
-        )
+READABLE_EXTS = {".xlsx", ".xlsm", ".xls"}
+WRITABLE_EXTS = {".xlsx", ".xlsm"}
 
 
-def _engine() -> str:
-    return "openpyxl"
+def _ext(path: Path) -> str:
+    """Return the lowercase file extension of the given path."""
+    return path.suffix.lower()
+
+
+def _engine_for_read(ext: str) -> str:
+    """Determine the engine to use for reading Excel files based on the extension."""
+    if ext in {".xlsx", ".xlsm"}:
+
+        return "openpyxl"
+    if ext == ".xls":
+        try:
+            import xlrd
+        except Exception as exc:
+            raise ValueError(
+                "Reading .xls requires 'xlrd' (<2.0). Please install it "
+                "or convert the file to .xlsx."
+            ) from exc
+        return "xlrd"
+    raise ValueError(f"Unsupported excel extension for read: '{ext}'.")
+
+
+def _engine_for_write(ext: str) -> str:
+    """Determine the engine to use for writing Excel files based on the extension."""
+    if ext in {".xlsx", ".xlsm"}:
+        return "openpyxl"
+    raise ValueError(
+        f"Writing '{ext}' is not supported. Use one of: {sorted(WRITABLE_EXTS)}."
+    )
 
 
 def read_excel_rows(
         path: Path,
         sheet_name: Optional[str] = None,
 ) -> Iterator[Dict[str, object]]:
-    """Yield rows from an Excel sheet as dictionaries."""
+    """Read an Excel sheet and yield rows as dictionaries (streaming iteration)."""
     path = resolve_file_path(path)
     ensure_exists(path)
-    _validate_ext(path)
-    df = pd.read_excel(path, sheet_name=sheet_name or 0, engine=_engine())
+    ext = _ext(path)
+    engine = _engine_for_read(ext)
+
+    df = pd.read_excel(path, sheet_name=sheet_name or 0, engine=engine)
     for _, row in df.iterrows():
-        yield {k: (None if pd.isna(v) else v) for k, v in row.to_dict().items()}
+        d = row.to_dict()
+        for k, v in list(d.items()):
+            if pd.isna(v):
+                d[k] = None
+        yield d
 
 
 def read_excel_bulk(path: Path, sheet_name: Optional[str] = None) -> pd.DataFrame:
-    """Read a sheet into a pandas DataFrame."""
+    """Read an entire Excel sheet into a pandas DataFrame."""
     path = resolve_file_path(path)
     ensure_exists(path)
-    _validate_ext(path)
-    return pd.read_excel(path, sheet_name=sheet_name or 0, engine=_engine())
+    ext = _ext(path)
+    engine = _engine_for_read(ext)
+    return pd.read_excel(path, sheet_name=sheet_name or 0, engine=engine)
 
 
 def read_excel_bigdata(
-        path: Path, sheet_name: Optional[str] = None, npartitions: int = 8
+        path: Path,
+        sheet_name: Optional[str] = None,
+        npartitions: int = 8,
 ) -> dd.DataFrame:
-    """Create a Dask DataFrame from the Excel sheet (via pandas)."""
+    """
+    Create a Dask DataFrame from an Excel sheet (via pandas -> Dask).
+    Excel does not support true chunked/big data APIs; the sheet is materialized once.
+    """
     path = resolve_file_path(path)
     ensure_exists(path)
-    _validate_ext(path)
-    pdf = pd.read_excel(path, sheet_name=sheet_name or 0, engine=_engine())
+    ext = _ext(path)
+    engine = _engine_for_read(ext)
+
+    pdf = pd.read_excel(path, sheet_name=sheet_name or 0, engine=engine)
     npartitions = max(1, min(npartitions, len(pdf) or 1))
     return dd.from_pandas(pdf, npartitions=npartitions)
 
@@ -69,38 +94,40 @@ def read_excel_bigdata(
 def _normalize_to_dataframe(
         data: Union[pd.DataFrame, List[Dict[str, object]]]
 ) -> pd.DataFrame:
+    """Convert the given input into a pandas DataFrame if it is not one already."""
     if isinstance(data, pd.DataFrame):
         return data
     return pd.DataFrame(data or [])
 
 
 def write_excel_row(
-        path: Path, row: Dict[str, object], sheet_name: Optional[str] = None
+        path: Path,
+        row: Dict[str, object],
+        sheet_name: Optional[str] = None,
 ) -> None:
-    """Append a single row to the given Excel sheet (header created if needed).
-
-    Note: Writing to .xlsm produces a macro-enabled workbook, but macros will not
-    be preserved if you overwrite an existing macro workbook.
     """
-    _validate_ext(Path(path))
-    if Path(path).exists():
+    Append a single row to the given Excel sheet (write header if needed).
+
+    Note:
+        Writing to .xlsm produces a macro-enabled workbook, but macros will not
+        be preserved if you overwrite an existing macro workbook.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ext = _ext(path)
+    engine = _engine_for_write(ext)
+
+    if path.exists():
         try:
-            df_existing = pd.read_excel(
-                path, sheet_name=sheet_name or 0, engine=_engine()
-            )
+            existing = pd.read_excel(path, sheet_name=sheet_name or 0, engine=engine)
         except Exception:
-            df_existing = None
+            existing = pd.DataFrame()
     else:
-        df_existing = None
+        existing = pd.DataFrame()
 
     df_row = pd.DataFrame([row])
-    out = pd.concat([df_existing, df_row], ignore_index=True) if (
-            df_existing is not None and not df_existing.empty
-    ) else df_row
-
-    out.to_excel(
-        path, sheet_name=sheet_name or "Sheet1", index=False, engine=_engine()
-    )
+    out = pd.concat([existing, df_row], ignore_index=True)
+    out.to_excel(path, sheet_name=sheet_name or "Sheet1", index=False, engine=engine)
 
 
 def write_excel_bulk(
@@ -108,21 +135,26 @@ def write_excel_bulk(
         data: Union[pd.DataFrame, List[Dict[str, object]]],
         sheet_name: Optional[str] = None,
 ) -> None:
-    """Overwrite the target sheet with the given data."""
-    _validate_ext(Path(path))
+    """Overwrite the target Excel sheet with the given data."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ext = _ext(path)
+    engine = _engine_for_write(ext)
+
     df = _normalize_to_dataframe(data)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    df.to_excel(
-        path, sheet_name=sheet_name or "Sheet1", index=False, engine=_engine()
-    )
+    df.to_excel(path, sheet_name=sheet_name or "Sheet1", index=False, engine=engine)
 
 
 def write_excel_bigdata(
-        path: Path, data: dd.DataFrame, sheet_name: Optional[str] = None
+        path: Path,
+        data: dd.DataFrame,
+        sheet_name: Optional[str] = None,
 ) -> None:
-    """Write a Dask DataFrame by materializing it to pandas first."""
-    _validate_ext(Path(path))
+    """Write a Dask DataFrame to an Excel sheet by materializing it to pandas first."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ext = _ext(path)
+    engine = _engine_for_write(ext)
+
     pdf = data.compute()
-    pdf.to_excel(
-        path, sheet_name=sheet_name or "Sheet1", index=False, engine=_engine()
-    )
+    pdf.to_excel(path, sheet_name=sheet_name or "Sheet1", index=False, engine=engine)

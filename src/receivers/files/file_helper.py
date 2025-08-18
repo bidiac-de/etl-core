@@ -1,6 +1,11 @@
 from pathlib import Path
 from typing import IO
 
+class FileReceiverError(Exception):
+    """Custom error for file receiver operations (read/write failures)."""
+    pass
+
+
 def resolve_file_path(filepath: Path) -> Path:
     """Resolve a relative or user path and return an absolute path."""
     return filepath.expanduser().resolve()

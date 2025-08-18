@@ -9,19 +9,15 @@ if TYPE_CHECKING:
 
 class RowExecutionStrategy(ExecutionStrategy):
     """
-    Streaming row-by-row mode:
-    Repeatedly calls component.receiver.process_row until exhaustion.
+    True streaming row-by-row mode:
+    Delegates to component.stream_rows(...) which MUST be an async-iterable.
     """
 
     async def execute(
-        self,
-        component: "Component",
-        payload: Any,
-        metrics: ComponentMetrics,
+            self,
+            component: "Component",
+            payload: Any,
+            metrics: ComponentMetrics,
     ) -> AsyncIterator[Dict[str, Any]]:
-        while True:
-            try:
-                row = await component.process_row(payload, metrics)
-                yield row
-            except StopAsyncIteration:
-                break
+        async for row in component.process_row(payload, metrics):
+            yield row

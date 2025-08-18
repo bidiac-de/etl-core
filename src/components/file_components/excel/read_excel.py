@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict
 
-import dask.dataframe as dd
 import pandas as pd
+import dask.dataframe as dd
 from pydantic import model_validator
 
 from src.components.file_components.excel.excel_component import Excel
-from src.components.component_registry  import register_component
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.components.component_registry import register_component
 from src.receivers.files.excel.excel_receiver import ExcelReceiver
+from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 @register_component("read_excel")
 class ReadExcel(Excel):
-    """Excel reader supporting row, bulk and bigdata modes."""
+    """Excel reader supporting row, bulk, and bigdata modes."""
 
     @model_validator(mode="after")
     def _build_objects(self) -> "ReadExcel":
@@ -22,40 +22,33 @@ class ReadExcel(Excel):
         return self
 
     async def process_row(
-            self,
-            row: Dict[str, Any],
-            metrics: ComponentMetrics,
-            sheet_name: Optional[str] = None,
-    ) -> AsyncIterator[Dict[str, Any]]:
-        """Stream rows as dicts from the sheet."""
-        _ = row
-        async for out in self._receiver.read_row(
-                self.filepath, metrics=metrics, sheet_name=sheet_name or self.sheet_name
+            self, row: Dict[str, Any],
+            metrics: ComponentMetrics
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Read rows one-by-one (streaming) from the configured sheet."""
+        async for result in self._receiver.read_row(
+                self.filepath, metrics=metrics, sheet_name=self.sheet_name
         ):
-            yield out
+            yield result
 
     async def process_bulk(
             self,
-            data: Optional[pd.DataFrame],
+            dataframe: pd.DataFrame,
             metrics: ComponentMetrics,
-            sheet_name: Optional[str] = None,
-    ) -> AsyncIterator[pd.DataFrame]:
+    ) -> AsyncGenerator[pd.DataFrame, None]:
         """Read the entire sheet into a pandas DataFrame."""
-        _ = data
         df = await self._receiver.read_bulk(
-            self.filepath, metrics=metrics, sheet_name=sheet_name or self.sheet_name
+            self.filepath, metrics=metrics, sheet_name=self.sheet_name
         )
         yield df
 
     async def process_bigdata(
             self,
-            chunk_iterable: Any,
+            dataframe: dd.DataFrame,
             metrics: ComponentMetrics,
-            sheet_name: Optional[str] = None,
-    ) -> AsyncIterator[dd.DataFrame]:
+    ) -> AsyncGenerator[dd.DataFrame, None]:
         """Read the sheet as a Dask DataFrame."""
-        _ = chunk_iterable
         ddf = await self._receiver.read_bigdata(
-            self.filepath, metrics=metrics, sheet_name=sheet_name or self.sheet_name
+            self.filepath, metrics=metrics, sheet_name=self.sheet_name
         )
         yield ddf

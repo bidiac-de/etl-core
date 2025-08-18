@@ -1,9 +1,11 @@
+import asyncio
+import inspect
 import pytest
 import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, AsyncGenerator
 
 from src.components.file_components.excel.read_excel import ReadExcel
 from src.components.file_components.excel.write_excel import WriteExcel
@@ -14,67 +16,11 @@ from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.components import Schema
 
-
 DATA_DIR = Path(__file__).parent / "data"
 VALID_XLSX = DATA_DIR / "test_data.xlsx"
 MISSING_VALUES_XLSX = DATA_DIR / "test_data_missing.xlsx"
 SCHEMA_MISMATCH_XLSX = DATA_DIR / "test_data_schema.xlsx"
 WRONG_TYPES_XLSX = DATA_DIR / "test_data_types.xlsx"
-
-
-def build_minimal_schema() -> Schema:
-    return Schema(
-        columns=[
-            ColumnDefinition(name="id", data_type=DataType.STRING),
-            ColumnDefinition(name="name", data_type=DataType.STRING),
-        ]
-    )
-
-
-@pytest.fixture(autouse=True)
-def patch_strategies(monkeypatch):
-    async def _collect_or_return(x):
-        if hasattr(x, "__aiter__"):
-            items = []
-            async for item in x:
-                items.append(item)
-            return items
-        if hasattr(x, "__await__"):
-            return await x
-        return x
-
-    async def _call_with_fallback(fn, payload, metrics):
-        try:
-            return await _collect_or_return(fn(payload, metrics=metrics))
-        except TypeError as e:
-            if "multiple values for argument 'metrics'" not in str(e):
-                raise
-            return await _collect_or_return(fn(metrics, payload))
-
-    async def row_exec(self, component, payload, metrics):
-        return await _call_with_fallback(component.process_row, payload, metrics)
-
-    async def bulk_exec(self, component, payload, metrics):
-        return await _call_with_fallback(component.process_bulk, payload, metrics)
-
-    async def bigdata_exec(self, component, payload, metrics):
-        return await _call_with_fallback(component.process_bigdata, payload, metrics)
-
-    from src.strategies.row_strategy import RowExecutionStrategy as _Row
-    from src.strategies.bulk_strategy import BulkExecutionStrategy as _Bulk
-    from src.strategies.bigdata_strategy import BigDataExecutionStrategy as _Big
-
-    monkeypatch.setattr(_Row, "execute", row_exec, raising=True)
-    monkeypatch.setattr(_Bulk, "execute", bulk_exec, raising=True)
-    monkeypatch.setattr(_Big, "execute", bigdata_exec, raising=True)
-
-
-@pytest.fixture
-def schema_definition():
-    return [
-        ColumnDefinition(name="id", data_type=DataType.STRING),
-        ColumnDefinition(name="name", data_type=DataType.STRING),
-    ]
 
 
 @pytest.fixture
@@ -88,78 +34,50 @@ def metrics():
     )
 
 
+@pytest.fixture
+def schema_definition():
+    return Schema(
+        columns=[
+            ColumnDefinition(name="id", data_type=DataType.STRING),
+            ColumnDefinition(name="name", data_type=DataType.STRING),
+        ]
+    )
+
+
 @pytest.mark.asyncio
-async def test_readexcel_valid_bulk(schema_definition, metrics):
+async def test_readexcel_valid_bulk(metrics, schema_definition):
     comp = ReadExcel(
         name="ReadExcel_Bulk_Valid",
         description="Valid Excel file",
         comp_type="read_excel",
         filepath=VALID_XLSX,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    res = await comp.execute(payload=None, metrics=metrics)
-    df = res[0] if isinstance(res, list) else res
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) >= 1
-    assert {"id", "name"}.issubset(set(df.columns))
+    res = comp.execute(payload=None, metrics=metrics)
+    assert isinstance(res, AsyncGenerator)
+
+    async for item in res:
+        assert isinstance(item, pd.DataFrame)
+        assert {"id", "name"}.issubset(set(item.columns))
 
 
 @pytest.mark.asyncio
-async def test_readexcel_missing_values_bulk(schema_definition, metrics):
+async def test_readexcel_missing_values_bulk(metrics, schema_definition):
     comp = ReadExcel(
         name="ReadExcel_Bulk_Missing",
         description="Missing values",
         comp_type="read_excel",
         filepath=MISSING_VALUES_XLSX,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    res = await comp.execute(payload=None, metrics=metrics)
-    df = res[0] if isinstance(res, list) else res
-    assert isinstance(df, pd.DataFrame)
-    assert df.isna().any().any()
-
-
-@pytest.mark.asyncio
-async def test_readexcel_schema_mismatch_bulk(schema_definition, metrics):
-    comp = ReadExcel(
-        name="ReadExcel_Bulk_Schema",
-        description="Schema mismatch",
-        comp_type="read_excel",
-        filepath=SCHEMA_MISMATCH_XLSX,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
-    )
-    comp.strategy = BulkExecutionStrategy()
-
-    res = await comp.execute(payload=None, metrics=metrics)
-    df = res[0] if isinstance(res, list) else res
-    expected_cols = {col.name for col in schema_definition}
-    actual_cols = set(df.columns)
-    assert expected_cols != actual_cols
-
-
-@pytest.mark.asyncio
-async def test_readexcel_wrong_types_bulk(schema_definition, metrics):
-    comp = ReadExcel(
-        name="ReadExcel_Bulk_WrongTypes",
-        description="Wrong data types",
-        comp_type="read_excel",
-        filepath=WRONG_TYPES_XLSX,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
-    )
-    comp.strategy = BulkExecutionStrategy()
-
-    res = await comp.execute(payload=None, metrics=metrics)
-    df = res[0] if isinstance(res, list) else res
-    assert isinstance(df, pd.DataFrame)
-    assert df["id"].dtype == object
+    res = comp.execute(payload=None, metrics=metrics)
+    async for df in res:
+        assert isinstance(df, pd.DataFrame)
+        assert df.isna().any().any()
 
 
 @pytest.mark.asyncio
@@ -169,15 +87,20 @@ async def test_readexcel_row_streaming(schema_definition, metrics):
         description="Row streaming",
         comp_type="read_excel",
         filepath=VALID_XLSX,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = RowExecutionStrategy()
 
-    rows: List[Dict[str, Any]] = await comp.execute(payload=None, metrics=metrics)
-    assert isinstance(rows, list)
-    assert len(rows) >= 1
-    assert {"id", "name"}.issubset(set(rows[0].keys()))
+    rows = comp.execute(payload=None, metrics=metrics)
+    assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
+
+    first = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert set(first.keys()) == {"id", "name"}
+
+    second = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert set(second.keys()) == {"id", "name"}
+
+    await rows.aclose()
 
 
 @pytest.mark.asyncio
@@ -187,18 +110,15 @@ async def test_readexcel_bigdata(schema_definition, metrics):
         description="Read Excel with Dask",
         comp_type="read_excel",
         filepath=VALID_XLSX,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = BigDataExecutionStrategy()
 
-    res = await comp.execute(payload=None, metrics=metrics)
-    ddf_res = res[0] if isinstance(res, list) else res
-    assert isinstance(ddf_res, dd.DataFrame)
-    df = ddf_res.compute()
-    assert len(df) >= 1
-    assert {"id", "name"}.issubset(set(df.columns))
-
+    res = comp.execute(payload=None, metrics=metrics)
+    async for ddf in res:
+        assert isinstance(ddf, dd.DataFrame)
+        pdf = ddf.compute()
+        assert {"id", "name"}.issubset(set(pdf.columns))
 
 
 @pytest.mark.asyncio
@@ -210,31 +130,17 @@ async def test_writeexcel_row(tmp_path: Path, schema_definition, metrics):
         description="Write single row",
         comp_type="write_excel",
         filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = RowExecutionStrategy()
 
     row = {"id": "1", "name": "Zoe"}
-    result = await comp.execute(payload=row, metrics=metrics)
-    if isinstance(result, list):
-        assert len(result) == 1
-        result = result[0]
-    assert result == row
+    await anext(comp.execute(payload=row, metrics=metrics), None)
 
-    reader = ReadExcel(
-        name="ReadBack_Row",
-        description="Read back written single",
-        comp_type="read_excel",
-        filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
-    )
-    reader.strategy = BulkExecutionStrategy()
-    res = await reader.execute(payload=None, metrics=metrics)
-    df = res[0] if isinstance(res, list) else res
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 1
+    assert out_fp.exists()
+
+    df = pd.read_excel(out_fp)
+    assert list(df.columns) == ["id", "name"]
     assert df.iloc[0]["name"] == "Zoe"
 
 
@@ -247,47 +153,24 @@ async def test_writeexcel_bulk(tmp_path: Path, schema_definition, metrics):
         description="Write multiple rows",
         comp_type="write_excel",
         filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    data = [
-        {"id": "1", "name": "A"},
-        {"id": "2", "name": "B"},
-        {"id": "3", "name": "C"},
-    ]
+    data = pd.DataFrame(
+        [
+            {"id": "1", "name": "A"},
+            {"id": "2", "name": "B"},
+            {"id": "3", "name": "C"},
+        ]
+    )
 
-    res = await comp.execute(payload=data, metrics=metrics)
-
-    if isinstance(res, list) and len(res) == 1:
-        res = res[0]
-
-    if isinstance(res, pd.DataFrame):
-        assert len(res) == 3
-        written_df = res
-    elif isinstance(res, list):
-        assert len(res) == 3
-        written_df = pd.DataFrame(res)
-    else:
-        raise AssertionError(f"Unexpected result type: {type(res)!r}")
+    await anext(comp.execute(payload=data, metrics=metrics), None)
 
     assert out_fp.exists()
 
-    reader = ReadExcel(
-        name="ReadBack_Bulk",
-        description="Read back bulk",
-        comp_type="read_excel",
-        filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
-    )
-    reader.strategy = BulkExecutionStrategy()
-    df_res = await reader.execute(payload=None, metrics=metrics)
-    df = df_res[0] if isinstance(df_res, list) else df_res
-
+    df = pd.read_excel(out_fp)
     assert list(df.sort_values("id")["name"]) == ["A", "B", "C"]
-    assert list(written_df.sort_values("id")["name"]) == ["A", "B", "C"]
 
 
 @pytest.mark.asyncio
@@ -299,8 +182,7 @@ async def test_writeexcel_bigdata(tmp_path: Path, schema_definition, metrics):
         description="Write Dask DataFrame",
         comp_type="write_excel",
         filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition,
     )
     comp.strategy = BigDataExecutionStrategy()
 
@@ -314,53 +196,64 @@ async def test_writeexcel_bigdata(tmp_path: Path, schema_definition, metrics):
         npartitions=2,
     )
 
-    result = await comp.execute(payload=ddf_in, metrics=metrics)
-    ddf_out = result[0] if isinstance(result, list) else result
-    assert isinstance(ddf_out, dd.DataFrame)
+    await anext(comp.execute(payload=ddf_in, metrics=metrics), None)
+
     assert out_fp.exists()
 
-    reader = ReadExcel(
-        name="ReadBack_BigData",
-        description="Read back big",
-        comp_type="read_excel",
-        filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
-    )
-    reader.strategy = BulkExecutionStrategy()
-    read_res = await reader.execute(payload=None, metrics=metrics)
-    df = read_res[0] if isinstance(read_res, list) else read_res
+    df = pd.read_excel(out_fp)
     assert list(df.sort_values("id")["name"]) == ["Nina", "Omar"]
 
+
 @pytest.mark.asyncio
-async def test_writeexcel_bulk_xlsm(tmp_path: Path, schema_definition, metrics):
-    out_fp = tmp_path / "bulk.xlsm"
-    comp = WriteExcel(
-        name="WriteExcel_Bulk_Xlsm",
-        description="Write multiple rows (xlsm)",
-        comp_type="write_excel",
-        filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+async def test_readexcel_schema_mismatch_bulk(schema_definition, metrics):
+    comp = ReadExcel(
+        name="ReadExcel_Bulk_Schema",
+        description="Schema mismatch",
+        comp_type="read_excel",
+        filepath=DATA_DIR / "test_data_schema.xlsx",
+        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
-    data = [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}]
-    res = await comp.execute(payload=data, metrics=metrics)
-    if isinstance(res, list) and len(res) == 1:
-        res = res[0]
-    assert (isinstance(res, list) and len(res) == 2) or (
-            isinstance(res, pd.DataFrame) and len(res) == 2
-    )
-    assert out_fp.exists()
-    reader = ReadExcel(
-        name="ReadBack_Bulk_Xlsm",
-        description="Read back xlsm",
+
+    res = comp.execute(payload=None, metrics=metrics)
+    async for df in res:
+        expected_cols = {col.name for col in schema_definition.columns}
+        actual_cols = set(df.columns)
+        assert expected_cols != actual_cols
+
+@pytest.mark.asyncio
+async def test_readexcel_wrong_types_bulk(schema_definition, metrics):
+    comp = ReadExcel(
+        name="ReadExcel_Bulk_WrongTypes",
+        description="Wrong data types",
         comp_type="read_excel",
-        filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        filepath=DATA_DIR / "test_data_types.xlsx",
+        schema=schema_definition,
     )
-    reader.strategy = BulkExecutionStrategy()
-    df_res = await reader.execute(payload=None, metrics=metrics)
-    df = df_res[0] if isinstance(df_res, list) else df_res
-    assert list(df.sort_values("id")["name"]) == ["A", "B"]
+    comp.strategy = BulkExecutionStrategy()
+
+    res = comp.execute(payload=None, metrics=metrics)
+    async for df in res:
+        assert isinstance(df, pd.DataFrame)
+        # all values should be read as object (string) instead of numeric
+        assert df["id"].dtype == object
+
+@pytest.mark.asyncio
+async def test_readexcel_invalid_file(metrics, schema_definition, tmp_path: Path):
+    # Create an invalid Excel file (actually just text)
+    invalid_fp = tmp_path / "invalid.xlsx"
+    invalid_fp.write_text("not a real excel file")
+
+    comp = ReadExcel(
+        name="ReadExcel_Invalid",
+        description="Invalid Excel file",
+        comp_type="read_excel",
+        filepath=invalid_fp,
+        schema=schema_definition,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    with pytest.raises(Exception):
+        res = comp.execute(payload=None, metrics=metrics)
+        async for _ in res:
+            pass

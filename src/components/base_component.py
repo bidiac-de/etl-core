@@ -19,6 +19,7 @@ from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
 from pandas import DataFrame
+from src.components.schema import Schema
 
 
 class StrategyType(str, Enum):
@@ -48,6 +49,7 @@ class Component(BaseModel, ABC):
     next: List[str] = []  # List of names of next components from config
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
+    schema: Schema = Field(..., description="Schema definition for this component")
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
@@ -81,7 +83,6 @@ class Component(BaseModel, ABC):
         if isinstance(v, MetaData):
             return v
         if isinstance(v, dict):
-            # let MetaData do its own validation on timestamps, ids, etc.
             return MetaData(**v)
         raise TypeError(f"metadata must be MetaData or dict, got {type(v).__name__}")
 
@@ -91,7 +92,6 @@ class Component(BaseModel, ABC):
         if isinstance(v, Layout):
             return v
         if isinstance(v, dict):
-            # let Layout do its own validation on coordinates, etc.
             return Layout(**v)
         raise TypeError(f"layout must be Layout or dict, got {type(v).__name__}")
 
@@ -161,9 +161,9 @@ class Component(BaseModel, ABC):
         self._prev_components.append(prev)
 
     def execute(
-        self,
-        payload: Any,
-        metrics: ComponentMetrics,
+            self,
+            payload: Any,
+            metrics: ComponentMetrics,
     ) -> AsyncIterator[Any]:
         """
         Invoke the strategy’s async `execute`, streaming native outputs.
@@ -172,7 +172,11 @@ class Component(BaseModel, ABC):
         return self.strategy.execute(self, payload, metrics)
 
     @abstractmethod
-    async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    @abstractmethod
+    async def process_row(
+            self, *args: Any, **kwargs: Any
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Async generator: yield dict rows."""
         raise NotImplementedError
 
     @abstractmethod

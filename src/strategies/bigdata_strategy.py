@@ -1,24 +1,40 @@
-from typing import Any, AsyncIterator, TYPE_CHECKING
+from __future__ import annotations
+
+import inspect
+from typing import Any, AsyncIterator
+
 import dask.dataframe as dd
 
-from src.strategies.base_strategy import ExecutionStrategy
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-
-if TYPE_CHECKING:
-    from src.components.base_component import Component
+from src.strategies.base_strategy import ExecutionStrategy
 
 
 class BigDataExecutionStrategy(ExecutionStrategy):
     """
-    Streaming bigdata mode:
-    Calls component.receiver.process_bigdata once and yields the Dask DataFrame.
+    Executes a component in bigdata mode.
+    Accepts component.process_bigdata implemented either as:
+      - async generator yielding dd.DataFrame, or
+      - async coroutine returning a dd.DataFrame.
+    Yields Dask DataFrames uniformly.
     """
 
     async def execute(
-        self,
-        component: "Component",
-        payload: Any,
-        metrics: ComponentMetrics,
+            self,
+            component: "Component",
+            payload: Any,
+            metrics: ComponentMetrics,
     ) -> AsyncIterator[dd.DataFrame]:
-        ddf: dd.DataFrame = await component.process_bigdata(payload, metrics)
-        yield ddf
+        result = component.process_bigdata(payload, metrics)
+
+        if inspect.isasyncgen(result):
+            async for ddf in result:
+                yield ddf
+            return
+
+        if inspect.iscoroutine(result):
+            ddf: dd.DataFrame = await result
+            yield ddf
+            return
+
+        if result is not None:
+            yield result  # type: ignore[misc]

@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import AsyncGenerator
 
 import dask.dataframe as dd
 import pandas as pd
@@ -23,47 +24,64 @@ def metrics() -> ComponentMetrics:
 
 @pytest.fixture
 def sample_excel_file() -> Path:
-    return Path(__file__).parent.parent / "components" / "files" / "data" / "test_data.xlsx"
+    return (
+            Path(__file__).parent.parent
+            / "components"
+            / "files"
+            / "data"
+            / "test_data.xlsx"
+    )
 
 
 @pytest.mark.asyncio
-async def test_readexcel_row(sample_excel_file: Path, metrics: ComponentMetrics):
+async def test_excelreceiver_read_row_streaming(
+        sample_excel_file: Path, metrics: ComponentMetrics
+) -> None:
     r = ExcelReceiver()
 
-    async def drain():
-        out = []
-        async for row in r.read_row(filepath=sample_excel_file, metrics=metrics):
-            out.append(row)
-        return out
+    rows = r.read_row(filepath=sample_excel_file, metrics=metrics)
 
-    rows = await asyncio.wait_for(drain(), timeout=3.0)
+    assert isinstance(rows, AsyncGenerator) or hasattr(rows, "__anext__")
 
-    assert isinstance(rows, list)
-    assert len(rows) >= 1
-    assert "id" in rows[0] and "name" in rows[0]
+    first = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert set(first.keys()) == {"id", "name"}
+    assert first["id"] in {"1", 1}
+    assert first["name"] == "Alice"
+
+    second = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert set(second.keys()) == {"id", "name"}
+    assert second["id"] in {"2", 2}
+    assert second["name"] == "Bob"
+
+    await rows.aclose()
 
 
 @pytest.mark.asyncio
-async def test_readexcel_bulk(sample_excel_file: Path, metrics: ComponentMetrics):
+async def test_read_excel_bulk(
+        sample_excel_file: Path, metrics: ComponentMetrics
+) -> None:
     r = ExcelReceiver()
     df = await r.read_bulk(filepath=sample_excel_file, metrics=metrics)
     assert isinstance(df, pd.DataFrame)
-    assert len(df) >= 1
-    assert {"id", "name"}.issubset(set(df.columns))
+    assert len(df) == 3
+    assert set(df.columns) == {"id", "name"}
+    assert "Bob" in set(df["name"])
 
 
 @pytest.mark.asyncio
-async def test_readexcel_bigdata(sample_excel_file: Path, metrics: ComponentMetrics):
+async def test_read_excel_bigdata(
+        sample_excel_file: Path, metrics: ComponentMetrics
+) -> None:
     r = ExcelReceiver()
     ddf = await r.read_bigdata(filepath=sample_excel_file, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
     df = ddf.compute()
-    assert len(df) >= 1
-    assert {"id", "name"}.issubset(set(df.columns))
+    assert len(df) == 3
+    assert "Charlie" in set(df["name"])
 
 
 @pytest.mark.asyncio
-async def test_writeexcel_row(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_excel_row(tmp_path: Path, metrics: ComponentMetrics) -> None:
     file_path = tmp_path / "out_row.xlsx"
     r = ExcelReceiver()
 
@@ -80,7 +98,7 @@ async def test_writeexcel_row(tmp_path: Path, metrics: ComponentMetrics):
 
 
 @pytest.mark.asyncio
-async def test_writeexcel_bulk(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_excel_bulk(tmp_path: Path, metrics: ComponentMetrics) -> None:
     file_path = tmp_path / "out_bulk.xlsx"
     file_path.touch()
     r = ExcelReceiver()
@@ -89,7 +107,9 @@ async def test_writeexcel_bulk(tmp_path: Path, metrics: ComponentMetrics):
         {"id": "20", "name": "Finn"},
         {"id": "21", "name": "Gina"},
     ]
-    await r.write_bulk(filepath=file_path, metrics=metrics, data=data)
+    df_in = pd.DataFrame(data)
+
+    await r.write_bulk(filepath=file_path, metrics=metrics, data=df_in)
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics)
     assert len(df) == 2
@@ -97,7 +117,7 @@ async def test_writeexcel_bulk(tmp_path: Path, metrics: ComponentMetrics):
 
 
 @pytest.mark.asyncio
-async def test_writeexcel_bigdata(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_excel_bigdata(tmp_path: Path, metrics: ComponentMetrics) -> None:
     file_path = tmp_path / "out_big.xlsx"
     file_path.touch()
     r = ExcelReceiver()
