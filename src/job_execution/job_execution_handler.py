@@ -26,8 +26,9 @@ class JobExecutionHandler:
     ...
     """
 
-    # process-wide guard (per interpreter)
-    _running_job_ids: Set[str] = set()
+    # process-wide storage for both execution instances and their job-id
+    _executions_by_job: Dict[str, JobExecution] = {}
+    # guard locks to ensure thread-safety
     _guard_lock = threading.Lock()
 
     def __init__(self) -> None:
@@ -35,32 +36,27 @@ class JobExecutionHandler:
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
-        self.running_executions: List[JobExecution] = []
 
     def execute_job(self, job: RuntimeJob) -> JobExecution:
         """
         top-level method to execute a Job, managing its execution lifecycle
         """
-        # check if job is already running
-        for exec_ in self.running_executions:
-            if exec_.job == job:
-                self.logger.warning("Job '%s' already running", job.name)
-                return exec_
-
-        # process-wide guard to prevent duplicates across instances via threading
         with self._guard_lock:
-            if job.id in self._running_job_ids:
-                self.logger.warning("Duplicate start blocked for job '%s'", job.name)
-                raise ExecutionAlreadyRunning(f"Job '{job.name}' is already running.")
-            self._running_job_ids.add(job.id)
+            # check if job is already running
+            existing = self._executions_by_job.get(job.id)
+            if existing is not None:
+                self.logger.warning("Job '%s' already running", job.name)
+                return existing
+
+            execution = JobExecution(job)
+            self._executions_by_job[job.id] = execution
 
         try:
-            execution = JobExecution(job)
-            self.running_executions.append(execution)
             return asyncio.run(self._main_loop(execution))
         finally:
+            # cleanup in both success/failure paths
             with self._guard_lock:
-                self._running_job_ids.discard(job.id)
+                self._executions_by_job.pop(job.id, None)
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
@@ -329,7 +325,6 @@ class JobExecutionHandler:
             self.job_info.logging_handler.log(cm)
 
         # cleanup
-        self.running_executions.remove(execution)
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
     def _finalize_failure(
@@ -342,7 +337,6 @@ class JobExecutionHandler:
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         # cleanup
-        self.running_executions.remove(execution)
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",
             execution.job.name,
