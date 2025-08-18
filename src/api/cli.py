@@ -16,9 +16,9 @@ from src.singletons import (
 
 
 app = typer.Typer(
-    help="ETL control CLI as alternative to the API/Studio, using the same"
-    " core as the API to manage job creation, execution, and monitoring. "
-    "can be used locally or remotely via HTTP."
+    help="ETL control CLI to manage job creation, execution, and monitoring "
+         "from the console. "
+         "can be used locally or remotely via HTTP."
 )
 
 
@@ -35,15 +35,13 @@ class ExecutionPort(Protocol):
     def start(self, job_id: str) -> Dict[str, Any]: ...
 
 
-# Local adapters (direct handler calls)
-
-
+# Local adapters: direct handler calls
 class LocalJobsClient(JobsPort):
-    def __init__(self, job_handler: Optional[JobHandler] = None) -> None:
-        self.job_handler = job_handler or _jh_singleton()
+    def __init__(self) -> None:
+        self.job_handler = _jh_singleton()
 
     def create(self, cfg: Dict[str, Any]) -> str:
-        # Accept raw dict so CLI can pass JSON directly;
+        # Accept raw dict so CLI can pass JSON directly
         from src.persistance.configs.job_config import JobConfig
 
         row = self.job_handler.create_job_entry(JobConfig(**cfg))
@@ -69,8 +67,8 @@ class LocalJobsClient(JobsPort):
 
 
 class LocalExecutionClient(ExecutionPort):
-    def __init__(self, exec_handler: Optional[JobExecutionHandler] = None) -> None:
-        self.exec_handler = exec_handler or _eh_singleton()
+    def __init__(self) -> None:
+        self.exec_handler = _eh_singleton()
         self.jobs = LocalJobsClient()
 
     def start(self, job_id: str) -> Dict[str, Any]:
@@ -84,9 +82,7 @@ class LocalExecutionClient(ExecutionPort):
         }
 
 
-# HTTP adapters (remote control if needed)
-
-
+# HTTP adapters for remote access
 class HttpJobsClient(JobsPort):
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -135,8 +131,6 @@ class HttpExecutionClient(ExecutionPort):
 
 
 # Wiring helpers
-
-
 def _pick_clients(remote: bool, base_url: str) -> Tuple[JobsPort, ExecutionPort]:
     if remote:
         return HttpJobsClient(base_url), HttpExecutionClient(base_url)
@@ -144,7 +138,6 @@ def _pick_clients(remote: bool, base_url: str) -> Tuple[JobsPort, ExecutionPort]
 
 
 # CLI commands
-
 _DEFAULT_ADDRESS = "http://127.0.0.1:8000"
 
 
