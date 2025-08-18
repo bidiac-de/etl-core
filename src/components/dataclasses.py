@@ -1,6 +1,7 @@
 from datetime import datetime
 from pydantic import field_validator, ConfigDict, PrivateAttr
 from uuid import uuid4
+from typing import Optional
 
 from src.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
 
@@ -71,7 +72,7 @@ class MetaData(MetaDataBase):
 
     @field_validator("user_id", mode="before")
     @classmethod
-    def validate_user_ids(cls, value: int):
+    def validate_user_ids(cls, value: Optional[int]):
         """
         Validate that set user IDs are non-negative integers
         """

@@ -26,7 +26,7 @@ class JobExecutionHandler:
     ...
     """
 
-    # process-wide storage for both execution instances and their job-id
+    # process-wide storage for job-ids of currently running jobs
     _running_jobs: Set[str] = set()
     # guard locks to ensure thread-safety
     _guard_lock = threading.Lock()

@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Self
 from src.components.dataclasses import MetaData
 from pydantic import (
     Field,
@@ -42,7 +42,7 @@ class RuntimeJob(JobBase):
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
 
     @model_validator(mode="after")
-    def _assign_strategies(self) -> "JobBase":
+    def _assign_strategies(self) -> Self:
         """
         After wiring, give every component the Job’s strategy.
         """
