@@ -19,18 +19,22 @@ from src.persistance.base_models.job_base import JobBase
 router = APIRouter(prefix="/configs", tags=["configs"])
 
 # Simple, thread-safe in-process caches
-# Keys include registry mode so dev/test <-> production switches don't leak.
+# Keys include registry mode so switches don't leak
 _JOB_SCHEMA_CACHE: Dict[str, Dict[str, Any]] = {}
 _COMPONENT_SCHEMA_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
+_COMPONENT_TYPES_CACHE: Dict[str, List[str]] = {}  # NEW: cache for /component_types
 
 _CACHE_LOCK = RLock()
 
 
 def invalidate_schema_caches() -> None:
-    """Clear all schema caches. Call after changing registry mode/registry."""
+    """
+    Clear all schema caches. Call after changing registry mode/registry.
+    """
     with _CACHE_LOCK:
         _JOB_SCHEMA_CACHE.clear()
         _COMPONENT_SCHEMA_CACHE.clear()
+        _COMPONENT_TYPES_CACHE.clear()  # include component types cache
 
 
 def _cached_job_schema() -> Dict[str, Any]:
@@ -57,7 +61,7 @@ def _cached_component_schema(comp_type: str) -> Dict[str, Any]:
         if hit is not None:
             return hit
 
-    # Visibility/existence checks must still run (especially for prod mode)
+    # Visibility/existence checks have to run
     meta = component_meta(comp_type)
     if mode == RegistryMode.PRODUCTION and (meta is None or meta.hidden):
         raise HTTPException(
@@ -72,7 +76,6 @@ def _cached_component_schema(comp_type: str) -> Dict[str, Any]:
 
     cls = component_registry.get(comp_type)
     if cls is None:
-        # Non-production: still 404, but distinct error code
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_error_payload(
@@ -87,6 +90,25 @@ def _cached_component_schema(comp_type: str) -> Dict[str, Any]:
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_CACHE[cache_key] = computed
     return computed
+
+
+def _cached_component_types() -> List[str]:
+    """
+    Cache component type listing per registry mode, so /configs/component_types
+    is served from memory until registry mode/contents change.
+    """
+    mode = get_registry_mode()
+    mode_key = getattr(mode, "value", str(mode))
+    with _CACHE_LOCK:
+        hit = _COMPONENT_TYPES_CACHE.get(mode_key)
+        if hit is not None:
+            return list(hit)
+
+    # computing outside of lock to reduce contention
+    types = public_component_types()
+    with _CACHE_LOCK:
+        _COMPONENT_TYPES_CACHE[mode_key] = list(types)
+        return list(types)
 
 
 # Routes
@@ -125,7 +147,7 @@ def get_job_schema() -> Dict[str, Any]:
 )
 def list_component_types() -> List[str]:
     try:
-        return public_component_types()
+        return _cached_component_types()
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
