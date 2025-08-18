@@ -1,30 +1,46 @@
+from __future__ import annotations
+
 from typing import Any, Dict, Union
+
 from sqlmodel import Session
 
 from src.persistance.errors import PersistNotFoundError
-from src.persistance.table_definitions import MetaDataTable, LayoutTable
+from src.persistance.table_definitions import (
+    ComponentTable,
+    JobTable,
+    LayoutTable,
+    MetaDataTable,
+)
 
 RowOrId = Union[str, MetaDataTable, LayoutTable]
 
 
 class DataClassHandler:
-    """CRUD helper for any Metadata or Layout rows."""
+    """CRUD Handler for Metadata and Layout rows."""
 
-    def create_metadata_entry(
-        self, session: Session, data: Dict[str, Any]
+    def create_metadata_for_job(
+        self, session: Session, owner: JobTable, data: Dict[str, Any]
     ) -> MetaDataTable:
-        meta = MetaDataTable(**data)
-        session.add(meta)
+        row = MetaDataTable(**data, job_id=owner.id)
+        session.add(row)
         session.flush()
-        return meta
+        return row
 
-    def create_layout_entry(
-        self, session: Session, data: Dict[str, Any]
-    ) -> LayoutTable:
-        layout = LayoutTable(**data)
-        session.add(layout)
+    def create_metadata_for_component(
+        self, session: Session, owner: ComponentTable, data: Dict[str, Any]
+    ) -> MetaDataTable:
+        row = MetaDataTable(**data, component_id=owner.id)
+        session.add(row)
         session.flush()
-        return layout
+        return row
+
+    def create_layout_for_component(
+        self, session: Session, owner: ComponentTable, data: Dict[str, Any]
+    ) -> LayoutTable:
+        row = LayoutTable(**data, component_id=owner.id)
+        session.add(row)
+        session.flush()
+        return row
 
     def update_metadata_entry(
         self, session: Session, meta: RowOrId, data: Dict[str, Any]
