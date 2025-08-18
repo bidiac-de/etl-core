@@ -45,7 +45,8 @@ class FilterComponent(Component):
             metrics: FilterMetrics,
     ) -> AsyncIterator[Mapping[str, object]]:
         """Forward rows that satisfy the rule."""
-        assert self._receiver is not None
+        if self._receiver is None:
+            raise RuntimeError("FilterReceiver not initialized in process_row")
         async for out in self._receiver.process_row(rows, metrics=metrics, rule=self.rule):
             yield out
 
@@ -57,7 +58,8 @@ class FilterComponent(Component):
         """
         Forward the single filtered DataFrame yielded by the receiver (if any).
         """
-        assert self._receiver is not None
+        if self._receiver is None:
+            raise RuntimeError("FilterReceiver not initialized in process_bulk")
         async for df in self._receiver.process_bulk(frames, metrics=metrics, rule=self.rule):
             yield df
 
@@ -68,6 +70,7 @@ class FilterComponent(Component):
             metrics: FilterMetrics,
     ) -> AsyncIterator["dd.DataFrame"]:
         """Forward the lazily filtered Dask DataFrame yielded by the receiver."""
-        assert self._receiver is not None
+        if self._receiver is None:
+            raise RuntimeError("FilterReceiver not initialized in process_bigdata")
         async for out_ddf in self._receiver.process_bigdata(ddf, metrics=metrics, rule=self.rule):
             yield out_ddf
