@@ -60,7 +60,10 @@ class MetaData(MetaDataBase):
             try:
                 value = datetime.fromisoformat(value)
             except ValueError:
-                raise ValueError("Timestamp must be ISO-format datetime string.")
+                raise ValueError(
+                    "Timestamp must be ISO-format datetime string"
+                    " or datetime object."
+                )
 
         if value > datetime.now():
             raise ValueError("Timestamp cannot be in the future.")
