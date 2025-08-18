@@ -27,7 +27,7 @@ class JobExecutionHandler:
     """
 
     # process-wide storage for both execution instances and their job-id
-    _executions_by_job: Dict[str, JobExecution] = {}
+    _running_jobs: Set[str] = set()
     # guard locks to ensure thread-safety
     _guard_lock = threading.Lock()
 
@@ -42,21 +42,21 @@ class JobExecutionHandler:
         top-level method to execute a Job, managing its execution lifecycle
         """
         with self._guard_lock:
-            # check if job is already running
-            existing = self._executions_by_job.get(job.id)
-            if existing is not None:
-                self.logger.warning("Job '%s' already running", job.name)
-                return existing
-
+            if job.id in self._running_jobs:
+                self.logger.warning("Job '%s' is already running", job.name)
+                raise ExecutionAlreadyRunning(
+                    f"Job '{job.name}' ({job.id}) is already running."
+                )
+            # mark as running and create the execution instance
+            self._running_jobs.add(job.id)
             execution = JobExecution(job)
-            self._executions_by_job[job.id] = execution
 
         try:
             return asyncio.run(self._main_loop(execution))
         finally:
             # cleanup in both success/failure paths
             with self._guard_lock:
-                self._executions_by_job.pop(job.id, None)
+                self._running_jobs.discard(job.id)
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
