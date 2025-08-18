@@ -14,7 +14,9 @@ from src.receivers.data_operations_receivers.filter_helper import (
     eval_rule_on_frame,
     eval_rule_on_row,
 )
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import FilterMetrics
+from src.metrics.component_metrics.data_operations_metrics.filter_metrics import (
+    FilterMetrics,
+)
 
 
 class FilterReceiver(Receiver):
@@ -25,10 +27,10 @@ class FilterReceiver(Receiver):
     """
 
     async def process_row(
-            self,
-            rows: Dict[str, Any],
-            rule: ComparisonRule,
-            metrics: FilterMetrics,
+        self,
+        rows: Dict[str, Any],
+        rule: ComparisonRule,
+        metrics: FilterMetrics,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Yield each incoming row that matches the rule."""
         async for row in rows:
@@ -38,11 +40,11 @@ class FilterReceiver(Receiver):
                 yield row
 
     async def process_bulk(
-            self,
-            frames: pd.DataFrame,
-            rule: ComparisonRule,
-            metrics: FilterMetrics,
-    ) ->AsyncGenerator [pd.DataFrame]:
+        self,
+        frames: pd.DataFrame,
+        rule: ComparisonRule,
+        metrics: FilterMetrics,
+    ) -> AsyncGenerator[pd.DataFrame]:
         """
         Consume incoming pandas DataFrame batches, filter them, and
         yield a single concatenated DataFrame if any rows matched.
@@ -66,17 +68,16 @@ class FilterReceiver(Receiver):
         metrics.lines_forwarded = metrics.lines_forwarded + total_forwarded
         metrics.lines_dismissed = metrics.lines_dismissed + max(
             0, total_received - total_forwarded
-)
+        )
 
         if parts:
             yield pd.concat(parts, ignore_index=True)
 
-
     async def process_bigdata(
-            self,
-            ddf: "dd.DataFrame",
-            rule: ComparisonRule,
-            metrics: FilterMetrics,
+        self,
+        ddf: "dd.DataFrame",
+        rule: ComparisonRule,
+        metrics: FilterMetrics,
     ) -> AsyncGenerator["dd.DataFrame"]:
         """
         Build a lazily filtered Dask DataFrame and yield it exactly once.

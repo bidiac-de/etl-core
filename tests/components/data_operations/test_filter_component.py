@@ -6,8 +6,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from components.data_operations.filter.filter_component import FilterComponent
-from components.data_operations.filter.comparison_rule import ComparisonRule
+from src.components.data_operations.filter.filter_component import FilterComponent
+from src.components.data_operations.filter.comparison_rule import ComparisonRule
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
@@ -18,6 +18,7 @@ async def agen_rows(items: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]
     for it in items:
         yield it
         await asyncio.sleep(0)
+
 
 async def aframes(items: List[pd.DataFrame]) -> AsyncIterator[pd.DataFrame]:
     for it in items:
@@ -33,12 +34,14 @@ def patch_strategies(monkeypatch):
       - Bulk: single concatenated DataFrame
       - BigData: dd.DataFrame
     """
+
     async def row_exec(self, component, payload, metrics):
         return [r async for r in component.process_row(payload, metrics=metrics)]
 
     async def bulk_exec(self, component, payload, metrics):
         parts = [f async for f in component.process_bulk(payload, metrics=metrics)]
         import pandas as pd
+
         return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
     async def bigdata_exec(self, component, payload, metrics):
@@ -120,7 +123,6 @@ async def test_filter_component_bigdata(metrics: ComponentMetrics):
         ]
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
-
 
     async for dout in comp.process_bigdata(ddf, metrics=metrics):
         out = dout.compute().sort_values("id")

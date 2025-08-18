@@ -16,10 +16,10 @@ class ExecutionStrategy(BaseModel, ABC):
 
     @abstractmethod
     def execute(
-            self,
-            component: "Component",
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        component: "Component",
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Any]:
         """
         Stream through the component logic, yielding native outputs.

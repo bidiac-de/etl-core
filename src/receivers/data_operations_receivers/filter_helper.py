@@ -10,7 +10,7 @@ try:
 except Exception:
     dd = None
 
-from src.components.data_operations.filter.comparison_rule  import ComparisonRule
+from src.components.data_operations.filter.comparison_rule import ComparisonRule
 
 
 def _ensure_string(series: pd.Series) -> pd.Series:
@@ -22,7 +22,8 @@ def _ensure_string(series: pd.Series) -> pd.Series:
 
 
 def _leaf_mask(
-        df: Union[pd.DataFrame, "dd.DataFrame"], rule: ComparisonRule,
+    df: Union[pd.DataFrame, "dd.DataFrame"],
+    rule: ComparisonRule,
 ) -> pd.Series:
     """Evaluate a single leaf rule against a DataFrame and return a boolean mask."""
     col = rule.column
@@ -68,7 +69,8 @@ def _all_same_column(children: Sequence[ComparisonRule]) -> str | None:
 
 
 def _optimize_or_eq(
-        df: Union[pd.DataFrame, "dd.DataFrame"], children: Sequence[ComparisonRule],
+    df: Union[pd.DataFrame, "dd.DataFrame"],
+    children: Sequence[ComparisonRule],
 ):
     """Optimize OR of many equality checks on one column to a single .isin(...)."""
     if not children or any(c.rules for c in children):
@@ -83,7 +85,8 @@ def _optimize_or_eq(
 
 
 def _optimize_or_contains(
-        df: Union[pd.DataFrame, "dd.DataFrame"], children: Sequence[ComparisonRule],
+    df: Union[pd.DataFrame, "dd.DataFrame"],
+    children: Sequence[ComparisonRule],
 ):
     """Optimize OR of many 'contains' checks on one column into a single regex."""
     if not children or any(c.rules for c in children):
@@ -93,16 +96,17 @@ def _optimize_or_contains(
         return None
     if not all(c.operator == "contains" for c in children):
         return None
-    pat = "|".join(
-        re.escape("" if c.value is None else str(c.value)) for c in children
-    )
+    pat = "|".join(re.escape("" if c.value is None else str(c.value)) for c in children)
     return _ensure_string(df[col]).str.contains(pat, na=False, regex=True)
 
 
 def _optimize_and_neq(
-        df: Union[pd.DataFrame, "dd.DataFrame"], children: Sequence[ComparisonRule],
+    df: Union[pd.DataFrame, "dd.DataFrame"],
+    children: Sequence[ComparisonRule],
 ):
-    """Optimize AND of many inequality checks on one column into a negated .isin(...)."""
+    """
+    Optimize AND of many inequality checks on one column into a negated .isin(...).
+    """
     if not children or any(c.rules for c in children):
         return None
     col = _all_same_column(children)
@@ -153,7 +157,8 @@ def eval_rule_on_frame(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.Series:
 
 
 def eval_rule_on_row(
-        row: Mapping[str, object] | pd.Series, rule: ComparisonRule,
+    row: Mapping[str, object] | pd.Series,
+    rule: ComparisonRule,
 ) -> bool:
     """
     Evaluate a single row (dict/Series) against the rule.

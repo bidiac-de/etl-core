@@ -14,10 +14,10 @@ class RowExecutionStrategy(ExecutionStrategy):
     """
 
     async def execute(
-            self,
-            component: "Component",
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        component: "Component",
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Dict[str, Any]]:
         while True:
             try:

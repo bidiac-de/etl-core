@@ -39,22 +39,25 @@ class ComparisonRule(BaseModel):
     @model_validator(mode="after")
     def _check_either_leaf_or_node(self) -> "ComparisonRule":
         """
-        Validate that the instance is either a leaf or a logical node, not both or neither.
-        Also validate shape constraints for the chosen kind.
+        Validate that the instance is either a leaf or a logical node,
+        not both or neither. Also validate shape constraints for the
+        chosen kind.
         """
         is_leaf = any(
             [
                 self.column is not None,
                 self.operator is not None,
                 self.value is not None,
-                ],
+            ],
         )
         is_node = any([self.logical_operator is not None, self.rules is not None])
 
         if is_leaf and is_node:
             raise ValueError("A rule cannot be both a leaf and a logical node.")
         if not is_leaf and not is_node:
-            raise ValueError("A rule must be either a leaf rule or a logical node rule.")
+            raise ValueError(
+                "A rule must be either a leaf rule or a logical node rule."
+            )
 
         if is_leaf:
             self._validate_leaf_rule()
@@ -75,7 +78,6 @@ class ComparisonRule(BaseModel):
         elif self.logical_operator in ("AND", "OR"):
             if not (self.rules and len(self.rules) >= 1):
                 raise ValueError("'AND'/'OR' requires at least one sub-rule.")
-
 
     def to_mask(self, df: Union[pd.DataFrame, "dd.DataFrame"]):
         """Build a pandas/dask boolean mask for this rule."""
