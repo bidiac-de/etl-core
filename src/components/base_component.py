@@ -45,7 +45,7 @@ class Component(ComponentBase, ABC):
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     next: List[str] = Field(default_factory=list)  # List of names of next components
     layout: Layout = Field(default_factory=lambda: Layout())
-    metadata: MetaData = Field(default_factory=lambda: MetaData())
+    metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
     schema: Schema = Field(..., description="Schema definition for this component")
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
