@@ -29,7 +29,7 @@ def invalidate_job_caches(job_id: Optional[str] = None) -> None:
     in the by-id cache; the list cache is always cleared because its contents
     depend on the full set of jobs.
     """
-    global _JOB_LIST_CACHE  # declare before any use or rebind
+    global _JOB_LIST_CACHE
     with _CACHE_LOCK:
         if job_id is not None:
             _JOB_BY_ID_CACHE.pop(job_id, None)
@@ -42,7 +42,7 @@ def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
         if hit is not None:
             return hit
 
-    # Compute outside of the lock to reduce contention
+    # Compute outside of lock to reduce contention
     try:
         job = job_handler.load_runtime_job(job_id)
     except PersistNotFoundError as exc:
@@ -65,7 +65,7 @@ def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
 
 
 def _cached_job_list(job_handler: JobHandler) -> List[Dict[str, Any]]:
-    global _JOB_LIST_CACHE  # declare before any read or rebind
+    global _JOB_LIST_CACHE
     with _CACHE_LOCK:
         if _JOB_LIST_CACHE is not None:
             # Return a copy to avoid accidental external mutation
@@ -79,7 +79,7 @@ def _cached_job_list(job_handler: JobHandler) -> List[Dict[str, Any]]:
             detail=_error_payload("DB_ERROR", "Failed to list jobs.", **_exc_meta(exc)),
         ) from exc
 
-    # Compute done: write back under lock and return a copy
+    # write back under lock after computing and return a copy
     with _CACHE_LOCK:
         _JOB_LIST_CACHE = list(rows)
         return list(_JOB_LIST_CACHE)

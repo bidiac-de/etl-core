@@ -22,7 +22,7 @@ router = APIRouter(prefix="/configs", tags=["configs"])
 # Keys include registry mode so switches don't leak
 _JOB_SCHEMA_CACHE: Dict[str, Dict[str, Any]] = {}
 _COMPONENT_SCHEMA_CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
-_COMPONENT_TYPES_CACHE: Dict[str, List[str]] = {}  # NEW: cache for /component_types
+_COMPONENT_TYPES_CACHE: Dict[str, List[str]] = {}
 
 _CACHE_LOCK = RLock()
 
@@ -34,7 +34,7 @@ def invalidate_schema_caches() -> None:
     with _CACHE_LOCK:
         _JOB_SCHEMA_CACHE.clear()
         _COMPONENT_SCHEMA_CACHE.clear()
-        _COMPONENT_TYPES_CACHE.clear()  # include component types cache
+        _COMPONENT_TYPES_CACHE.clear()
 
 
 def _cached_job_schema() -> Dict[str, Any]:
