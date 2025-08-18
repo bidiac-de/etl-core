@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Generator, Callable, Iterable
+from fastapi.requests import Request
 
 import pytest
 import os
@@ -107,11 +108,8 @@ def clear_db() -> Generator[None, None, None]:
 
 @pytest.fixture()
 def shared_job_handler(client: TestClient):
-    """
-    Access the single JobHandler created in main.lifespan (app.state).
-    Use this if a test needs to seed data without going through /jobs endpoints.
-    """
-    return client.app.state.job_handler
+    req = Request({"type": "http", "app": client.app})  # method needs request
+    return get_job_handler(req)
 
 
 @pytest.fixture()

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Protocol, List, Optional, Tuple
+from typing import Any, Dict, Protocol, List, Tuple
 
 import requests
 import typer
 
-from src.persistance.handlers.job_handler import JobHandler
-from src.job_execution.job_execution_handler import JobExecutionHandler
 from src.persistance.errors import PersistNotFoundError
 from src.singletons import (
     job_handler as _jh_singleton,
@@ -17,8 +15,8 @@ from src.singletons import (
 
 app = typer.Typer(
     help="ETL control CLI to manage job creation, execution, and monitoring "
-         "from the console. "
-         "can be used locally or remotely via HTTP."
+    "from the console. "
+    "can be used locally or remotely via HTTP."
 )
 
 
