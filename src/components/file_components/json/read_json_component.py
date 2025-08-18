@@ -25,23 +25,23 @@ class ReadJSON(JSON):
         """
         Yield one row (dict) at a time.
         """
-        async for rec in self._receiver.read_row(self.filepath, metrics=metrics):
-            yield rec
+        async for result in self._receiver.read_row(self.filepath, metrics=metrics):
+            yield result
 
     async def process_bulk(
-        self, data: Any, metrics: ComponentMetrics
+        self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """
         Yield pandas DataFrame-Chunks.
         """
-        df = await self._receiver.read_bulk(self.filepath, metrics=metrics)
-        yield df
+        dataframe = await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        yield dataframe
 
     async def process_bigdata(
-        self, chunk_iterable: Any, metrics: ComponentMetrics
+        self, data: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """
         Yield pandas DataFrame pro (Dask-)Partition.
         """
-        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
-        yield ddf
+        dataframe = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        yield dataframe

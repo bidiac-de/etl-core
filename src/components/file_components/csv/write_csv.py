@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, AsyncGenerator, Literal
 import pandas as pd
 import dask.dataframe as dd
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from src.components.file_components.csv.csv_component import CSV
 from src.components.registry import register_component
@@ -22,21 +22,21 @@ class WriteCSV(CSV):
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Write a single row and yield it."""
-        await self._receiver.write_row(self.filepath, metrics=metrics, row=row)
+        await self._receiver.write_row(self.filepath, metrics=metrics, row=row, separator=self.separator)
         yield row
 
     async def process_bulk(
-        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Write full pandas DataFrame and yield it."""
-        await self._receiver.write_bulk(self.filepath, metrics=metrics, data=data)
-        yield data
+        await self._receiver.write_bulk(self.filepath, metrics=metrics, data=dataframe, separator=self.separator)
+        yield dataframe
 
     async def process_bigdata(
-        self, chunk_iterable: Any, metrics: ComponentMetrics
+        self, dataframe: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """Write Dask DataFrame and yield it."""
         await self._receiver.write_bigdata(
-            self.filepath, metrics=metrics, data=chunk_iterable
+            self.filepath, metrics=metrics, data=dataframe, separator=self.separator
         )
-        yield chunk_iterable
+        yield dataframe

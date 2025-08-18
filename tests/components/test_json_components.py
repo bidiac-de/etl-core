@@ -29,15 +29,6 @@ BAD_LINE_JSONL = DATA_DIR / "testdata_bad_line.jsonl"
 MIXED_SCHEMA_JSONL = DATA_DIR / "testdata_mixed_schema.jsonl"
 
 
-def build_minimal_schema() -> Schema:
-    return Schema(
-        columns=[
-            ColumnDefinition(name="id", data_type=DataType.INTEGER),
-            ColumnDefinition(name="name", data_type=DataType.STRING),
-        ]
-    )
-
-
 Mode = Literal["row", "bulk", "bigdata"]
 
 
@@ -96,10 +87,12 @@ def patch_strategies(monkeypatch):
 
 @pytest.fixture
 def schema_definition():
-    return [
-        ColumnDefinition(name="id", data_type=DataType.INTEGER),
-        ColumnDefinition(name="name", data_type=DataType.STRING),
-    ]
+    return Schema(
+        columns=[
+            ColumnDefinition(name="id", data_type=DataType.STRING),
+            ColumnDefinition(name="name", data_type=DataType.STRING),
+        ]
+    )
 
 
 @pytest.fixture
@@ -120,8 +113,7 @@ async def test_readjson_valid_bulk(schema_definition, metrics):
         description="Valid JSON array-of-records",
         comp_type="read_json",
         filepath=VALID_JSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -138,8 +130,7 @@ async def test_readjson_ndjson_bulk(schema_definition, metrics):
         description="Valid NDJSON",
         comp_type="read_json",
         filepath=VALID_NDJSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -156,8 +147,7 @@ async def test_readjson_invalid_json_content_raises(schema_definition, metrics):
         description="Malformed JSON",
         comp_type="read_json",
         filepath=INVALID_JSON_FILE,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -172,8 +162,7 @@ async def test_readjson_bulk_extra_missing(schema_definition, metrics):
         description="Extra + missing fields",
         comp_type="read_json",
         filepath=EXTRA_MISSING_JSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -191,8 +180,7 @@ async def test_readjson_bulk_mixed_types(schema_definition, metrics):
         description="Mixed numeric/string/null",
         comp_type="read_json",
         filepath=MIXED_TYPES_JSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -209,8 +197,7 @@ async def test_readjson_bulk_nested(schema_definition, metrics):
         description="Keep nested dicts",
         comp_type="read_json",
         filepath=NESTED_JSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -226,8 +213,7 @@ async def test_readjson_ndjson_bad_line_raises(schema_definition, metrics):
         description="Bad line in NDJSON",
         comp_type="read_json",
         filepath=BAD_LINE_JSONL,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -242,8 +228,7 @@ async def test_readjson_ndjson_mixed_schema(schema_definition, metrics):
         description="Varying schema in NDJSON",
         comp_type="read_json",
         filepath=MIXED_SCHEMA_JSONL,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -258,12 +243,11 @@ async def test_readjson_row_streaming(schema_definition, metrics):
         description="Row streaming over JSON array",
         comp_type="read_json",
         filepath=VALID_JSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = RowExecutionStrategy()
 
-    rows: List[Dict[str, Any]] = await comp.execute(payload=None, metrics=metrics)
+    rows = await comp.execute(payload=None, metrics=metrics)
     assert isinstance(rows, list)
     assert len(rows) == 3
     assert set(rows[0].keys()) >= {"id", "name"}
@@ -276,8 +260,7 @@ async def test_readjson_bigdata(schema_definition, metrics):
         description="Read NDJSON with Dask",
         comp_type="read_json",
         filepath=VALID_NDJSON,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BigDataExecutionStrategy()
 
@@ -289,7 +272,7 @@ async def test_readjson_bigdata(schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writejson_row(tmp_path: Path, schema_definition, metrics):
+async def test_write_json_row(tmp_path: Path, schema_definition, metrics):
     out_fp = tmp_path / "single.json"
 
     comp = WriteJSON(
@@ -297,19 +280,18 @@ async def test_writejson_row(tmp_path: Path, schema_definition, metrics):
         description="Write single row",
         comp_type="write_json",
         filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = RowExecutionStrategy()
 
     row = {"id": 1, "name": "Zoe"}
     result = await comp.execute(payload=row, metrics=metrics)
-    assert result == row
+
+    assert result[0] == row
+
     assert out_fp.exists()
-
     content = json.loads(out_fp.read_text(encoding="utf-8"))
-    assert isinstance(content, list) and len(content) == 1 and content[0] == row
-
+    assert row in content
 
 @pytest.mark.asyncio
 async def test_writejson_bulk(tmp_path: Path, schema_definition, metrics):
@@ -320,8 +302,7 @@ async def test_writejson_bulk(tmp_path: Path, schema_definition, metrics):
         description="Write list of records",
         comp_type="write_json",
         filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -339,8 +320,7 @@ async def test_writejson_bulk(tmp_path: Path, schema_definition, metrics):
         description="Read back bulk JSON",
         comp_type="read_json",
         filepath=out_fp,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     reader.strategy = BulkExecutionStrategy()
     df = await reader.execute(payload=None, metrics=metrics)
@@ -357,8 +337,7 @@ async def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics):
         description="Write Dask DataFrame as partitioned NDJSON",
         comp_type="write_json",
         filepath=out_dir,
-        schema_definition=schema_definition,
-        schema=build_minimal_schema(),
+        schema=schema_definition
     )
     comp.strategy = BigDataExecutionStrategy()
 

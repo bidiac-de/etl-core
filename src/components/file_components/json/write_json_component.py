@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Literal, Union, AsyncGenerator
-from pydantic import Field, model_validator
+from pydantic import model_validator
 import pandas as pd
+import dask.dataframe as dd
 
 from src.components.file_components.json.json_component import JSON
 from src.components.dataclasses import Layout, MetaData
@@ -28,20 +29,20 @@ class WriteJSON(JSON):
         yield row
 
     async def process_bulk(
-        self, data: Union[List[Dict[str, Any]], pd.DataFrame], metrics: ComponentMetrics
-    ) -> AsyncGenerator[Union[List[Dict[str, Any]], pd.DataFrame], None]:
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
+    ) -> AsyncGenerator[pd.DataFrame, None]:
         """
         Write multiple rows (DataFrame or List[dict]).
         """
-        await self._receiver.write_bulk(self.filepath, metrics=metrics, data=data)
-        yield data
+        await self._receiver.write_bulk(self.filepath, metrics=metrics, data=dataframe)
+        yield dataframe
 
     async def process_bigdata(
-        self, chunk_iterable: Any, metrics: ComponentMetrics
-    ) -> AsyncGenerator[Any, None]:
+        self, dataframe: dd.DataFrame, metrics: ComponentMetrics
+    ) -> AsyncGenerator[dd.DataFrame, None]:
         """
         Write big data (z. B. Dask DataFrame)."""
         await self._receiver.write_bigdata(
-            self.filepath, metrics=metrics, data=chunk_iterable
+            self.filepath, metrics=metrics, data=dataframe
         )
-        yield chunk_iterable
+        yield dataframe

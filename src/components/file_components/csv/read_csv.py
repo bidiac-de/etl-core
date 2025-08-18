@@ -1,7 +1,7 @@
 from typing import Any, Dict, AsyncGenerator, Literal
 import pandas as pd
 import dask.dataframe as dd
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from src.components.file_components.csv.csv_component import CSV
 from src.components.registry import register_component
@@ -33,7 +33,7 @@ class ReadCSV(CSV):
         metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Read whole CSV as a pandas DataFrame."""
-        df = await self._receiver.read_bulk(self.filepath, metrics=metrics)
+        df = await self._receiver.read_bulk(self.filepath, metrics=metrics, separator=self.separator)
         yield df
 
     async def process_bigdata(
@@ -42,5 +42,5 @@ class ReadCSV(CSV):
         metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """Read large CSV as a Dask DataFrame."""
-        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
+        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics, separator=self.separator)
         yield ddf

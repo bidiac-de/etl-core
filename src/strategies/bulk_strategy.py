@@ -20,5 +20,5 @@ class BulkExecutionStrategy(ExecutionStrategy):
         payload: Any,
         metrics: ComponentMetrics,
     ) -> AsyncIterator[pd.DataFrame]:
-        df: pd.DataFrame = await component.process_bulk(payload, metrics)
-        yield df
+        async for df in component.process_bulk(payload, metrics):
+            yield df

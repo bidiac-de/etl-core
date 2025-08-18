@@ -20,5 +20,6 @@ class BigDataExecutionStrategy(ExecutionStrategy):
         payload: Any,
         metrics: ComponentMetrics,
     ) -> AsyncIterator[dd.DataFrame]:
-        ddf: dd.DataFrame = await component.process_bigdata(payload, metrics)
-        yield ddf
+
+        async for ddf in component.process_bigdata(payload, metrics):
+            yield ddf
