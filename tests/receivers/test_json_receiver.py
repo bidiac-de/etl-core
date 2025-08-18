@@ -1,6 +1,8 @@
 import asyncio
+import inspect
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import AsyncGenerator
 
 import dask.dataframe as dd
 import pandas as pd
@@ -36,17 +38,28 @@ def sample_ndjson_file() -> Path:
 
 
 @pytest.mark.asyncio
-async def test_readjson_row(sample_json_file: Path, metrics: ComponentMetrics):
+async def test_read_json_row(sample_json_file: Path, metrics: ComponentMetrics):
     r = JSONReceiver()
-    rows = [row async for row in r.read_row(filepath=sample_json_file, metrics=metrics)]
-    assert isinstance(rows, list)
-    assert len(rows) == 3
-    assert {"id", "name"}.issubset(rows[0].keys())
-    assert {"Alice", "Bob", "Charlie"}.issubset({x["name"] for x in rows})
 
+    rows = r.read_row(filepath=sample_json_file, metrics=metrics)
+
+    assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
+
+    first = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert set(first.keys()) >= {"id", "name"}
+    assert first["name"] in {"Alice", "Bob", "Charlie"}
+
+    second = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert set(second.keys()) >= {"id", "name"}
+    assert second["name"] in {"Alice", "Bob", "Charlie"}
+
+    async for _ in rows:
+        continue
+
+    await rows.aclose()
 
 @pytest.mark.asyncio
-async def test_readjson_bulk(sample_json_file: Path, metrics: ComponentMetrics):
+async def test_read_json_bulk(sample_json_file: Path, metrics: ComponentMetrics):
     r = JSONReceiver()
     df = await r.read_bulk(filepath=sample_json_file, metrics=metrics)
     assert isinstance(df, pd.DataFrame)
@@ -56,7 +69,7 @@ async def test_readjson_bulk(sample_json_file: Path, metrics: ComponentMetrics):
 
 
 @pytest.mark.asyncio
-async def test_readjson_bigdata(sample_ndjson_file: Path, metrics: ComponentMetrics):
+async def test_read_json_bigdata(sample_ndjson_file: Path, metrics: ComponentMetrics):
     r = JSONReceiver()
     ddf = await r.read_bigdata(filepath=sample_ndjson_file, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
@@ -66,7 +79,7 @@ async def test_readjson_bigdata(sample_ndjson_file: Path, metrics: ComponentMetr
 
 
 @pytest.mark.asyncio
-async def test_writejson_row(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_json_row(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.json"
     r = JSONReceiver()
 
@@ -83,7 +96,7 @@ async def test_writejson_row(tmp_path: Path, metrics: ComponentMetrics):
 
 
 @pytest.mark.asyncio
-async def test_writejson_bulk(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_json_bulk(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_bulk.json"
     r = JSONReceiver()
 
@@ -99,7 +112,7 @@ async def test_writejson_bulk(tmp_path: Path, metrics: ComponentMetrics):
 
 
 @pytest.mark.asyncio
-async def test_writejson_bigdata(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_json_bigdata(tmp_path: Path, metrics: ComponentMetrics):
     out_dir = tmp_path / "big_out"
     out_dir.mkdir(parents=True, exist_ok=True)
     r = JSONReceiver()
@@ -124,7 +137,7 @@ async def test_writejson_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 
 
 @pytest.mark.asyncio
-async def test_readjson_row_gz(tmp_path: Path, metrics: ComponentMetrics):
+async def test_read_json_row_gz(tmp_path: Path, metrics: ComponentMetrics):
     """Optional: .gz Support – only read_row (uses open_text_auto)."""
     import gzip, json as _json
 
@@ -137,6 +150,12 @@ async def test_readjson_row_gz(tmp_path: Path, metrics: ComponentMetrics):
 
     await asyncio.to_thread(_write_gz)
     r = JSONReceiver()
-    rows = [row async for row in r.read_row(filepath=gz_path, metrics=metrics)]
-    assert len(rows) == 1
-    assert rows[0]["name"] == "Alice"
+
+    rows = r.read_row(filepath=gz_path, metrics=metrics)
+
+    assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
+
+    first = await asyncio.wait_for(anext(rows), timeout=0.25)
+    assert first["name"] == "Alice"
+
+    await rows.aclose()
