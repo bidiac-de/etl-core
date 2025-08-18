@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Mapping
+from typing import Any, AsyncGenerator, Dict
 
 import pandas as pd
 
@@ -26,35 +26,47 @@ class FilterReceiver(Receiver):
 
     async def process_row(
             self,
-            rows: AsyncIterator[Mapping[str, Any]],
-            *,
-            metrics: FilterMetrics,
+            rows: Dict[str, Any],
             rule: ComparisonRule,
-    ) -> AsyncIterator[Mapping[str, Any]]:
+            metrics: FilterMetrics,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """Yield each incoming row that matches the rule."""
-        _ = metrics
         async for row in rows:
+            metrics.lines_received += 1
             if eval_rule_on_row(row, rule):
+                metrics.lines_forwarded += 1
                 yield row
 
     async def process_bulk(
             self,
-            frames: AsyncIterator[pd.DataFrame],
-            *,
-            metrics: FilterMetrics,
+            frames: pd.DataFrame,
             rule: ComparisonRule,
-    ) -> AsyncIterator[pd.DataFrame]:
+            metrics: FilterMetrics,
+    ) ->AsyncGenerator [pd.DataFrame]:
         """
         Consume incoming pandas DataFrame batches, filter them, and
         yield a single concatenated DataFrame if any rows matched.
         """
-        _ = metrics
         parts: list[pd.DataFrame] = []
-        async for pdf in frames:
-            mask = eval_rule_on_frame(pdf, rule)
-            out = pdf[mask]
-            if not out.empty:
-                parts.append(out)
+        total_received = 0
+        total_forwarded = 0
+
+        async for frame in frames:
+            batch_size = int(len(frame))
+            total_received += batch_size
+
+            mask = eval_rule_on_frame(frame, rule)
+            matched = int(mask.sum())
+            total_forwarded += matched
+
+            if matched:
+                parts.append(frame[mask])
+
+        metrics.lines_received = metrics.lines_received + total_received
+        metrics.lines_forwarded = metrics.lines_forwarded + total_forwarded
+        metrics.lines_dismissed = metrics.lines_dismissed + max(
+            0, total_received - total_forwarded
+)
 
         if parts:
             yield pd.concat(parts, ignore_index=True)
@@ -63,20 +75,34 @@ class FilterReceiver(Receiver):
     async def process_bigdata(
             self,
             ddf: "dd.DataFrame",
-            *,
-            metrics: FilterMetrics,
             rule: ComparisonRule,
-    ) -> AsyncIterator["dd.DataFrame"]:
+            metrics: FilterMetrics,
+    ) -> AsyncGenerator["dd.DataFrame"]:
         """
         Build a lazily filtered Dask DataFrame and yield it exactly once.
         """
-        _ = metrics
+        try:
+            total_received = int(ddf.map_partitions(len).sum().compute())
+        except Exception:
+            total_received = 0
 
-        def _apply(pdf: pd.DataFrame) -> pd.DataFrame:
-            m = eval_rule_on_frame(pdf, rule)
-            return pdf[m]
+        def _apply(partition_frame: pd.DataFrame) -> pd.DataFrame:
+            mask = eval_rule_on_frame(partition_frame, rule)
+            return partition_frame[mask]
 
         filtered = ddf.map_partitions(
-            _apply, meta=getattr(dd, "utils").make_meta(ddf)
+            _apply,
+            meta=getattr(dd, "utils").make_meta(ddf),
+        )
+
+        try:
+            total_forwarded = int(filtered.map_partitions(len).sum().compute())
+        except Exception:
+            total_forwarded = 0
+
+        metrics.lines_received = metrics.lines_received + total_received
+        metrics.lines_forwarded = metrics.lines_forwarded + total_forwarded
+        metrics.lines_dismissed = metrics.lines_dismissed + max(
+            0, total_received - total_forwarded
         )
         yield filtered
