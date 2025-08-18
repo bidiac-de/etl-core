@@ -1,25 +1,58 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Generator
+from typing import Any, AsyncIterator, Dict
+
+import dask.dataframe as dd
+import pandas as pd
+
 from src.receivers.base_receiver import Receiver
 
 
 class ReadDatabaseReceiver(Receiver, ABC):
-    """Abstract receiver for reading data."""
+    """
+    DB-agnostic read receiver supporting row/bulk/bigdata.
 
-    def __init__(self, id: int = 0):
-        super().__init__(id)
+    Contracts:
+      - read_row:     async iterator of dicts (true streaming)
+      - read_bulk:    pandas.DataFrame of all rows
+      - read_bigdata: dask.dataframe.DataFrame built lazily from chunks
 
-    @abstractmethod
-    def read_row(self) -> Dict[str, Any]:
-        """Reads a single row."""
-        pass
-
-    @abstractmethod
-    def read_bulk(self) -> List[Dict[str, Any]]:
-        """Reads multiple rows as list."""
-        pass
+    **driver_kwargs is a generic passthrough for engine-specific options.
+    Generic receivers MUST ignore unknown keys.
+    """
 
     @abstractmethod
-    def read_bigdata(self) -> Generator[Dict[str, Any], None, None]:
-        """Reads big data in a generator/streaming manner."""
-        pass
+    async def read_row(
+        self,
+        *,
+        db: Any,
+        entity_name: str,
+        metrics: Any,
+        batch_size: int = 1000,
+        **driver_kwargs: Any,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def read_bulk(
+        self,
+        *,
+        db: Any,
+        entity_name: str,
+        metrics: Any,
+        **driver_kwargs: Any,
+    ) -> pd.DataFrame:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def read_bigdata(
+        self,
+        *,
+        db: Any,
+        entity_name: str,
+        metrics: Any,
+        chunk_size: int = 100_000,
+        **driver_kwargs: Any,
+    ) -> dd.DataFrame:
+        raise NotImplementedError

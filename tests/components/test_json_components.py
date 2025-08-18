@@ -40,17 +40,23 @@ def build_minimal_schema() -> Schema:
 
 Mode = Literal["row", "bulk", "bigdata"]
 
+
 async def _consume_async_gen(gen: AsyncGenerator):
     items = []
     async for item in gen:
         items.append(item)
     return items
 
+
 async def _coerce_async_result(res: Any, *, mode: Mode, component_type: str):
     if hasattr(res, "__aiter__"):
         items = await _consume_async_gen(res)
         if mode == "row":
-            return items[0] if (component_type == "write_json" and len(items) == 1) else items
+            return (
+                items[0]
+                if (component_type == "write_json" and len(items) == 1)
+                else items
+            )
         return items[0] if items else None
 
     if hasattr(res, "__await__"):
@@ -67,19 +73,26 @@ def patch_strategies(monkeypatch):
 
     async def row_exec(self, component, payload, metrics):
         res = component.process_row(payload, metrics=metrics)
-        return await _coerce_async_result(res, mode="row", component_type=getattr(component, "type", ""))
+        return await _coerce_async_result(
+            res, mode="row", component_type=getattr(component, "type", "")
+        )
 
     async def bulk_exec(self, component, payload, metrics):
         res = component.process_bulk(payload, metrics=metrics)
-        return await _coerce_async_result(res, mode="bulk", component_type=getattr(component, "type", ""))
+        return await _coerce_async_result(
+            res, mode="bulk", component_type=getattr(component, "type", "")
+        )
 
     async def bigdata_exec(self, component, payload, metrics):
         res = component.process_bigdata(payload, metrics=metrics)
-        return await _coerce_async_result(res, mode="bigdata", component_type=getattr(component, "type", ""))
+        return await _coerce_async_result(
+            res, mode="bigdata", component_type=getattr(component, "type", "")
+        )
 
     monkeypatch.setattr(RowExecutionStrategy, "execute", row_exec, raising=True)
     monkeypatch.setattr(BulkExecutionStrategy, "execute", bulk_exec, raising=True)
     monkeypatch.setattr(BigDataExecutionStrategy, "execute", bigdata_exec, raising=True)
+
 
 @pytest.fixture
 def schema_definition():
@@ -87,6 +100,7 @@ def schema_definition():
         ColumnDefinition(name="id", data_type=DataType.INTEGER),
         ColumnDefinition(name="name", data_type=DataType.STRING),
     ]
+
 
 @pytest.fixture
 def metrics() -> ComponentMetrics:
@@ -97,7 +111,6 @@ def metrics() -> ComponentMetrics:
         lines_received=0,
         lines_forwarded=0,
     )
-
 
 
 @pytest.mark.asyncio
@@ -238,7 +251,6 @@ async def test_readjson_ndjson_mixed_schema(schema_definition, metrics):
     assert set(df.columns) >= {"id", "name", "nickname", "active"}
 
 
-
 @pytest.mark.asyncio
 async def test_readjson_row_streaming(schema_definition, metrics):
     comp = ReadJSON(
@@ -255,7 +267,6 @@ async def test_readjson_row_streaming(schema_definition, metrics):
     assert isinstance(rows, list)
     assert len(rows) == 3
     assert set(rows[0].keys()) >= {"id", "name"}
-
 
 
 @pytest.mark.asyncio
@@ -275,7 +286,6 @@ async def test_readjson_bigdata(schema_definition, metrics):
     df = ddf.compute().sort_values("id")
     assert len(df) == 3
     assert {"Alice", "Bob", "Charlie"}.issubset(set(df["name"]))
-
 
 
 @pytest.mark.asyncio
@@ -352,10 +362,15 @@ async def test_writejson_bigdata(tmp_path: Path, schema_definition, metrics):
     )
     comp.strategy = BigDataExecutionStrategy()
 
-    ddf_in = dd.from_pandas(pd.DataFrame([
-        {"id": 10, "name": "Nina"},
-        {"id": 11, "name": "Omar"},
-    ]), npartitions=2)
+    ddf_in = dd.from_pandas(
+        pd.DataFrame(
+            [
+                {"id": 10, "name": "Nina"},
+                {"id": 11, "name": "Omar"},
+            ]
+        ),
+        npartitions=2,
+    )
 
     result = await comp.execute(payload=ddf_in, metrics=metrics)
     assert isinstance(result, dd.DataFrame)

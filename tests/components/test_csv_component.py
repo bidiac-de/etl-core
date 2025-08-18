@@ -3,7 +3,7 @@ import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List, AsyncGenerator, AsyncIterator
+from typing import Dict, Any, List
 
 from src.components.file_components.csv.read_csv import ReadCSV
 from src.components.file_components.csv.write_csv import WriteCSV
@@ -87,6 +87,7 @@ def metrics():
         lines_received=0,
         lines_forwarded=0,
     )
+
 
 @pytest.mark.asyncio
 async def test_readcsv_valid_bulk(schema_definition, metrics):

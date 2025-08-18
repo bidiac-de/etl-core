@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List
-from pydantic import Field, ConfigDict
+from typing import Any, Dict, List
+from pydantic import ConfigDict
 
 from src.components.file_components.file_component import FileComponent
-from src.components.column_definition import ColumnDefinition
 from src.metrics.component_metrics import ComponentMetrics
+
 
 class JSON(FileComponent, ABC):
     """Abstract JSON component, async + streaming (yield)."""
@@ -15,23 +14,28 @@ class JSON(FileComponent, ABC):
         extra="ignore",
     )
 
-
     @abstractmethod
-    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> Dict[str, Any]:
+    async def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> Dict[str, Any]:
         """
         Yield single rows (dict) from file.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bulk(self, data: List[Dict[str, Any]], metrics: ComponentMetrics) -> List[Dict[str, Any]]:
+    async def process_bulk(
+        self, data: List[Dict[str, Any]], metrics: ComponentMetrics
+    ) -> List[Dict[str, Any]]:
         """
         Yield pandas DataFrame chunks.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bigdata(self, chunk_iterable: Any, metrics: ComponentMetrics) -> Any:
+    async def process_bigdata(
+        self, chunk_iterable: Any, metrics: ComponentMetrics
+    ) -> Any:
         """
         Yield pandas DataFrame per (big) chunk/partition (e.g., from Dask).
         """

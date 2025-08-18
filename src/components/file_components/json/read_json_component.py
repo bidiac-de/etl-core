@@ -4,7 +4,6 @@ import pandas as pd
 import dask.dataframe as dd
 
 from src.components.file_components.json.json_component import JSON
-from src.components.dataclasses import Layout, MetaData
 from src.components.registry import register_component
 from src.receivers.files.json_receiver import JSONReceiver
 from src.metrics.component_metrics import ComponentMetrics
@@ -22,7 +21,7 @@ class ReadJSON(JSON):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yield one row (dict) at a time.
@@ -30,9 +29,7 @@ class ReadJSON(JSON):
         async for rec in self._receiver.read_row(self.filepath, metrics=metrics):
             yield rec
 
-    async def process_bulk(
-            self, data: Any, metrics: ComponentMetrics
-    ) -> pd.DataFrame:
+    async def process_bulk(self, data: Any, metrics: ComponentMetrics) -> pd.DataFrame:
         """
         Yield pandas DataFrame-Chunks.
         """
@@ -40,7 +37,7 @@ class ReadJSON(JSON):
         yield df
 
     async def process_bigdata(
-            self, chunk_iterable: Any, metrics: ComponentMetrics
+        self, chunk_iterable: Any, metrics: ComponentMetrics
     ) -> dd.DataFrame:
         """
         Yield pandas DataFrame pro (Dask-)Partition.

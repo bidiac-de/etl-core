@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 
 from src.logging.logging_setup import setup_logging
+from src.api.routers.contexts import router as contexts_router
 
 app = FastAPI()
+app.include_router(contexts_router)
 
 
 if __name__ == "__main__":

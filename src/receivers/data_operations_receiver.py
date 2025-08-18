@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Generator
 from src.receivers.base_receiver import Receiver
 
+
 class DataOperationsReceiver(Receiver, ABC):
     """Abstract base class for receivers that process data."""
 

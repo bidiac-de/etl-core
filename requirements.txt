@@ -39,3 +39,8 @@ types-requests
 black
 flake8
 isort
+pandas
+pymongo
+sqlalchemy
+keyring
+dask
