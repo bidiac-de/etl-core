@@ -14,7 +14,7 @@ from typing import AsyncIterator, Dict, Any
 from src.components.databases.mariadb.mariadb_read import MariaDBRead
 from src.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
-from src.components.databases.connection_handler import ConnectionHandler
+from src.components.databases.sql_connection_handler import SQLConnectionHandler
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.base_strategy import ExecutionStrategy
 from src.components.schema import Schema
@@ -34,6 +34,7 @@ class TestMariaDBIntegration:
             "password": "testpass",
             "database": "testdb"
         }.get(param)
+        mock_credentials.decrypted_password = "testpass"
         context.get_credentials.return_value = mock_credentials
         return context
 
@@ -353,19 +354,20 @@ class TestMariaDBIntegration:
             credentials_id=1
         )
         read_comp.context = mock_context
-        
+
         # Mock the connection handler
-        with patch('src.components.databases.connection_handler.ConnectionHandler.create') as mock_create:
+        with patch('src.components.databases.database.SQLConnectionHandler') as mock_handler_class:
             mock_handler = Mock()
-            mock_handler.connection = Mock()
-            mock_create.return_value = mock_handler
+            mock_handler.build_url.return_value = "mysql://user:pass@localhost:3306/testdb"
+            mock_handler.connect.return_value = None
+            mock_handler_class.return_value = mock_handler
             
-            # Mock the receiver
-            with patch('src.receivers.databases.mariadb.mariadb_receiver.MariaDBReceiver') as mock_receiver_class:
+            # Mock the receiver creation
+            with patch.object(read_comp, '_create_receiver') as mock_create_receiver:
                 mock_receiver = Mock()
-                mock_receiver_class.return_value = mock_receiver
+                mock_create_receiver.return_value = mock_receiver
                 
-                # Setup connection
+                # Call _setup_connection
                 read_comp._setup_connection()
                 
                 # Verify connection was set up

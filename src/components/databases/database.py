@@ -1,18 +1,28 @@
-from abc import abstractmethod, ABC
-from typing import List, Any, Iterable, Dict, AsyncIterator
+# src/components/databases/database.py
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import List, Dict, Any
+
 import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.components.base_component import Component, StrategyType
+from src.components.base_component import Component, StrategyType, get_strategy
 from src.components.column_definition import ColumnDefinition
 from src.components.databases.connection_handler import ConnectionHandler
 from src.context.context import Context
-from src.receivers.databases.mariadb import MariaDBReceiver
+from src.components.databases.sql_connection_handler import SQLConnectionHandler
+from src.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class DatabaseComponent(Component, ABC):
-    """Base class for database components with MariaDB support."""
+    """
+    Base class for database components (Mongo, SQL, ...).
+    
+    Shared, engine-agnostic tuning knobs live here so all receivers/components
+    can use them consistently.
+    """
     
     # Database-specific fields
     host: str = Field(..., description="Database host")
@@ -22,9 +32,37 @@ class DatabaseComponent(Component, ABC):
     query: str = Field(default="", description="SQL query for read operations")
     credentials_id: int = Field(..., description="ID of credentials to use")
     
+    # Engine-agnostic entity name (table / collection / view)
+    entity_name: str = Field(
+        default="",
+        description="name of the target entity (table/collection).",
+    )
+    
+    # Shared throughput knobs
+    row_batch_size: int = Field(
+        default=1_000,
+        ge=1,
+        description="Hint for server-side cursor batch size in row streaming.",
+    )
+    bulk_chunk_size: int = Field(
+        default=50_000,
+        ge=1,
+        description="Records per chunk when writing/reading pandas DataFrames.",
+    )
+    bigdata_partition_chunk_size: int = Field(
+        default=50_000,
+        ge=1,
+        description=(
+            "Records per chunk inside each Dask partition for bigdata mode "
+            "(used by readers/writers)."
+        ),
+    )
+    
     # Private attributes
-    _connection_handler: ConnectionHandler = None
+    _connection_handler: SQLConnectionHandler = None
     _context: Context = None
+    _receiver: Any = None
+    _strategy: Any = None
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -46,7 +84,7 @@ class DatabaseComponent(Component, ABC):
         return self
 
     @property
-    def connection_handler(self) -> ConnectionHandler:
+    def connection_handler(self) -> SQLConnectionHandler:
         return self._connection_handler
 
     @property
@@ -78,7 +116,7 @@ class DatabaseComponent(Component, ABC):
         
         return {
             "user": credentials.get_parameter("user"),
-            "password": credentials.get_parameter("password"),
+            "password": credentials.decrypted_password,
             "database": credentials.get_parameter("database")
         }
 
@@ -90,7 +128,8 @@ class DatabaseComponent(Component, ABC):
         creds = self._get_credentials()
         
         # Create connection handler with credentials
-        self._connection_handler = ConnectionHandler.create(
+        self._connection_handler = SQLConnectionHandler()
+        url = SQLConnectionHandler.build_url(
             db_type="mariadb",
             user=creds["user"],
             password=creds["password"],
@@ -99,8 +138,19 @@ class DatabaseComponent(Component, ABC):
             database=creds["database"]
         )
         
+        # Build engine kwargs from credentials pool settings
+        credentials_obj = self._context.get_credentials(self.credentials_id)
+        engine_kwargs = build_sql_engine_kwargs(credentials_obj)
+        
+        self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
+        
         # Create receiver with new connection
-        self._receiver = MariaDBReceiver(self._connection_handler)
+        self._receiver = self._create_receiver()
+
+    def _create_receiver(self):
+        """Create the appropriate receiver for this database type."""
+        # This should be implemented by concrete subclasses
+        raise NotImplementedError("Subclasses must implement _create_receiver")
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
@@ -123,8 +173,4 @@ class DatabaseComponent(Component, ABC):
     def __del__(self):
         """Cleanup connection when component is destroyed."""
         if hasattr(self, '_connection_handler') and self._connection_handler:
-            self._connection_handler.close()
-
-
-# Import the strategy factory function
-from src.components.base_component import get_strategy
+            self._connection_handler.close_pool(force=True)
