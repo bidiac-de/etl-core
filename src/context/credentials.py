@@ -21,6 +21,7 @@ class Credentials(BaseModel, IContextProvider):
         frozen=False,
     )
 
+    credentials_id: int
     name: str
     user: str
     database: str

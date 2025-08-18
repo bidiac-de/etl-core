@@ -5,18 +5,18 @@ import dask.dataframe as dd
 
 from src.receivers.base_receiver import Receiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.components.databases.connection_handler import ConnectionHandler
+from src.components.databases.sql_connection_handler import SQLConnectionHandler
 
 
 class ReadDatabaseReceiver(Receiver, ABC):
     """Abstract receiver for reading data from databases (async + streaming)."""
 
-    def __init__(self, connection_handler: ConnectionHandler):
+    def __init__(self, connection_handler: SQLConnectionHandler):
         # Use object.__setattr__ to avoid Pydantic validation issues
         object.__setattr__(self, '_connection_handler', connection_handler)
 
     @property
-    def connection_handler(self) -> ConnectionHandler:
+    def connection_handler(self) -> SQLConnectionHandler:
         return self._connection_handler
 
     @abstractmethod

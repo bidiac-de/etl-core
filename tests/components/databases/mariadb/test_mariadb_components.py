@@ -19,7 +19,7 @@ from typing import AsyncIterator, Dict, Any
 from src.components.databases.mariadb.mariadb_read import MariaDBRead
 from src.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.components.databases.mariadb.mariadb import MariaDBComponent
-from src.components.databases.connection_handler import ConnectionHandler
+from src.components.databases.sql_connection_handler import SQLConnectionHandler
 from src.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.base_strategy import ExecutionStrategy
@@ -40,6 +40,7 @@ class TestMariaDBComponents:
             "password": "testpass",
             "database": "testdb"
         }.get(param)
+        mock_credentials.decrypted_password = "testpass"
         context.get_credentials.return_value = mock_credentials
         return context
 
@@ -322,22 +323,27 @@ class TestMariaDBComponents:
             credentials_id=1
         )
         write_comp.context = mock_context
-        
+
         # Mock the connection handler and receiver to avoid real DB connection
-        with patch('src.components.databases.connection_handler.ConnectionHandler.create') as mock_create:
+        with patch('src.components.databases.database.SQLConnectionHandler') as mock_handler_class:
             mock_handler = Mock()
-            mock_handler.connection = Mock()
-            mock_create.return_value = mock_handler
+            mock_handler.build_url.return_value = "mysql://user:pass@localhost:3306/testdb"
+            mock_handler.connect.return_value = None
+            mock_handler_class.return_value = mock_handler
             
-            # Mock the receiver
-            mock_receiver = Mock()
-            write_comp._receiver = mock_receiver
-            
-            # Test build_insert_query
-            write_comp.on_duplicate_key_update = ["name", "email"]
-            
-            # This should not raise an error now
-            assert write_comp.on_duplicate_key_update == ["name", "email"]
+            # Mock the receiver creation
+            with patch.object(write_comp, '_create_receiver') as mock_create_receiver:
+                mock_receiver = Mock()
+                mock_create_receiver.return_value = mock_receiver
+                
+                # Call _setup_connection
+                write_comp._setup_connection()
+                
+                # Verify the insert query building works
+                query = write_comp._build_insert_query(["name", "email"])
+                assert "INSERT INTO users" in query
+                assert "name, email" in query
+                assert "VALUES" in query
 
     def test_mariadb_component_connection_setup(self, mock_context, mock_schema):
         """Test MariaDB component connection setup."""
@@ -354,17 +360,18 @@ class TestMariaDBComponents:
             credentials_id=1
         )
         read_comp.context = mock_context
-        
+
         # Mock the connection handler creation
-        with patch('src.components.databases.connection_handler.ConnectionHandler.create') as mock_create:
+        with patch('src.components.databases.database.SQLConnectionHandler') as mock_handler_class:
             mock_handler = Mock()
-            mock_handler.connection = Mock()
-            mock_create.return_value = mock_handler
+            mock_handler.build_url.return_value = "mysql://user:pass@localhost:3306/testdb"
+            mock_handler.connect.return_value = None
+            mock_handler_class.return_value = mock_handler
             
-            # Mock the receiver
-            with patch('src.receivers.databases.mariadb.mariadb_receiver.MariaDBReceiver') as mock_receiver_class:
+            # Mock the receiver creation
+            with patch.object(read_comp, '_create_receiver') as mock_create_receiver:
                 mock_receiver = Mock()
-                mock_receiver_class.return_value = mock_receiver
+                mock_create_receiver.return_value = mock_receiver
                 
                 # Call _setup_connection
                 read_comp._setup_connection()
