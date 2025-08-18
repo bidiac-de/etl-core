@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
 from pydantic import (
-    BaseModel,
     Field,
     ConfigDict,
     model_validator,
@@ -18,6 +17,7 @@ from src.strategies.base_strategy import ExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
+from src.persistance.base_models.component_base import ComponentBase
 from pandas import DataFrame
 from src.components.schema import Schema
 
@@ -32,7 +32,7 @@ class StrategyType(str, Enum):
     BIGDATA = "bigdata"
 
 
-class Component(BaseModel, ABC):
+class Component(ComponentBase, ABC):
     """
     Base class for all components in the system
     """
@@ -43,10 +43,7 @@ class Component(BaseModel, ABC):
         validate_assignment=True,
     )
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    name: str
-    description: str
-    comp_type: str
-    next: List[str] = []  # List of names of next components from config
+    next: List[str] = Field(default_factory=list)  # List of names of next components
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
     schema: Schema = Field(..., description="Schema definition for this component")
@@ -77,7 +74,7 @@ class Component(BaseModel, ABC):
             raise ValueError("Value must be a non-empty string.")
         return value.strip()
 
-    @field_validator("metadata", mode="before")
+    @field_validator("metadata_", mode="before")
     @classmethod
     def _cast_metadata(cls, v: MetaData | dict) -> MetaData:
         if isinstance(v, MetaData):
