@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set, Tuple, cast
+from typing import Any, Dict, List, Set, cast
 
 from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, select
@@ -24,17 +24,22 @@ BASE_FIELDS: Set[str] = {
     "comp_type",
     "next",
     "layout",
-    "layout_",
-    "metadata",
     "metadata_",
 }
 
 
 def _split_base_and_payload(
-    data: Dict[str, Any],
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    base = {k: v for k, v in data.items() if k in BASE_FIELDS}
-    payload = {k: v for k, v in data.items() if k not in BASE_FIELDS}
+    data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    # normalize possible alias keys into internally used names
+    norm = dict(data)
+    if "metadata" in norm and "metadata_" not in norm:
+        norm["metadata_"] = norm.pop("metadata")
+    if "layout_" in norm and "layout" not in norm:
+        norm["layout"] = norm.pop("layout_")
+
+    base = {k: v for k, v in norm.items() if k in BASE_FIELDS}
+    payload = {k: v for k, v in norm.items() if k not in BASE_FIELDS}
     return base, payload
 
 
