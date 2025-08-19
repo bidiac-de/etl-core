@@ -1,8 +1,9 @@
 from typing import Any, AsyncIterator, TYPE_CHECKING
-import dask.dataframe as dd
 
 from src.strategies.base_strategy import ExecutionStrategy
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
+
+import dask.dataframe as dd
 
 if TYPE_CHECKING:
     from src.components.base_component import Component
@@ -20,5 +21,6 @@ class BigDataExecutionStrategy(ExecutionStrategy):
         payload: Any,
         metrics: ComponentMetrics,
     ) -> AsyncIterator[dd.DataFrame]:
-        ddf: dd.DataFrame = await component.process_bigdata(payload, metrics)
-        yield ddf
+
+        async for ddf in component.process_bigdata(payload, metrics):
+            yield ddf
