@@ -9,7 +9,9 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 
 
 class WriteFileReceiver(Receiver, ABC):
-    """Abstract receiver for writing data (async + streaming-friendly)."""
+    """
+    Abstract receiver for writing data (async + streaming-friendly).
+    """
 
     @abstractmethod
     async def write_row(
