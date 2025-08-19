@@ -1,10 +1,11 @@
 import asyncio
 import logging
+import threading
 from typing import Any, Dict, List, Set
 from collections import deque
 
 from src.components.runtime_state import RuntimeState
-from src.job_execution.job import Job, JobExecution, _Sentinel
+from src.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.components.base_component import Component
 from src.job_execution.job_information_handler import JobInformationHandler
@@ -13,45 +14,49 @@ from src.metrics.metrics_registry import get_metrics_class
 from src.metrics.execution_metrics import ExecutionMetrics
 
 
+class ExecutionAlreadyRunning(Exception):
+    """
+    Raised when attempting to start an execution for a job that is already running.
+    """
+
+
 class JobExecutionHandler:
     """
     Manages executions of multiple Jobs in streaming mode:
-    - Maintains running executions and their attempts
-    - Integrates file and console logging
-    - Records system and component metrics
-    - For each execution attempt, spawns one asyncio worker per component
-    - Retries up to job.num_of_retries
+    ...
     """
 
-    def __init__(
-        self,
-    ) -> None:
+    # process-wide storage for job-ids of currently running jobs
+    _running_jobs: Set[str] = set()
+    # guard locks to ensure thread-safety
+    _guard_lock = threading.Lock()
+
+    def __init__(self) -> None:
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
-        self.running_executions: List[JobExecution] = []
 
-    def execute_job(self, job: Job) -> JobExecution:
+    def execute_job(self, job: RuntimeJob) -> JobExecution:
         """
-        top-level method to execute a Job, managing its execution lifecycle:
-        - checks if the job is already running
-        - initializes a JobExecution instance
-        - starts the main loop for the job execution
-        - handles retries and finalization
-        :param job: Job instance to execute
-        :return: Execution instance containing job execution details
+        top-level method to execute a Job, managing its execution lifecycle
         """
-        # guard condition: dont allow executing the same job multiple times concurrently
-        for exec_ in self.running_executions:
-            if exec_.job == job:
-                self.logger.warning("Job '%s' already running", job.name)
-                return exec_
+        with self._guard_lock:
+            if job.id in self._running_jobs:
+                self.logger.warning("Job '%s' is already running", job.name)
+                raise ExecutionAlreadyRunning(
+                    f"Job '{job.name}' ({job.id}) is already running."
+                )
+            # mark as running and create the execution instance
+            self._running_jobs.add(job.id)
+            execution = JobExecution(job)
 
-        execution = JobExecution(job)
-        self.running_executions.append(execution)
-
-        return asyncio.run(self._main_loop(execution))
+        try:
+            return asyncio.run(self._main_loop(execution))
+        finally:
+            # cleanup in both success/failure paths
+            with self._guard_lock:
+                self._running_jobs.discard(job.id)
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
@@ -256,7 +261,7 @@ class JobExecutionHandler:
 
         while remaining:
             item = await queue.get()
-            if isinstance(item, _Sentinel):
+            if isinstance(item, Sentinel):
                 remaining.discard(item.component_id)
             else:
                 await self._run_component(component, item, metrics, out_queues)
@@ -320,7 +325,6 @@ class JobExecutionHandler:
             self.job_info.logging_handler.log(cm)
 
         # cleanup
-        self.running_executions.remove(execution)
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
     def _finalize_failure(
@@ -333,7 +337,6 @@ class JobExecutionHandler:
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         # cleanup
-        self.running_executions.remove(execution)
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",
             execution.job.name,

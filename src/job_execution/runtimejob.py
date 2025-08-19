@@ -1,27 +1,23 @@
-from typing import List, Dict
+from typing import List, Dict, Self
 from src.components.dataclasses import MetaData
 from pydantic import (
-    BaseModel,
     Field,
     ConfigDict,
-    NonNegativeInt,
     model_validator,
-    field_validator,
     PrivateAttr,
 )
-from collections import Counter
 import asyncio
 
-from src.components.base_component import Component, get_strategy, StrategyType
+from src.components.base_component import Component, get_strategy
 from src.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
+from src.persistance.base_models.job_base import JobBase
 from uuid import uuid4
 import logging
-from src.components.component_registry import component_registry
 
 logger = logging.getLogger("job.ExecutionHandler")
 
 
-class _Sentinel:
+class Sentinel:
     """Unique end-of-stream marker for each component."""
 
     __slots__ = ("component_id",)
@@ -33,7 +29,7 @@ class _Sentinel:
         return f"<Sentinel {self.component_id}>"
 
 
-class Job(BaseModel):
+class RuntimeJob(JobBase):
     """
     Job Objects
     """
@@ -41,60 +37,12 @@ class Job(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True, extra="ignore", validate_assignment=True
     )
-
-    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    name: str = Field(default="default_job_name")
-    num_of_retries: NonNegativeInt = Field(default=0)
-    file_logging: bool = Field(default=False)
-    strategy_type: StrategyType = Field(default=StrategyType.ROW)
-
     components: List[Component] = Field(default_factory=list)
-
-    metadata: MetaData = Field(default_factory=lambda: MetaData(), exclude=True)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _instantiate_components(cls, values: dict) -> dict:
-        raw = values.get("components", [])
-        built: list[Component] = []
-        for comp_data in raw:
-            comp_type = comp_data.get("comp_type")
-            comp_cls = component_registry.get(comp_type)
-            if comp_cls is None:
-                valid_types = list(component_registry.keys())
-                raise ValueError(
-                    f"Unknown component type: {comp_type!r}. "
-                    f"Valid types are: {valid_types}"
-                )
-            built.append(comp_cls(**comp_data))
-        values["components"] = built
-        return values
+    metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
+    _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
 
     @model_validator(mode="after")
-    def _check_names_and_wire(self) -> "Job":
-        # check names for duplicates
-        counts = Counter(c.name for c in self.components)
-        dupes = [name for name, cnt in counts.items() if cnt > 1]
-        if dupes:
-            raise ValueError(f"Duplicate component names: {sorted(dupes)}")
-
-        # create mapping
-        name_map = {c.name: c for c in self.components}
-
-        # wire up components using comprehension
-        for comp in self.components:
-            try:
-                next_objs = [name_map[n] for n in comp.next]
-            except KeyError as e:
-                raise ValueError(f"Unknown next‐component name: {e.args[0]!r}")
-            comp.next_components = next_objs
-            for nxt in next_objs:
-                nxt.prev_components.append(comp)
-
-        return self
-
-    @model_validator(mode="after")
-    def _assign_strategies(self) -> "Job":
+    def _assign_strategies(self) -> Self:
         """
         After wiring, give every component the Job’s strategy.
         """
@@ -103,46 +51,6 @@ class Job(BaseModel):
             comp.strategy = get_strategy(self.strategy_type)
 
         return self
-
-    @field_validator("name", "strategy_type", mode="before")
-    @classmethod
-    def _validate_non_empty_string(cls, value: str) -> str:
-        """
-        Validate that the name, comp_type, and strategy_type are non-empty strings.
-        """
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError("Value must be a non-empty string.")
-        return value.strip()
-
-    @field_validator("num_of_retries", mode="before")
-    @classmethod
-    def _validate_num_of_retries(cls, value: int) -> NonNegativeInt:
-        """
-        Validate that the number of retries is a non-negative integer.
-        """
-        if not isinstance(value, int) or value < 0:
-            raise ValueError("Number of retries must be a non-negative integer.")
-        return NonNegativeInt(value)
-
-    @field_validator("file_logging", mode="before")
-    @classmethod
-    def _validate_file_logging(cls, value: bool) -> bool:
-        """
-        Validate that file_logging is a boolean.
-        """
-        if not isinstance(value, bool):
-            raise ValueError("File logging must be a boolean value.")
-        return value
-
-    @field_validator("metadata", mode="before")
-    @classmethod
-    def _cast_metadata(cls, v: MetaData | dict) -> MetaData:
-        if isinstance(v, MetaData):
-            return v
-        if isinstance(v, dict):
-            # let MetaData do its own validation on timestamps, ids, etc.
-            return MetaData(**v)
-        raise TypeError(f"metadata must be MetaData or dict, got {type(v).__name__}")
 
     @property
     def id(self) -> str:
@@ -157,7 +65,7 @@ class JobExecution:
     Runtime state for one execution of a JobDefinition.
     """
 
-    def __init__(self, job: Job):
+    def __init__(self, job: RuntimeJob):
         self._id: str = str(uuid4())
         self._job = job
         # each execution carries its own retry strategy
@@ -166,8 +74,8 @@ class JobExecution:
         self._attempts: List[ExecutionAttempt] = []
 
         # each component gets its own sentinel instance
-        self._sentinels: Dict[str, _Sentinel] = {
-            comp.id: _Sentinel(comp.id) for comp in job.components
+        self._sentinels: Dict[str, Sentinel] = {
+            comp.id: Sentinel(comp.id) for comp in job.components
         }
 
     def start_attempt(self):
@@ -186,7 +94,7 @@ class JobExecution:
         return self._id
 
     @property
-    def job(self) -> Job:
+    def job(self) -> RuntimeJob:
         return self._job
 
     @property
@@ -205,7 +113,7 @@ class JobExecution:
         return self._retry_strategy
 
     @property
-    def sentinels(self) -> Dict[str, _Sentinel]:
+    def sentinels(self) -> Dict[str, Sentinel]:
         """
         Returns a mapping of component IDs to their sentinels.
         Sentinels are used to mark the end of a stream for each component.
