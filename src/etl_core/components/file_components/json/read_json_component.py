@@ -31,7 +31,7 @@ class ReadJSON(JSON):
         self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """
-        Yield pandas DataFrame-Chunks.
+        Yield pandas DataFrame chunks.
         """
         dataframe = await self._receiver.read_bulk(self.filepath, metrics=metrics)
         yield dataframe
