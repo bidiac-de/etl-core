@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
+
+from astroid.bases import AsyncGenerator
 from pydantic import (
     Field,
     ConfigDict,
@@ -18,7 +20,8 @@ from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.persistance.base_models.component_base import ComponentBase
-from pandas import DataFrame
+import pandas as pd
+import dask.dataframe as dd
 
 
 class StrategyType(str, Enum):
@@ -177,11 +180,11 @@ class Component(ComponentBase, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bulk(self, *args: Any, **kwargs: Any) -> DataFrame:
+    async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[pd.DataFrame]:
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bigdata(self, *args: Any, **kwargs: Any) -> Any:
+    async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[dd.DataFrame]:
         raise NotImplementedError
 
 
