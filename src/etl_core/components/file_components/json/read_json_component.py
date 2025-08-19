@@ -40,7 +40,7 @@ class ReadJSON(JSON):
         self, data: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """
-        Yield pandas DataFrame pro (Dask-)Partition.
+        Yield Dask DataFrame partitions.
         """
         dataframe = await self._receiver.read_bigdata(self.filepath, metrics=metrics)
         yield dataframe
