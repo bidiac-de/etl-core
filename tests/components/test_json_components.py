@@ -4,7 +4,7 @@ import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List, Dict, Any
 
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
@@ -39,263 +39,310 @@ def metrics() -> ComponentMetrics:
 
 
 @pytest.mark.asyncio
-async def test_read_json_valid_bulk(metrics):
+async def test_component_read_json_row_exact(metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="ReadJSON_Row_Valid",
+        description="Row exact read",
+        comp_type="read_json",
+        filepath=VALID_JSON,
+    )
+    comp.strategy = RowExecutionStrategy()
+
+    gen = comp.execute(payload=None, metrics=metrics)
+    assert isinstance(gen, AsyncGenerator)
+
+    collected: List[Dict[str, Any]] = []
+    async for rec in gen:
+        collected.append(rec)
+
+    expected = [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
+        {"id": 3, "name": "Charlie"},
+    ]
+    assert collected == expected
+    assert metrics.lines_received == len(expected)
+
+
+@pytest.mark.asyncio
+async def test_component_read_json_bulk_exact(metrics: ComponentMetrics):
     comp = ReadJSON(
         name="ReadJSON_Bulk_Valid",
-        description="Valid JSON array-of-records",
+        description="Bulk exact read",
         comp_type="read_json",
         filepath=VALID_JSON,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    res = comp.execute(payload=None, metrics=metrics)
-    assert isinstance(res, AsyncGenerator)
-
-    async for df in res:
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) == 3
-        assert {"id", "name"}.issubset(df.columns)
+    gen = comp.execute(payload=None, metrics=metrics)
+    dfs = []
+    async for df in gen:
+        dfs.append(df)
+    assert len(dfs) == 1
+    df = dfs[0].sort_values("id").reset_index(drop=True)
+    expected_df = pd.DataFrame(
+        [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"},
+            {"id": 3, "name": "Charlie"},
+        ]
+    )
+    pd.testing.assert_frame_equal(df, expected_df)
+    assert metrics.lines_received == 3
 
 
 @pytest.mark.asyncio
-async def test_read_json_ndjson_bulk(metrics):
+async def test_component_read_json_bigdata_exact(metrics: ComponentMetrics):
     comp = ReadJSON(
-        name="ReadJSON_Bulk_NDJSON",
-        description="Valid NDJSON",
+        name="ReadJSON_BigData_Valid",
+        description="Bigdata NDJSON read",
         comp_type="read_json",
         filepath=VALID_NDJSON,
     )
-    comp.strategy = BulkExecutionStrategy()
+    comp.strategy = BigDataExecutionStrategy()
 
-    res = comp.execute(payload=None, metrics=metrics)
-    async for df in res:
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) == 3
-        assert {"id", "name"}.issubset(df.columns)
+    gen = comp.execute(payload=None, metrics=metrics)
+    ddfs = []
+    async for ddf in gen:
+        ddfs.append(ddf)
+    assert len(ddfs) == 1
+    df = ddfs[0].compute().sort_values("id").reset_index(drop=True)
+    expected_df = pd.DataFrame(
+        [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"},
+            {"id": 3, "name": "Charlie"},
+        ]
+    )
+    pd.testing.assert_frame_equal(df, expected_df, check_dtype=False)
+    assert metrics.lines_received == 3
+    assert pd.api.types.is_integer_dtype(df["id"])
+    assert df["name"].astype(str).map(type).eq(str).all()
 
 
 @pytest.mark.asyncio
-async def test_read_json_invalid_json_content_raises(metrics):
+async def test_component_read_json_invalid_content_raises(metrics: ComponentMetrics):
     comp = ReadJSON(
-        name="ReadJSON_Invalid_Content",
+        name="ReadJSON_Invalid",
         description="Malformed JSON",
         comp_type="read_json",
         filepath=INVALID_JSON_FILE,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    res = comp.execute(payload=None, metrics=metrics)
+    gen = comp.execute(payload=None, metrics=metrics)
     with pytest.raises(Exception):
-        await anext(res)
+        await anext(gen)
 
 
 @pytest.mark.asyncio
-async def test_read_json_bulk_extra_missing(metrics):
-    comp = ReadJSON(
-        name="ReadJSON_ExtraMissing",
-        description="Extra + missing fields",
-        comp_type="read_json",
-        filepath=EXTRA_MISSING_JSON,
-    )
-    comp.strategy = BulkExecutionStrategy()
-
-    res = comp.execute(payload=None, metrics=metrics)
-    async for df in res:
-        assert isinstance(df, pd.DataFrame)
-        assert {"id", "name"}.issubset(df.columns)
-        assert {"age", "city", "nickname"}.issubset(df.columns)
-
-
-@pytest.mark.asyncio
-async def test_read_json_bulk_mixed_types(metrics):
-    comp = ReadJSON(
-        name="ReadJSON_MixedTypes",
-        description="Mixed numeric/string/null",
-        comp_type="read_json",
-        filepath=MIXED_TYPES_JSON,
-    )
-    comp.strategy = BulkExecutionStrategy()
-
-    res = comp.execute(payload=None, metrics=metrics)
-    async for df in res:
-        assert "score" in df.columns
-        pd.to_numeric(df["score"], errors="coerce")
-
-
-@pytest.mark.asyncio
-async def test_read_json_bulk_nested(metrics):
-    comp = ReadJSON(
-        name="ReadJSON_Nested",
-        description="Keep nested dicts",
-        comp_type="read_json",
-        filepath=NESTED_JSON,
-    )
-    comp.strategy = BulkExecutionStrategy()
-
-    res = comp.execute(payload=None, metrics=metrics)
-    async for df in res:
-        assert "addr" in df.columns
-        assert isinstance(df.iloc[0]["addr"], dict) or df.iloc[0]["addr"] is None
-
-
-@pytest.mark.asyncio
-async def test_read_json_ndjson_bad_line_raises(metrics):
+async def test_component_read_json_ndjson_bad_line_raises(metrics: ComponentMetrics):
     comp = ReadJSON(
         name="ReadJSON_NDJSON_BadLine",
-        description="Bad line in NDJSON",
+        description="NDJSON bad line",
         comp_type="read_json",
         filepath=BAD_LINE_JSONL,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    res = comp.execute(payload=None, metrics=metrics)
+    gen = comp.execute(payload=None, metrics=metrics)
     with pytest.raises(Exception):
-        await anext(res)
+        await anext(gen)
 
 
 @pytest.mark.asyncio
-async def test_read_json_ndjson_mixed_schema(metrics):
+async def test_component_read_json_bulk_extra_missing(metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="ReadJSON_ExtraMissing",
+        description="Extra & missing fields",
+        comp_type="read_json",
+        filepath=EXTRA_MISSING_JSON,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    gen = comp.execute(payload=None, metrics=metrics)
+    async for df in gen:
+        cols = set(df.columns)
+        assert {"id", "name"}.issubset(cols)
+        assert {"age", "city", "nickname"} <= cols
+
+
+@pytest.mark.asyncio
+async def test_component_read_json_bulk_mixed_types(metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="ReadJSON_MixedTypes",
+        description="Mixed column types",
+        comp_type="read_json",
+        filepath=MIXED_TYPES_JSON,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    gen = comp.execute(payload=None, metrics=metrics)
+    async for df in gen:
+        assert "score" in df.columns
+        pd.to_numeric(df["score"], errors="coerce")
+
+
+@pytest.mark.asyncio
+async def test_component_read_json_bulk_nested(metrics: ComponentMetrics):
+    comp = ReadJSON(
+        name="ReadJSON_Nested",
+        description="Nested fields kept",
+        comp_type="read_json",
+        filepath=NESTED_JSON,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    gen = comp.execute(payload=None, metrics=metrics)
+    async for df in gen:
+        assert "addr" in df.columns
+        assert isinstance(df.iloc[0]["addr"], dict) or df.iloc[0]["addr"] is None
+
+
+@pytest.mark.asyncio
+async def test_component_read_json_ndjson_mixed_schema(metrics: ComponentMetrics):
     comp = ReadJSON(
         name="ReadJSON_NDJSON_MixedSchema",
-        description="Varying schema in NDJSON",
+        description="NDJSON varying schema",
         comp_type="read_json",
         filepath=MIXED_SCHEMA_JSONL,
     )
     comp.strategy = BulkExecutionStrategy()
 
-    res = comp.execute(payload=None, metrics=metrics)
-    async for df in res:
-        assert {"id", "name", "nickname", "active"}.issubset(df.columns)
+    gen = comp.execute(payload=None, metrics=metrics)
+    async for df in gen:
+        assert {"id", "name"}.issubset(df.columns)
+        assert {"nickname", "active"} <= set(df.columns)
 
 
 @pytest.mark.asyncio
-async def test_read_json_row_streaming(metrics):
-    comp = ReadJSON(
-        name="ReadJSON_Row_Stream",
-        description="Row streaming over JSON array",
-        comp_type="read_json",
-        filepath=VALID_JSON,
-    )
-    comp.strategy = RowExecutionStrategy()
-
-    rows = comp.execute(payload=None, metrics=metrics)
-    assert isinstance(rows, AsyncGenerator)
-
-    first = await anext(rows)
-    assert {"id", "name"}.issubset(first.keys())
-
-    second = await anext(rows)
-    assert {"id", "name"}.issubset(second.keys())
-
-    await rows.aclose()
-
-
-@pytest.mark.asyncio
-async def test_read_json_bigdata(metrics):
-    comp = ReadJSON(
-        name="ReadJSON_BigData",
-        description="Read NDJSON with Dask",
-        comp_type="read_json",
-        filepath=VALID_NDJSON,
-    )
-    comp.strategy = BigDataExecutionStrategy()
-
-    res = comp.execute(payload=None, metrics=metrics)
-    async for ddf in res:
-        assert isinstance(ddf, dd.DataFrame)
-        df = ddf.compute().sort_values("id")
-        assert len(df) == 3
-        assert {"Alice", "Bob", "Charlie"}.issubset(set(df["name"]))
-
-
-@pytest.mark.asyncio
-async def test_write_json_row(tmp_path: Path, metrics):
-    out_fp = tmp_path / "single.json"
-
+async def test_component_write_json_row(tmp_path: Path, metrics: ComponentMetrics):
+    out_fp = tmp_path / "row.json"
     comp = WriteJSON(
         name="WriteJSON_Row",
-        description="Write single row",
+        description="Write rows (append into JSON array)",
         comp_type="write_json",
         filepath=out_fp,
     )
     comp.strategy = RowExecutionStrategy()
 
-    row = {"id": 1, "name": "Zoe"}
-    res = comp.execute(payload=row, metrics=metrics)
+    rows = [
+        {"id": 10, "name": "Zoe"},
+        {"id": 11, "name": "Liam"},
+    ]
+    for r in rows:
+        gen = comp.execute(payload=r, metrics=metrics)
+        yielded = await anext(gen)
+        assert yielded == r
 
-    yielded = await anext(res)
-    assert yielded == row
-
-    assert out_fp.exists()
+    assert metrics.lines_received == len(rows)
     content = json.loads(out_fp.read_text(encoding="utf-8"))
-    assert row in content
+    assert content == rows
+
+    read_metrics = ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
+    reader = ReadJSON(
+        name="ReadBack_Row",
+        description="Read back rows",
+        comp_type="read_json",
+        filepath=out_fp,
+    )
+    reader.strategy = BulkExecutionStrategy()
+    gen2 = reader.execute(payload=None, metrics=read_metrics)
+    dfs = []
+    async for df in gen2:
+        dfs.append(df)
+    assert len(dfs) == 1
+    df = dfs[0].sort_values("id").reset_index(drop=True)
+    expected_df = pd.DataFrame(rows)
+    pd.testing.assert_frame_equal(df, expected_df)
 
 
 @pytest.mark.asyncio
-async def test_write_json_bulk(tmp_path: Path, metrics):
+async def test_component_write_json_bulk(tmp_path: Path, metrics: ComponentMetrics):
     out_fp = tmp_path / "bulk.json"
-
     comp = WriteJSON(
         name="WriteJSON_Bulk",
-        description="Write list of records",
+        description="Write DataFrame",
         comp_type="write_json",
         filepath=out_fp,
     )
     comp.strategy = BulkExecutionStrategy()
 
     data = pd.DataFrame(
-        [
-            {"id": 1, "name": "A"},
-            {"id": 2, "name": "B"},
-            {"id": 3, "name": "C"},
-        ]
+        [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}]
     )
     gen = comp.execute(payload=data, metrics=metrics)
     await anext(gen, None)
 
-    assert out_fp.exists()
+    assert metrics.lines_received == 3
+    direct = json.loads(out_fp.read_text(encoding="utf-8"))
+    assert direct == data.to_dict(orient="records")
+
+    read_metrics = ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
     reader = ReadJSON(
-        name="ReadBack_Bulk_JSON",
-        description="Read back bulk JSON",
+        name="ReadBack_Bulk",
+        description="Read back bulk",
         comp_type="read_json",
         filepath=out_fp,
     )
     reader.strategy = BulkExecutionStrategy()
-
-    res = reader.execute(payload=None, metrics=metrics)
-    async for df in res:
-        assert list(df.sort_values("id")["name"]) == ["A", "B", "C"]
+    gen2 = reader.execute(payload=None, metrics=read_metrics)
+    dfs = []
+    async for df in gen2:
+        dfs.append(df)
+    df_back = dfs[0].sort_values("id").reset_index(drop=True)
+    pd.testing.assert_frame_equal(
+        df_back, data.sort_values("id").reset_index(drop=True)
+    )
 
 
 @pytest.mark.asyncio
-async def test_write_json_bigdata(tmp_path: Path, metrics):
+async def test_component_write_json_bigdata(tmp_path: Path, metrics: ComponentMetrics):
     out_dir = tmp_path / "big_out"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     comp = WriteJSON(
         name="WriteJSON_BigData",
-        description="Write Dask DataFrame as partitioned NDJSON",
+        description="Write Dask DF to partitioned NDJSON",
         comp_type="write_json",
         filepath=out_dir,
     )
     comp.strategy = BigDataExecutionStrategy()
 
-    ddf_in = dd.from_pandas(
-        pd.DataFrame(
-            [
-                {"id": 10, "name": "Nina"},
-                {"id": 11, "name": "Omar"},
-            ]
-        ),
-        npartitions=2,
-    )
+    pdf = pd.DataFrame([{"id": 50, "name": "X"}, {"id": 51, "name": "Y"}])
+    ddf_in = dd.from_pandas(pdf, npartitions=1)
 
     gen = comp.execute(payload=ddf_in, metrics=metrics)
     await anext(gen, None)
 
+    assert metrics.lines_received == 2
     parts = sorted(out_dir.glob("part-*.jsonl"))
-    assert parts, "No partition files written."
+    assert parts, "Partition files missing"
+
+    parsed: List[Dict[str, Any]] = []
+    for p in parts:
+        with p.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    parsed.append(json.loads(line))
+    parsed_sorted = sorted(parsed, key=lambda x: x["id"])
+    assert parsed_sorted == pdf.sort_values("id").to_dict(orient="records")
 
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
-    df_out = ddf_out.compute().sort_values("id")
-    assert list(df_out["name"]) == ["Nina", "Omar"]
+    df_out = ddf_out.compute().sort_values("id").reset_index(drop=True)
+    pd.testing.assert_frame_equal(
+        df_out, pdf.sort_values("id").reset_index(drop=True), check_dtype=False
+    )
