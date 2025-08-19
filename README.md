@@ -70,6 +70,13 @@ Key features include:
     ```bash
     pip install -r requirements.txt
     ```
+
+4. **Create .env**
+
+    ```plaintext
+    Create a `.env` file in the root, filling in values for the placeholder values found in:
+    etl-core/.env_example
+    ```
 ## Contributions
 
 Contributions are welcome! Please review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests. Your input is highly appreciated as we continuously work to enhance the ETL Core Engine.
