@@ -15,7 +15,7 @@ from src.components.file_components.json.write_json_component import WriteJSON
 
 from src.components.column_definition import ColumnDefinition, DataType
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.components import Schema
+from src.components.schema import Schema
 
 
 DATA_DIR = Path(__file__).parent / "data" / "json"

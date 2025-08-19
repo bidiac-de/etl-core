@@ -1,11 +1,7 @@
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List
-from pydantic import Field, ConfigDict
+from abc import ABC
+from pydantic import ConfigDict
 
 from src.components.file_components.file_component import FileComponent
-from src.components.column_definition import ColumnDefinition
-from src.metrics.component_metrics import ComponentMetrics
 
 
 class JSON(FileComponent, ABC):

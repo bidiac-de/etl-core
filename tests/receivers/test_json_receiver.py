@@ -140,7 +140,8 @@ async def test_write_json_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 @pytest.mark.asyncio
 async def test_read_json_row_gz(tmp_path: Path, metrics: ComponentMetrics):
     """Optional: .gz Support – only read_row (uses open_text_auto)."""
-    import gzip, json as _json
+    import gzip
+    import json as _json
 
     gz_path = tmp_path / "rows.json.gz"
     payload = [{"id": 1, "name": "Alice"}]

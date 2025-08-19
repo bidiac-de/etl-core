@@ -1,11 +1,8 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from enum import Enum
-from typing import Any, Dict, List, Optional
 
-import pandas as pd
 from pydantic import Field, ConfigDict
 from src.components.file_components.file_component import FileComponent
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 class Delimiter(str, Enum):

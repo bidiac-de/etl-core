@@ -1,6 +1,8 @@
+import gzip
+import io
+from typing import Iterator, Dict, Any, Optional, Tuple, List
 from pathlib import Path
-import json, gzip, io
-from typing import Any, Dict, List, Iterator, Optional
+import json
 
 
 def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
@@ -39,15 +41,12 @@ def load_json_records(path: Path) -> List[Dict[str, Any]]:
 
 
 def dump_json_records(path: Path, records: List[Dict[str, Any]], indent: int = 2):
-    """Write a list of record dictionaries as a JSON array (UTF-8, ensure_ascii=False)."""
+    """
+    Write a list of record dictionaries as a JSON array (UTF-8, ensure_ascii=False).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open_text_auto(path, "wt") as f:
         json.dump(records, f, indent=indent, ensure_ascii=False)
-
-
-from typing import Iterator, Dict, Any, Optional, Tuple
-from pathlib import Path
-import json
 
 
 def _is_ndjson_path(p: str) -> bool:
@@ -110,13 +109,17 @@ def _iter_single_object(
 
 
 def _need_more_data(buf: str, j: int) -> bool:
-    """Gibt True zurück, wenn nach dem Überspringen von Trennern/Whitespace kein Token im Buffer steht."""
+    """
+    Gibt True zurück, wenn nach dem Überspringen von Trennern/Whitespace
+    kein Token im Buffer steht.
+    """
     return j >= len(buf)
 
 
 def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
     """
-    Liest den nächsten Chunk. Wenn EOF und Buffer nur Whitespace enthält -> array korrekt beendet (leer rest),
+    Liest den nächsten Chunk. Wenn EOF und Buffer nur Whitespace
+    enthält -> array korrekt beendet (leer rest),
     sonst bleibt der Aufrufer für Fehlermeldung zuständig.
     """
     buf, eof = _append_next_chunk(buf, f, size)

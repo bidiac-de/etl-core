@@ -1,7 +1,6 @@
 import csv
 from pathlib import Path
 from typing import Dict, Any, Generator
-import itertools
 import pandas as pd
 import dask.dataframe as dd
 

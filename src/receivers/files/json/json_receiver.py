@@ -14,8 +14,6 @@ from src.receivers.files.json.json_helper import (
     read_json_row,
 )
 
-from typing import Any
-
 _SENTINEL: Any = object()
 
 

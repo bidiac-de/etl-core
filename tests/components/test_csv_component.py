@@ -5,7 +5,7 @@ import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, AsyncGenerator, List
+from typing import Any, Dict, AsyncGenerator
 
 from src.components.file_components.csv.read_csv import ReadCSV
 from src.components.file_components.csv.write_csv import WriteCSV
@@ -15,7 +15,7 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
-from src.components import Schema
+from src.components.schema import Schema
 
 DATA_DIR = Path(__file__).parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"

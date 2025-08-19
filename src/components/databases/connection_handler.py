@@ -72,7 +72,8 @@ class ConnectionHandler:
             conn = client[database]
 
             print(
-                f"[ConnectionHandler] Created MongoDB connection: {masked_uri}/{database}"
+                f"[ConnectionHandler] Created MongoDB "
+                f"connection: {masked_uri}/{database}"
             )
 
             instance = cls()

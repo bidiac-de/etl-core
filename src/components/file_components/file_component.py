@@ -1,8 +1,6 @@
 from pathlib import Path
-from typing import List, Literal
 from pydantic import Field, model_validator
 from src.components.base_component import Component
-from src.components.column_definition import ColumnDefinition
 from abc import ABC
 
 
