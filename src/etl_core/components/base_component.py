@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Any, Dict, AsyncIterator
 from uuid import uuid4
 
-from astroid.bases import AsyncGenerator
 from pydantic import (
     Field,
     ConfigDict,
