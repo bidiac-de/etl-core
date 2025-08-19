@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Dict, Any, List
+from typing import AsyncIterator, Dict, Any
 import pandas as pd
 import dask.dataframe as dd
 
@@ -13,28 +13,34 @@ class ReadDatabaseReceiver(Receiver, ABC):
 
     def __init__(self, connection_handler: SQLConnectionHandler):
         # Use object.__setattr__ to avoid Pydantic validation issues
-        object.__setattr__(self, '_connection_handler', connection_handler)
+        object.__setattr__(self, "_connection_handler", connection_handler)
 
     @property
     def connection_handler(self) -> SQLConnectionHandler:
         return self._connection_handler
 
     @abstractmethod
-    async def read_row(self, query: str, params: Dict[str, Any], metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
+    async def read_row(
+        self, query: str, params: Dict[str, Any], metrics: ComponentMetrics
+    ) -> AsyncIterator[Dict[str, Any]]:
         """
         Yield single rows (as dicts) from a query.
         """
         pass
 
     @abstractmethod
-    async def read_bulk(self, query: str, params: Dict[str, Any], metrics: ComponentMetrics) -> pd.DataFrame:
+    async def read_bulk(
+        self, query: str, params: Dict[str, Any], metrics: ComponentMetrics
+    ) -> pd.DataFrame:
         """
         Read 'bulk' data as a pandas DataFrame.
         """
         pass
 
     @abstractmethod
-    async def read_bigdata(self, query: str, params: Dict[str, Any], metrics: ComponentMetrics) -> dd.DataFrame:
+    async def read_bigdata(
+        self, query: str, params: Dict[str, Any], metrics: ComponentMetrics
+    ) -> dd.DataFrame:
         """
         Read 'big data' as a Dask DataFrame.
         """

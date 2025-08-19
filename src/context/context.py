@@ -29,7 +29,7 @@ class Context(BaseModel, IContextProvider):
     name: str
     environment: Environment
     parameters: Dict[str, ContextParameter] = Field(default_factory=dict)
-    
+
     # Add credentials storage
     _credentials: Dict[int, Credentials] = {}
 
@@ -69,11 +69,11 @@ class Context(BaseModel, IContextProvider):
             self.parameters[key].value = value
         else:
             raise KeyError(f"Cannot set value, parameter with key '{key}' not found.")
-    
+
     def add_credentials(self, credentials: Credentials) -> None:
         """Add credentials to the context."""
         self._credentials[credentials.credentials_id] = credentials
-    
+
     def get_credentials(self, credentials_id: int) -> Credentials:
         """Get credentials by ID."""
         if credentials_id not in self._credentials:

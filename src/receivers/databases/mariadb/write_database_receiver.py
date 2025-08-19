@@ -13,7 +13,7 @@ class WriteDatabaseReceiver(Receiver, ABC):
 
     def __init__(self, connection_handler: SQLConnectionHandler):
         # Use object.__setattr__ to avoid Pydantic validation issues
-        object.__setattr__(self, '_connection_handler', connection_handler)
+        object.__setattr__(self, "_connection_handler", connection_handler)
 
     @property
     def connection_handler(self) -> SQLConnectionHandler:
@@ -21,10 +21,7 @@ class WriteDatabaseReceiver(Receiver, ABC):
 
     @abstractmethod
     async def write_row(
-            self,
-            table: str,
-            data: Dict[str, Any],
-            metrics: ComponentMetrics
+        self, table: str, data: Dict[str, Any], metrics: ComponentMetrics
     ) -> None:
         """
         Write a single row to a table.
@@ -33,10 +30,10 @@ class WriteDatabaseReceiver(Receiver, ABC):
 
     @abstractmethod
     async def write_bulk(
-            self,
-            table: str,
-            data: Union[pd.DataFrame, List[Dict[str, Any]]],
-            metrics: ComponentMetrics,
+        self,
+        table: str,
+        data: Union[pd.DataFrame, List[Dict[str, Any]]],
+        metrics: ComponentMetrics,
     ) -> None:
         """
         Write multiple rows at once.
@@ -46,10 +43,7 @@ class WriteDatabaseReceiver(Receiver, ABC):
 
     @abstractmethod
     async def write_bigdata(
-            self,
-            table: str,
-            metrics: ComponentMetrics,
-            data: dd.DataFrame
+        self, table: str, metrics: ComponentMetrics, data: dd.DataFrame
     ) -> None:
         """
         Write large datasets (e.g., Dask DataFrame partitions).

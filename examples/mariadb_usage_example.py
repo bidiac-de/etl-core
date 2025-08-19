@@ -14,17 +14,17 @@ from src.metrics.component_metrics.component_metrics import ComponentMetrics
 
 async def example_mariadb_etl():
     """Example of MariaDB ETL operations."""
-    
+
     # Create context and credentials
     context = Context()
     credentials = Credentials(
         credentials_id=1,
         user="etl_user",
         password="secure_password",
-        database="etl_database"
+        database="etl_database",
     )
     context.add_credentials(credentials)
-    
+
     # Create MariaDB Read component
     read_component = MariaDBRead(
         name="read_users",
@@ -37,9 +37,9 @@ async def example_mariadb_etl():
         query="SELECT id, name, email FROM users WHERE active = 1",
         params={},
         strategy_type="bulk",  # Can be "row", "bulk", or "bigdata"
-        schema=None  # Will be set automatically
+        schema=None,  # Will be set automatically
     )
-    
+
     # Create MariaDB Write component
     write_component = MariaDBWrite(
         name="write_processed_users",
@@ -52,21 +52,21 @@ async def example_mariadb_etl():
         strategy_type="bulk",
         batch_size=1000,
         on_duplicate_key_update=["name", "email"],
-        schema=None  # Will be set automatically
+        schema=None,  # Will be set automatically
     )
-    
+
     # Set context for both components
     read_component.context = context
     write_component.context = context
-    
+
     # Create mock metrics
     metrics = ComponentMetrics()
-    
+
     print("=== MariaDB ETL Example ===")
     print(f"Read Component: {read_component.name}")
     print(f"Write Component: {write_component.name}")
     print(f"Strategy: {read_component.strategy_type}")
-    
+
     # Example of using the components
     try:
         # Read data using bulk strategy
@@ -74,20 +74,20 @@ async def example_mariadb_etl():
         df = await read_component.process_bulk(None, metrics)
         print(f"Read {len(df)} rows")
         print(f"Columns: {list(df.columns)}")
-        
+
         # Write data using bulk strategy
         print("\n--- Writing data ---")
-        await write_component.process_bulk(df.to_dict('records'), metrics)
+        await write_component.process_bulk(df.to_dict("records"), metrics)
         print("Data written successfully")
-        
+
     except Exception as e:
         print(f"Error: {e}")
-    
+
     finally:
         # Cleanup connections
-        if hasattr(read_component, '_connection_handler'):
+        if hasattr(read_component, "_connection_handler"):
             read_component._connection_handler.close()
-        if hasattr(write_component, '_connection_handler'):
+        if hasattr(write_component, "_connection_handler"):
             write_component._connection_handler.close()
 
 

@@ -176,7 +176,7 @@ read_comp.strategy_type = "row"
 async for row in read_comp.process_row(None, metrics):
     # Process each row individually
     processed_row = await process_row(row)
-    
+
     # Write processed row
     await write_comp.process_row(processed_row, metrics)
 ```

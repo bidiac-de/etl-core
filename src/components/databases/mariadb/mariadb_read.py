@@ -22,33 +22,31 @@ class MariaDBRead(MariaDBComponent):
         """Build objects after validation."""
         # Call parent _build_objects first
         super()._build_objects()
-        
+
         # Setup connection with credentials
         self._setup_connection()
-        
+
         return self
 
     async def process_row(
-            self, 
-            payload: Any, 
-            metrics: ComponentMetrics
+        self, payload: Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
         """Read rows one-by-one (streaming)."""
         async for result in self._receiver.read_row(self.query, self.params, metrics):
             yield result
 
     async def process_bulk(
-            self,
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> pd.DataFrame:
         """Read query results as a pandas DataFrame."""
         return await self._receiver.read_bulk(self.query, self.params, metrics)
 
     async def process_bigdata(
-            self,
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> dd.DataFrame:
         """Read large query results as a Dask DataFrame."""
         return await self._receiver.read_bigdata(self.query, self.params, metrics)

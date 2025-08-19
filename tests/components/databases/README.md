@@ -88,7 +88,7 @@ Tests verwenden wiederverwendbare Test-Daten:
 
 **✅ Alle Tests erfolgreich!**
 - **Komponenten-Tests**: 12/12 bestanden
-- **Receiver-Tests**: 12/12 bestanden  
+- **Receiver-Tests**: 12/12 bestanden
 - **Integrations-Tests**: 9/9 bestanden
 - **Gesamt**: 33/33 Tests bestanden
 
