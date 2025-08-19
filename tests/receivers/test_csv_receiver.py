@@ -30,9 +30,10 @@ def sample_csv_file() -> Path:
     )
 
 
-
 @pytest.mark.asyncio
-async def test_csvreceiver_read_row_streaming(sample_csv_file: Path, metrics: ComponentMetrics):
+async def test_csvreceiver_read_row_streaming(
+    sample_csv_file: Path, metrics: ComponentMetrics
+):
     r = CSVReceiver()
 
     rows = r.read_row(filepath=sample_csv_file, metrics=metrics, separator=",")
@@ -51,6 +52,7 @@ async def test_csvreceiver_read_row_streaming(sample_csv_file: Path, metrics: Co
 
     await rows.aclose()
 
+
 @pytest.mark.asyncio
 async def test_read_csv_bulk(sample_csv_file: Path, metrics: ComponentMetrics):
     r = CSVReceiver()
@@ -59,6 +61,7 @@ async def test_read_csv_bulk(sample_csv_file: Path, metrics: ComponentMetrics):
     assert len(df) == 3
     assert set(df.columns) == {"id", "name"}
     assert "Bob" in set(df["name"])
+
 
 @pytest.mark.asyncio
 async def test_read_csv_bigdata(sample_csv_file: Path, metrics: ComponentMetrics):
@@ -69,21 +72,29 @@ async def test_read_csv_bigdata(sample_csv_file: Path, metrics: ComponentMetrics
     assert len(df) == 3
     assert "Charlie" in set(df["name"])
 
+
 @pytest.mark.asyncio
 async def test_write_csv_row(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.csv"
     r = CSVReceiver()
 
     await r.write_row(
-        filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"}, separator=","
+        filepath=file_path,
+        metrics=metrics,
+        row={"id": "10", "name": "Daisy"},
+        separator=",",
     )
     await r.write_row(
-        filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"}, separator=","
+        filepath=file_path,
+        metrics=metrics,
+        row={"id": "11", "name": "Eli"},
+        separator=",",
     )
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics, separator=",")
     assert len(df) == 2
     assert set(df["name"]) == {"Daisy", "Eli"}
+
 
 @pytest.mark.asyncio
 async def test_write_csv_bulk(tmp_path: Path, metrics: ComponentMetrics):
@@ -103,6 +114,7 @@ async def test_write_csv_bulk(tmp_path: Path, metrics: ComponentMetrics):
     assert len(df) == 2
     assert set(df["name"]) == {"Finn", "Gina"}
 
+
 @pytest.mark.asyncio
 async def test_write_csv_bigdata(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_big.csv"
@@ -117,7 +129,9 @@ async def test_write_csv_bigdata(tmp_path: Path, metrics: ComponentMetrics):
     )
     ddf_in = dd.from_pandas(pdf, npartitions=1)
 
-    await r.write_bigdata(filepath=file_path, metrics=metrics, data=ddf_in, separator=",")
+    await r.write_bigdata(
+        filepath=file_path, metrics=metrics, data=ddf_in, separator=","
+    )
 
     assert file_path.exists()
 

@@ -2,8 +2,10 @@ from pathlib import Path
 from typing import IO
 from typing import Any
 
+
 class FileReceiverError(Exception):
     pass
+
 
 def resolve_file_path(filepath: Path) -> Path:
     """Resolve a relative or user path and return an absolute path."""

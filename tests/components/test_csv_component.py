@@ -35,6 +35,7 @@ def metrics():
         lines_forwarded=0,
     )
 
+
 @pytest.fixture
 def schema_definition():
     return Schema(
@@ -53,8 +54,7 @@ async def test_read_csv_valid_bulk(metrics, schema_definition):
         comp_type="read_csv",
         filepath=VALID_CSV,
         schema=schema_definition,
-        separator=Delimiter.COMMA
-
+        separator=Delimiter.COMMA,
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -75,7 +75,7 @@ async def test_read_csv_missing_values_bulk(metrics, schema_definition):
         comp_type="read_csv",
         filepath=MISSING_VALUES_CSV,
         schema=schema_definition,
-        separator=Delimiter.COMMA
+        separator=Delimiter.COMMA,
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -97,10 +97,10 @@ async def test_read_csv_row_streaming(schema_definition, metrics):
         comp_type="read_csv",
         filepath=VALID_CSV,
         schema=schema_definition,
-        separator=Delimiter.COMMA
+        separator=Delimiter.COMMA,
     )
     comp.strategy = RowExecutionStrategy()
-    
+
     rows: Dict[str, Any] = comp.execute(payload=None, metrics=metrics)
 
     assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
@@ -116,6 +116,7 @@ async def test_read_csv_row_streaming(schema_definition, metrics):
     assert second["name"] == "Bob"
 
     await rows.aclose()
+
 
 @pytest.mark.asyncio
 async def test_readcsv_bigdata(schema_definition, metrics):
@@ -139,6 +140,7 @@ async def test_readcsv_bigdata(schema_definition, metrics):
         assert pdf.iloc[0, 1] == "Alice"
         assert pdf.iloc[1, 0] == "2"
 
+
 @pytest.mark.asyncio
 async def test_writecsv_row(tmp_path: Path, schema_definition, metrics):
     out_fp = tmp_path / "single.csv"
@@ -149,7 +151,7 @@ async def test_writecsv_row(tmp_path: Path, schema_definition, metrics):
         comp_type="write_csv",
         filepath=out_fp,
         schema=schema_definition,
-        separator=Delimiter.COMMA
+        separator=Delimiter.COMMA,
     )
     comp.strategy = RowExecutionStrategy()
 
@@ -162,6 +164,7 @@ async def test_writecsv_row(tmp_path: Path, schema_definition, metrics):
 
     assert content[0] == "id,name"
     assert content[1] == "1,Zoe"
+
 
 @pytest.mark.asyncio
 async def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics):
@@ -176,11 +179,13 @@ async def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics):
         schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
-    data = pd.DataFrame([
-        {"id": "1", "name": "A"},
-        {"id": "2", "name": "B"},
-        {"id": "3", "name": "C"},
-    ])
+    data = pd.DataFrame(
+        [
+            {"id": "1", "name": "A"},
+            {"id": "2", "name": "B"},
+            {"id": "3", "name": "C"},
+        ]
+    )
 
     await anext(comp.execute(payload=data, metrics=metrics), None)
 
@@ -193,7 +198,7 @@ async def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics):
     assert content[2] == "2,B"
     assert content[3] == "3,C"
 
-    
+
 @pytest.mark.asyncio
 async def test_writecsv_bigdata(tmp_path: Path, schema_definition, metrics):
     out_fp = tmp_path / "big.csv"

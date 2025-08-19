@@ -28,19 +28,19 @@ class ReadCSV(CSV):
             yield result
 
     async def process_bulk(
-        self,
-        dataframe: pd.DataFrame,
-        metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Read whole CSV as a pandas DataFrame."""
-        df = await self._receiver.read_bulk(self.filepath, metrics=metrics, separator=self.separator)
+        df = await self._receiver.read_bulk(
+            self.filepath, metrics=metrics, separator=self.separator
+        )
         yield df
 
     async def process_bigdata(
-        self,
-        dataframe: pd.DataFrame,
-        metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """Read large CSV as a Dask DataFrame."""
-        ddf = await self._receiver.read_bigdata(self.filepath, metrics=metrics, separator=self.separator)
+        ddf = await self._receiver.read_bigdata(
+            self.filepath, metrics=metrics, separator=self.separator
+        )
         yield ddf

@@ -67,7 +67,11 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         return ddf
 
     async def write_row(
-        self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any], separator: str
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        row: Dict[str, Any],
+        separator: str,
     ):
         """Append one row to a CSV file."""
         metrics.lines_received += 1
@@ -75,7 +79,11 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += 1
 
     async def write_bulk(
-        self, filepath: Path, metrics: ComponentMetrics, data: pd.DataFrame, separator: str
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: pd.DataFrame,
+        separator: str,
     ):
         """Write multiple rows to a CSV file."""
         metrics.lines_received += len(data)
@@ -83,13 +91,19 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += len(data)
 
     async def write_bigdata(
-            self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame, separator: str
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: dd.DataFrame,
+        separator: str,
     ):
         """Write large dataset to a CSV file."""
         try:
             data = await asyncio.to_thread(data.persist)
         except Exception as e:
-            raise FileReceiverError(f"Failed to persist dataframe before write: {e}") from e
+            raise FileReceiverError(
+                f"Failed to persist dataframe before write: {e}"
+            ) from e
 
         try:
             row_count = await asyncio.to_thread(
@@ -99,7 +113,9 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
             raise FileReceiverError(f"Failed to count rows; aborting write: {e}") from e
 
         try:
-            await asyncio.to_thread(write_csv_bigdata, filepath, data, separator=separator)
+            await asyncio.to_thread(
+                write_csv_bigdata, filepath, data, separator=separator
+            )
         except Exception as e:
             raise FileReceiverError(f"Failed to write CSV: {e}") from e
 

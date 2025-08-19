@@ -21,6 +21,7 @@ BASE_FIELDS: Set[str] = {
     "next",
     "layout",
     "metadata_",
+    "schema",
 }
 
 

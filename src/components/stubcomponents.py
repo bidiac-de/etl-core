@@ -2,16 +2,20 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List
 
-from pydantic import PrivateAttr
+from pydantic import PrivateAttr, Field
 
 from src.components.base_component import Component
 from src.components.component_registry import register_component
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.receivers.base_receiver import Receiver
+from src.components.schema import Schema
 
 
 @register_component("test", hidden=True)
 class StubComponent(Component):
+    # default to satisfy schema requirements
+    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
+
     def _build_objects(self) -> "StubComponent":
         """Wire a trivial receiver."""
         self._receiver = StubReceiver()
@@ -63,8 +67,12 @@ class FailStubComponent(StubComponent):
 
 @register_component("stub_fail_once", hidden=True)
 class StubFailOnce(Component):
-    """Fails the first time, succeeds on the next try."""
+    """
+    Fails the first time, succeeds on the next try.
+    """
 
+    # default to satisfy schema requirements
+    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
     _called: bool = PrivateAttr(default=False)
 
     def _build_objects(self) -> "StubFailOnce":
@@ -110,6 +118,8 @@ class MultiSource(Component):
     Emits multiple rows in a streaming fashion; used by pipeline tests.
     """
 
+    # default to satisfy schema requirements
+    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
     count: int = 2
     _emitted: int = PrivateAttr(default=0)
 
@@ -142,6 +152,9 @@ class MultiEcho(Component):
     """
     Echoes each received row downstream; used by pipeline tests.
     """
+
+    # default to satisfy schema requirements
+    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
 
     def _build_objects(self) -> "MultiEcho":
         self._receiver = StubReceiver()

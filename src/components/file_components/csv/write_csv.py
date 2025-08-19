@@ -22,14 +22,18 @@ class WriteCSV(CSV):
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Write a single row and yield it."""
-        await self._receiver.write_row(self.filepath, metrics=metrics, row=row, separator=self.separator)
+        await self._receiver.write_row(
+            self.filepath, metrics=metrics, row=row, separator=self.separator
+        )
         yield row
 
     async def process_bulk(
         self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Write full pandas DataFrame and yield it."""
-        await self._receiver.write_bulk(self.filepath, metrics=metrics, data=dataframe, separator=self.separator)
+        await self._receiver.write_bulk(
+            self.filepath, metrics=metrics, data=dataframe, separator=self.separator
+        )
         yield dataframe
 
     async def process_bigdata(

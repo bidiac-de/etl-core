@@ -8,9 +8,7 @@ import dask.dataframe as dd
 from src.receivers.files.file_helper import resolve_file_path, ensure_exists, open_file
 
 
-def read_csv_row(
-    path: Path, separator: str
-) -> Generator[Dict[str, Any], None, None]:
+def read_csv_row(path: Path, separator: str) -> Generator[Dict[str, Any], None, None]:
     """Yield CSV rows as dicts, read sequentially from file"""
     path = resolve_file_path(path)
     ensure_exists(path)
@@ -27,7 +25,9 @@ def read_csv_bulk(path: Path, separator: str) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, sep=separator)
 
 
-def read_csv_bigdata(path: Path, separator: str, blocksize: str = "16MB") -> dd.DataFrame:
+def read_csv_bigdata(
+    path: Path, separator: str, blocksize: str = "16MB"
+) -> dd.DataFrame:
     """Read large CSV as a Dask DataFrame in chunks."""
     path = resolve_file_path(path)
     ensure_exists(path)
@@ -48,7 +48,7 @@ def write_csv_row(path: Path, row: Dict[str, Any], separator: str):
 def write_csv_bulk(path: Path, data: pd.DataFrame, separator: str):
     """Write multiple rows to CSV."""
     path = resolve_file_path(path)
-    
+
     if data.empty:
         # Leere Datei anlegen
         with open_file(path, "w", newline=""):

@@ -50,7 +50,6 @@ def metrics() -> ComponentMetrics:
     )
 
 
-
 @pytest.mark.asyncio
 async def test_read_json_valid_bulk(schema_definition, metrics):
     comp = ReadJSON(
@@ -189,7 +188,6 @@ async def test_read_json_ndjson_mixed_schema(schema_definition, metrics):
         assert {"id", "name", "nickname", "active"}.issubset(df.columns)
 
 
-
 @pytest.mark.asyncio
 async def test_read_json_row_streaming(schema_definition, metrics):
     comp = ReadJSON(
@@ -213,7 +211,6 @@ async def test_read_json_row_streaming(schema_definition, metrics):
     await rows.aclose()
 
 
-
 @pytest.mark.asyncio
 async def test_read_json_bigdata(schema_definition, metrics):
     comp = ReadJSON(
@@ -231,7 +228,6 @@ async def test_read_json_bigdata(schema_definition, metrics):
         df = ddf.compute().sort_values("id")
         assert len(df) == 3
         assert {"Alice", "Bob", "Charlie"}.issubset(set(df["name"]))
-
 
 
 @pytest.mark.asyncio

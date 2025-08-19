@@ -58,6 +58,7 @@ async def test_read_json_row(sample_json_file: Path, metrics: ComponentMetrics):
 
     await rows.aclose()
 
+
 @pytest.mark.asyncio
 async def test_read_json_bulk(sample_json_file: Path, metrics: ComponentMetrics):
     r = JSONReceiver()
