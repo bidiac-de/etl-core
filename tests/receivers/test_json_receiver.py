@@ -54,7 +54,7 @@ async def test_read_json_row_exact(sample_json_file: Path, metrics: ComponentMet
         {"id": 2, "name": "Bob"},
         {"id": 3, "name": "Charlie"},
     ]
-    assert collected == expected, "Reihenfolge oder Inhalte weichen ab"
+    assert collected == expected, "order or content does not match"
     assert metrics.lines_received == len(expected)
 
 
@@ -117,7 +117,7 @@ async def test_write_json_row_and_re_read(tmp_path: Path, metrics: ComponentMetr
         if isinstance(loaded, list):
             parsed_direct = loaded
         else:
-            pytest.fail(f"Unerwartete JSON-Struktur (kein Array): {type(loaded)}")
+            pytest.fail(f"unexpected JSON-Structure (no array): {type(loaded)}")
     except json.JSONDecodeError:
         parsed_direct = [
             json.loads(line) for line in raw_text.splitlines() if line.strip()
@@ -127,7 +127,7 @@ async def test_write_json_row_and_re_read(tmp_path: Path, metrics: ComponentMetr
         {"id": 10, "name": "Daisy"},
         {"id": 11, "name": "Eli"},
     ]
-    assert parsed_direct == expected_list, "Direkter Dateiinhalt stimmt nicht"
+    assert parsed_direct == expected_list, "Direct Content does not match"
 
     read_metrics = ComponentMetrics(
         started_at=datetime.now(),
@@ -163,7 +163,7 @@ async def test_write_json_bulk_exact(tmp_path: Path, metrics: ComponentMetrics):
     assert direct_obj == [
         {"id": 20, "name": "Finn"},
         {"id": 21, "name": "Gina"},
-    ], "Direktes Parsen (bulk array) stimmt nicht"
+    ], "direct parsing (bulk array) does not match"
 
     read_metrics = ComponentMetrics(
         started_at=datetime.now(),
@@ -196,7 +196,7 @@ async def test_write_json_bigdata_roundtrip(tmp_path: Path, metrics: ComponentMe
     assert metrics.lines_received == 2
 
     parts = sorted(out_dir.glob("part-*.jsonl"))
-    assert parts, "Es wurden keine Partitionen geschrieben"
+    assert parts, "No partitiones wrote"
 
     parsed_lines = []
     for p in parts:
@@ -208,7 +208,7 @@ async def test_write_json_bigdata_roundtrip(tmp_path: Path, metrics: ComponentMe
     parsed_lines_sorted = sorted(parsed_lines, key=lambda x: x["id"])
     assert parsed_lines_sorted == pdf.sort_values("id").to_dict(
         orient="records"
-    ), "Direktes Parsen (bigdata jsonl) stimmt nicht"
+    ), "Direct parsing (bigdata) does not match"
 
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")
     df_out = ddf_out.compute().sort_values("id").reset_index(drop=True)
@@ -222,7 +222,7 @@ async def test_read_json_row_gz(
     sample_json_file: Path, tmp_path: Path, metrics: ComponentMetrics
 ):
     """
-    Test .gz Lesepfad (nur row-basiert), erzeugt komprimierte Datei on-the-fly.
+    Test .gz read path (row base only), produces compromised file on-the-fly.
     """
     import gzip
     import json
