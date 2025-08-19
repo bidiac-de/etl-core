@@ -7,15 +7,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, AsyncGenerator
 
-from src.components.file_components.csv.read_csv import ReadCSV
-from src.components.file_components.csv.write_csv import WriteCSV
-from src.components.column_definition import ColumnDefinition, DataType
-from src.components.file_components.csv.csv_component import Delimiter
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.strategies.row_strategy import RowExecutionStrategy
-from src.strategies.bulk_strategy import BulkExecutionStrategy
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
-from src.components.schema import Schema
+from etl_core.components.file_components.csv.read_csv import ReadCSV
+from etl_core.components.file_components.csv.write_csv import WriteCSV
+from etl_core.components.column_definition import ColumnDefinition, DataType
+from etl_core.components.file_components.csv.csv_component import Delimiter
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.strategies.row_strategy import RowExecutionStrategy
+from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
+from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
+from etl_core.components.schema import Schema
 
 DATA_DIR = Path(__file__).parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"

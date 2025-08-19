@@ -1,7 +1,7 @@
-from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.components.runtime_state import RuntimeState
-import src.job_execution.runtimejob as runtimejob_module
-from src.components.stubcomponents import StubComponent
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
+from etl_core.components.runtime_state import RuntimeState
+import etl_core.job_execution.runtimejob as runtimejob_module
+from etl_core.components.stubcomponents import StubComponent
 from datetime import datetime
 from tests.helpers import get_component_by_name, runtime_job_from_config
 

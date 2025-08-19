@@ -1,4 +1,4 @@
-from src.components.column_definition import ColumnDefinition, DataType
+from etl_core.components.column_definition import ColumnDefinition, DataType
 
 
 def test_column_definition():

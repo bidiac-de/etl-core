@@ -1,7 +1,7 @@
 from typing import Iterable, List, Dict, Union, Any, Mapping
-from src.components.base_component import Component
-from src.job_execution.runtimejob import RuntimeJob
-from src.persistance.configs.job_config import JobConfig
+from etl_core.components.base_component import Component
+from etl_core.job_execution.runtimejob import RuntimeJob
+from etl_core.persistance.configs.job_config import JobConfig
 
 
 def get_component_by_name(job: "RuntimeJob", name: str) -> "Component":

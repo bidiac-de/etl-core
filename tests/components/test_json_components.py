@@ -6,16 +6,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
-from src.strategies.row_strategy import RowExecutionStrategy
-from src.strategies.bulk_strategy import BulkExecutionStrategy
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+from etl_core.strategies.row_strategy import RowExecutionStrategy
+from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
+from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 
-from src.components.file_components.json.read_json_component import ReadJSON
-from src.components.file_components.json.write_json_component import WriteJSON
+from etl_core.components.file_components.json.read_json_component import ReadJSON
+from etl_core.components.file_components.json.write_json_component import WriteJSON
 
-from src.components.column_definition import ColumnDefinition, DataType
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.components.schema import Schema
+from etl_core.components.column_definition import ColumnDefinition, DataType
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.components.schema import Schema
 
 
 DATA_DIR = Path(__file__).parent / "data" / "json"

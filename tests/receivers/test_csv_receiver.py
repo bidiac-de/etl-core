@@ -8,8 +8,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from src.receivers.files.csv.csv_receiver import CSVReceiver
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.files.csv.csv_receiver import CSVReceiver
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 @pytest.fixture

@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from src.persistance.db import engine
-from src.persistance.table_definitions import (
+from etl_core.persistance.db import engine
+from etl_core.persistance.table_definitions import (
     ComponentTable,
     JobTable,
     MetaDataTable,
