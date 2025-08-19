@@ -225,7 +225,7 @@ async def test_read_json_row_gz(
     Test .gz Lesepfad (nur row-basiert), erzeugt komprimierte Datei on-the-fly.
     """
     import gzip
-    import _json
+    import json
 
     gz_path = tmp_path / "rows.json.gz"
     payload = [
@@ -235,7 +235,7 @@ async def test_read_json_row_gz(
 
     def _write_gz():
         with gzip.open(gz_path, "wt", encoding="utf-8") as f:
-            _json.dump(payload, f)
+            json.dump(payload, f)
 
     await asyncio.to_thread(_write_gz)
 

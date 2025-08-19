@@ -123,7 +123,6 @@ def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
     """
     buf, eof = _append_next_chunk(buf, f, size)
     if eof and not buf.strip():
-        # Signal: noting useful in buffer
         return buf, True
     return buf, False
 
@@ -140,7 +139,6 @@ def _ensure_token(buf: str, f, size: int) -> Tuple[Optional[int], str]:
             return j, buf
         buf, closed = _fetch_or_close(buf, f, size)
         if closed:
-            # no more tokens --> empty/fully read array
             return None, buf
 
 
@@ -169,10 +167,8 @@ def _iter_array(
     while True:
         j, buf = _ensure_token(buf, f, size)
         if j is None:
-            # clean end of array, no more token
             return
         if buf[j] == "]":
-            # closing bracket found
             return
         obj, buf = _decode_or_read(dec, buf, j, f, size)
         yield obj
