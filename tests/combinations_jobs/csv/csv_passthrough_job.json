@@ -1,0 +1,36 @@
+{
+  "name": "CsvPassthroughJob",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "row",
+  "metadata": {
+    "created_by": "pytest",
+    "created_at": "2025-08-19T14:00:00"
+  },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_csv",
+      "filepath": "INPUT_REPLACED_BY_TEST",
+      "separator": ",",
+      "schema": {
+        "columns": [
+          { "name": "id", "dtype": "int64" },
+          { "name": "name", "dtype": "string" }
+        ]
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "filepath": "OUTPUT_REPLACED_BY_TEST",
+      "separator": ",",
+      "schema": {
+        "columns": [
+          { "name": "id", "dtype": "int64" },
+          { "name": "name", "dtype": "string" }
+        ]
+      }
+    }
+  ]
+}
