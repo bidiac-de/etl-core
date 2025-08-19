@@ -6,14 +6,13 @@ with the MariaDB components.
 """
 
 import pytest
-from unittest.mock import Mock
 
 from src.etl_core.context.credentials import Credentials
 from src.etl_core.context.context import Context
 from src.etl_core.context.environment import Environment
 from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.schema import Schema
+from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class TestCredentialsIntegration:
@@ -55,11 +54,6 @@ class TestCredentialsIntegration:
         # Add credentials to context
         context.add_credentials(sample_credentials)
         return context
-
-    @pytest.fixture
-    def mock_schema(self):
-        """Create mock schema."""
-        return Mock(spec=Schema)
 
     def test_credentials_creation(self, sample_credentials):
         """Test that Credentials objects are created correctly."""
@@ -109,13 +103,12 @@ class TestCredentialsIntegration:
         assert retrieved == new_creds
         assert retrieved.user == "user2"
 
-    def test_mariadb_component_with_real_credentials(self, sample_context, mock_schema):
+    def test_mariadb_component_with_real_credentials(self, sample_context):
         """Test that MariaDBRead works with real credentials."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -139,9 +132,6 @@ class TestCredentialsIntegration:
         assert sample_credentials.get_parameter("pool_max_size") == 10
         assert sample_credentials.get_parameter("pool_timeout_s") == 30
 
-        # Test that these can be used by pool_args
-        from src.components.databases.pool_args import build_sql_engine_kwargs
-
         engine_kwargs = build_sql_engine_kwargs(sample_credentials)
         assert engine_kwargs["pool_size"] == 10
         assert engine_kwargs["pool_timeout"] == 30
@@ -159,9 +149,6 @@ class TestCredentialsIntegration:
         # Test that pool parameters return None
         assert creds.get_parameter("pool_max_size") is None
         assert creds.get_parameter("pool_timeout_s") is None
-
-        # Test pool_args with minimal credentials
-        from src.components.databases.pool_args import build_sql_engine_kwargs
 
         engine_kwargs = build_sql_engine_kwargs(creds)
         # Should be empty dict when no pool settings
@@ -358,15 +345,12 @@ class TestCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    def test_credentials_in_mariadb_component_integration(
-        self, sample_context, mock_schema
-    ):
+    def test_credentials_in_mariadb_component_integration(self, sample_context):
         """Test complete integration of credentials in MariaDB component."""
         read_comp = MariaDBRead(
             name="integration_test",
             description="Integration test component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users WHERE id = %(id)s",

@@ -22,7 +22,6 @@ from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.etl_core.strategies.base_strategy import ExecutionStrategy
-from src.etl_core.components.schema import Schema
 
 
 class TestMariaDBIntegration:
@@ -51,12 +50,6 @@ class TestMariaDBIntegration:
         metrics.set_completed = Mock()
         metrics.set_failed = Mock()
         return metrics
-
-    @pytest.fixture
-    def mock_schema(self):
-        """Create mock schema."""
-        schema = Mock(spec=Schema)
-        return schema
 
     @pytest.fixture
     def sample_data(self):
@@ -106,7 +99,7 @@ class TestMariaDBIntegration:
 
     @pytest.mark.asyncio
     async def test_read_to_write_pipeline(
-        self, mock_context, mock_metrics, sample_data, mock_schema
+        self, mock_context, mock_metrics, sample_data
     ):
         """Test complete read to write pipeline."""
         # Create read component
@@ -114,7 +107,6 @@ class TestMariaDBIntegration:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -129,7 +121,6 @@ class TestMariaDBIntegration:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -171,14 +162,13 @@ class TestMariaDBIntegration:
 
     @pytest.mark.asyncio
     async def test_row_strategy_streaming(
-        self, mock_context, mock_metrics, sample_data, mock_schema
+        self, mock_context, mock_metrics, sample_data
     ):
         """Test row strategy streaming with MariaDB components."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users WHERE id = %(id)s",
@@ -220,15 +210,12 @@ class TestMariaDBIntegration:
         assert results[1]["id"] == 2
 
     @pytest.mark.asyncio
-    async def test_bigdata_strategy(
-        self, mock_context, mock_metrics, sample_ddf, mock_schema
-    ):
+    async def test_bigdata_strategy(self, mock_context, mock_metrics, sample_ddf):
         """Test bigdata strategy with MariaDB components."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -262,15 +249,12 @@ class TestMariaDBIntegration:
         assert hasattr(results[0], "npartitions")
 
     @pytest.mark.asyncio
-    async def test_component_strategy_execution(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_component_strategy_execution(self, mock_context, mock_metrics):
         """Test component strategy execution."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -309,13 +293,12 @@ class TestMariaDBIntegration:
         assert results[0]["id"] == 1
 
     @pytest.mark.asyncio
-    async def test_error_propagation(self, mock_context, mock_metrics, mock_schema):
+    async def test_error_propagation(self, mock_context, mock_metrics):
         """Test error propagation through the pipeline."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -336,13 +319,12 @@ class TestMariaDBIntegration:
                 pass
 
     @pytest.mark.asyncio
-    async def test_metrics_integration(self, mock_context, mock_metrics, mock_schema):
+    async def test_metrics_integration(self, mock_context, mock_metrics):
         """Test metrics integration with MariaDB components."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -376,15 +358,12 @@ class TestMariaDBIntegration:
         assert len(results) == 1
 
     @pytest.mark.asyncio
-    async def test_connection_handler_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_connection_handler_integration(self, mock_context, mock_metrics):
         """Test connection handler integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -396,7 +375,7 @@ class TestMariaDBIntegration:
 
         # Mock the connection handler
         with patch(
-            "src.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -421,14 +400,13 @@ class TestMariaDBIntegration:
 
     @pytest.mark.asyncio
     async def test_bulk_strategy_integration(
-        self, mock_context, mock_metrics, sample_dataframe, mock_schema
+        self, mock_context, mock_metrics, sample_dataframe
     ):
         """Test bulk strategy integration with MariaDB components."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -464,15 +442,12 @@ class TestMariaDBIntegration:
         assert len(results[0]) == 2
 
     @pytest.mark.asyncio
-    async def test_error_recovery_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_error_recovery_integration(self, mock_context, mock_metrics):
         """Test error recovery and retry logic in integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -503,9 +478,7 @@ class TestMariaDBIntegration:
                 pass
 
     @pytest.mark.asyncio
-    async def test_large_dataset_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_large_dataset_integration(self, mock_context, mock_metrics):
         """Test integration with large datasets."""
         # Create large dataset
         large_data = [
@@ -518,7 +491,6 @@ class TestMariaDBIntegration:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -541,15 +513,12 @@ class TestMariaDBIntegration:
         assert result.iloc[999]["id"] == 999
 
     @pytest.mark.asyncio
-    async def test_concurrent_operations_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_concurrent_operations_integration(self, mock_context, mock_metrics):
         """Test concurrent operations in integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -586,9 +555,7 @@ class TestMariaDBIntegration:
             assert result_list[0]["id"] == 1
 
     @pytest.mark.asyncio
-    async def test_data_transformation_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_data_transformation_integration(self, mock_context, mock_metrics):
         """Test data transformation through the pipeline."""
         # Create source data
         source_data = [
@@ -610,7 +577,6 @@ class TestMariaDBIntegration:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -647,15 +613,12 @@ class TestMariaDBIntegration:
         assert transformed_data[1]["full_name"] == "Jane Smith"
 
     @pytest.mark.asyncio
-    async def test_connection_pool_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_connection_pool_integration(self, mock_context, mock_metrics):
         """Test connection pool integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -667,7 +630,7 @@ class TestMariaDBIntegration:
 
         # Mock connection handler with pool settings
         with patch(
-            "src.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -691,15 +654,12 @@ class TestMariaDBIntegration:
                 assert read_comp._connection_handler.max_overflow == 20
 
     @pytest.mark.asyncio
-    async def test_metrics_performance_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_metrics_performance_integration(self, mock_context, mock_metrics):
         """Test metrics performance tracking in integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -740,14 +700,13 @@ class TestMariaDBIntegration:
 
     @pytest.mark.asyncio
     async def test_error_handling_strategy_integration(
-        self, mock_context, mock_metrics, mock_schema
+        self, mock_context, mock_metrics
     ):
         """Test error handling strategy integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -780,53 +739,6 @@ class TestMariaDBIntegration:
         with pytest.raises(Exception, match="Connection timeout"):
             async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
-
-    @pytest.mark.asyncio
-    async def test_schema_validation_integration(
-        self, mock_context, mock_metrics, mock_schema
-    ):
-        """Test schema validation integration."""
-        # Create schema with validation rules
-        mock_schema.validate_data = Mock(return_value=True)
-        mock_schema.get_required_fields = Mock(return_value=["id", "name"])
-
-        read_comp = MariaDBRead(
-            name="test_read",
-            description="Test read component",
-            comp_type="database",
-            schema=mock_schema,
-            database="testdb",
-            table="users",
-            query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
-            credentials_id=1,
-        )
-        read_comp.context = mock_context
-
-        # Mock the receiver
-        mock_receiver = AsyncMock()
-
-        async def mock_read_row_generator(query, params, metrics):
-            yield {"id": 1, "name": "John", "email": "john@example.com"}
-
-        mock_receiver.read_row = mock_read_row_generator
-        read_comp._receiver = mock_receiver
-
-        # Test schema validation integration
-        results = []
-        async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            # Validate against schema
-            is_valid = mock_schema.validate_data(result)
-            required_fields = mock_schema.get_required_fields()
-
-            assert is_valid
-            assert all(field in result for field in required_fields)
-            results.append(result)
-
-        assert len(results) == 1
-        mock_schema.validate_data.assert_called_once()
-        mock_schema.get_required_fields.assert_called_once()
 
 
 if __name__ == "__main__":
