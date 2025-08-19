@@ -27,7 +27,6 @@ BAD_LINE_JSONL = DATA_DIR / "testdata_bad_line.jsonl"
 MIXED_SCHEMA_JSONL = DATA_DIR / "testdata_mixed_schema.jsonl"
 
 
-
 @pytest.fixture
 def metrics() -> ComponentMetrics:
     return ComponentMetrics(
@@ -210,7 +209,7 @@ async def test_read_json_bigdata(metrics):
 
 
 @pytest.mark.asyncio
-async def test_write_json_row(tmp_path: Path,metrics):
+async def test_write_json_row(tmp_path: Path, metrics):
     out_fp = tmp_path / "single.json"
 
     comp = WriteJSON(

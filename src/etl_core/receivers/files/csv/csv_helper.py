@@ -4,7 +4,11 @@ from typing import Dict, Any, Generator
 import pandas as pd
 import dask.dataframe as dd
 
-from etl_core.receivers.files.file_helper import resolve_file_path, ensure_exists, open_file
+from etl_core.receivers.files.file_helper import (
+    resolve_file_path,
+    ensure_exists,
+    open_file,
+)
 
 
 def read_csv_row(path: Path, separator: str) -> Generator[Dict[str, Any], None, None]:

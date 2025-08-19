@@ -8,6 +8,7 @@ import dask.dataframe as dd
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
 
+
 class BigDataExecutionStrategy(ExecutionStrategy):
     """
     Streaming bigdata mode:
