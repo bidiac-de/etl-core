@@ -67,6 +67,7 @@ class StubFailOnce(Component):
     """
     Fails the first time, succeeds on the next try.
     """
+
     _called: bool = PrivateAttr(default=False)
 
     def _build_objects(self) -> "StubFailOnce":
@@ -111,6 +112,7 @@ class MultiSource(Component):
     """
     Emits multiple rows in a streaming fashion; used by pipeline tests.
     """
+
     count: int = 2
     _emitted: int = PrivateAttr(default=0)
 
