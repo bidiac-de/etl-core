@@ -1,7 +1,6 @@
 from abc import abstractmethod, ABC
 from typing import List, Any, Iterable
 from etl_core.components.base_component import Component
-from etl_core.components.column_definition import ColumnDefinition
 from etl_core.components.databases.connection_handler import ConnectionHandler
 from etl_core.context.context import Context
 
@@ -14,12 +13,10 @@ class DatabaseComponent(Component, ABC):
         description: str,
         context: Context,
         connection_handler: ConnectionHandler,
-        schema_definition: List[ColumnDefinition],
     ):
         super().__init__(id=id, name=name, description=description, type="database")
         self._context = context
         self._connection_handler = connection_handler
-        self._schema_definition = schema_definition
 
     @property
     def context(self) -> Context:
@@ -40,18 +37,6 @@ class DatabaseComponent(Component, ABC):
         if not isinstance(value, ConnectionHandler):
             raise TypeError("connection_handler must be a ConnectionHandler instance")
         self._connection_handler = value
-
-    @property
-    def schema_definition(self) -> List[ColumnDefinition]:
-        return self._schema_definition
-
-    @schema_definition.setter
-    def schema_definition(self, value: List[ColumnDefinition]):
-        if not all(isinstance(c, ColumnDefinition) for c in value):
-            raise TypeError(
-                "schema_definition must be a list of ColumnDefinition instances"
-            )
-        self._schema_definition = value
 
     @abstractmethod
     def process_row(self, row) -> Any:

@@ -9,18 +9,15 @@ from typing import Any, Dict, AsyncGenerator
 
 from etl_core.components.file_components.csv.read_csv import ReadCSV
 from etl_core.components.file_components.csv.write_csv import WriteCSV
-from etl_core.components.column_definition import ColumnDefinition, DataType
 from etl_core.components.file_components.csv.csv_component import Delimiter
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
-from etl_core.components.schema import Schema
 
 DATA_DIR = Path(__file__).parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"
 MISSING_VALUES_CSV = DATA_DIR / "test_data_missing_values.csv"
-SCHEMA_MISMATCH_CSV = DATA_DIR / "test_data_schema.csv"
 WRONG_TYPES_CSV = DATA_DIR / "test_data_wrong_types.csv"
 INVALID_CSV_FILE = DATA_DIR / "test_invalid_csv.csv"
 
@@ -36,24 +33,13 @@ def metrics():
     )
 
 
-@pytest.fixture
-def schema_definition():
-    return Schema(
-        columns=[
-            ColumnDefinition(name="id", data_type=DataType.STRING),
-            ColumnDefinition(name="name", data_type=DataType.STRING),
-        ]
-    )
-
-
 @pytest.mark.asyncio
-async def test_read_csv_valid_bulk(metrics, schema_definition):
+async def test_read_csv_valid_bulk(metrics):
     comp = ReadCSV(
         name="ReadCSV_Bulk_Valid",
         description="Valid CSV file",
         comp_type="read_csv",
         filepath=VALID_CSV,
-        schema=schema_definition,
         separator=Delimiter.COMMA,
     )
     comp.strategy = BulkExecutionStrategy()
@@ -68,13 +54,12 @@ async def test_read_csv_valid_bulk(metrics, schema_definition):
 
 
 @pytest.mark.asyncio
-async def test_read_csv_missing_values_bulk(metrics, schema_definition):
+async def test_read_csv_missing_values_bulk(metrics):
     comp = ReadCSV(
         name="ReadCSV_Bulk_Missing",
         description="Missing values",
         comp_type="read_csv",
         filepath=MISSING_VALUES_CSV,
-        schema=schema_definition,
         separator=Delimiter.COMMA,
     )
     comp.strategy = BulkExecutionStrategy()
@@ -90,13 +75,12 @@ async def test_read_csv_missing_values_bulk(metrics, schema_definition):
 
 
 @pytest.mark.asyncio
-async def test_read_csv_row_streaming(schema_definition, metrics):
+async def test_read_csv_row_streaming(metrics):
     comp = ReadCSV(
         name="ReadCSV_Row_Stream",
         description="Row streaming",
         comp_type="read_csv",
         filepath=VALID_CSV,
-        schema=schema_definition,
         separator=Delimiter.COMMA,
     )
     comp.strategy = RowExecutionStrategy()
@@ -119,14 +103,13 @@ async def test_read_csv_row_streaming(schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_readcsv_bigdata(schema_definition, metrics):
+async def test_readcsv_bigdata(metrics):
     comp = ReadCSV(
         name="ReadCSV_BigData",
         description="Read CSV with Dask",
         comp_type="read_csv",
         filepath=VALID_CSV,
         separator=Delimiter.COMMA,
-        schema=schema_definition,
     )
     comp.strategy = BigDataExecutionStrategy()
 
@@ -142,7 +125,7 @@ async def test_readcsv_bigdata(schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writecsv_row(tmp_path: Path, schema_definition, metrics):
+async def test_writecsv_row(tmp_path: Path, metrics):
     out_fp = tmp_path / "single.csv"
 
     comp = WriteCSV(
@@ -150,7 +133,6 @@ async def test_writecsv_row(tmp_path: Path, schema_definition, metrics):
         description="Write single row",
         comp_type="write_csv",
         filepath=out_fp,
-        schema=schema_definition,
         separator=Delimiter.COMMA,
     )
     comp.strategy = RowExecutionStrategy()
@@ -167,7 +149,7 @@ async def test_writecsv_row(tmp_path: Path, schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics):
+async def test_writecsv_bulk(tmp_path: Path, metrics):
     out_fp = tmp_path / "bulk.csv"
 
     comp = WriteCSV(
@@ -176,7 +158,6 @@ async def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics):
         comp_type="write_csv",
         filepath=out_fp,
         separator=Delimiter.COMMA,
-        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
     data = pd.DataFrame(
@@ -200,7 +181,7 @@ async def test_writecsv_bulk(tmp_path: Path, schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writecsv_bigdata(tmp_path: Path, schema_definition, metrics):
+async def test_writecsv_bigdata(tmp_path: Path, metrics):
     out_fp = tmp_path / "big.csv"
 
     comp = WriteCSV(
@@ -209,7 +190,6 @@ async def test_writecsv_bigdata(tmp_path: Path, schema_definition, metrics):
         comp_type="write_csv",
         filepath=out_fp,
         separator=Delimiter.COMMA,
-        schema=schema_definition,
     )
     comp.strategy = BigDataExecutionStrategy()
 

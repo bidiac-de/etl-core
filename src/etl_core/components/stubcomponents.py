@@ -2,19 +2,16 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List
 
-from pydantic import PrivateAttr, Field
+from pydantic import PrivateAttr
 
 from etl_core.components.base_component import Component
 from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.base_receiver import Receiver
-from etl_core.components.schema import Schema
 
 
 @register_component("test", hidden=True)
 class StubComponent(Component):
-    # default to satisfy schema requirements
-    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
 
     def _build_objects(self) -> "StubComponent":
         """Wire a trivial receiver."""
@@ -70,9 +67,6 @@ class StubFailOnce(Component):
     """
     Fails the first time, succeeds on the next try.
     """
-
-    # default to satisfy schema requirements
-    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
     _called: bool = PrivateAttr(default=False)
 
     def _build_objects(self) -> "StubFailOnce":
@@ -117,9 +111,6 @@ class MultiSource(Component):
     """
     Emits multiple rows in a streaming fashion; used by pipeline tests.
     """
-
-    # default to satisfy schema requirements
-    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
     count: int = 2
     _emitted: int = PrivateAttr(default=0)
 
@@ -152,9 +143,6 @@ class MultiEcho(Component):
     """
     Echoes each received row downstream; used by pipeline tests.
     """
-
-    # default to satisfy schema requirements
-    schema: Schema = Field(default_factory=lambda: Schema(columns=[]))
 
     def _build_objects(self) -> "MultiEcho":
         self._receiver = StubReceiver()

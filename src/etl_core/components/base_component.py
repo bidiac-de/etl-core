@@ -19,7 +19,6 @@ from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.persistance.base_models.component_base import ComponentBase
 from pandas import DataFrame
-from etl_core.components.schema import Schema
 
 
 class StrategyType(str, Enum):
@@ -46,7 +45,6 @@ class Component(ComponentBase, ABC):
     next: List[str] = Field(default_factory=list)  # List of names of next components
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
-    schema: Schema = Field(..., description="Schema definition for this component")
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
