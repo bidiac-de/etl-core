@@ -179,11 +179,15 @@ class Component(ComponentBase, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bulk(self, *args: Any, **kwargs: Any) -> AsyncIterator[pd.DataFrame]:
+    async def process_bulk(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncIterator[pd.DataFrame]:
         raise NotImplementedError
 
     @abstractmethod
-    async def process_bigdata(self, *args: Any, **kwargs: Any) -> AsyncIterator[dd.DataFrame]:
+    async def process_bigdata(
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncIterator[dd.DataFrame]:
         raise NotImplementedError
 
 
