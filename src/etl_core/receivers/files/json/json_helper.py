@@ -1,29 +1,42 @@
 import gzip
 import io
-from typing import Iterator, Dict, Any, Optional, Tuple, List
-from pathlib import Path
 import json
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 
 def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
-    """Open text files with optional gzip support.
-
-    If the path ends with .gz, open it via gzip and wrap in a TextIOWrapper.
-    Otherwise, open as a normal text file.
+    """
+    Open text or gzip compressed text transparently.
     """
     p = str(path)
     if p.endswith(".gz"):
+        # gzip.open wants binary mode
         return io.TextIOWrapper(gzip.open(p, mode.replace("t", "")), encoding=encoding)
     return open(path, mode, encoding=encoding)
 
 
+def is_ndjson_path(path: Path) -> bool:
+    """
+    Public predicate for NDJSON/JSONL detection (incl. gz).
+    """
+    p = str(path).lower()
+    return p.endswith((".jsonl", ".ndjson", ".jsonl.gz", ".ndjson.gz"))
+
+
+# Backwards compatibility for any internal uses.
+def _is_ndjson_path(p: str) -> bool:  # noqa: D401
+    return p.endswith((".jsonl", ".ndjson", ".jsonl.gz", ".ndjson.gz"))
+
+
 def load_json_records(path: Path) -> List[Dict[str, Any]]:
-    """Load JSON as a list of record dictionaries.
+    """
+    Load into memory as list of dicts.
 
     Supports:
       - JSON array: [ {...}, {...} ]
-      - Single JSON object: { ... } -> converted to [ { ... } ]
-      - JSON Lines (NDJSON): one JSON object per line
+      - Single JSON object: { ... } -> [ { ... } ]
+      - NDJSON (one JSON per line)
     """
     with open_text_auto(path, "rt") as f:
         text = f.read().strip()
@@ -32,6 +45,7 @@ def load_json_records(path: Path) -> List[Dict[str, Any]]:
     if text.startswith("["):
         data = json.loads(text)
         return data if isinstance(data, list) else [data]
+    # Could be NDJSON or a single object without brackets
     lines = [ln for ln in text.splitlines() if ln.strip()]
     try:
         return [json.loads(ln) for ln in lines]
@@ -42,15 +56,42 @@ def load_json_records(path: Path) -> List[Dict[str, Any]]:
 
 def dump_json_records(path: Path, records: List[Dict[str, Any]], indent: int = 2):
     """
-    Write a list of record dictionaries as a JSON array (UTF-8, ensure_ascii=False).
+    Write a JSON array (ensure UTF-8, no ASCII escaping).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open_text_auto(path, "wt") as f:
         json.dump(records, f, indent=indent, ensure_ascii=False)
 
 
-def _is_ndjson_path(p: str) -> bool:
-    return p.endswith((".jsonl", ".ndjson", ".jsonl.gz", ".ndjson.gz"))
+def append_ndjson_record(path: Path, record: Dict[str, Any]) -> None:
+    """
+    Append a single record to an NDJSON file efficiently.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open_text_auto(path, "at") as f:
+        f.write(json.dumps(record, ensure_ascii=False))
+        f.write("\n")
+
+
+def dump_ndjson_records(path: Path, records: List[Dict[str, Any]]) -> None:
+    """
+    Write many records as NDJSON.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open_text_auto(path, "wt") as f:
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False))
+            f.write("\n")
+
+
+def dump_records_auto(path: Path, records: List[Dict[str, Any]], indent: int = 2):
+    """
+    Write records as NDJSON if path indicates NDJSON, else a JSON array.
+    """
+    if is_ndjson_path(path):
+        dump_ndjson_records(path, records)
+    else:
+        dump_json_records(path, records, indent=indent)
 
 
 def _append_next_chunk(buf: str, f, size: int) -> Tuple[str, bool]:
@@ -110,16 +151,14 @@ def _iter_single_object(
 
 def _need_more_data(buf: str, j: int) -> bool:
     """
-    returns True, if no more token is available in the buffer after skipping
-    whitespace and commas.
+    True if there is no next token after skipping whitespace/commas.
     """
     return j >= len(buf)
 
 
 def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
     """
-    Reads next chunk. if EOF and buffer is empty -> array is
-    cleanly finished.
+    Read next chunk; if EOF and buffer empty -> cleanly finished.
     """
     buf, eof = _append_next_chunk(buf, f, size)
     if eof and not buf.strip():
@@ -129,9 +168,7 @@ def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
 
 def _ensure_token(buf: str, f, size: int) -> Tuple[Optional[int], str]:
     """
-    Ensures, that a next token is available in the buffer.
-    Skips whitespace and commas, then checks if more data is needed.
-    Returns (index, buf). index=None signals: stream is cleanly finished..
+    Ensure next token available; return (index, buf). index=None -> done.
     """
     while True:
         j = _skip_seps(buf, 0)
@@ -146,8 +183,7 @@ def _decode_or_read(
     dec: json.JSONDecoder, buf: str, start: int, f, size: int
 ) -> Tuple[Dict[str, Any], str]:
     """
-    Try to decode a JSON object from the buffer starting at 'start', until
-    a complete JSON object is found or EOF is reached.
+    Decode next object from buffer, reading more until complete.
     """
     while True:
         decoded = _try_decode(dec, buf, start)
@@ -176,7 +212,7 @@ def _iter_array(
 
 def _prime_top_level(f, size: int, buf: str) -> Tuple[Optional[str], str, int]:
     """
-    Reads Chunks until a top-level JSON token is detected or EOF is reached.
+    Read chunks until top-level token is detected or EOF.
     """
     while True:
         buf, eof = _append_next_chunk(buf, f, size)
@@ -197,8 +233,14 @@ def _prime_top_level(f, size: int, buf: str) -> Tuple[Optional[str], str, int]:
 
 
 def read_json_row(path: Path, chunk_size: int = 65536) -> Iterator[Dict[str, Any]]:
-    p = str(path).lower()
-    if _is_ndjson_path(p):
+    """
+    Streaming iterator over JSON content.
+
+    - NDJSON: yields per line
+    - Single object: yields once
+    - Array: yields per element
+    """
+    if is_ndjson_path(path):
         yield from _iter_ndjson(path)
         return
 
