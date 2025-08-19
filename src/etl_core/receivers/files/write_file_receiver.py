@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict
 import pandas as pd
 import dask.dataframe as dd
 
@@ -25,7 +25,7 @@ class WriteFileReceiver(Receiver, ABC):
         self,
         filepath: Path,
         metrics: ComponentMetrics,
-        data: Union[pd.DataFrame, List[Dict[str, Any]]],
+        data: pd.DataFrame,
     ) -> None:
         """
         Write multiple rows at once.
