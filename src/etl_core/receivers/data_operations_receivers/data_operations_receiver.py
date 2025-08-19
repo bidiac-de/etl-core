@@ -18,7 +18,9 @@ class DataOperationsReceiver(Receiver, ABC):
         metrics: ComponentMetrics,
         **kwargs: Any,
     ) -> AsyncIterator[Dict[str, Any]]:
-        """Consume a stream of rows and yield filtered/transformed rows."""
+        """
+        Consume a stream of rows and yield filtered/transformed rows.
+        """
         raise NotImplementedError
 
     @abstractmethod
