@@ -101,10 +101,12 @@ async def test_write_json_bulk(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_bulk.json"
     r = JSONReceiver()
 
-    data = [
-        {"id": 20, "name": "Finn"},
-        {"id": 21, "name": "Gina"},
-    ]
+    data = pd.DataFrame(
+        [
+            {"id": 20, "name": "Finn"},
+            {"id": 21, "name": "Gina"},
+        ]
+    )
     await r.write_bulk(filepath=file_path, metrics=metrics, data=data)
 
     df = await r.read_bulk(filepath=file_path, metrics=metrics)
@@ -128,7 +130,7 @@ async def test_write_json_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 
     await r.write_bigdata(filepath=out_dir, metrics=metrics, data=ddf_in)
 
-    parts = sorted(out_dir.glob("part-*.json"))
+    parts = sorted(out_dir.glob("part-*.jsonl"))
     assert parts, "No partition files written."
 
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")

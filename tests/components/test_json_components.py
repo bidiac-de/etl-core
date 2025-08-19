@@ -267,12 +267,13 @@ async def test_write_json_bulk(tmp_path: Path, schema_definition, metrics):
     )
     comp.strategy = BulkExecutionStrategy()
 
-    data = [
-        {"id": 1, "name": "A"},
-        {"id": 2, "name": "B"},
-        {"id": 3, "name": "C"},
-    ]
-
+    data = pd.DataFrame(
+        [
+            {"id": 1, "name": "A"},
+            {"id": 2, "name": "B"},
+            {"id": 3, "name": "C"},
+        ]
+    )
     gen = comp.execute(payload=data, metrics=metrics)
     await anext(gen, None)
 
@@ -318,7 +319,7 @@ async def test_write_json_bigdata(tmp_path: Path, schema_definition, metrics):
     gen = comp.execute(payload=ddf_in, metrics=metrics)
     await anext(gen, None)
 
-    parts = sorted(out_dir.glob("part-*.json"))
+    parts = sorted(out_dir.glob("part-*.jsonl"))
     assert parts, "No partition files written."
 
     ddf_out = dd.read_json([str(p) for p in parts], lines=True, blocksize="64MB")

@@ -7,7 +7,7 @@ import asyncio
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.files.read_file_receiver import ReadFileReceiver
 from etl_core.receivers.files.write_file_receiver import WriteFileReceiver
-from etl_core.receivers.files.file_helper import ensure_exists
+from etl_core.receivers.files.file_helper import ensure_exists, FileReceiverError
 from etl_core.receivers.files.json.json_helper import (
     load_json_records,
     dump_json_records,
@@ -28,7 +28,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     """Receiver for JSON / NDJSON files with Pandas (bulk) and Dask (bigdata)."""
 
     async def read_row(
-        self, filepath: Path, metrics: ComponentMetrics
+            self, filepath: Path, metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
         ensure_exists(filepath)
         it = read_json_row(filepath)
@@ -40,7 +40,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             yield rec
 
     async def read_bulk(
-        self, filepath: Path, metrics: ComponentMetrics
+            self, filepath: Path, metrics: ComponentMetrics
     ) -> pd.DataFrame:
         """
         Read the entire JSON/NDJSON file into a Pandas DataFrame.
@@ -58,7 +58,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         return df
 
     async def read_bigdata(
-        self, filepath: Path, metrics: ComponentMetrics
+            self, filepath: Path, metrics: ComponentMetrics
     ) -> dd.DataFrame:
         """
         Read large JSON/NDJSON files as a Dask DataFrame.
@@ -74,22 +74,18 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         ddf = await asyncio.to_thread(_read)
 
         try:
-            row_count = int(ddf.shape[0].compute())
-        except Exception:
-            try:
-                row_count = int(ddf.index.size.compute())
-            except Exception:
-                import pandas as pd
-
-                row_count = int(
-                    ddf.map_partitions(lambda df: pd.Series([len(df)])).compute().sum()
-                )
+            row_count = await asyncio.to_thread(
+                lambda: int(ddf.map_partitions(len).sum().compute())
+            )
+        except Exception as e:
+            raise FileReceiverError(f"Failed to count rows for bigdata read: {e}") from e
 
         metrics.lines_received += row_count
         return ddf
 
+
     async def write_row(
-        self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
+            self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
     ):
         """
         Append a single JSON record. For array-of-records JSON: read -> append -> write.
@@ -104,63 +100,60 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             else:
                 dump_json_records(filepath, [row], indent=2)
 
-        await asyncio.to_thread(_write)
+        try:
+            await asyncio.to_thread(_write)
+        except Exception as e:
+            raise FileReceiverError(f"Failed to write JSON row: {e}") from e
+
         metrics.lines_received += 1
 
     async def write_bulk(
-        self,
-        filepath: Path,
-        metrics: ComponentMetrics,
-        data: Union[pd.DataFrame, List[Dict[str, Any]]],
+            self,
+            filepath: Path,
+            metrics: ComponentMetrics,
+            data: pd.DataFrame
     ):
         """
         Write multiple rows to a JSON file (array-of-records).
         """
 
         def _write():
-            if isinstance(data, pd.DataFrame):
-                data.to_json(filepath, orient="records", indent=2, force_ascii=False)
-            elif isinstance(data, list) and data:
-                dump_json_records(filepath, data, indent=2)
-            else:
-                dump_json_records(filepath, [], indent=2)
+            data.to_json(filepath, orient="records", indent=2, force_ascii=False)
 
-        await asyncio.to_thread(_write)
-        if isinstance(data, pd.DataFrame):
-            metrics.lines_received += int(data.shape[0])
-        elif isinstance(data, list):
-            metrics.lines_received += len(data)
-        else:
-            metrics.lines_received += 0
+        try:
+            await asyncio.to_thread(_write)
+        except Exception as e:
+            raise FileReceiverError(f"Failed to write JSON bulk: {e}") from e
+
+        metrics.lines_received += len(data)
+
 
     async def write_bigdata(
-        self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
+            self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
     ):
         """
         Write a Dask DataFrame as partitioned JSON Lines files.
         """
 
+        try:
+            row_count = await asyncio.to_thread(
+                lambda: int(data.map_partitions(len).sum().compute())
+            )
+        except Exception as e:
+            raise FileReceiverError(f"Failed to count rows; aborting write: {e}") from e
+
         def _write():
             filepath.mkdir(parents=True, exist_ok=True)
             data.to_json(
-                str(filepath / "part-*.json"),
+                str(filepath / "part-*.jsonl"),
                 orient="records",
                 lines=True,
                 force_ascii=False,
             )
 
-        await asyncio.to_thread(_write)
-
         try:
-            row_count = int(data.shape[0].compute())
-        except Exception:
-            try:
-                row_count = int(data.index.size.compute())
-            except Exception:
-                import pandas as pd
-
-                row_count = int(
-                    data.map_partitions(lambda df: pd.Series([len(df)])).compute().sum()
-                )
+            await asyncio.to_thread(_write)
+        except Exception as e:
+            raise FileReceiverError(f"Failed to write JSON: {e}") from e
 
         metrics.lines_received += row_count
