@@ -53,7 +53,7 @@ def write_csv_bulk(path: Path, data: pd.DataFrame, separator: str):
     path = resolve_file_path(path)
 
     if data.empty:
-        # Leere Datei anlegen
+        # Create empty file
         with open_file(path, "w", newline=""):
             return
 
