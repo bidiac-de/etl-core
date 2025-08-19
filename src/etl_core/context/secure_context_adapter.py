@@ -2,11 +2,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from src.context.context import Context
-from src.context.context_parameter import ContextParameter
-from src.context.credentials import Credentials
-from src.context.context_provider import IContextProvider
-from src.context.secrets.secret_provider import SecretProvider
+from src.etl_core.context.context import Context
+from src.etl_core.context.context_parameter import ContextParameter
+from src.etl_core.context.credentials import Credentials
+from src.etl_core.context.context_provider import IContextProvider
+from src.etl_core.context.secrets.secret_provider import SecretProvider
 
 
 @dataclass(frozen=True)

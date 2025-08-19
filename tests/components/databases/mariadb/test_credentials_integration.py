@@ -8,12 +8,12 @@ with the MariaDB components.
 import pytest
 from unittest.mock import Mock
 
-from src.context.credentials import Credentials
-from src.context.context import Context
-from src.context.environment import Environment
-from src.context.context_parameter import ContextParameter
-from src.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.components.schema import Schema
+from src.etl_core.context.credentials import Credentials
+from src.etl_core.context.context import Context
+from src.etl_core.context.environment import Environment
+from src.etl_core.context.context_parameter import ContextParameter
+from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from src.etl_core.components.schema import Schema
 
 
 class TestCredentialsIntegration:

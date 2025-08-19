@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from typing import Dict, List
 
-from src.context.context_provider import IContextProvider
+from src.etl_core.context.context_provider import IContextProvider
 
 
 class ContextRegistry:

@@ -5,10 +5,10 @@ import dask.dataframe as dd
 from sqlalchemy import text
 from sqlalchemy.engine import Connection as SQLConnection
 
-from .read_database_receiver import ReadDatabaseReceiver
-from .write_database_receiver import WriteDatabaseReceiver
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.components.databases.sql_connection_handler import SQLConnectionHandler
+from etl_core.receivers.data_operations_receivers.databases.mariadb.read_database_receiver import ReadDatabaseReceiver
+from etl_core.receivers.data_operations_receivers.databases.mariadb.write_database_receiver import WriteDatabaseReceiver
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
 
 
 class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):

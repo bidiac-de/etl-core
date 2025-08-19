@@ -5,7 +5,7 @@ from typing import Any, Dict, Generator, Optional, Tuple
 
 from sqlalchemy.engine import Connection, Engine
 
-from src.components.databases.pool_registry import ConnectionPoolRegistry, PoolKey
+from src.etl_core.components.databases.pool_registry import ConnectionPoolRegistry, PoolKey
 
 
 class SQLConnectionHandler:

@@ -17,11 +17,11 @@ except ImportError:
 
 from unittest.mock import Mock, AsyncMock, patch
 
-from src.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.components.databases.mariadb.mariadb_write import MariaDBWrite
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.strategies.base_strategy import ExecutionStrategy
-from src.components.schema import Schema
+from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.etl_core.strategies.base_strategy import ExecutionStrategy
+from src.etl_core.components.schema import Schema
 
 
 class TestMariaDBComponents:
@@ -1107,7 +1107,7 @@ class TestMariaDBComponents:
     def test_mariadb_component_inheritance_structure(self, mock_schema):
         """Test that MariaDB component has correct inheritance structure."""
         from src.components.databases.mariadb.mariadb import MariaDBComponent
-        from src.components.databases.database import DatabaseComponent
+        from etl_core.components.databases.database import DatabaseComponent
 
         # Verify inheritance
         assert issubclass(MariaDBComponent, DatabaseComponent)

@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from src.components.databases.database import DatabaseComponent
+from etl_core.components.databases.database import DatabaseComponent
 
 
 class MariaDBComponent(DatabaseComponent):
@@ -15,7 +15,7 @@ class MariaDBComponent(DatabaseComponent):
     def _create_receiver(self):
         """Create the MariaDB receiver."""
         # Import here to avoid circular import
-        from src.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
+        from etl_core.receivers.data_operations_receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
 
         return MariaDBReceiver(self._connection_handler)
 

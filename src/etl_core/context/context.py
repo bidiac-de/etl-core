@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from src.context.context_provider import IContextProvider
-from src.context.context_parameter import ContextParameter
-from src.context.environment import Environment
-from src.context.credentials import Credentials
+from src.etl_core.context.context_provider import IContextProvider
+from src.etl_core.context.context_parameter import ContextParameter
+from src.etl_core.context.environment import Environment
+from src.etl_core.context.credentials import Credentials
 
 
 class Context(BaseModel, IContextProvider):

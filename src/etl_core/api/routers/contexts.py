@@ -6,14 +6,14 @@ from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.context.context import Context
-from src.context.environment import Environment
-from src.context.credentials import Credentials
-from src.context.context_registry import ContextRegistry
-from src.context.secure_context_adapter import SecureContextAdapter
+from src.etl_core.context.context import Context
+from src.etl_core.context.environment import Environment
+from src.etl_core.context.credentials import Credentials
+from src.etl_core.context.context_registry import ContextRegistry
+from src.etl_core.context.secure_context_adapter import SecureContextAdapter
 
-from src.context.secrets.secret_provider import SecretProvider
-from src.context.secrets.keyring_provider import KeyringSecretProvider
+from src.etl_core.context.secrets.secret_provider import SecretProvider
+from src.etl_core.context.secrets.keyring_provider import KeyringSecretProvider
 
 router = APIRouter(prefix="/contexts", tags=["contexts"])
 

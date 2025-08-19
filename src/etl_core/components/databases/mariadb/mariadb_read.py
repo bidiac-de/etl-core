@@ -4,8 +4,8 @@ import dask.dataframe as dd
 from pydantic import Field, model_validator
 
 from .mariadb import MariaDBComponent
-from src.components.registry import register_component
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.etl_core.components.component_registry import register_component
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 @register_component("read_mariadb")
