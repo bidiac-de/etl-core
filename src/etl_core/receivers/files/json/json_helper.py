@@ -2,7 +2,7 @@ import gzip
 import io
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Callable
 
 
 def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
@@ -27,6 +27,28 @@ def is_ndjson_path(path: Path) -> bool:
 # Backwards compatibility for any internal uses.
 def _is_ndjson_path(p: str) -> bool:  # noqa: D401
     return p.endswith((".jsonl", ".ndjson", ".jsonl.gz", ".ndjson.gz"))
+
+
+def iter_ndjson_lenient(
+    path: Path,
+    on_error: Optional[Callable[[Exception], None]] = None,
+) -> Iterator[Dict[str, Any]]:
+    """
+    NDJSON iterator that skips malformed lines. If on_error is provided,
+    it will be called for each JSON decode error.
+    """
+    with open_text_auto(path, "rt") as f:
+        for line in f:
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                obj = json.loads(s)
+            except json.JSONDecodeError as exc:
+                if on_error:
+                    on_error(exc)
+                continue
+            yield obj if isinstance(obj, dict) else {"_value": obj}
 
 
 def load_json_records(path: Path) -> List[Dict[str, Any]]:

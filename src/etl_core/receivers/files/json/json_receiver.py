@@ -1,9 +1,9 @@
 import asyncio
+import contextlib
 import os
 import tempfile
 from pathlib import Path
-import contextlib
-from typing import Any, AsyncIterator, Dict, TypeVar, Callable
+from typing import Any, AsyncIterator, Callable, Dict, TypeVar
 
 import dask.dataframe as dd
 import pandas as pd
@@ -21,6 +21,7 @@ from etl_core.receivers.files.json.json_helper import (
     is_ndjson_path,
     load_json_records,
     read_json_row,
+    iter_ndjson_lenient,
 )
 
 _SENTINEL: Any = object()
@@ -58,8 +59,24 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     async def read_row(
         self, filepath: Path, metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Stream rows from JSON-like files.
+
+        - NDJSON: use lenient iterator that skips malformed lines and bumps
+          metrics.error_count.
+        - JSON array/object: delegate to read_json_row() streaming iterator.
+        """
         ensure_exists(filepath)
-        it = read_json_row(filepath)
+
+        if is_ndjson_path(filepath):
+
+            def _on_error(_: Exception) -> None:
+                metrics.error_count += 1
+
+            it = iter_ndjson_lenient(filepath, on_error=_on_error)
+        else:
+            it = read_json_row(filepath)
+
         while True:
             rec = await asyncio.to_thread(_next_or_sentinel, it)
             if rec is _SENTINEL:
@@ -72,20 +89,40 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     ) -> pd.DataFrame:
         """
         Read the entire file into a Pandas DataFrame.
+
+        - NDJSON: use pandas.read_json(lines=True).
+        - JSON array/object: use load_json_records() then DataFrame(records)
+          to preserve mixed value types (e.g., keep "88" as str).
         """
         ensure_exists(filepath)
 
-        def _read() -> pd.DataFrame:
-            p = str(filepath)
-            if is_ndjson_path(filepath):
-                # Supports .gz via compression= infer
+        if is_ndjson_path(filepath):
+
+            def _read_ndjson() -> pd.DataFrame:
+                p = str(filepath)
                 return pd.read_json(p, lines=True, compression="infer")
-            # records-orient for array/object JSON
-            return pd.read_json(p, orient="records", compression="infer")
+
+            try:
+                df = await asyncio.to_thread(_read_ndjson)
+            except Exception as exc:
+                metrics.error_count += 1
+                raise FileReceiverError(
+                    f"Failed to read NDJSON to Pandas: {exc}"
+                ) from exc
+
+            metrics.lines_received += len(df)
+            return df
+
+        # Non-NDJSON: keep original JSON value types by building
+        # DataFrame from python objects
+        def _read_array_or_object() -> pd.DataFrame:
+            records = load_json_records(filepath)
+            return pd.DataFrame.from_records(records)
 
         try:
-            df = await asyncio.to_thread(_read)
+            df = await asyncio.to_thread(_read_array_or_object)
         except Exception as exc:
+            metrics.error_count += 1
             raise FileReceiverError(f"Failed to read JSON to Pandas: {exc}") from exc
 
         metrics.lines_received += len(df)
@@ -146,7 +183,6 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             if filepath.exists():
                 existing = load_json_records(filepath)
                 existing.append(row)
-                # Write atomically to avoid torn writes under concurrency
                 _atomic_overwrite(
                     filepath, lambda tmp: dump_json_records(tmp, existing, indent=2)
                 )
@@ -218,7 +254,6 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
         def _write() -> None:
             filepath.mkdir(parents=True, exist_ok=True)
-            # Dask will shard by partition.
             data.to_json(
                 str(filepath / "part-*.jsonl"),
                 orient="records",
