@@ -40,7 +40,7 @@ class WriteJSON(JSON):
         self, dataframe: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """
-        Write big data (z. B. Dask DataFrame)."""
+        Write big data (e.g., Dask DataFrame)."""
         await self._receiver.write_bigdata(
             self.filepath, metrics=metrics, data=dataframe
         )
