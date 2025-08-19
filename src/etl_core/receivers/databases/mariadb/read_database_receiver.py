@@ -5,7 +5,9 @@ import dask.dataframe as dd
 
 from src.etl_core.receivers.base_receiver import Receiver
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from src.etl_core.components.databases.sql_connection_handler import (
+    SQLConnectionHandler,
+)
 
 
 class ReadDatabaseReceiver(Receiver, ABC):

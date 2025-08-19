@@ -21,7 +21,8 @@ from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.etl_core.strategies.base_strategy import ExecutionStrategy
-from src.etl_core.components.schema import Schema
+from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
+from etl_core.components.databases.database import DatabaseComponent
 
 
 class TestMariaDBComponents:
@@ -50,12 +51,6 @@ class TestMariaDBComponents:
         metrics.set_completed = Mock()
         metrics.set_failed = Mock()
         return metrics
-
-    @pytest.fixture
-    def mock_schema(self):
-        """Create mock schema."""
-        schema = Mock(spec=Schema)
-        return schema
 
     @pytest.fixture
     def sample_data(self):
@@ -103,13 +98,12 @@ class TestMariaDBComponents:
             mock_ddf.compute.return_value = mock_ddf
             return mock_ddf
 
-    def test_mariadb_read_initialization(self, mock_schema):
+    def test_mariadb_read_initialization(self):
         """Test MariaDBRead component initialization."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -125,13 +119,12 @@ class TestMariaDBComponents:
         assert read_comp.port == 3306
         assert read_comp.credentials_id == 1
 
-    def test_mariadb_write_initialization(self, mock_schema):
+    def test_mariadb_write_initialization(self):
         """Test MariaDBWrite component initialization."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -146,14 +139,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_row(
-        self, mock_context, mock_metrics, sample_data, mock_schema
+        self, mock_context, mock_metrics, sample_data
     ):
         """Test MariaDBRead process_row method."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users WHERE id = %(id)s",
@@ -186,14 +178,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_bulk(
-        self, mock_context, mock_metrics, sample_dataframe, mock_schema
+        self, mock_context, mock_metrics, sample_dataframe
     ):
         """Test MariaDBRead process_bulk method."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -215,14 +206,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_bigdata(
-        self, mock_context, mock_metrics, sample_dask_dataframe, mock_schema
+        self, mock_context, mock_metrics, sample_dask_dataframe
     ):
         """Test MariaDBRead process_bigdata method."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -243,15 +233,12 @@ class TestMariaDBComponents:
         assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
-    async def test_mariadb_write_process_row(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_mariadb_write_process_row(self, mock_context, mock_metrics):
         """Test MariaDBWrite process_row method."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -277,14 +264,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_bulk(
-        self, mock_context, mock_metrics, sample_dataframe, mock_schema
+        self, mock_context, mock_metrics, sample_dataframe
     ):
         """Test MariaDBWrite process_bulk method."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -307,14 +293,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_bigdata(
-        self, mock_context, mock_metrics, sample_dask_dataframe, mock_schema
+        self, mock_context, mock_metrics, sample_dask_dataframe
     ):
         """Test MariaDBWrite process_bigdata method."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -335,13 +320,12 @@ class TestMariaDBComponents:
 
         assert hasattr(result, "npartitions")
 
-    def test_mariadb_write_build_insert_query(self, mock_context, mock_schema):
+    def test_mariadb_write_build_insert_query(self, mock_context):
         """Test MariaDBWrite build_insert_query method."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -352,7 +336,7 @@ class TestMariaDBComponents:
 
         # Mock the connection handler and receiver to avoid real DB connection
         with patch(
-            "src.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -375,13 +359,12 @@ class TestMariaDBComponents:
                 assert "name, email" in query
                 assert "VALUES" in query
 
-    def test_mariadb_component_connection_setup(self, mock_context, mock_schema):
+    def test_mariadb_component_connection_setup(self, mock_context):
         """Test MariaDB component connection setup."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -393,7 +376,7 @@ class TestMariaDBComponents:
 
         # Mock the connection handler creation
         with patch(
-            "src.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -415,15 +398,12 @@ class TestMariaDBComponents:
                 assert read_comp._receiver is not None
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_error_handling(
-        self, mock_context, mock_schema, mock_metrics
-    ):
+    async def test_mariadb_component_error_handling(self, mock_context, mock_metrics):
         """Test MariaDB component error handling."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -446,14 +426,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_component_strategy_integration(
-        self, mock_context, mock_metrics, mock_schema
+        self, mock_context, mock_metrics
     ):
         """Test MariaDB component strategy integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -493,13 +472,12 @@ class TestMariaDBComponents:
 
     # NEW TESTS FOR IMPROVED COVERAGE
 
-    def test_mariadb_write_on_duplicate_key_update(self, mock_context, mock_schema):
+    def test_mariadb_write_on_duplicate_key_update(self, mock_context):
         """Test MariaDBWrite with ON DUPLICATE KEY UPDATE."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -516,13 +494,12 @@ class TestMariaDBComponents:
         assert "name = VALUES(name)" in query
         assert "email = VALUES(email)" in query
 
-    def test_mariadb_write_batch_size_configuration(self, mock_context, mock_schema):
+    def test_mariadb_write_batch_size_configuration(self, mock_context):
         """Test MariaDBWrite batch size configuration."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -535,15 +512,12 @@ class TestMariaDBComponents:
         assert write_comp.batch_size == 500
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_with_complex_params(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_mariadb_read_with_complex_params(self, mock_context, mock_metrics):
         """Test MariaDBRead with complex query parameters."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users WHERE age > %(min_age)s AND city IN %(cities)s",
@@ -574,15 +548,12 @@ class TestMariaDBComponents:
         assert results[0]["city"] == "Berlin"
 
     @pytest.mark.asyncio
-    async def test_mariadb_write_with_empty_data(
-        self, mock_context, mock_metrics, mock_schema
-    ):
+    async def test_mariadb_write_with_empty_data(self, mock_context, mock_metrics):
         """Test MariaDBWrite with empty data."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -603,15 +574,12 @@ class TestMariaDBComponents:
         assert len(result) == 0
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_connection_failure(
-        self, mock_context, mock_schema
-    ):
+    async def test_mariadb_component_connection_failure(self, mock_context):
         """Test MariaDB component connection failure handling."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -633,9 +601,7 @@ class TestMariaDBComponents:
             read_comp._get_credentials()
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_invalid_credentials(
-        self, mock_context, mock_schema
-    ):
+    async def test_mariadb_component_invalid_credentials(self, mock_context):
         """Test MariaDB component with invalid credentials."""
         # Create context with invalid credentials
         invalid_context = Mock()
@@ -645,7 +611,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -659,36 +624,15 @@ class TestMariaDBComponents:
         with pytest.raises(KeyError, match="Credentials not found"):
             read_comp._get_credentials()
 
-    def test_mariadb_component_schema_validation(self, mock_context):
-        """Test MariaDB component schema validation."""
-        # Test with valid schema
-        valid_schema = Mock(spec=Schema)
-
-        read_comp = MariaDBRead(
-            name="test_read",
-            description="Test read component",
-            comp_type="database",
-            schema=valid_schema,
-            database="testdb",
-            table="users",
-            query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
-            credentials_id=1,
-        )
-
-        assert read_comp.schema == valid_schema
-
     @pytest.mark.asyncio
     async def test_mariadb_component_metrics_integration(
-        self, mock_context, mock_metrics, mock_schema
+        self, mock_context, mock_metrics
     ):
         """Test MariaDB component metrics integration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -721,15 +665,12 @@ class TestMariaDBComponents:
         assert len(results) == 1
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_strategy_type_configuration(
-        self, mock_context, mock_schema
-    ):
+    async def test_mariadb_component_strategy_type_configuration(self, mock_context):
         """Test MariaDB component strategy type configuration."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query="SELECT * FROM users",
@@ -744,7 +685,7 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_component_large_query_handling(
-        self, mock_context, mock_metrics, mock_schema
+        self, mock_context, mock_metrics
     ):
         """Test MariaDB component with large queries."""
         large_query = """
@@ -762,7 +703,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             query=large_query,
@@ -794,14 +734,13 @@ class TestMariaDBComponents:
 
     @pytest.mark.asyncio
     async def test_mariadb_component_special_characters_in_table_name(
-        self, mock_context, mock_metrics, mock_schema
+        self, mock_context, mock_metrics
     ):
         """Test MariaDB component with special characters in table names."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="user_profiles_2024",  # Table with underscores and numbers
             host="localhost",
@@ -823,28 +762,26 @@ class TestMariaDBComponents:
         assert len(results) == 1
         assert write_comp.table == "user_profiles_2024"
 
-    # NEW TESTS FOR MARIA DB BASE CLASS COVERAGE
 
-    def test_mariadb_component_charset_collation_defaults(self, mock_schema):
+# Create a concrete MariaDB component instance for edge cases
+# where it does not matter if it is read or write
+class TestMariaDBComponent(MariaDBComponent):
+    def process_row(self, payload, metrics):
+        pass
+
+    def process_bulk(self, payload, metrics):
+        pass
+
+    def process_bigdata(self, payload, metrics):
+        pass
+
+    def test_mariadb_component_charset_collation_defaults(self):
         """Test MariaDB component default charset and collation settings."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-
-        # Create a concrete MariaDB component instance
-        class TestMariaDBComponent(MariaDBComponent):
-            def process_row(self, payload, metrics):
-                pass
-
-            def process_bulk(self, payload, metrics):
-                pass
-
-            def process_bigdata(self, payload, metrics):
-                pass
 
         comp = TestMariaDBComponent(
             name="test_charset",
             description="Test charset component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -861,7 +798,6 @@ class TestMariaDBComponents:
             name="test_custom_charset",
             description="Test custom charset component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -874,25 +810,13 @@ class TestMariaDBComponents:
         assert comp_custom.charset == "latin1"
         assert comp_custom.collation == "latin1_swedish_ci"
 
-    def test_mariadb_component_receiver_creation(self, mock_schema):
+    def test_mariadb_component_receiver_creation(self):
         """Test MariaDB component receiver creation."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-
-        class TestMariaDBComponent(MariaDBComponent):
-            def process_row(self, payload, metrics):
-                pass
-
-            def process_bulk(self, payload, metrics):
-                pass
-
-            def process_bigdata(self, payload, metrics):
-                pass
 
         comp = TestMariaDBComponent(
             name="test_receiver",
             description="Test receiver component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -909,27 +833,13 @@ class TestMariaDBComponents:
         assert hasattr(receiver, "read_row")
         assert hasattr(receiver, "write_row")
 
-    def test_mariadb_component_connection_setup_with_session_variables(
-        self, mock_schema
-    ):
+    def test_mariadb_component_connection_setup_with_session_variables(self):
         """Test MariaDB component connection setup with session variables."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-
-        class TestMariaDBComponent(MariaDBComponent):
-            def process_row(self, payload, metrics):
-                pass
-
-            def process_bulk(self, payload, metrics):
-                pass
-
-            def process_bigdata(self, payload, metrics):
-                pass
 
         comp = TestMariaDBComponent(
             name="test_session_vars",
             description="Test session variables component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -960,27 +870,13 @@ class TestMariaDBComponents:
         mock_conn.execute.assert_any_call("SET collation_connection = utf8_general_ci")
         mock_conn.commit.assert_called_once()
 
-    def test_mariadb_component_connection_setup_with_session_variables_failure(
-        self, mock_schema
-    ):
+    def test_mariadb_component_connection_setup_with_session_variables_failure(self):
         """Test MariaDB component setup when session variable setting fails."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-
-        class TestMariaDBComponent(MariaDBComponent):
-            def process_row(self, payload, metrics):
-                pass
-
-            def process_bulk(self, payload, metrics):
-                pass
-
-            def process_bigdata(self, payload, metrics):
-                pass
 
         comp = TestMariaDBComponent(
             name="test_session_vars_failure",
             description="Test session variables failure component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -1013,27 +909,13 @@ class TestMariaDBComponents:
             )
             assert "Connection failed" in warning_message
 
-    def test_mariadb_component_connection_setup_without_connection_handler(
-        self, mock_schema
-    ):
+    def test_mariadb_component_connection_setup_without_connection_handler(self):
         """Test MariaDB component connection setup without connection handler."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-
-        class TestMariaDBComponent(MariaDBComponent):
-            def process_row(self, payload, metrics):
-                pass
-
-            def process_bulk(self, payload, metrics):
-                pass
-
-            def process_bigdata(self, payload, metrics):
-                pass
 
         comp = TestMariaDBComponent(
             name="test_no_handler",
             description="Test no handler component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -1049,26 +931,14 @@ class TestMariaDBComponents:
 
         # Should complete without error (no session variables set)
 
-    def test_mariadb_component_various_configurations(self, mock_schema):
+    def test_mariadb_component_various_configurations(self):
         """Test MariaDB component with various configuration combinations."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-
-        class TestMariaDBComponent(MariaDBComponent):
-            def process_row(self, payload, metrics):
-                pass
-
-            def process_bulk(self, payload, metrics):
-                pass
-
-            def process_bigdata(self, payload, metrics):
-                pass
 
         # Test with minimal configuration
         comp_minimal = TestMariaDBComponent(
             name="test_minimal",
             description="Test minimal component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",
@@ -1086,7 +956,6 @@ class TestMariaDBComponents:
             name="test_custom",
             description="Test custom component",
             comp_type="database",
-            schema=mock_schema,
             database="customdb",
             table="custom_table",
             host="customhost",
@@ -1104,10 +973,8 @@ class TestMariaDBComponents:
         assert comp_custom.port == 5432
         assert comp_custom.credentials_id == 999
 
-    def test_mariadb_component_inheritance_structure(self, mock_schema):
+    def test_mariadb_component_inheritance_structure(self):
         """Test that MariaDB component has correct inheritance structure."""
-        from src.components.databases.mariadb.mariadb import MariaDBComponent
-        from etl_core.components.databases.database import DatabaseComponent
 
         # Verify inheritance
         assert issubclass(MariaDBComponent, DatabaseComponent)
@@ -1127,7 +994,6 @@ class TestMariaDBComponents:
             name="test_inheritance",
             description="Test inheritance component",
             comp_type="database",
-            schema=mock_schema,
             database="testdb",
             table="users",
             host="localhost",

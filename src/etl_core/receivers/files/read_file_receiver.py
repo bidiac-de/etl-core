@@ -6,7 +6,6 @@ from etl_core.receivers.base_receiver import Receiver
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
-
 class ReadFileReceiver(Receiver, ABC):
     """Abstract receiver for reading data (async + streaming)."""
 

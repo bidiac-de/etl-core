@@ -19,9 +19,13 @@ from unittest.mock import Mock, patch
 from sqlalchemy.engine import Connection as SQLConnection
 from sqlalchemy import text
 
-from etl_core.receivers.data_operations_receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
+from etl_core.receivers.databases.mariadb import (
+    MariaDBReceiver,
+)
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from src.etl_core.components.databases.sql_connection_handler import (
+    SQLConnectionHandler,
+)
 
 
 class TestMariaDBReceivers:

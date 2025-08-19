@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.components.base_component import Component, StrategyType, get_strategy
-from src.components.column_definition import ColumnDefinition
-from src.context.context import Context
-from src.components.databases.sql_connection_handler import SQLConnectionHandler
-from src.components.databases.pool_args import build_sql_engine_kwargs
+from src.etl_core.components.base_component import Component, StrategyType, get_strategy
+from src.etl_core.context.context import Context
+from src.etl_core.components.databases.sql_connection_handler import (
+    SQLConnectionHandler,
+)
+from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class DatabaseComponent(Component, ABC):
@@ -66,7 +67,6 @@ class DatabaseComponent(Component, ABC):
     def _build_objects(self):
         """Build database-specific objects after validation."""
         # Create connection handler without credentials initially
-        # We'll create it later when context is available
         self._connection_handler = None
 
         # Create receiver (will be updated when connection is available)
@@ -96,11 +96,6 @@ class DatabaseComponent(Component, ABC):
             self._context = value
         else:
             raise TypeError("context must have get_credentials method")
-
-    @property
-    def schema_definition(self) -> List[ColumnDefinition]:
-        # This will be implemented by concrete components
-        return []
 
     def _get_credentials(self) -> Dict[str, Any]:
         """Get credentials from context."""

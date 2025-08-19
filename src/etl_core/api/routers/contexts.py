@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from typing import Optional, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.etl_core.context.context import Context
@@ -245,14 +245,16 @@ def get_provider(id: str) -> ProviderInfoResponse:
 
 
 # unregister and purge secrets by id
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_provider(id: str) -> None:
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def delete_provider(id: str) -> Response:
     try:
         adapter = ContextRegistry.resolve(id)
     except KeyError:
-        return  # idempotent 204
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     try:
         adapter.delete_from_store()
     finally:
         ContextRegistry.unregister(id)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
