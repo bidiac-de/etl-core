@@ -16,7 +16,7 @@ class MariaDBComponent(DatabaseComponent):
         """Create the MariaDB receiver."""
         # Import here to avoid circular import
         from etl_core.receivers.databases.mariadb.mariadb_receiver import (
-            MariaDBReceiver
+            MariaDBReceiver,
         )
 
         return MariaDBReceiver(self._connection_handler)
