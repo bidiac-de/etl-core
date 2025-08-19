@@ -13,7 +13,7 @@ class DataOperationsReceiver(Receiver, ABC):
     @abstractmethod
     async def process_row(
         self,
-        rows: AsyncIterator[Dict[str, Any]],
+        row: Dict[str, Any],
         *,
         metrics: ComponentMetrics,
         **kwargs: Any,
@@ -24,7 +24,7 @@ class DataOperationsReceiver(Receiver, ABC):
     @abstractmethod
     async def process_bulk(
         self,
-        frames: AsyncIterator[pd.DataFrame],
+        dataframe: pd.DataFrame,
         *,
         metrics: ComponentMetrics,
         **kwargs: Any,
@@ -39,6 +39,6 @@ class DataOperationsReceiver(Receiver, ABC):
         *,
         metrics: ComponentMetrics,
         **kwargs: Any,
-    ) -> dd.DataFrame:
+    ) -> AsyncIterator[dd.DataFrame]:
         """Process a Dask DataFrame and return a Dask DataFrame."""
         raise NotImplementedError

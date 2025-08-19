@@ -110,29 +110,29 @@ def _iter_single_object(
 
 def _need_more_data(buf: str, j: int) -> bool:
     """
-    Gibt True zurück, wenn nach dem Überspringen von Trennern/Whitespace
-    kein Token im Buffer steht.
+    returns True, if no more token is available in the buffer after skipping
+    whitespace and commas.
     """
     return j >= len(buf)
 
 
 def _fetch_or_close(buf: str, f, size: int) -> Tuple[str, bool]:
     """
-    Liest den nächsten Chunk. Wenn EOF und Buffer nur Whitespace
-    enthält -> array korrekt beendet (leer rest),
-    sonst bleibt der Aufrufer für Fehlermeldung zuständig.
+    Reads next chunk. if EOF and buffer is empty -> array is
+    cleanly finished.
     """
     buf, eof = _append_next_chunk(buf, f, size)
     if eof and not buf.strip():
-        # Signal: wirklich nichts Sinnvolles mehr im Buffer
+        # Signal: noting useful in buffer
         return buf, True
     return buf, False
 
 
 def _ensure_token(buf: str, f, size: int) -> Tuple[Optional[int], str]:
     """
-    Stellt sicher, dass ein nächstes Token im Buffer steht (nach Whitespace/Kommas).
-    Gibt (index, buf) zurück. index=None signalisiert: Stream ist sauber beendet.
+    Ensures, that a next token is available in the buffer.
+    Skips whitespace and commas, then checks if more data is needed.
+    Returns (index, buf). index=None signals: stream is cleanly finished..
     """
     while True:
         j = _skip_seps(buf, 0)
@@ -140,7 +140,7 @@ def _ensure_token(buf: str, f, size: int) -> Tuple[Optional[int], str]:
             return j, buf
         buf, closed = _fetch_or_close(buf, f, size)
         if closed:
-            # Kein weiteres Token mehr -> leeres/komplett gelesenes Array
+            # no more tokens --> empty/fully read array
             return None, buf
 
 
@@ -148,8 +148,8 @@ def _decode_or_read(
     dec: json.JSONDecoder, buf: str, start: int, f, size: int
 ) -> Tuple[Dict[str, Any], str]:
     """
-    Versucht ab 'start' zu decodieren und lädt bei Bedarf weitere Chunks nach,
-    bis ein vollständiges JSON-Element vorliegt oder EOF als Fehler gewertet wird.
+    Try to decode a JSON object from the buffer starting at 'start', until
+    a complete JSON object is found or EOF is reached.
     """
     while True:
         decoded = _try_decode(dec, buf, start)
@@ -169,10 +169,10 @@ def _iter_array(
     while True:
         j, buf = _ensure_token(buf, f, size)
         if j is None:
-            # sauberer Abschluss (kein weiteres Token)
+            # clean end of array, no more token
             return
         if buf[j] == "]":
-            # schließende Klammer erreicht
+            # closing bracket found
             return
         obj, buf = _decode_or_read(dec, buf, j, f, size)
         yield obj
@@ -180,9 +180,7 @@ def _iter_array(
 
 def _prime_top_level(f, size: int, buf: str) -> Tuple[Optional[str], str, int]:
     """
-    Liest so lange Chunks nach, bis das Top-Level-Token erkennbar ist
-    oder sicher klar ist, dass nichts mehr kommt.
-    Rückgabe: (top, buf, i) – top in {"object","array"} oder None (=> nichts zu lesen).
+    Reads Chunks until a top-level JSON token is detected or EOF is reached.
     """
     while True:
         buf, eof = _append_next_chunk(buf, f, size)
