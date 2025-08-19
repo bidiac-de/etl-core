@@ -4,7 +4,7 @@ import pandas as pd
 import dask.dataframe as dd
 
 from etl_core.components.file_components.json.json_component import JSON
-from etl_core.components.registry import register_component
+from etl_core.components.component_registry import register_component
 from etl_core.receivers.files.json.json_receiver import JSONReceiver
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 

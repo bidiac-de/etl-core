@@ -4,7 +4,7 @@ import dask.dataframe as dd
 from pydantic import model_validator
 
 from etl_core.components.file_components.csv.csv_component import CSV
-from etl_core.components.registry import register_component
+from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.files.csv.csv_receiver import CSVReceiver
 
