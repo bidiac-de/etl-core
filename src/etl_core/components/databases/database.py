@@ -7,12 +7,8 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.base_component import Component, StrategyType, get_strategy
+from src.etl_core.components.base_component import Component
 from src.etl_core.context.context import Context
-from src.etl_core.components.databases.sql_connection_handler import (
-    SQLConnectionHandler,
-)
-from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class DatabaseComponent(Component, ABC):
@@ -23,10 +19,6 @@ class DatabaseComponent(Component, ABC):
     can use them consistently.
     """
 
-    host: str = Field(..., description="Database host")
-    port: int = Field(default=3306, description="Database port")
-    database: str = Field(..., description="Database name")
-    query: str = Field(default="", description="SQL query for read operations")
     credentials_id: int = Field(..., description="ID of credentials to use")
 
     entity_name: str = Field(
@@ -53,27 +45,14 @@ class DatabaseComponent(Component, ABC):
         ),
     )
 
-    _connection_handler: SQLConnectionHandler = None
     _context: Context = None
     _receiver: Any = None
-    _strategy: Any = None
 
     @model_validator(mode="after")
     def _build_objects(self):
         """Build database-specific objects after validation."""
-        self._connection_handler = None
         self._receiver = None
-
-        if hasattr(self, "strategy_type"):
-            self._strategy = get_strategy(self.strategy_type)
-        else:
-            self._strategy = get_strategy(StrategyType.BULK)
-
         return self
-
-    @property
-    def connection_handler(self) -> SQLConnectionHandler:
-        return self._connection_handler
 
     @property
     def context(self) -> Context:
@@ -99,34 +78,9 @@ class DatabaseComponent(Component, ABC):
             "user": credentials.get_parameter("user"),
             "password": credentials.decrypted_password,
             "database": credentials.get_parameter("database"),
+            "host": credentials.get_parameter("host"),
+            "port": credentials.get_parameter("port"),
         }
-
-    def _setup_connection(self):
-        """Setup the database connection with credentials."""
-        if not self._context:
-            return
-
-        creds = self._get_credentials()
-
-        self._connection_handler = SQLConnectionHandler()
-        url = SQLConnectionHandler.build_url(
-            db_type="mariadb",
-            user=creds["user"],
-            password=creds["password"],
-            host=self.host,
-            port=self.port,
-            database=creds["database"],
-        )
-
-        credentials_obj = self._context.get_credentials(self.credentials_id)
-        engine_kwargs = build_sql_engine_kwargs(credentials_obj)
-
-        self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
-        self._receiver = self._create_receiver()
-
-    def _create_receiver(self):
-        """Create the appropriate receiver for this database type."""
-        raise NotImplementedError("Subclasses must implement _create_receiver")
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
@@ -145,8 +99,3 @@ class DatabaseComponent(Component, ABC):
         Should be a generator to avoid materializing large data.
         """
         raise NotImplementedError
-
-    def __del__(self):
-        """Cleanup connection when component is destroyed."""
-        if hasattr(self, "_connection_handler") and self._connection_handler:
-            self._connection_handler.close_pool(force=True)

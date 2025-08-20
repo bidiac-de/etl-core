@@ -24,7 +24,6 @@ from src.etl_core.strategies.base_strategy import ExecutionStrategy
 from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from src.etl_core.components.databases.database import DatabaseComponent
 
-
 class TestMariaDBComponents:
     """Test cases for MariaDB components."""
 
@@ -104,19 +103,15 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
             params={"limit": 10},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.params == {"limit": 10}
-        assert read_comp.host == "localhost"
-        assert read_comp.port == 3306
         assert read_comp.credentials_id == 1
 
     def test_mariadb_write_initialization(self):
@@ -125,16 +120,11 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
         assert write_comp.entity_name == "users"
-        assert write_comp.host == "localhost"
-        assert write_comp.port == 3306
         assert write_comp.credentials_id == 1
 
     @pytest.mark.asyncio
@@ -146,12 +136,10 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -160,7 +148,7 @@ class TestMariaDBComponents:
         mock_receiver = AsyncMock()
 
         # Create an async generator for read_row
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -185,11 +173,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -213,11 +199,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -239,10 +223,8 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = mock_context
@@ -276,10 +258,8 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = mock_context
@@ -303,10 +283,8 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = mock_context
@@ -323,63 +301,22 @@ class TestMariaDBComponents:
 
         assert hasattr(result, "npartitions")
 
-    def test_mariadb_write_build_insert_query(self, mock_context):
-        """Test MariaDBWrite build_insert_query method."""
-        write_comp = MariaDBWrite(
-            name="test_write",
-            description="Test write component",
-            comp_type="database",
-            database="testdb",
-            entity_name="users",
-            host="localhost",
-            port=3306,
-            credentials_id=1,
-        )
-        write_comp.context = mock_context
-
-        # Mock the connection handler and receiver to avoid real DB connection
-        with patch(
-            "src.etl_core.components.databases.database.SQLConnectionHandler"
-        ) as mock_handler_class:
-            mock_handler = Mock()
-            mock_handler.build_url.return_value = (
-                "mysql://user:pass@localhost:3306/testdb"
-            )
-            mock_handler.connect.return_value = None
-            mock_handler_class.return_value = mock_handler
-
-            # Mock the receiver creation
-            with patch.object(write_comp, "_create_receiver") as mock_create_receiver:
-                mock_receiver = Mock()
-                mock_create_receiver.return_value = mock_receiver
-
-                # Call _setup_connection
-                write_comp._setup_connection()
-
-                # Verify the insert query building works
-                query = write_comp._build_insert_query(["name", "email"])
-                assert "INSERT INTO users" in query
-                assert "name, email" in query
-                assert "VALUES" in query
-
     def test_mariadb_component_connection_setup(self, mock_context):
         """Test MariaDB component connection setup."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
 
         # Mock the connection handler creation
         with patch(
-            "src.etl_core.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.sql_database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -407,11 +344,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -436,11 +371,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -448,7 +381,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -475,38 +408,14 @@ class TestMariaDBComponents:
 
     # NEW TESTS FOR IMPROVED COVERAGE
 
-    def test_mariadb_write_on_duplicate_key_update(self, mock_context):
-        """Test MariaDBWrite with ON DUPLICATE KEY UPDATE."""
-        write_comp = MariaDBWrite(
-            name="test_write",
-            description="Test write component",
-            comp_type="database",
-            database="testdb",
-            entity_name="users",
-            host="localhost",
-            port=3306,
-            credentials_id=1,
-            on_duplicate_key_update=["name", "email"],
-        )
-        write_comp.context = mock_context
-
-        # Test the insert query building with ON DUPLICATE KEY UPDATE
-        query = write_comp._build_insert_query(["name", "email"])
-        assert "INSERT INTO users" in query
-        assert "ON DUPLICATE KEY UPDATE" in query
-        assert "name = VALUES(name)" in query
-        assert "email = VALUES(email)" in query
-
     def test_mariadb_write_batch_size_configuration(self, mock_context):
         """Test MariaDBWrite batch size configuration."""
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
             batch_size=500,
         )
@@ -521,12 +430,10 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users WHERE age > %(min_age)s AND city IN %(cities)s",
             params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -534,7 +441,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John", "age": 25, "city": "Berlin"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -557,10 +464,8 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = mock_context
@@ -584,11 +489,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=999,  # Use non-existent credentials ID
         )
 
@@ -615,11 +518,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=999,  # Non-existent credentials
         )
         read_comp.context = invalid_context
@@ -637,11 +538,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -649,7 +548,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             # Simulate metrics usage
             metrics.set_started()
             yield {"id": 1, "name": "John"}
@@ -675,11 +574,9 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
             strategy_type="row",  # Explicit strategy type
         )
@@ -707,12 +604,10 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="users",
             query=large_query,
             params={"start_date": "2023-01-01", "limit": 1000},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -720,7 +615,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John", "email": "john@example.com"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -745,10 +640,8 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
+            
             entity_name="user_profiles_2024",  # Table with underscores and numbers
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = mock_context
@@ -765,7 +658,6 @@ class TestMariaDBComponents:
 
         assert len(results) == 1
         assert write_comp.entity_name == "user_profiles_2024"
-
 
 # Create a concrete MariaDB component instance for edge cases
 # where it does not matter if it is read or write
@@ -786,10 +678,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_charset",
             description="Test charset component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -802,10 +691,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_custom_charset",
             description="Test custom charset component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
             charset="latin1",
             collation="latin1_swedish_ci",
@@ -821,10 +707,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_receiver",
             description="Test receiver component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -844,10 +727,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_session_vars",
             description="Test session variables component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
             charset="utf8",
             collation="utf8_general_ci",
@@ -881,10 +761,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_session_vars_failure",
             description="Test session variables failure component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -920,10 +797,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_no_handler",
             description="Test no handler component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -943,27 +817,18 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_minimal",
             description="Test minimal component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
         assert comp_minimal.charset == "utf8mb4"
         assert comp_minimal.collation == "utf8mb4_unicode_ci"
-        assert comp_minimal.name == "test_minimal"
-        assert comp_minimal.database == "testdb"
-
-        # Test with custom configuration
+        assert comp_minimal.name == "test_minimal"        # Test with custom configuration
         comp_custom = TestMariaDBComponent(
             name="test_custom",
             description="Test custom component",
             comp_type="database",
-            database="customdb",
             entity_name="custom_table",
-            host="customhost",
-            port=5432,
             credentials_id=999,
             charset="latin1",
             collation="latin1_bin",
@@ -971,10 +836,7 @@ class TestMariaDBComponent(MariaDBComponent):
 
         assert comp_custom.charset == "latin1"
         assert comp_custom.collation == "latin1_bin"
-        assert comp_custom.database == "customdb"
         assert comp_custom.entity_name == "custom_table"
-        assert comp_custom.host == "customhost"
-        assert comp_custom.port == 5432
         assert comp_custom.credentials_id == 999
 
     def test_mariadb_component_inheritance_structure(self):
@@ -998,10 +860,7 @@ class TestMariaDBComponent(MariaDBComponent):
             name="test_inheritance",
             description="Test inheritance component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -1009,13 +868,10 @@ class TestMariaDBComponent(MariaDBComponent):
         assert hasattr(comp, "process_row")
         assert hasattr(comp, "process_bulk")
         assert hasattr(comp, "process_bigdata")
-        assert hasattr(comp, "_create_receiver")
-        assert hasattr(comp, "_setup_connection")
 
         # Verify it has MariaDB-specific fields
         assert hasattr(comp, "charset")
         assert hasattr(comp, "collation")
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

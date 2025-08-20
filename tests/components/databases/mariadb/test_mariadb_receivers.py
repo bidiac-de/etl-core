@@ -154,7 +154,7 @@ class TestMariaDBReceivers:
         # Test read_row with new signature
         results = []
         async for result in receiver.read_row(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -186,7 +186,7 @@ class TestMariaDBReceivers:
 
         # Test read_bulk with new signature
         result = await receiver.read_bulk(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -215,7 +215,7 @@ class TestMariaDBReceivers:
 
         # Test read_bigdata with new signature
         result = await receiver.read_bigdata(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -239,7 +239,7 @@ class TestMariaDBReceivers:
 
         # Test write_row with new signature
         result = await receiver.write_row(
-            db=None,
+            
             entity_name="users",
             row={"name": "John", "email": "john@example.com"},
             metrics=mock_metrics,
@@ -269,7 +269,7 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with new signature
         result = await receiver.write_bulk(
-            db=None,
+            
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
@@ -292,7 +292,7 @@ class TestMariaDBReceivers:
         # Test write_bulk with empty DataFrame
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
-            db=None,
+            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -320,7 +320,7 @@ class TestMariaDBReceivers:
         # Test write_bigdata with new signature
         try:
             result = await receiver.write_bigdata(
-                db=None,
+                
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
@@ -362,7 +362,7 @@ class TestMariaDBReceivers:
         with pytest.raises(Exception):
             # This will trigger the error when we try to read
             async for _ in receiver.read_row(
-                db=None,
+                
                 entity_name="users",
                 metrics=mock_metrics,
                 query="SELECT * FROM users",
@@ -389,7 +389,7 @@ class TestMariaDBReceivers:
         # Test that async execution works
         results = []
         async for result in receiver.read_row(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -414,7 +414,7 @@ class TestMariaDBReceivers:
 
         with pytest.raises(Exception, match="Connection failed"):
             async for _ in receiver.read_row(
-                db=None,
+                
                 entity_name="users",
                 metrics=mock_metrics,
                 query="SELECT 1",
@@ -441,7 +441,7 @@ class TestMariaDBReceivers:
         mock_conn.execute.return_value = mock_result
 
         async for _ in receiver.read_row(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query=malicious_query,
@@ -473,7 +473,7 @@ class TestMariaDBReceivers:
 
         with pytest.raises(Exception):
             await receiver.write_row(
-                db=None,
+                
                 entity_name="users",
                 row={"name": "John"},
                 metrics=mock_metrics,
@@ -496,19 +496,18 @@ class TestMariaDBReceivers:
             ddf = dd.from_pandas(df, npartitions=2)
 
             # Mock the partition processing
-            with patch.object(ddf, "map_partitions") as mock_map:
-                mock_map.return_value.compute.return_value = None
+            with patch.object(ddf, "compute") as mock_compute:
+                mock_compute.return_value = df
 
                 await receiver.write_bigdata(
-                    db=None,
                     entity_name="users",
                     frame=ddf,
                     metrics=mock_metrics,
                     table="users",
                 )
 
-                # Verify that map_partitions was called
-                mock_map.assert_called_once()
+                # Verify that compute was called
+                mock_compute.assert_called_once()
 
         else:
             # Skip if dask is not available
@@ -525,7 +524,7 @@ class TestMariaDBReceivers:
         empty_df = pd.DataFrame()
 
         result = await receiver.write_bulk(
-            db=None,
+            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -554,7 +553,7 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         result = await receiver.write_bulk(
-            db=None,
+            
             entity_name="users",
             frame=single_row_df,
             metrics=mock_metrics,
@@ -582,7 +581,7 @@ class TestMariaDBReceivers:
         # Test read_row with empty result
         results = []
         async for result in receiver.read_row(
-            db=None,
+            
             entity_name="empty_table",
             metrics=mock_metrics,
             query="SELECT * FROM empty_table",
@@ -606,7 +605,7 @@ class TestMariaDBReceivers:
 
         # Test read_bulk with empty result
         result = await receiver.read_bulk(
-            db=None,
+            
             entity_name="empty_table",
             metrics=mock_metrics,
             query="SELECT * FROM empty_table",
@@ -634,7 +633,7 @@ class TestMariaDBReceivers:
 
         # Test read operation
         await receiver.read_bulk(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT 1",
@@ -658,7 +657,7 @@ class TestMariaDBReceivers:
 
         # Test that metrics object is used in operations
         await receiver.read_bulk(
-            db=None,
+            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT 1",
@@ -687,7 +686,7 @@ class TestMariaDBReceivers:
 
         # Test read_bulk with large dataset
         result = await receiver.read_bulk(
-            db=None,
+            
             entity_name="large_table",
             metrics=mock_metrics,
             query="SELECT * FROM large_table",
@@ -720,7 +719,7 @@ class TestMariaDBReceivers:
 
         # Test write_row with special characters
         result = await receiver.write_row(
-            db=None,
+            
             entity_name="users",
             row=special_data,
             metrics=mock_metrics,
@@ -753,7 +752,7 @@ class TestMariaDBReceivers:
 
         # Test write_row with numeric data
         result = await receiver.write_row(
-            db=None,
+            
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
@@ -781,7 +780,7 @@ class TestMariaDBReceivers:
 
         # Test write_row with boolean data
         result = await receiver.write_row(
-            db=None,
+            
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
@@ -818,23 +817,20 @@ class TestMariaDBReceivers:
                     mock_result
                 )
 
-                # Mock map_partitions to return a mock object
-                mock_partition_result = Mock()
-                mock_partition_result.compute.return_value = None
-                ddf.map_partitions = Mock(return_value=mock_partition_result)
+                # Mock compute to return a mock object
+                mock_compute_result = df
+                ddf.compute = Mock(return_value=mock_compute_result)
 
                 # Test write_bigdata
                 result = await receiver.write_bigdata(
-                    db=None,
                     entity_name="test_table",
                     frame=ddf,
                     metrics=mock_metrics,
                     table="test_table",
                 )
 
-                # Verify map_partitions was called
-                ddf.map_partitions.assert_called_once()
-                mock_partition_result.compute.assert_called_once()
+                # Verify compute was called
+                ddf.compute.assert_called_once()
                 # Verify return value
                 # result is now a DataFrame, not None
                 assert result is not None
@@ -861,22 +857,20 @@ class TestMariaDBReceivers:
                 df = pd.DataFrame()
                 ddf = dd.from_pandas(df, npartitions=1)
 
-                # Mock map_partitions to return a mock object
-                mock_partition_result = Mock()
-                mock_partition_result.compute.return_value = None
-                ddf.map_partitions = Mock(return_value=mock_partition_result)
+                # Mock compute to return a mock object
+                mock_compute_result = df
+                ddf.compute = Mock(return_value=mock_compute_result)
 
                 # Test write_bigdata with empty data
                 result = await receiver.write_bigdata(
-                    db=None,
                     entity_name="test_table",
                     frame=ddf,
                     metrics=mock_metrics,
                     table="test_table",
                 )
 
-                # Verify map_partitions was called
-                ddf.map_partitions.assert_called_once()
+                # Verify compute was called
+                ddf.compute.assert_called_once()
                 # Verify return value
                 # result is now a DataFrame, not None
                 assert result is not None
@@ -910,22 +904,21 @@ class TestMariaDBReceivers:
                     mock_result
                 )
 
-                # Mock map_partitions to return a mock object
-                mock_partition_result = Mock()
-                mock_partition_result.compute.return_value = None
-                ddf.map_partitions = Mock(return_value=mock_partition_result)
+                # Mock compute to return a mock object
+                mock_compute_result = df
+                ddf.compute = Mock(return_value=mock_compute_result)
 
                 # Test write_bigdata
                 result = await receiver.write_bigdata(
-                    db=None,
+                    
                     entity_name="test_table",
                     frame=ddf,
                     metrics=mock_metrics,
                     table="test_table",
                 )
 
-                # Verify map_partitions was called
-                ddf.map_partitions.assert_called_once()
+                # Verify compute was called
+                ddf.compute.assert_called_once()
                 # Verify return value
                 # result is now a DataFrame, not None
                 assert result is not None
@@ -948,7 +941,7 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with empty DataFrame
         result = await receiver.write_bulk(
-            db=None,
+            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -971,7 +964,7 @@ class TestMariaDBReceivers:
         # Test write_bulk with empty list (convert to DataFrame first)
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
-            db=None,
+            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -1012,7 +1005,7 @@ class TestMariaDBReceivers:
 
                     # Test read_bigdata
                     await receiver.read_bigdata(
-                        db=None,
+                        
                         entity_name="users",
                         metrics=mock_metrics,
                         query="SELECT * FROM users",
@@ -1046,7 +1039,7 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with DataFrame
         await receiver.write_bulk(
-            db=None, entity_name="users", frame=df, metrics=mock_metrics, table="users"
+             entity_name="users", frame=df, metrics=mock_metrics, table="users"
         )
 
         # Verify execute was called
@@ -1071,7 +1064,7 @@ class TestMariaDBReceivers:
         # Test write_bulk with list (convert to DataFrame first)
         df = pd.DataFrame(list_data)
         await receiver.write_bulk(
-            db=None, entity_name="users", frame=df, metrics=mock_metrics, table="users"
+             entity_name="users", frame=df, metrics=mock_metrics, table="users"
         )
 
         # Verify execute was called

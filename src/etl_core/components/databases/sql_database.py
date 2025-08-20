@@ -8,6 +8,8 @@ import dask.dataframe as dd
 from pydantic import Field, model_validator
 
 from src.etl_core.components.databases.database import DatabaseComponent
+from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class SQLDatabaseComponent(DatabaseComponent, ABC):
@@ -18,10 +20,13 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     database-specific differences while maintaining the common interface.
     """
 
+    query: str = Field(default="", description="SQL query for read operations")
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
 
     entity_name: str = Field(..., description="Name of the target entity (table/view)")
+
+    _connection_handler: SQLConnectionHandler = None
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -30,9 +35,32 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         self._setup_connection()
         return self
 
+    @property
+    def connection_handler(self) -> SQLConnectionHandler:
+        return self._connection_handler
+
     def _setup_connection(self):
         """Setup the SQL database connection with credentials and specific settings."""
-        super()._setup_connection()
+        if not self._context:
+            return
+
+        creds = self._get_credentials()
+
+        self._connection_handler = SQLConnectionHandler()
+        url = SQLConnectionHandler.build_url(
+            db_type="mariadb",
+            user=creds["user"],
+            password=creds["password"],
+            host=creds["host"],
+            port=creds["port"],
+            database=creds["database"],
+        )
+
+        credentials_obj = self._context.get_credentials(self.credentials_id)
+        engine_kwargs = build_sql_engine_kwargs(credentials_obj)
+
+        self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
+        self._receiver = self._create_receiver()
 
         if self._connection_handler and self.charset:
             try:
@@ -48,6 +76,11 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     def _create_receiver(self):
         """Create the SQL database receiver."""
         raise NotImplementedError("Subclasses must implement _create_receiver")
+
+    def __del__(self):
+        """Cleanup connection when component is destroyed."""
+        if hasattr(self, "_connection_handler") and self._connection_handler:
+            self._connection_handler.close_pool(force=True)
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:

@@ -14,7 +14,6 @@ class MariaDBReceiver(SQLReceiver):
     async def read_row(
         self,
         *,
-        db: Any,
         entity_name: str,
         metrics: Any,
         batch_size: int = 1000,
@@ -36,7 +35,6 @@ class MariaDBReceiver(SQLReceiver):
     async def read_bulk(
         self,
         *,
-        db: Any,
         entity_name: str,
         metrics: Any,
         **driver_kwargs: Any,
@@ -55,7 +53,6 @@ class MariaDBReceiver(SQLReceiver):
     async def read_bigdata(
         self,
         *,
-        db: Any,
         entity_name: str,
         metrics: Any,
         **driver_kwargs: Any,
@@ -75,81 +72,112 @@ class MariaDBReceiver(SQLReceiver):
     async def write_row(
         self,
         *,
-        db: Any,
         entity_name: str,
         row: Dict[str, Any],
         metrics: Any,
         **driver_kwargs: Any,
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
-        columns = list(row.keys())
-        columns_str = ", ".join(columns)
-        placeholders = ", ".join([f":{col}" for col in columns])
-        query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
-
-        def _execute_query():
-            with self.connection_handler.lease() as conn:
-                result = conn.execute(text(query), row)
-                conn.commit()
-                return {"affected_rows": result.rowcount, "row": row}
+        query = driver_kwargs.get("query")
+        
+        if query:
+            # Use custom query if provided
+            def _execute_query():
+                with self.connection_handler.lease() as conn:
+                    result = conn.execute(text(query), row)
+                    conn.commit()
+                    return {"affected_rows": result.rowcount, "row": row}
+        else:
+            # Fall back to auto-generated INSERT query
+            columns = list(row.keys())
+            columns_str = ", ".join(columns)
+            placeholders = ", ".join([f":{col}" for col in columns])
+            query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
+            
+            def _execute_query():
+                with self.connection_handler.lease() as conn:
+                    result = conn.execute(text(query), row)
+                    conn.commit()
+                    return {"affected_rows": result.rowcount, "row": row}
 
         return await asyncio.to_thread(_execute_query)
 
     async def write_bulk(
         self,
         *,
-        db: Any,
         entity_name: str,
         frame: pd.DataFrame,
         metrics: Any,
         **driver_kwargs: Any,
     ) -> pd.DataFrame:
-        """Write a pandas DataFrame and return the result."""
+        """Write a pandas DataFrame and return it."""
         if frame.empty:
             return frame
 
-        columns = list(frame.columns)
-        columns_str = ", ".join(columns)
-        placeholders = ", ".join([f":{col}" for col in columns])
-        query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
+        query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
 
-        def _execute_query():
-            with self.connection_handler.lease() as conn:
-                data = frame.to_dict("records")
-                conn.execute(text(query), data)
-                conn.commit()
-                return frame
+        if query:
+            # Use custom query if provided
+            def _execute_query():
+                with self.connection_handler.lease() as conn:
+                    # Execute custom query for each row
+                    for _, row in frame.iterrows():
+                        conn.execute(text(query), row.to_dict())
+                    conn.commit()
+                    return frame
+        else:
+            # Fall back to pandas.to_sql()
+            def _execute_query():
+                with self.connection_handler.lease() as conn:
+                    frame.to_sql(
+                        table,
+                        conn,
+                        if_exists="append",
+                        index=False,
+                        method="multi",
+                    )
+                    conn.commit()
+                    return frame
 
         return await asyncio.to_thread(_execute_query)
 
     async def write_bigdata(
         self,
         *,
-        db: Any,
         entity_name: str,
         frame: dd.DataFrame,
         metrics: Any,
         **driver_kwargs: Any,
     ) -> dd.DataFrame:
-        """Write a Dask DataFrame and return the result."""
+        """Write a Dask DataFrame and return it."""
+        query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
 
-        def _write_chunk(chunk_df):
-            import asyncio
+        if query:
+            # Use custom query if provided
+            def _execute_query():
+                with self.connection_handler.lease() as conn:
+                    # Convert Dask DataFrame to pandas and execute custom query
+                    pandas_df = frame.compute()
+                    for _, row in pandas_df.iterrows():
+                        conn.execute(text(query), row.to_dict())
+                    conn.commit()
+                    return frame
+        else:
+            # Fall back to pandas.to_sql()
+            def _execute_query():
+                with self.connection_handler.lease() as conn:
+                    # Convert Dask DataFrame to pandas and write
+                    pandas_df = frame.compute()
+                    pandas_df.to_sql(
+                        table,
+                        conn,
+                        if_exists="append",
+                        index=False,
+                        method="multi",
+                    )
+                    conn.commit()
+                    return frame
 
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(
-                self.write_bulk(
-                    db=db,
-                    entity_name=entity_name,
-                    frame=chunk_df,
-                    metrics=metrics,
-                    **driver_kwargs,
-                )
-            )
-
-        try:
-            frame.map_partitions(_write_chunk).compute()
-        except Exception:
-            pass
-
-        return frame
+        return await asyncio.to_thread(_execute_query)

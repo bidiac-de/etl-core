@@ -3,7 +3,7 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from .mariadb import MariaDBComponent
+from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from src.etl_core.components.component_registry import register_component
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
@@ -20,7 +20,9 @@ class MariaDBRead(MariaDBComponent):
     def _build_objects(self):
         """Build objects after validation."""
         super()._build_objects()
-        self._setup_connection()
+        # Create and assign the MariaDB receiver
+        from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
+        self._receiver = MariaDBReceiver(self.connection_handler)
         return self
 
     async def process_row(
@@ -28,7 +30,6 @@ class MariaDBRead(MariaDBComponent):
     ) -> AsyncIterator[Dict[str, Any]]:
         """Read rows one-by-one (streaming)."""
         async for result in self._receiver.read_row(
-            db=None,
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
@@ -43,7 +44,6 @@ class MariaDBRead(MariaDBComponent):
     ) -> pd.DataFrame:
         """Read query results as a pandas DataFrame."""
         return await self._receiver.read_bulk(
-            db=None,
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
@@ -57,7 +57,6 @@ class MariaDBRead(MariaDBComponent):
     ) -> dd.DataFrame:
         """Read large query results as a Dask DataFrame."""
         return await self._receiver.read_bigdata(
-            db=None,
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,

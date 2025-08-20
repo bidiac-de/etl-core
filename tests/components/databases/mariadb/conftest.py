@@ -23,6 +23,8 @@ def sample_credentials():
         credentials_id=1,
         name="test_db_creds",
         user="testuser",
+        host="localhost",
+        port=3306,
         database="testdb",
         password="testpass123",
         pool_max_size=10,
@@ -125,11 +127,8 @@ def mariadb_read_component(sample_context):
             name="test_read",
             description="Test read component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = sample_context
@@ -147,10 +146,7 @@ def mariadb_write_component(sample_context):
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = sample_context
@@ -165,6 +161,8 @@ def multiple_credentials():
             credentials_id=2,
             name="minimal_creds",
             user="minuser",
+            host="localhost",
+            port=3306,
             database="mindb",
             password="minpass",
         ),
@@ -172,6 +170,8 @@ def multiple_credentials():
             credentials_id=3,
             name="pool_creds",
             user="pooluser",
+            host="localhost",
+            port=3306,
             database="pooldb",
             password="poolpass",
             pool_max_size=50,
@@ -181,6 +181,8 @@ def multiple_credentials():
             credentials_id=4,
             name="special_creds",
             user="user@domain",
+            host="localhost",
+            port=3306,
             database="test-db_123",
             password="pass@word#123",
         ),
@@ -188,6 +190,8 @@ def multiple_credentials():
             credentials_id=5,
             name="no_pass_creds",
             user="nopassuser",
+            host="localhost",
+            port=3306,
             database="nopassdb",
         ),
     }
@@ -247,3 +251,73 @@ def sample_query_params():
         "filter": {"active": True, "role": "admin"},
         "pagination": {"limit": 10, "offset": 0},
     }
+
+
+@pytest.fixture
+def credentials_dict():
+    """Create a dictionary of credentials for testing."""
+    return {
+        "minimal": Credentials(
+            credentials_id=2,
+            name="minimal_creds",
+            user="minuser",
+            host="localhost",
+            port=3306,
+            database="mindb",
+            password="minpass",
+        ),
+        "with_pool": Credentials(
+            credentials_id=3,
+            name="pool_creds",
+            user="pooluser",
+            host="localhost",
+            port=3306,
+            database="pooldb",
+            password="poolpass",
+            pool_max_size=50,
+            pool_timeout_s=60,
+        ),
+        "special_chars": Credentials(
+            credentials_id=4,
+            name="special_creds",
+            user="user@domain",
+            host="localhost",
+            port=3306,
+            database="special_db",
+            password="pass@word!",
+        ),
+        "no_password": Credentials(
+            credentials_id=5,
+            name="nopass_creds",
+            user="nopassuser",
+            host="localhost",
+            port=3306,
+            database="nopassdb",
+        ),
+    }
+
+
+@pytest.fixture
+def mock_credentials():
+    """Create a mock Credentials object for testing."""
+    return Credentials(
+        credentials_id=1,
+        name="test_creds",
+        user="testuser",
+        host="localhost",
+        port=3306,
+        database="testdb",
+        password="testpass",
+    )
+
+@pytest.fixture
+def mock_credentials_no_password():
+    """Create a mock Credentials object without password for testing."""
+    return Credentials(
+        credentials_id=2,
+        name="test_creds_no_pass",
+        user="testuser",
+        host="localhost",
+        port=3306,
+        database="testdb",
+    )

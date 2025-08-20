@@ -46,7 +46,6 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
     async def read_row(
         self,
         *,
-        db: Any,
         entity_name: str,
         metrics: Any,
         batch_size: int = 1000,
@@ -59,7 +58,6 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
     async def read_bulk(
         self,
         *,
-        db: Any,
         entity_name: str,
         metrics: Any,
         **driver_kwargs: Any,
@@ -71,7 +69,6 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
     async def read_bigdata(
         self,
         *,
-        db: Any,
         entity_name: str,
         metrics: Any,
         **driver_kwargs: Any,
@@ -83,7 +80,6 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
     async def write_row(
         self,
         *,
-        db: Any,
         entity_name: str,
         row: Dict[str, Any],
         metrics: Any,
@@ -96,24 +92,22 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
     async def write_bulk(
         self,
         *,
-        db: Any,
         entity_name: str,
         frame: pd.DataFrame,
         metrics: Any,
         **driver_kwargs: Any,
     ) -> pd.DataFrame:
-        """Write a pandas DataFrame and return the result."""
+        """Write a pandas DataFrame and return it."""
         raise NotImplementedError
 
     @abstractmethod
     async def write_bigdata(
         self,
         *,
-        db: Any,
         entity_name: str,
         frame: dd.DataFrame,
         metrics: Any,
         **driver_kwargs: Any,
     ) -> dd.DataFrame:
-        """Write a Dask DataFrame and return the result."""
+        """Write a Dask DataFrame and return it."""
         raise NotImplementedError

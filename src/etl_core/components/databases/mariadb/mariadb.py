@@ -10,11 +10,3 @@ class MariaDBComponent(SQLDatabaseComponent):
     collation: str = Field(
         default="utf8mb4_unicode_ci", description="Collation for MariaDB"
     )
-
-    def _create_receiver(self):
-        """Create the MariaDB receiver."""
-        from etl_core.receivers.databases.mariadb.mariadb_receiver import (
-            MariaDBReceiver,
-        )
-
-        return MariaDBReceiver(self._connection_handler)

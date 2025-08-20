@@ -23,7 +23,9 @@ class Credentials(BaseModel, IContextProvider):
     credentials_id: int
     name: str
     user: str
-    database: str
+    host: str = Field(..., description="Database host")
+    port: int = Field(default=3306, description="Database port")
+    database: str = Field(..., description="Database name")
     password: Optional[SecretStr] = Field(default=None, repr=False)
 
     # portable pool settings for sql and mongo connections
@@ -40,6 +42,8 @@ class Credentials(BaseModel, IContextProvider):
         mapping: dict[str, Any] = {
             "credentials_id": self.credentials_id,
             "user": self.user,
+            "host": self.host,
+            "port": self.port,
             "database": self.database,
             # expose portable pool settings via provider API
             "pool_max_size": self.pool_max_size,

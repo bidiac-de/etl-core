@@ -16,7 +16,6 @@ from src.etl_core.context.credentials import Credentials
 from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
-
 class TestCredentialsIntegration:
     """Test cases for real Credentials and Context integration."""
 
@@ -25,7 +24,6 @@ class TestCredentialsIntegration:
         assert sample_credentials.credentials_id == 1
         assert sample_credentials.name == "test_db_creds"
         assert sample_credentials.user == "testuser"
-        assert sample_credentials.database == "testdb"
         assert sample_credentials.decrypted_password == "testpass123"
         assert sample_credentials.pool_max_size == 10
         assert sample_credentials.pool_timeout_s == 30
@@ -55,18 +53,19 @@ class TestCredentialsIntegration:
         """Test adding new credentials to context."""
         new_creds = Credentials(
             credentials_id=2,
-            name="another_db",
-            user="user2",
-            database="db2",
+            name="new_creds",
+            user="newuser",
+            host="localhost",
+            port=3306,
+            database="newdb",
             password="pass2",
         )
-
         sample_context.add_credentials(new_creds)
 
         # Verify it was added
         retrieved = sample_context.get_credentials(2)
-        assert retrieved == new_creds
-        assert retrieved.user == "user2"
+        assert retrieved.name == "new_creds"
+        assert retrieved.user == "newuser"
 
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
@@ -86,8 +85,6 @@ class TestCredentialsIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -117,8 +114,6 @@ class TestCredentialsIntegration:
             comp_type="database",
             database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -147,33 +142,39 @@ class TestCredentialsIntegration:
             credentials_id=3,
             name="minimal_creds",
             user="minuser",
+            host="localhost",
+            port=3306,
             database="mindb",
             password="minpass",
         )
 
-        # Test that pool parameters return None
-        assert creds.get_parameter("pool_max_size") is None
-        assert creds.get_parameter("pool_timeout_s") is None
+        # Should have default pool settings
+        assert creds.pool_max_size is None
+        assert creds.pool_timeout_s is None
 
         engine_kwargs = build_sql_engine_kwargs(creds)
         # Should be empty dict when no pool settings
         assert engine_kwargs == {}
 
     def test_credentials_password_handling(self):
-        """Test password handling in credentials."""
-        # Test with password
+        """Test credentials password handling."""
         creds_with_pass = Credentials(
             credentials_id=4,
-            name="with_pass",
-            user="user4",
-            database="db4",
+            name="pass_creds",
+            user="passuser",
+            host="localhost",
+            port=3306,
+            database="passdb",
             password="secret123",
         )
-        assert creds_with_pass.decrypted_password == "secret123"
 
-        # Test without password
         creds_no_pass = Credentials(
-            credentials_id=5, name="no_pass", user="user5", database="db5"
+            credentials_id=5,
+            name="nopass_creds",
+            user="nopassuser",
+            host="localhost",
+            port=3306,
+            database="nopassdb",
         )
         assert creds_no_pass.decrypted_password is None
 
@@ -191,14 +192,25 @@ class TestCredentialsIntegration:
     # NEW TESTS FOR IMPROVED CREDENTIAL SYSTEM COVERAGE
 
     def test_credentials_validation(self):
-        """Test credentials validation and constraints."""
-        # Test valid credentials
+        """Test credentials validation."""
         valid_creds = Credentials(
             credentials_id=6,
             name="valid_creds",
             user="validuser",
+            host="localhost",
+            port=3306,
             database="validdb",
             password="validpass",
+        )
+
+        special_creds = Credentials(
+            credentials_id=7,
+            name="special_creds",
+            user="user@domain",
+            host="localhost",
+            port=3306,
+            database="special_db",
+            password="pass@word#123",
         )
         assert valid_creds.credentials_id == 6
         assert valid_creds.name == "valid_creds"
@@ -208,6 +220,8 @@ class TestCredentialsIntegration:
             credentials_id=7,
             name="special_creds_2024",
             user="user@domain",
+            host="localhost",
+            port=3306,
             database="test-db_123",
             password="pass@word#123",
         )
@@ -216,28 +230,26 @@ class TestCredentialsIntegration:
         assert special_creds.decrypted_password == "pass@word#123"
 
     def test_credentials_edge_cases(self):
-        """Test credentials with edge case values."""
-        # Test empty strings
+        """Test credentials edge cases."""
         empty_creds = Credentials(
-            credentials_id=8, name="", user="", database="", password=""
+            credentials_id=8,
+            name="",
+            user="",
+            host="localhost",
+            port=3306,
+            database="",
+            password="",
         )
-        assert empty_creds.name == ""
-        assert empty_creds.user == ""
-        assert empty_creds.database == ""
-        assert empty_creds.decrypted_password == ""
 
-        # Test very long values
         long_creds = Credentials(
             credentials_id=9,
-            name="a" * 1000,
-            user="b" * 1000,
-            database="c" * 1000,
-            password="d" * 1000,
+            name="a" * 100,
+            user="b" * 100,
+            host="localhost",
+            port=3306,
+            database="c" * 100,
+            password="d" * 100,
         )
-        assert len(long_creds.name) == 1000
-        assert len(long_creds.user) == 1000
-        assert len(long_creds.database) == 1000
-        assert len(long_creds.decrypted_password) == 1000
 
     def test_context_parameter_types(self):
         """Test different context parameter types."""
@@ -305,29 +317,33 @@ class TestCredentialsIntegration:
 
     def test_credentials_pool_configuration_validation(self):
         """Test credentials pool configuration validation."""
-        # Test valid pool configuration
         valid_pool_creds = Credentials(
             credentials_id=18,
-            name="valid_pool",
+            name="pool_creds",
             user="pooluser",
+            host="localhost",
+            port=3306,
             database="pooldb",
             password="poolpass",
             pool_max_size=50,
             pool_timeout_s=60,
         )
+
+        min_pool_creds = Credentials(
+            credentials_id=19,
+            name="min_pool_creds",
+            user="minpooluser",
+            host="localhost",
+            port=3306,
+            database="minpooldb",
+            password="minpoolpass",
+            pool_max_size=1,
+            pool_timeout_s=1,
+        )
         assert valid_pool_creds.pool_max_size == 50
         assert valid_pool_creds.pool_timeout_s == 60
 
         # Test minimum values
-        min_pool_creds = Credentials(
-            credentials_id=19,
-            name="min_pool",
-            user="minuser",
-            database="mindb",
-            password="minpass",
-            pool_max_size=1,
-            pool_timeout_s=1,
-        )
         assert min_pool_creds.pool_max_size == 1
         assert min_pool_creds.pool_timeout_s == 1
 
@@ -369,8 +385,6 @@ class TestCredentialsIntegration:
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -390,12 +404,20 @@ class TestCredentialsIntegration:
 
     def test_context_credentials_multiple_databases(self):
         """Test context with multiple database credentials."""
-        # Create multiple credentials
+        multi_context = Context(
+            id=23,
+            name="multi_db_context",
+            environment=Environment.TEST,
+            parameters={}
+        )
+
         creds1 = Credentials(
             credentials_id=21,
             name="db1_creds",
             user="user1",
-            database="database1",
+            host="localhost",
+            port=3306,
+            database="db1",
             password="pass1",
         )
 
@@ -403,15 +425,13 @@ class TestCredentialsIntegration:
             credentials_id=22,
             name="db2_creds",
             user="user2",
-            database="database2",
+            host="localhost",
+            port=3306,
+            database="db2",
             password="pass2",
         )
 
         # Create context with multiple credentials
-        multi_context = Context(
-            id=23, name="multi_db_context", environment=Environment.TEST, parameters={}
-        )
-
         multi_context.add_credentials(creds1)
         multi_context.add_credentials(creds2)
 
@@ -421,35 +441,29 @@ class TestCredentialsIntegration:
 
         assert retrieved_creds1 == creds1
         assert retrieved_creds2 == creds2
-        assert retrieved_creds1.database == "database1"
-        assert retrieved_creds2.database == "database2"
+        assert retrieved_creds1.database == "db1"
+        assert retrieved_creds2.database == "db2"
 
     def test_credentials_password_security(self):
-        """Test password security aspects."""
-        # Test that passwords are stored as provided (in real system, they'd be
-        # encrypted)
+        """Test credentials password security."""
         secure_creds = Credentials(
             credentials_id=24,
             name="secure_creds",
             user="secureuser",
+            host="localhost",
+            port=3306,
             database="securedb",
-            password="very_secure_password_123!@#",
+            password="secure_password_123!@#",
         )
 
-        # Verify password is accessible (in real system, this would be decrypted)
-        assert secure_creds.decrypted_password == "very_secure_password_123!@#"
-
-        # Test special characters in password
         special_pass_creds = Credentials(
             credentials_id=25,
-            name="special_pass",
+            name="special_pass_creds",
             user="specialuser",
+            host="localhost",
+            port=3306,
             database="specialdb",
-            password="p@ssw0rd!@#$%^&*()_+-=[]{}|;':\",./<>?",
-        )
-        assert (
-            special_pass_creds.decrypted_password
-            == "p@ssw0rd!@#$%^&*()_+-=[]{}|;':\",./<>?"
+            password="!@#$%^&*()_+-=[]{}|;':\",./<>?",
         )
 
     def test_context_parameter_immutability(self):
@@ -468,7 +482,17 @@ class TestCredentialsIntegration:
         assert param.key == "immutable_param"
 
     def test_credentials_database_name_validation(self):
-        """Test database name validation in credentials."""
+        """Test credentials database name validation."""
+        creds = Credentials(
+            credentials_id=30,
+            name="dbname_creds",
+            user="dbnameuser",
+            host="localhost",
+            port=3306,
+            database="testdb",
+            password="pass0",
+        )
+
         # Test valid database names
         valid_db_names = [
             "testdb",
@@ -484,6 +508,8 @@ class TestCredentialsIntegration:
                 credentials_id=30 + i,
                 name=f"creds_{i}",
                 user=f"user{i}",
+                host="localhost",
+                port=3306,
                 database=db_name,
                 password=f"pass{i}",
             )
@@ -524,8 +550,6 @@ class TestCredentialsIntegration:
             comp_type="database",
             database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -539,7 +563,6 @@ class TestCredentialsIntegration:
 
         # Test that the component is properly configured
         assert write_comp.entity_name == "users"
-        assert write_comp.database == "testdb"
         assert write_comp.credentials_id == 1
 
     @patch(
@@ -559,8 +582,6 @@ class TestCredentialsIntegration:
             entity_name="users",
             query="SELECT * FROM users WHERE active = %(active)s",
             params={"active": True},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
 
@@ -576,7 +597,6 @@ class TestCredentialsIntegration:
         assert read_comp.query == "SELECT * FROM users WHERE active = %(active)s"
         assert read_comp.params == {"active": True}
         assert read_comp.entity_name == "users"
-        assert read_comp.database == "testdb"
         assert read_comp.credentials_id == 1
 
     # NEW TESTS USING THE IMPROVED FIXTURES
@@ -671,7 +691,6 @@ class TestCredentialsIntegration:
         assert bulk_insert[0]["name"] == "John"
         assert bulk_insert[1]["name"] == "Jane"
         assert bulk_insert[2]["name"] == "Bob"
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

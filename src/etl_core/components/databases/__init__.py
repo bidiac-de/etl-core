@@ -5,7 +5,9 @@ from .pool_registry import ConnectionPoolRegistry
 from .sql_connection_handler import SQLConnectionHandler
 
 # SQL Database Components
-from .mariadb import MariaDBComponent, MariaDBRead, MariaDBWrite
+from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
+from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 
 __all__ = [
     "DatabaseComponent",

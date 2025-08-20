@@ -19,10 +19,9 @@ except ImportError:
 from unittest.mock import Mock, AsyncMock, patch
 
 from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.etl_core.strategies.base_strategy import ExecutionStrategy
-
 
 class TestMariaDBIntegration:
     """Integration tests for MariaDB components and receivers."""
@@ -110,8 +109,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -123,8 +120,6 @@ class TestMariaDBIntegration:
             comp_type="database",
             database="testdb",
             entity_name="users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         write_comp.context = mock_context
@@ -132,7 +127,7 @@ class TestMariaDBIntegration:
         # Mock the receivers
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -176,8 +171,6 @@ class TestMariaDBIntegration:
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -185,7 +178,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -222,8 +215,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -261,8 +252,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -270,7 +259,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -305,8 +294,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -331,8 +318,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -340,7 +325,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             # Call metrics methods to simulate real usage
             metrics.set_started()
             yield {"id": 1, "name": "John"}
@@ -370,15 +355,13 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
 
         # Mock the connection handler
         with patch(
-            "src.etl_core.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.sql_database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -413,8 +396,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
             strategy_type="bulk",
         )
@@ -454,8 +435,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -464,7 +443,7 @@ class TestMariaDBIntegration:
         mock_receiver = AsyncMock()
         call_count = 0
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -497,8 +476,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -525,8 +502,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -534,7 +509,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -583,8 +558,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -592,7 +565,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             for item in source_data:
                 yield item
 
@@ -625,15 +598,13 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
 
         # Mock connection handler with pool settings
         with patch(
-            "src.etl_core.components.databases.database.SQLConnectionHandler"
+            "src.etl_core.components.databases.sql_database.SQLConnectionHandler"
         ) as mock_handler_class:
             mock_handler = Mock()
             mock_handler.build_url.return_value = (
@@ -663,8 +634,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -672,7 +641,7 @@ class TestMariaDBIntegration:
         # Mock the receiver with performance tracking
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             metrics.set_started()
 
             # Simulate processing time
@@ -710,8 +679,6 @@ class TestMariaDBIntegration:
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
-            host="localhost",
-            port=3306,
             credentials_id=1,
         )
         read_comp.context = mock_context
@@ -725,7 +692,7 @@ class TestMariaDBIntegration:
             {"id": 1, "name": "John"},  # Success case
         ]
 
-        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
+        async def mock_read_row_generator(entity_name, metrics, **driver_kwargs):
             for scenario in error_scenarios:
                 if isinstance(scenario, Exception):
                     raise scenario
@@ -739,7 +706,6 @@ class TestMariaDBIntegration:
         with pytest.raises(Exception, match="Connection timeout"):
             async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
