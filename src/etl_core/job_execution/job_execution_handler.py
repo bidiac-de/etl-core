@@ -11,18 +11,19 @@ from etl_core.components.base_component import Component
 from etl_core.job_execution.job_information_handler import JobInformationHandler
 from etl_core.metrics.system_metrics import SystemMetricsHandler
 from etl_core.metrics.metrics_registry import get_metrics_class
+from etl_core.metrics.execution_metrics import ExecutionMetrics
 
 
 class ExecutionAlreadyRunning(Exception):
-    """Raised when attempting to start an execution for a job that is already running."""
+    """
+    Raised when attempting to start an execution for a job that is already running.
+    """
 
 
 class JobExecutionHandler:
     """
-    Manages executions of multiple Jobs in streaming mode.
-    Exposes both async and sync entrypoints:
-      - aexecute_job(): awaitable (preferred in async contexts)
-      - execute_job(): sync convenience wrapper (CLI etc.)
+    Manages executions of multiple Jobs in streaming mode:
+    ...
     """
 
     # process-wide storage for job-ids of currently running jobs
@@ -38,30 +39,7 @@ class JobExecutionHandler:
 
     def execute_job(self, job: RuntimeJob) -> JobExecution:
         """
-        Synchronous wrapper for environments without an event loop (e.g., CLI).
-        Do NOT call this from within a running event loop.
-        """
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            pass
-        else:
-            raise RuntimeError(
-                "execute_job() was called from within a running event loop. "
-                "Use 'await aexecute_job(...)' instead."
-            )
-        return asyncio.run(self._execute_job_async(job))
-
-    async def aexecute_job(self, job: RuntimeJob) -> JobExecution:
-        """
-        Async entrypoint for environments with a running loop (pytest-asyncio, FastAPI).
-        """
-        return await self._execute_job_async(job)
-
-    async def _execute_job_async(self, job: RuntimeJob) -> JobExecution:
-        """
-        Shared async core used by both entrypoints.
-        Handles running-job guards, main loop, and cleanup.
+        top-level method to execute a Job, managing its execution lifecycle
         """
         with self._guard_lock:
             if job.id in self._running_jobs:
@@ -69,12 +47,14 @@ class JobExecutionHandler:
                 raise ExecutionAlreadyRunning(
                     f"Job '{job.name}' ({job.id}) is already running."
                 )
+            # mark as running and create the execution instance
             self._running_jobs.add(job.id)
             execution = JobExecution(job)
 
         try:
-            return await self._main_loop(execution)
+            return asyncio.run(self._main_loop(execution))
         finally:
+            # cleanup in both success/failure paths
             with self._guard_lock:
                 self._running_jobs.discard(job.id)
 
@@ -272,13 +252,7 @@ class JobExecutionHandler:
         async for batch in component.execute(payload, metrics):
             await self._fan_out(batch, out_queues)
 
-    async def _merge_and_run(
-        self,
-        component: Component,
-        metrics: ComponentMetrics,
-        in_queues: List[asyncio.Queue],
-        out_queues: List[asyncio.Queue],
-    ) -> None:
+    async def _merge_and_run(self, component, metrics, in_queues, out_queues):
         """
         Merge payloads from multiple input queues and run the component.
         """
@@ -325,7 +299,9 @@ class JobExecutionHandler:
 
             dq.extend(nxt.next_components)
 
-    def _finalize_success(self, execution: JobExecution, job_metrics) -> None:
+    def _finalize_success(
+        self, execution: JobExecution, job_metrics: "ExecutionMetrics"
+    ) -> None:
         """
         Final actions when a streaming execution succeeds.
         """
@@ -351,7 +327,9 @@ class JobExecutionHandler:
         # cleanup
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
-    def _finalize_failure(self, exc: Exception, execution: JobExecution, job_metrics) -> None:  # noqa: D401
+    def _finalize_failure(
+        self, exc: Exception, execution: JobExecution, job_metrics: "ExecutionMetrics"
+    ) -> None:
         """
         Final actions when all retries are exhausted or streaming execution fails.
         """

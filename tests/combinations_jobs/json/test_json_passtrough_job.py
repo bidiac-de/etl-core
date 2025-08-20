@@ -1,6 +1,3 @@
-import etl_core.components.file_components.json.read_json  # noqa: F401
-import etl_core.components.file_components.json.write_json  # noqa: F401
-
 import json
 import pytest
 import pandas as pd
@@ -26,8 +23,8 @@ def _make_job(cfg_path: Path, in_path: Path, out_path: Path):
     return runtime_job_from_config(cfg)
 
 
-@pytest.mark.asyncio
-async def test_execute_json_row_job(tmp_path: Path):
+
+def test_execute_json_row_job(tmp_path: Path):
     # Row-Streaming: NDJSON (.jsonl)
     in_fp = tmp_path / "in.jsonl"
     rows = [{"id": 1, "name": "Nina"}, {"id": 2, "name": "Max"}]
@@ -39,15 +36,15 @@ async def test_execute_json_row_job(tmp_path: Path):
     job = _make_job(cfg_path, in_fp, out_fp)
 
     handler = JobExecutionHandler()
-    execution = await handler.aexecute_job(job)
+    execution = handler.execute_job(job)
 
     assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     out = pd.read_json(out_fp, lines=True)
     assert list(out["name"]) == ["Nina", "Max"]
 
 
-@pytest.mark.asyncio
-async def test_execute_json_bulk_job(tmp_path: Path):
+
+def test_execute_json_bulk_job(tmp_path: Path):
     # Bulk: JSON-Array in/out (.json)
     in_fp = tmp_path / "in_bulk.json"
     df_in = pd.DataFrame([{"id": 2, "name": "Omar"}, {"id": 3, "name": "Lina"}])
@@ -59,15 +56,15 @@ async def test_execute_json_bulk_job(tmp_path: Path):
     job = _make_job(cfg_path, in_fp, out_fp)
 
     handler = JobExecutionHandler()
-    execution = await handler.aexecute_job(job)
+    execution = handler.execute_job(job)
 
     assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     out = pd.read_json(out_fp, orient="records").sort_values("id")
     assert list(out["name"]) == ["Omar", "Lina"]
 
 
-@pytest.mark.asyncio
-async def test_execute_json_bigdata_job(tmp_path: Path):
+
+def test_execute_json_bigdata_job(tmp_path: Path):
     # BigData: NDJSON input (.jsonl), partitioned NDJSON output (directory)
     in_fp = tmp_path / "in_big.jsonl"
     records = [{"id": 4, "name": "Max"}, {"id": 5, "name": "Gina"}]
@@ -80,7 +77,7 @@ async def test_execute_json_bigdata_job(tmp_path: Path):
     job = _make_job(cfg_path, in_fp, out_dir)
 
     handler = JobExecutionHandler()
-    execution = await handler.aexecute_job(job)
+    execution = handler.execute_job(job)
 
     assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
