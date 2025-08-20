@@ -8,8 +8,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-import etl_core.components.file_components.csv.read_csv # noqa: E402
-import etl_core.components.file_components.csv.write_csv # noqa: E402
+import etl_core.components.file_components.csv.read_csv  # noqa: F401
+import etl_core.components.file_components.csv.write_csv  # noqa: F401
 
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
@@ -48,7 +48,9 @@ def _normalize_components(components: List[Dict[str, Any]]) -> None:
             comp["options"] = {}
 
 
-def _inject_filepaths(components: List[Dict[str, Any]], in_fp: Path, out_fp: Path) -> None:
+def _inject_filepaths(
+    components: List[Dict[str, Any]], in_fp: Path, out_fp: Path
+) -> None:
     """
     Inject temp input/output file paths.
     """
@@ -71,7 +73,6 @@ def _render_job_cfg(cfg_path: Path, in_fp: Path, out_fp: Path) -> Dict[str, Any]
 
     comps = cfg.get("components", [])
     _normalize_components(comps)
-
 
     _inject_filepaths(comps, in_fp, out_fp)
     return cfg
@@ -100,12 +101,14 @@ def test_execute_csv_row_job(tmp_path: Path, exec_handler: JobExecutionHandler) 
     assert list(out["name"]) == ["Nina"]
 
 
-def test_execute_csv_bulk_job(tmp_path: Path, exec_handler: JobExecutionHandler) -> None:
+def test_execute_csv_bulk_job(
+    tmp_path: Path, exec_handler: JobExecutionHandler
+) -> None:
     """Bulk strategy: read/write two rows."""
     in_fp = tmp_path / "in_bulk.csv"
-    pd.DataFrame(
-        [{"id": 2, "name": "Omar"}, {"id": 3, "name": "Lina"}]
-    ).to_csv(in_fp, index=False)
+    pd.DataFrame([{"id": 2, "name": "Omar"}, {"id": 3, "name": "Lina"}]).to_csv(
+        in_fp, index=False
+    )
     out_fp = tmp_path / "out_bulk.csv"
 
     cfg = _render_job_cfg(BULK_JOB, in_fp, out_fp)
@@ -119,10 +122,14 @@ def test_execute_csv_bulk_job(tmp_path: Path, exec_handler: JobExecutionHandler)
     assert list(out["name"]) == ["Omar", "Lina"]
 
 
-def test_execute_csv_bigdata_job(tmp_path: Path, exec_handler: JobExecutionHandler) -> None:
+def test_execute_csv_bigdata_job(
+    tmp_path: Path, exec_handler: JobExecutionHandler
+) -> None:
     """BigData strategy: single-file CSV via Dask."""
     in_fp = tmp_path / "in_big.csv"
-    pd.DataFrame([{"id": 4, "name": "Max"}, {"id": 5, "name": "Gina"}]).to_csv(in_fp, index=False)
+    pd.DataFrame([{"id": 4, "name": "Max"}, {"id": 5, "name": "Gina"}]).to_csv(
+        in_fp, index=False
+    )
     out_fp = tmp_path / "out_big.csv"
 
     cfg = _render_job_cfg(BIG_JOB, in_fp, out_fp)

@@ -1,5 +1,4 @@
 import json
-import pytest
 import pandas as pd
 import dask.dataframe as dd
 from pathlib import Path
@@ -23,7 +22,6 @@ def _make_job(cfg_path: Path, in_path: Path, out_path: Path):
     return runtime_job_from_config(cfg)
 
 
-
 def test_execute_json_row_job(tmp_path: Path):
     # Row-Streaming: NDJSON (.jsonl)
     in_fp = tmp_path / "in.jsonl"
@@ -38,10 +36,12 @@ def test_execute_json_row_job(tmp_path: Path):
     handler = JobExecutionHandler()
     execution = handler.execute_job(job)
 
-    assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
+    assert (
+        handler.job_info.metrics_handler.get_job_metrics(execution.id).status
+        == RuntimeState.SUCCESS
+    )
     out = pd.read_json(out_fp, lines=True)
     assert list(out["name"]) == ["Nina", "Max"]
-
 
 
 def test_execute_json_bulk_job(tmp_path: Path):
@@ -58,10 +58,12 @@ def test_execute_json_bulk_job(tmp_path: Path):
     handler = JobExecutionHandler()
     execution = handler.execute_job(job)
 
-    assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
+    assert (
+        handler.job_info.metrics_handler.get_job_metrics(execution.id).status
+        == RuntimeState.SUCCESS
+    )
     out = pd.read_json(out_fp, orient="records").sort_values("id")
     assert list(out["name"]) == ["Omar", "Lina"]
-
 
 
 def test_execute_json_bigdata_job(tmp_path: Path):
@@ -79,7 +81,10 @@ def test_execute_json_bigdata_job(tmp_path: Path):
     handler = JobExecutionHandler()
     execution = handler.execute_job(job)
 
-    assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
+    assert (
+        handler.job_info.metrics_handler.get_job_metrics(execution.id).status
+        == RuntimeState.SUCCESS
+    )
 
     parts = sorted(out_dir.glob("part-*.jsonl"))
     assert parts, "No partition files written."
