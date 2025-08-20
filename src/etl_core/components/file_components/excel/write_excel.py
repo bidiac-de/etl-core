@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Dict, AsyncGenerator
 
 import pandas as pd
@@ -17,7 +15,7 @@ class WriteExcel(Excel):
     """Excel writer supporting row, bulk, and bigdata modes."""
 
     @model_validator(mode="after")
-    def _build_objects(self) -> WriteExcel:
+    def _build_objects(self) -> "WriteExcel":
         self._receiver = ExcelReceiver()
         return self
 
