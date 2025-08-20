@@ -6,7 +6,10 @@ from typing import Dict, Iterator, List, Optional, Sequence, Union, Any
 import dask.dataframe as dd
 import pandas as pd
 
-from src.etl_core.receivers.files.file_helper import ensure_exists, resolve_file_path
+from src.etl_core.receivers.files.file_helper import (
+    ensure_file_exists,
+    resolve_file_path,
+)
 
 READABLE_EXTS = {".xlsx", ".xlsm", ".xls"}
 WRITABLE_EXTS = {".xlsx", ".xlsm"}
@@ -37,7 +40,7 @@ def _engine_for_write(ext: str) -> str:
 
 def _prepare_read(path: Path) -> tuple[Path, str]:
     path = resolve_file_path(path)
-    ensure_exists(path)
+    ensure_file_exists(path)
     return path, _engine_for_read(_ext(path))
 
 
@@ -53,7 +56,9 @@ def _df_replace_nans_inplace(df: pd.DataFrame) -> pd.DataFrame:
     return df.where(pd.notna(df), None)
 
 
-def read_excel_rows(path: Path, sheet_name: Optional[str] = None) -> Iterator[Dict[str, object]]:
+def read_excel_rows(
+    path: Path, sheet_name: Optional[str] = None
+) -> Iterator[Dict[str, object]]:
     path, engine = _prepare_read(path)
     df = pd.read_excel(path, sheet_name=sheet_name or 0, engine=engine)
     df = _df_replace_nans_inplace(df)
@@ -80,14 +85,23 @@ def read_excel_bigdata(
     return dd.from_pandas(pdf, npartitions=npartitions)
 
 
-def _normalize_to_dataframe(data: Union[pd.DataFrame, Sequence[Dict[str, object]]]) -> pd.DataFrame:
-    return data if isinstance(data, pd.DataFrame) else pd.DataFrame(list(data) if data else [])
+def _normalize_to_dataframe(
+    data: Union[pd.DataFrame, Sequence[Dict[str, object]]],
+) -> pd.DataFrame:
+    return (
+        data
+        if isinstance(data, pd.DataFrame)
+        else pd.DataFrame(list(data) if data else [])
+    )
 
 
-def write_excel_row(path: Path, row: Dict[str, object], sheet_name: Optional[str] = None) -> None:
+def write_excel_row(
+    path: Path, row: Dict[str, object], sheet_name: Optional[str] = None
+) -> None:
     """
-    Append a single row efficiently. Avoids re-reading the entire file by using openpyxl.
-    Falls back to pandas path if anything unexpected happens (e.g., wrong engine).
+    Append a single row efficiently. Avoids re-reading the entire file by
+     using openpyxl.Falls back to pandas path if anything unexpected
+     happens (e.g., wrong engine).
     """
     path, engine = _prepare_write(path)
 
@@ -96,12 +110,18 @@ def write_excel_row(path: Path, row: Dict[str, object], sheet_name: Optional[str
             from openpyxl import load_workbook
         except Exception:  # pragma: no cover - hard dep edge case
             # Fallback to pandas-based concat if openpyxl is not available
-            _write_excel_row_pandas_fallback(path, row, sheet_name or SHEET_DEFAULT, engine)
+            _write_excel_row_pandas_fallback(
+                path, row, sheet_name or SHEET_DEFAULT, engine
+            )
             return
 
         if path.exists():
             wb = load_workbook(path)
-            ws = wb[sheet_name or SHEET_DEFAULT] if sheet_name or SHEET_DEFAULT in wb.sheetnames else wb.active
+            ws = (
+                wb[sheet_name or SHEET_DEFAULT]
+                if sheet_name or SHEET_DEFAULT in wb.sheetnames
+                else wb.active
+            )
             if ws.max_row == 1 and all(cell.value is None for cell in ws[1]):
                 # Empty sheet: write header + row
                 keys = list(row.keys())
@@ -121,7 +141,9 @@ def write_excel_row(path: Path, row: Dict[str, object], sheet_name: Optional[str
     _write_excel_row_pandas_fallback(path, row, sheet_name or SHEET_DEFAULT, engine)
 
 
-def _write_excel_row_pandas_fallback(path: Path, row: Dict[str, Any], sheet_name: str, engine: str) -> None:
+def _write_excel_row_pandas_fallback(
+    path: Path, row: Dict[str, Any], sheet_name: str, engine: str
+) -> None:
     if path.exists():
         try:
             existing = pd.read_excel(path, sheet_name=sheet_name, engine=engine)
@@ -140,7 +162,9 @@ def write_excel_bulk(
 ) -> None:
     path, engine = _prepare_write(path)
     df = _normalize_to_dataframe(data)
-    df.to_excel(path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine)
+    df.to_excel(
+        path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine
+    )
 
 
 def write_excel_bigdata(
@@ -150,4 +174,6 @@ def write_excel_bigdata(
 ) -> None:
     path, engine = _prepare_write(path)
     pdf = data.compute()
-    pdf.to_excel(path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine)
+    pdf.to_excel(
+        path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine
+    )

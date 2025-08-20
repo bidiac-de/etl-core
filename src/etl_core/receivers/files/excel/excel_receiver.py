@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Optional, Iterator
+from typing import Any, AsyncIterator, Dict, Optional
 
 import dask.dataframe as dd
 import pandas as pd
 
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.receivers.files.file_helper import ensure_exists, FileReceiverError
+from src.etl_core.receivers.files.file_helper import (
+    ensure_file_exists,
+    FileReceiverError,
+)
 from src.etl_core.receivers.files.read_file_receiver import ReadFileReceiver
 from src.etl_core.receivers.files.write_file_receiver import WriteFileReceiver
 from src.etl_core.receivers.files.excel.excel_helper import (
@@ -33,11 +36,13 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         sheet_name: Optional[str] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream rows from an Excel sheet one by one."""
-        ensure_exists(filepath)
+        ensure_file_exists(filepath)
         try:
             it = read_excel_rows(filepath, sheet_name=sheet_name)
         except Exception as exc:
-            raise FileReceiverError(f"Failed to open excel for row-read: {exc}") from exc
+            raise FileReceiverError(
+                f"Failed to open excel for row-read: {exc}"
+            ) from exc
 
         while True:
             row = await asyncio.to_thread(next, it, _SENTINEL)
@@ -53,7 +58,7 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         sheet_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Read an entire Excel sheet into a pandas DataFrame."""
-        ensure_exists(filepath)
+        ensure_file_exists(filepath)
         try:
             df = await asyncio.to_thread(read_excel_bulk, filepath, sheet_name)
         except Exception as exc:
@@ -68,7 +73,7 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         sheet_name: Optional[str] = None,
     ) -> dd.DataFrame:
         """Load an Excel sheet as a Dask DataFrame."""
-        ensure_exists(filepath)
+        ensure_file_exists(filepath)
         try:
             ddf = await asyncio.to_thread(read_excel_bigdata, filepath, sheet_name)
         except Exception as exc:
