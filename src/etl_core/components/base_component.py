@@ -171,7 +171,6 @@ class Component(ComponentBase, ABC):
         return self.strategy.execute(self, payload, metrics)
 
     @abstractmethod
-    @abstractmethod
     async def process_row(
         self, *args: Any, **kwargs: Any
     ) -> AsyncIterator[Dict[str, Any]]:
