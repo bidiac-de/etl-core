@@ -34,7 +34,7 @@ class MariaDBRead(MariaDBComponent):
         """Read rows one-by-one (streaming)."""
         async for result in self._receiver.read_row(
             db=None,
-            entity_name=self.table,
+            entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
             params=self.params
@@ -49,7 +49,7 @@ class MariaDBRead(MariaDBComponent):
         """Read query results as a pandas DataFrame."""
         return await self._receiver.read_bulk(
             db=None,
-            entity_name=self.table,
+            entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
             params=self.params
@@ -63,7 +63,7 @@ class MariaDBRead(MariaDBComponent):
         """Read large query results as a Dask DataFrame."""
         return await self._receiver.read_bigdata(
             db=None,
-            entity_name=self.table,
+            entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
             params=self.params

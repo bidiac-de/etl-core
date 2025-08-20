@@ -108,7 +108,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -122,7 +122,7 @@ class TestMariaDBIntegration:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -141,7 +141,7 @@ class TestMariaDBIntegration:
 
         mock_write_receiver = AsyncMock()
         mock_write_receiver.write_row.return_value = (
-            None  # write_row doesn't return anything
+            {"affected_rows": 1, "row": {"id": 1, "name": "John"}}
         )
         write_comp._receiver = mock_write_receiver
 
@@ -158,7 +158,9 @@ class TestMariaDBIntegration:
             write_results.append(result)
 
         assert len(write_results) == 1
-        assert write_results[0]["id"] == 1
+        # The result now contains the receiver response
+        assert write_results[0]["affected_rows"] == 1
+        assert write_results[0]["row"]["id"] == 1
 
     @pytest.mark.asyncio
     async def test_row_strategy_streaming(
@@ -170,7 +172,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
             host="localhost",
@@ -217,7 +219,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -256,7 +258,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -300,7 +302,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -326,7 +328,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -365,7 +367,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -408,7 +410,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -449,7 +451,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -492,7 +494,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -520,7 +522,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -578,7 +580,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -620,7 +622,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -658,7 +660,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -705,7 +707,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,

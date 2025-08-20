@@ -27,7 +27,6 @@ class DatabaseComponent(Component, ABC):
     host: str = Field(..., description="Database host")
     port: int = Field(default=3306, description="Database port")
     database: str = Field(..., description="Database name")
-    table: str = Field(..., description="Table name for operations")
     query: str = Field(default="", description="SQL query for read operations")
     credentials_id: int = Field(..., description="ID of credentials to use")
 

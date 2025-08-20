@@ -105,7 +105,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             params={"limit": 10},
             host="localhost",
@@ -126,13 +126,13 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
         )
 
-        assert write_comp.table == "users"
+        assert write_comp.entity_name == "users"
         assert write_comp.host == "localhost"
         assert write_comp.port == 3306
         assert write_comp.credentials_id == 1
@@ -147,7 +147,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
             host="localhost",
@@ -186,7 +186,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -214,7 +214,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -240,7 +240,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -249,7 +249,7 @@ class TestMariaDBComponents:
 
         # Mock the receiver
         mock_receiver = AsyncMock()
-        mock_receiver.write_row.return_value = None  # write_row doesn't return anything
+        mock_receiver.write_row.return_value = {"affected_rows": 1, "row": {"name": "John", "email": "john@example.com"}}
         write_comp._receiver = mock_receiver
 
         # Test process_row - this returns an async iterator
@@ -260,7 +260,9 @@ class TestMariaDBComponents:
             results.append(result)
 
         assert len(results) == 1
-        assert results[0]["name"] == "John"
+        # The result now contains the receiver response
+        assert results[0]["affected_rows"] == 1
+        assert results[0]["row"]["name"] == "John"
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_bulk(
@@ -272,7 +274,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -299,7 +301,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -323,7 +325,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -362,7 +364,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -401,7 +403,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -430,7 +432,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -475,7 +477,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -497,7 +499,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -515,7 +517,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users WHERE age > %(min_age)s AND city IN %(cities)s",
             params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
             host="localhost",
@@ -551,7 +553,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -578,7 +580,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -609,7 +611,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -631,7 +633,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -669,7 +671,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -701,7 +703,7 @@ class TestMariaDBComponents:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query=large_query,
             params={"start_date": "2023-01-01", "limit": 1000},
             host="localhost",
@@ -739,7 +741,7 @@ class TestMariaDBComponents:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="user_profiles_2024",  # Table with underscores and numbers
+            entity_name="user_profiles_2024",  # Table with underscores and numbers
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -757,7 +759,7 @@ class TestMariaDBComponents:
             results.append(result)
 
         assert len(results) == 1
-        assert write_comp.table == "user_profiles_2024"
+        assert write_comp.entity_name == "user_profiles_2024"
 
 
 # Create a concrete MariaDB component instance for edge cases
@@ -780,7 +782,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test charset component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -796,7 +798,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test custom charset component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -815,7 +817,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test receiver component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -838,7 +840,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test session variables component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -875,7 +877,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test session variables failure component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -914,7 +916,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test no handler component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -937,7 +939,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test minimal component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -954,7 +956,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test custom component",
             comp_type="database",
             database="customdb",
-            table="custom_table",
+            entity_name="custom_table",
             host="customhost",
             port=5432,
             credentials_id=999,
@@ -965,7 +967,7 @@ class TestMariaDBComponent(MariaDBComponent):
         assert comp_custom.charset == "latin1"
         assert comp_custom.collation == "latin1_bin"
         assert comp_custom.database == "customdb"
-        assert comp_custom.table == "custom_table"
+        assert comp_custom.entity_name == "custom_table"
         assert comp_custom.host == "customhost"
         assert comp_custom.port == 5432
         assert comp_custom.credentials_id == 999
@@ -992,7 +994,7 @@ class TestMariaDBComponent(MariaDBComponent):
             description="Test inheritance component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,

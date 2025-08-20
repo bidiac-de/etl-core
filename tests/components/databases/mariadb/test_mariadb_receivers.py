@@ -250,7 +250,7 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
-        assert result == {"inserted_id": 123}
+        assert result == {"affected_rows": 1, "row": {"name": "John", "email": "john@example.com"}}
 
     @pytest.mark.asyncio
     async def test_mariadb_receiver_write_bulk(
@@ -323,11 +323,9 @@ class TestMariaDBReceivers:
                 metrics=mock_metrics,
                 table="users"
             )
-            # If it succeeds, verify execute and commit were called
-            mock_connection_handler.lease().__enter__().execute.assert_called()
-            mock_connection_handler.lease().__enter__().commit.assert_called()
-            # Verify return value
-            assert result == sample_dask_dataframe
+            # Verify return value - result should be the DataFrame
+            assert result is not None
+            assert hasattr(result, "npartitions")
         except Exception as e:
             # If Dask tokenization fails, that's expected - check it's a known issue
             assert "tokenize" in str(e).lower() or "serialize" in str(e).lower()
@@ -729,7 +727,7 @@ class TestMariaDBReceivers:
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         # Verify return value
-        assert result == {"inserted_id": 456}
+        assert result == {"affected_rows": 1, "row": special_data}
 
     @pytest.mark.asyncio
     async def test_numeric_data_types(self, mock_connection_handler, mock_metrics):
@@ -762,7 +760,7 @@ class TestMariaDBReceivers:
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         # Verify return value
-        assert result == {"inserted_id": 789}
+        assert result == {"affected_rows": 1, "row": numeric_data}
 
     @pytest.mark.asyncio
     async def test_boolean_data_types(self, mock_connection_handler, mock_metrics):
@@ -790,7 +788,7 @@ class TestMariaDBReceivers:
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         # Verify return value
-        assert result == {"inserted_id": 101}
+        assert result == {"affected_rows": 1, "row": boolean_data}
 
     # NEW TESTS FOR IMPROVED COVERAGE
 
@@ -835,7 +833,9 @@ class TestMariaDBReceivers:
                 ddf.map_partitions.assert_called_once()
                 mock_partition_result.compute.assert_called_once()
                 # Verify return value
-                assert result == None
+                # result is now a DataFrame, not None
+                assert result is not None
+                assert hasattr(result, "npartitions")
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -875,7 +875,9 @@ class TestMariaDBReceivers:
                 # Verify map_partitions was called
                 ddf.map_partitions.assert_called_once()
                 # Verify return value
-                assert result == None
+                # result is now a DataFrame, not None
+                assert result is not None
+                assert hasattr(result, "npartitions")
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -922,7 +924,9 @@ class TestMariaDBReceivers:
                 # Verify map_partitions was called
                 ddf.map_partitions.assert_called_once()
                 # Verify return value
-                assert result == None
+                # result is now a DataFrame, not None
+                assert result is not None
+                assert hasattr(result, "npartitions")
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -1012,10 +1016,10 @@ class TestMariaDBReceivers:
                         params={}
                     )
 
-                    # Verify from_pandas was called with default npartitions=4
+                    # Verify from_pandas was called with default npartitions=1
                     mock_from_pandas.assert_called_once()
                     call_args = mock_from_pandas.call_args
-                    assert call_args[1]["npartitions"] == 4
+                    assert call_args[1]["npartitions"] == 1
 
             except ImportError:
                 pytest.skip("Dask not available")

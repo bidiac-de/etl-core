@@ -81,7 +81,7 @@ class TestCredentialsIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -109,7 +109,7 @@ class TestCredentialsIntegration:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -355,7 +355,7 @@ class TestCredentialsIntegration:
             description="Integration test component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
             host="localhost",
@@ -508,7 +508,7 @@ class TestCredentialsIntegration:
             description="Test write bulk component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -523,7 +523,7 @@ class TestCredentialsIntegration:
         assert creds["database"] == "testdb"
 
         # Test that the component is properly configured
-        assert write_comp.table == "users"
+        assert write_comp.entity_name == "users"
         assert write_comp.database == "testdb"
         assert write_comp.credentials_id == 1
 
@@ -539,7 +539,7 @@ class TestCredentialsIntegration:
             description="Test read query component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users WHERE active = %(active)s",
             params={"active": True},
             host="localhost",
@@ -558,7 +558,7 @@ class TestCredentialsIntegration:
         # Test that the component is properly configured
         assert read_comp.query == "SELECT * FROM users WHERE active = %(active)s"
         assert read_comp.params == {"active": True}
-        assert read_comp.table == "users"
+        assert read_comp.entity_name == "users"
         assert read_comp.database == "testdb"
         assert read_comp.credentials_id == 1
 
@@ -601,13 +601,13 @@ class TestCredentialsIntegration:
         """Test the MariaDB component fixtures."""
         # Test read component
         assert mariadb_read_component.name == "test_read"
-        assert mariadb_read_component.table == "users"
+        assert mariadb_read_component.entity_name == "users"
         assert mariadb_read_component.query == "SELECT * FROM users"
         assert mariadb_read_component.credentials_id == 1
 
         # Test write component
         assert mariadb_write_component.name == "test_write"
-        assert mariadb_write_component.table == "users"
+        assert mariadb_write_component.entity_name == "users"
         assert mariadb_write_component.credentials_id == 1
 
         # Test that both have context set

@@ -1,4 +1,4 @@
-from typing import Any, Dict, AsyncIterator, List, Union
+from typing import Any, Dict, AsyncIterator, List
 import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
@@ -13,7 +13,6 @@ class MariaDBWrite(MariaDBComponent):
     """MariaDB writer supporting row, bulk, and bigdata modes."""
 
     # Write-specific fields
-    table: str = Field(..., description="Table to write to")
     strategy_type: str = Field(default="bulk", description="Execution strategy type")
 
     # Optional fields for write operations
@@ -36,32 +35,27 @@ class MariaDBWrite(MariaDBComponent):
     async def process_row(
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
-        """Write a single row and yield it."""
+        """Write a single row and yield the result."""
         result = await self._receiver.write_row(
             db=None,
-            entity_name=self.table,
+            entity_name=self.entity_name,
             row=row,
             metrics=metrics,
-            table=self.table
+            table=self.entity_name
         )
-        yield row
+        yield result
 
     async def process_bulk(
-        self, data: Union[List[Dict[str, Any]], pd.DataFrame], metrics: ComponentMetrics
+        self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> pd.DataFrame:
         """Write full dataset and yield it as DataFrame."""
-        # Convert list to DataFrame if needed
-        if isinstance(data, list):
-            df = pd.DataFrame(data)
-        else:
-            df = data
 
         result = await self._receiver.write_bulk(
             db=None,
-            entity_name=self.table,
-            frame=df,
+            entity_name=self.entity_name,
+            frame=data,
             metrics=metrics,
-            table=self.table
+            table=self.entity_name
         )
         return result
 
@@ -71,10 +65,10 @@ class MariaDBWrite(MariaDBComponent):
         """Write Dask DataFrame and yield it."""
         result = await self._receiver.write_bigdata(
             db=None,
-            entity_name=self.table,
+            entity_name=self.entity_name,
             frame=chunk_iterable,
             metrics=metrics,
-            table=self.table
+            table=self.entity_name
         )
         return result
 
@@ -83,7 +77,7 @@ class MariaDBWrite(MariaDBComponent):
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
 
-        query = f"INSERT INTO {self.table} ({columns_str}) VALUES ({placeholders})"
+        query = f"INSERT INTO {self.entity_name} ({columns_str}) VALUES ({placeholders})"
 
         if self.on_duplicate_key_update:
             update_clause = ", ".join(
