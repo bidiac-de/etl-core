@@ -12,7 +12,8 @@
       "name": "reader",
       "comp_type": "read_json",
       "description": "read json input",
-      "filepath": "__IN__"
+      "filepath": "__IN__",
+      "next": ["writer"]
     },
     {
       "name": "writer",
