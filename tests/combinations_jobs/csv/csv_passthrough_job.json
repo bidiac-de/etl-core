@@ -10,24 +10,24 @@
   "components": [
     {
       "name": "reader",
-      "comp_type": "csv_reader",
+      "comp_type": "read_csv",
       "description": "Reads CSV into the pipeline",
       "filepath": "REPLACE_IN_TEST",
       "params": {
         "has_header": true,
-        "delimiter": ",",
+        "separator": ",",
         "encoding": "utf-8"
       },
       "next": ["writer"]
     },
     {
       "name": "writer",
-      "comp_type": "csv_writer",
+      "comp_type": "write_csv",
       "description": "Writes CSV (file or partitioned folder for bigdata)",
       "filepath": "REPLACE_IN_TEST",
       "params": {
         "mode": "overwrite",
-        "delimiter": ",",
+        "separator": ",",
         "encoding": "utf-8"
       },
       "next": []
