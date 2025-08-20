@@ -18,11 +18,11 @@ except ImportError:
 from unittest.mock import Mock, AsyncMock, patch
 
 from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.etl_core.strategies.base_strategy import ExecutionStrategy
 from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
-from etl_core.components.databases.database import DatabaseComponent
+from src.etl_core.components.databases.database import DatabaseComponent
 
 
 class TestMariaDBComponents:

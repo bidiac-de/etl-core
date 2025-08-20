@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from typing import Dict
 
-from src.context.secrets.secret_provider import SecretProvider
+from src.etl_core.context.secrets.secret_provider import SecretProvider
 
 
 class InMemorySecretProvider(SecretProvider):

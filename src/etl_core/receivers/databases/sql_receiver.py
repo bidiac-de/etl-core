@@ -101,7 +101,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         frame: pd.DataFrame,
         metrics: Any,
         **driver_kwargs: Any,
-    ) -> dd.DataFrame:
+    ) -> pd.DataFrame:
         """Write a pandas DataFrame and return the result."""
         raise NotImplementedError
 
