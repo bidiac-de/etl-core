@@ -124,24 +124,37 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         sheet_name: Optional[str] = None,
     ) -> None:
         """Write a Dask DataFrame to an Excel sheet (materialized to pandas)."""
+        row_count: Optional[int] = None
+        persisted = False
+
         try:
             data = await asyncio.to_thread(data.persist)
-        except Exception:
+            persisted = True
+        except Exception as exc:
             pass
 
         try:
             row_count = await asyncio.to_thread(
                 lambda: int(data.map_partitions(len).sum().compute())
             )
-        except Exception as exc:
-            raise FileReceiverError(
-                f"Failed to count rows before excel write: {exc}"
-            ) from exc
 
-        try:
+            EXCEL_MAX_ROWS = 1_048_576
+            if row_count > EXCEL_MAX_ROWS:
+                raise FileReceiverError(
+                    f"Row count {row_count} exceeds Excel sheet limit {EXCEL_MAX_ROWS}. "
+                    "Consider splitting into multiple sheets or writing CSV/Parquet."
+                )
+
             await asyncio.to_thread(write_excel_bigdata, filepath, data, sheet_name)
+
         except Exception as exc:
-            raise FileReceiverError(f"Failed to write excel: {exc}") from exc
+            raise FileReceiverError(f"Failed during excel write pipeline: {exc}") from exc
+        finally:
+            try:
+                if persisted and hasattr(data, "unpersist"):
+                    await asyncio.to_thread(data.unpersist)
+            except Exception:
+                pass
 
         if row_count is not None:
             metrics.lines_forwarded += row_count
