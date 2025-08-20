@@ -17,7 +17,7 @@ from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.components.file_components.json.read_json_component import ReadJSON
 from etl_core.components.file_components.json.write_json_component import WriteJSON
 
-DATA_DIR = Path(__file__).parent / "data" / "json"
+DATA_DIR = Path(__file__).parent.parent / "data" / "json"
 VALID_JSON = DATA_DIR / "testdata.json"
 NESTED_JSON = DATA_DIR / "testdata_nested.json"
 BAD_JSON = DATA_DIR / "testdata_bad.json"
@@ -239,7 +239,7 @@ async def test_read_bulk_mixed_types(metrics: ComponentMetrics) -> None:
     df = dfs[0].sort_values("id").reset_index(drop=True)
     scores = list(df["score"])
     assert scores[0] == 95
-    assert scores[1] == '88'
+    assert scores[1] == "88"
     assert pd.isna(scores[2])
     assert metrics.lines_received == 3
     assert metrics.error_count == 0
@@ -401,3 +401,20 @@ async def test_write_bulk_to_ndjson_lines_and_roundtrip(
     )
     assert metrics.lines_received == len(df)
     assert metrics.error_count == 0
+
+
+@pytest.mark.asyncio
+async def test_read_row_ndjson_missing_file_raises(
+    metrics: ComponentMetrics, tmp_path: Path
+) -> None:
+    comp = ReadJSON(
+        name="r_missing",
+        description="missing file should error",
+        comp_type="read_json",
+        filepath=tmp_path / "does_not_exist.jsonl",
+    )
+    comp.strategy = RowExecutionStrategy()
+
+    with pytest.raises(FileNotFoundError):
+        gen = comp.execute(payload=None, metrics=metrics)
+        await anext(gen)

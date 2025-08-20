@@ -98,19 +98,27 @@ async def test_read_json_bigdata_exact(
 
 
 @pytest.mark.asyncio
-async def test_write_json_row_and_re_read_single_row_mode(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_json_row_and_re_read_single_row_mode(
+    tmp_path: Path, metrics: ComponentMetrics
+):
     file_path = tmp_path / "out_row.json"
     r = JSONReceiver()
 
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"})
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"}
+    )
     assert metrics.lines_received == 1
 
     assert file_path.exists(), "JSON output file was not created after first write"
     with file_path.open(encoding="utf-8") as f:
         after_first = json.load(f)
-    assert after_first == [{"id": 10, "name": "Daisy"}], "File should contain only Daisy after first write"
+    assert after_first == [
+        {"id": 10, "name": "Daisy"}
+    ], "File should contain only Daisy after first write"
 
-    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"})
+    await r.write_row(
+        filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"}
+    )
     assert metrics.lines_received == 2
 
     assert file_path.exists(), "JSON output file missing after second write"
@@ -120,7 +128,9 @@ async def test_write_json_row_and_re_read_single_row_mode(tmp_path: Path, metric
         {"id": 10, "name": "Daisy"},
         {"id": 11, "name": "Eli"},
     ]
-    assert after_second == expected_list, "File should contain Daisy and Eli after second write"
+    assert (
+        after_second == expected_list
+    ), "File should contain Daisy and Eli after second write"
 
     read_metrics = ComponentMetrics(
         started_at=datetime.now(),
@@ -241,3 +251,13 @@ async def test_read_json_row_gz(
 
     assert collected == payload
     assert metrics.lines_received == len(payload)
+
+
+@pytest.mark.asyncio
+async def test_jsonreceiver_read_bulk_missing_file_raises(
+    metrics: ComponentMetrics, tmp_path: Path
+):
+    r = JSONReceiver()
+    missing = tmp_path / "missing.json"
+    with pytest.raises(FileNotFoundError):
+        await r.read_bulk(filepath=missing, metrics=metrics)

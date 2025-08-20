@@ -103,6 +103,7 @@ async def test_write_csv_row(tmp_path: Path, metrics: ComponentMetrics):
     assert lines[1] == "10,Daisy"
     assert lines[2] == "11,Eli"
 
+
 @pytest.mark.asyncio
 async def test_write_csv_bulk(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_bulk.csv"
@@ -120,6 +121,7 @@ async def test_write_csv_bulk(tmp_path: Path, metrics: ComponentMetrics):
     assert file_path.exists()
     df_out = pd.read_csv(file_path)
     pd.testing.assert_frame_equal(df_out, df)
+
 
 @pytest.mark.asyncio
 async def test_write_csv_bigdata(tmp_path: Path, metrics: ComponentMetrics):
@@ -143,3 +145,13 @@ async def test_write_csv_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 
     df_out = pd.read_csv(file_path)
     pd.testing.assert_frame_equal(df_out, pdf)
+
+
+@pytest.mark.asyncio
+async def test_csvreceiver_read_row_missing_file_raises(
+    metrics: ComponentMetrics, tmp_path: Path
+):
+    r = CSVReceiver()
+    rows = r.read_row(filepath=tmp_path / "missing.csv", metrics=metrics, separator=",")
+    with pytest.raises(FileNotFoundError):
+        await anext(rows)
