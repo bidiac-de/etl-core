@@ -130,7 +130,7 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         try:
             data = await asyncio.to_thread(data.persist)
             persisted = True
-        except Exception as exc:
+        except Exception:
             pass
 
         try:
@@ -141,14 +141,16 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
             EXCEL_MAX_ROWS = 1_048_576
             if row_count > EXCEL_MAX_ROWS:
                 raise FileReceiverError(
-                    f"Row count {row_count} exceeds Excel sheet limit {EXCEL_MAX_ROWS}. "
+                    f"Row count {row_count} exceeds Excel sheet limit {EXCEL_MAX_ROWS}."
                     "Consider splitting into multiple sheets or writing CSV/Parquet."
                 )
 
             await asyncio.to_thread(write_excel_bigdata, filepath, data, sheet_name)
 
         except Exception as exc:
-            raise FileReceiverError(f"Failed during excel write pipeline: {exc}") from exc
+            raise FileReceiverError(
+                f"Failed during excel write pipeline: {exc}"
+            ) from exc
         finally:
             try:
                 if persisted and hasattr(data, "unpersist"):

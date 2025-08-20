@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Sequence, Union, Any, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Union, Tuple
 
 import dask.dataframe as dd
 import pandas as pd
@@ -50,6 +50,7 @@ def _prepare_write(path: Path) -> Tuple[Path, str]:
 def _df_replace_nans_inplace(df: pd.DataFrame) -> pd.DataFrame:
     return df.where(pd.notna(df), None)
 
+
 def read_excel_rows(
     path: Path, sheet_name: Optional[str] = None
 ) -> Iterator[Dict[str, object]]:
@@ -90,7 +91,10 @@ def read_excel_rows(
         sh = book.sheet_by_name(sheet_name) if sheet_name else book.sheet_by_index(0)
         if sh.nrows == 0:
             raise ValueError("Worksheet is empty.")
-        headers = [str(sh.cell_value(0, c)) if sh.cell_value(0, c) != "" else "" for c in range(sh.ncols)]
+        headers = [
+            str(sh.cell_value(0, c)) if sh.cell_value(0, c) != "" else ""
+            for c in range(sh.ncols)
+        ]
         if not any(h for h in headers):
             raise ValueError("No header row found in worksheet.")
         for r in range(1, sh.nrows):
@@ -118,10 +122,16 @@ def read_excel_bigdata(
     npartitions = max(1, min(npartitions, max(len(pdf), 1)))
     return dd.from_pandas(pdf, npartitions=npartitions)
 
+
 def _normalize_to_dataframe(
     data: Union[pd.DataFrame, Sequence[Dict[str, object]]],
 ) -> pd.DataFrame:
-    return data if isinstance(data, pd.DataFrame) else pd.DataFrame(list(data) if data else [])
+    return (
+        data
+        if isinstance(data, pd.DataFrame)
+        else pd.DataFrame(list(data) if data else [])
+    )
+
 
 def write_excel_row(
     path: Path, row: Dict[str, object], sheet_name: Optional[str] = None
@@ -132,7 +142,9 @@ def write_excel_row(
     """
     path, engine = _prepare_write(path)
     if engine != "openpyxl":
-        raise ValueError("Appending rows is only supported for .xlsx/.xlsm via openpyxl.")
+        raise ValueError(
+            "Appending rows is only supported for .xlsx/.xlsm via openpyxl."
+        )
 
     from openpyxl import load_workbook, Workbook
 
@@ -184,7 +196,9 @@ def write_excel_bulk(
 ) -> None:
     path, engine = _prepare_write(path)
     df = _normalize_to_dataframe(data)
-    df.to_excel(path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine)
+    df.to_excel(
+        path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine
+    )
 
 
 def write_excel_bigdata(
@@ -194,4 +208,6 @@ def write_excel_bigdata(
 ) -> None:
     path, engine = _prepare_write(path)
     pdf = data.compute()
-    pdf.to_excel(path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine)
+    pdf.to_excel(
+        path, sheet_name=sheet_name or SHEET_DEFAULT, index=False, engine=engine
+    )
