@@ -98,36 +98,29 @@ async def test_read_json_bigdata_exact(
 
 
 @pytest.mark.asyncio
-async def test_write_json_row_and_re_read(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_json_row_and_re_read_single_row_mode(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_row.json"
     r = JSONReceiver()
 
-    await r.write_row(
-        filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"}
-    )
-    await r.write_row(
-        filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"}
-    )
+    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 10, "name": "Daisy"})
+    assert metrics.lines_received == 1
+
+    assert file_path.exists(), "JSON output file was not created after first write"
+    with file_path.open(encoding="utf-8") as f:
+        after_first = json.load(f)
+    assert after_first == [{"id": 10, "name": "Daisy"}], "File should contain only Daisy after first write"
+
+    await r.write_row(filepath=file_path, metrics=metrics, row={"id": 11, "name": "Eli"})
     assert metrics.lines_received == 2
 
-    raw_text = file_path.read_text(encoding="utf-8").strip()
-    parsed_direct: List[Dict]
-    try:
-        loaded = json.loads(raw_text)
-        if isinstance(loaded, list):
-            parsed_direct = loaded
-        else:
-            pytest.fail(f"unexpected JSON-Structure (no array): {type(loaded)}")
-    except json.JSONDecodeError:
-        parsed_direct = [
-            json.loads(line) for line in raw_text.splitlines() if line.strip()
-        ]
-
+    assert file_path.exists(), "JSON output file missing after second write"
+    with file_path.open(encoding="utf-8") as f:
+        after_second = json.load(f)
     expected_list = [
         {"id": 10, "name": "Daisy"},
         {"id": 11, "name": "Eli"},
     ]
-    assert parsed_direct == expected_list, "Direct Content does not match"
+    assert after_second == expected_list, "File should contain Daisy and Eli after second write"
 
     read_metrics = ComponentMetrics(
         started_at=datetime.now(),
