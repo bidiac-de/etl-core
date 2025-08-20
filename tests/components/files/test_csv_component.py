@@ -229,6 +229,7 @@ async def test_read_csv_missing_file_bulk_raises(metrics, tmp_path: Path):
         gen = comp.execute(payload=None, metrics=metrics)
         await anext(gen)
 
+
 @pytest.mark.asyncio
 async def test_read_csv_invalid_file_type_bulk_raises(metrics):
     comp = ReadCSV(
