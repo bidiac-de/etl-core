@@ -4,6 +4,7 @@ from typing import Any, AsyncGenerator, Dict
 
 import pandas as pd
 import dask.dataframe as dd
+from dask.dataframe.utils import make_meta
 
 from etl_core.receivers.base_receiver import Receiver
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
@@ -72,16 +73,16 @@ class FilterReceiver(Receiver):
 
         filtered = ddf.map_partitions(
             _apply,
-            meta=getattr(dd, "utils").make_meta(ddf),
+            meta=make_meta(ddf),
         )
 
         # Best-effort metrics (safe-guarded)
         try:
-            metrics.lines_received += int(ddf.map_partitions(len).sum().compute())
-            metrics.lines_forwarded += int(filtered.map_partitions(len).sum().compute())
-            metrics.lines_dismissed += max(
-                0, metrics.lines_received - metrics.lines_forwarded
-            )
+            total_received = int(ddf.map_partitions(len).sum().compute())
+            total_forwarded = int(filtered.map_partitions(len).sum().compute())
+            metrics.lines_received += total_received
+            metrics.lines_forwarded += total_forwarded
+            metrics.lines_dismissed += max(0, total_received - total_forwarded)
         except Exception:
             pass
 
