@@ -35,12 +35,8 @@ python-dotenv
 click
 rich
 psutil
+xlrd
 
 # Type Checking
 mypy
 types-requests
-
-# Code Quality
-black
-flake8
-isort
