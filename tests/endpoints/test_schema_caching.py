@@ -104,7 +104,6 @@ def test_component_schema_is_cached_and_invalidates(
     _require_cache_or_skip(client)
 
     comp = _get_first_public_component(client)
-    print(comp)
     if not comp:
         pytest.skip("No public components available to test component schema caching")
 
