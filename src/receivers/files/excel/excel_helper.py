@@ -45,8 +45,8 @@ def _engine_for_write(ext: str) -> str:
 
 
 def read_excel_rows(
-        path: Path,
-        sheet_name: Optional[str] = None,
+    path: Path,
+    sheet_name: Optional[str] = None,
 ) -> Iterator[Dict[str, object]]:
     """Read an Excel sheet and yield rows as dictionaries (streaming iteration)."""
     path = resolve_file_path(path)
@@ -73,9 +73,9 @@ def read_excel_bulk(path: Path, sheet_name: Optional[str] = None) -> pd.DataFram
 
 
 def read_excel_bigdata(
-        path: Path,
-        sheet_name: Optional[str] = None,
-        npartitions: int = 8,
+    path: Path,
+    sheet_name: Optional[str] = None,
+    npartitions: int = 8,
 ) -> dd.DataFrame:
     """
     Create a Dask DataFrame from an Excel sheet (via pandas -> Dask).
@@ -92,7 +92,7 @@ def read_excel_bigdata(
 
 
 def _normalize_to_dataframe(
-        data: Union[pd.DataFrame, List[Dict[str, object]]]
+    data: Union[pd.DataFrame, List[Dict[str, object]]],
 ) -> pd.DataFrame:
     """Convert the given input into a pandas DataFrame if it is not one already."""
     if isinstance(data, pd.DataFrame):
@@ -101,9 +101,9 @@ def _normalize_to_dataframe(
 
 
 def write_excel_row(
-        path: Path,
-        row: Dict[str, object],
-        sheet_name: Optional[str] = None,
+    path: Path,
+    row: Dict[str, object],
+    sheet_name: Optional[str] = None,
 ) -> None:
     """
     Append a single row to the given Excel sheet (write header if needed).
@@ -131,9 +131,9 @@ def write_excel_row(
 
 
 def write_excel_bulk(
-        path: Path,
-        data: Union[pd.DataFrame, List[Dict[str, object]]],
-        sheet_name: Optional[str] = None,
+    path: Path,
+    data: Union[pd.DataFrame, List[Dict[str, object]]],
+    sheet_name: Optional[str] = None,
 ) -> None:
     """Overwrite the target Excel sheet with the given data."""
     path = Path(path)
@@ -146,9 +146,9 @@ def write_excel_bulk(
 
 
 def write_excel_bigdata(
-        path: Path,
-        data: dd.DataFrame,
-        sheet_name: Optional[str] = None,
+    path: Path,
+    data: dd.DataFrame,
+    sheet_name: Optional[str] = None,
 ) -> None:
     """Write a Dask DataFrame to an Excel sheet by materializing it to pandas first."""
     path = Path(path)

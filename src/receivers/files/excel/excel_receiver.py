@@ -35,10 +35,10 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
     """Receiver for Excel files (xlsx/xlsm; xls supported)"""
 
     async def read_row(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            sheet_name: Optional[str] = None,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        sheet_name: Optional[str] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream rows from an Excel sheet one by one."""
         ensure_exists(filepath)
@@ -51,10 +51,10 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
             yield row
 
     async def read_bulk(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            sheet_name: Optional[str] = None,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        sheet_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Read an entire Excel sheet into a pandas DataFrame."""
         ensure_exists(filepath)
@@ -63,10 +63,10 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         return df
 
     async def read_bigdata(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            sheet_name: Optional[str] = None,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        sheet_name: Optional[str] = None,
     ) -> dd.DataFrame:
         """Load an Excel sheet as a Dask DataFrame."""
         ensure_exists(filepath)
@@ -81,11 +81,11 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         return ddf
 
     async def write_row(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            row: Dict[str, Any],
-            sheet_name: Optional[str] = None,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        row: Dict[str, Any],
+        sheet_name: Optional[str] = None,
     ) -> None:
         """Append a single row to an Excel sheet."""
         metrics.lines_received += 1
@@ -96,11 +96,11 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += 1
 
     async def write_bulk(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            data: pd.DataFrame,
-            sheet_name: Optional[str] = None,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: pd.DataFrame,
+        sheet_name: Optional[str] = None,
     ) -> None:
         """Write a complete pandas DataFrame to an Excel sheet."""
         metrics.lines_received += len(data)
@@ -111,11 +111,11 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += len(data)
 
     async def write_bigdata(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            data: dd.DataFrame,
-            sheet_name: Optional[str] = None,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: dd.DataFrame,
+        sheet_name: Optional[str] = None,
     ) -> None:
         """Write a Dask DataFrame to an Excel sheet (materialized to pandas)."""
         try:

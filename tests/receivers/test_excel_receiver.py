@@ -25,17 +25,17 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_excel_file() -> Path:
     return (
-            Path(__file__).parent.parent
-            / "components"
-            / "files"
-            / "data"
-            / "test_data.xlsx"
+        Path(__file__).parent.parent
+        / "components"
+        / "files"
+        / "data"
+        / "test_data.xlsx"
     )
 
 
 @pytest.mark.asyncio
 async def test_excelreceiver_read_row_streaming(
-        sample_excel_file: Path, metrics: ComponentMetrics
+    sample_excel_file: Path, metrics: ComponentMetrics
 ) -> None:
     r = ExcelReceiver()
 
@@ -58,7 +58,7 @@ async def test_excelreceiver_read_row_streaming(
 
 @pytest.mark.asyncio
 async def test_read_excel_bulk(
-        sample_excel_file: Path, metrics: ComponentMetrics
+    sample_excel_file: Path, metrics: ComponentMetrics
 ) -> None:
     r = ExcelReceiver()
     df = await r.read_bulk(filepath=sample_excel_file, metrics=metrics)
@@ -70,7 +70,7 @@ async def test_read_excel_bulk(
 
 @pytest.mark.asyncio
 async def test_read_excel_bigdata(
-        sample_excel_file: Path, metrics: ComponentMetrics
+    sample_excel_file: Path, metrics: ComponentMetrics
 ) -> None:
     r = ExcelReceiver()
     ddf = await r.read_bigdata(filepath=sample_excel_file, metrics=metrics)

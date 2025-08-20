@@ -22,9 +22,7 @@ class WriteExcel(Excel):
         return self
 
     async def process_row(
-            self,
-            row: Dict[str, Any],
-            metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Write a single row and yield it."""
         await self._receiver.write_row(
@@ -36,9 +34,7 @@ class WriteExcel(Excel):
         yield row
 
     async def process_bulk(
-            self,
-            dataframe: pd.DataFrame,
-            metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Write full pandas DataFrame and yield it."""
         await self._receiver.write_bulk(
@@ -50,9 +46,7 @@ class WriteExcel(Excel):
         yield dataframe
 
     async def process_bigdata(
-            self,
-            dataframe: dd.DataFrame,
-            metrics: ComponentMetrics
+        self, dataframe: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """Write Dask DataFrame and yield it."""
         await self._receiver.write_bigdata(

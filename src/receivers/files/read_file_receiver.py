@@ -11,7 +11,7 @@ class ReadFileReceiver(Receiver, ABC):
 
     @abstractmethod
     async def read_row(
-            self, filepath: Path, metrics: ComponentMetrics
+        self, filepath: Path, metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
         """
         Yield single rows (as dicts).

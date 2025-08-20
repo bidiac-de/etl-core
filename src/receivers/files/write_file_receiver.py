@@ -13,7 +13,7 @@ class WriteFileReceiver(Receiver, ABC):
 
     @abstractmethod
     async def write_row(
-            self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
+        self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
     ) -> None:
         """
         Write a single row.
@@ -22,10 +22,10 @@ class WriteFileReceiver(Receiver, ABC):
 
     @abstractmethod
     async def write_bulk(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            data: Union[pd.DataFrame, List[Dict[str, Any]]],
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: Union[pd.DataFrame, List[Dict[str, Any]]],
     ) -> None:
         """
         Write multiple rows at once.
@@ -35,7 +35,7 @@ class WriteFileReceiver(Receiver, ABC):
 
     @abstractmethod
     async def write_bigdata(
-            self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
+        self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
     ) -> None:
         """
         Write large datasets (e.g., Dask DataFrame partitions).

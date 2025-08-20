@@ -22,19 +22,18 @@ class ReadExcel(Excel):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any],
-            metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Read rows one-by-one (streaming) from the configured sheet."""
         async for result in self._receiver.read_row(
-                self.filepath, metrics=metrics, sheet_name=self.sheet_name
+            self.filepath, metrics=metrics, sheet_name=self.sheet_name
         ):
             yield result
 
     async def process_bulk(
-            self,
-            dataframe: pd.DataFrame,
-            metrics: ComponentMetrics,
+        self,
+        dataframe: pd.DataFrame,
+        metrics: ComponentMetrics,
     ) -> AsyncGenerator[pd.DataFrame, None]:
         """Read the entire sheet into a pandas DataFrame."""
         df = await self._receiver.read_bulk(
@@ -43,9 +42,9 @@ class ReadExcel(Excel):
         yield df
 
     async def process_bigdata(
-            self,
-            dataframe: dd.DataFrame,
-            metrics: ComponentMetrics,
+        self,
+        dataframe: dd.DataFrame,
+        metrics: ComponentMetrics,
     ) -> AsyncGenerator[dd.DataFrame, None]:
         """Read the sheet as a Dask DataFrame."""
         ddf = await self._receiver.read_bigdata(

@@ -5,6 +5,7 @@ from typing import Any, AsyncIterator
 
 import dask.dataframe as dd
 
+from src.components.base_component import Component
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.base_strategy import ExecutionStrategy
 
@@ -19,10 +20,10 @@ class BigDataExecutionStrategy(ExecutionStrategy):
     """
 
     async def execute(
-            self,
-            component: "Component",
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        component: "Component",
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[dd.DataFrame]:
         result = component.process_bigdata(payload, metrics)
 
