@@ -23,20 +23,17 @@ class DatabaseComponent(Component, ABC):
     can use them consistently.
     """
 
-    # Database-specific fields
     host: str = Field(..., description="Database host")
     port: int = Field(default=3306, description="Database port")
     database: str = Field(..., description="Database name")
     query: str = Field(default="", description="SQL query for read operations")
     credentials_id: int = Field(..., description="ID of credentials to use")
 
-    # Engine-agnostic entity name (table / collection / view)
     entity_name: str = Field(
         default="",
         description="name of the target entity (table/collection).",
     )
 
-    # Shared throughput knobs
     row_batch_size: int = Field(
         default=1_000,
         ge=1,
@@ -56,7 +53,6 @@ class DatabaseComponent(Component, ABC):
         ),
     )
 
-    # Private attributes
     _connection_handler: SQLConnectionHandler = None
     _context: Context = None
     _receiver: Any = None
@@ -65,17 +61,12 @@ class DatabaseComponent(Component, ABC):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build database-specific objects after validation."""
-        # Create connection handler without credentials initially
         self._connection_handler = None
-
-        # Create receiver (will be updated when connection is available)
         self._receiver = None
 
-        # Set strategy based on component type
         if hasattr(self, "strategy_type"):
             self._strategy = get_strategy(self.strategy_type)
         else:
-            # Default to bulk strategy for database operations
             self._strategy = get_strategy(StrategyType.BULK)
 
         return self
@@ -90,8 +81,7 @@ class DatabaseComponent(Component, ABC):
 
     @context.setter
     def context(self, value: Context):
-        # Allow Mock objects for testing
-        if hasattr(value, "get_credentials"):  # Check if it has the required method
+        if hasattr(value, "get_credentials"):
             self._context = value
         else:
             raise TypeError("context must have get_credentials method")
@@ -101,7 +91,6 @@ class DatabaseComponent(Component, ABC):
         if not self._context:
             raise ValueError("Context not set for database component")
 
-        # Get credentials from context
         credentials = self._context.get_credentials(self.credentials_id)
         if not credentials:
             raise ValueError(f"Credentials with ID {self.credentials_id} not found")
@@ -119,7 +108,6 @@ class DatabaseComponent(Component, ABC):
 
         creds = self._get_credentials()
 
-        # Create connection handler with credentials
         self._connection_handler = SQLConnectionHandler()
         url = SQLConnectionHandler.build_url(
             db_type="mariadb",
@@ -130,18 +118,14 @@ class DatabaseComponent(Component, ABC):
             database=creds["database"],
         )
 
-        # Build engine kwargs from credentials pool settings
         credentials_obj = self._context.get_credentials(self.credentials_id)
         engine_kwargs = build_sql_engine_kwargs(credentials_obj)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
-
-        # Create receiver with new connection
         self._receiver = self._create_receiver()
 
     def _create_receiver(self):
         """Create the appropriate receiver for this database type."""
-        # This should be implemented by concrete subclasses
         raise NotImplementedError("Subclasses must implement _create_receiver")
 
     @abstractmethod

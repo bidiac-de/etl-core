@@ -6,15 +6,14 @@ with the MariaDB components.
 """
 
 import pytest
-import pandas as pd
 from unittest.mock import Mock, patch
 
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from src.etl_core.context.context import Context
+from src.etl_core.context.environment import Environment
+from src.etl_core.context.credentials import Credentials
+from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
@@ -69,13 +68,17 @@ class TestCredentialsIntegration:
         assert retrieved == new_creds
         assert retrieved.user == "user2"
 
-    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
-    def test_mariadb_read_component_with_real_credentials(self, mock_handler_class, sample_context):
+    @patch(
+        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    )
+    def test_mariadb_read_component_with_real_credentials(
+        self, mock_handler_class, sample_context
+    ):
         """Test that MariaDBRead works with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-        
+
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
@@ -97,13 +100,17 @@ class TestCredentialsIntegration:
         assert creds["password"] == "testpass123"
         assert creds["database"] == "testdb"
 
-    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
-    def test_mariadb_write_component_with_real_credentials(self, mock_handler_class, sample_context):
+    @patch(
+        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    )
+    def test_mariadb_write_component_with_real_credentials(
+        self, mock_handler_class, sample_context
+    ):
         """Test that MariaDBWrite works with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-        
+
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
@@ -343,13 +350,17 @@ class TestCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
-    def test_credentials_in_mariadb_component_integration(self, mock_handler_class, sample_context):
+    @patch(
+        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    )
+    def test_credentials_in_mariadb_component_integration(
+        self, mock_handler_class, sample_context
+    ):
         """Test complete integration of credentials in MariaDB component."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-        
+
         read_comp = MariaDBRead(
             name="integration_test",
             description="Integration test component",
@@ -496,13 +507,17 @@ class TestCredentialsIntegration:
             )
             assert param.key == key
 
-    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
-    def test_mariadb_write_bulk_operations(self, mock_handler_class, sample_context, sample_dataframe):
+    @patch(
+        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    )
+    def test_mariadb_write_bulk_operations(
+        self, mock_handler_class, sample_context, sample_dataframe
+    ):
         """Test MariaDB write bulk operations with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-        
+
         write_comp = MariaDBWrite(
             name="test_write_bulk",
             description="Test write bulk component",
@@ -527,13 +542,15 @@ class TestCredentialsIntegration:
         assert write_comp.database == "testdb"
         assert write_comp.credentials_id == 1
 
-    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
+    @patch(
+        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    )
     def test_mariadb_read_query_operations(self, mock_handler_class, sample_context):
         """Test MariaDB read query operations with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-        
+
         read_comp = MariaDBRead(
             name="test_read_query",
             description="Test read query component",
@@ -588,16 +605,20 @@ class TestCredentialsIntegration:
         no_pass_creds = multiple_credentials["no_password"]
         assert no_pass_creds.password is None
 
-    def test_context_with_multiple_credentials_fixture(self, context_with_multiple_credentials, multiple_credentials):
+    def test_context_with_multiple_credentials_fixture(
+        self, context_with_multiple_credentials, multiple_credentials
+    ):
         """Test the context with multiple credentials fixture."""
         context = context_with_multiple_credentials
-        
+
         # Test that all credentials are accessible
         for creds in multiple_credentials.values():
             retrieved = context.get_credentials(creds.credentials_id)
             assert retrieved == creds
 
-    def test_mariadb_component_fixtures(self, mariadb_read_component, mariadb_write_component):
+    def test_mariadb_component_fixtures(
+        self, mariadb_read_component, mariadb_write_component
+    ):
         """Test the MariaDB component fixtures."""
         # Test read component
         assert mariadb_read_component.name == "test_read"

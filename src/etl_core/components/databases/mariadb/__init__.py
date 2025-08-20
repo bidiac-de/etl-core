@@ -4,6 +4,6 @@ from .mariadb_write import MariaDBWrite
 
 __all__ = [
     "MariaDBComponent",
-    "MariaDBRead", 
+    "MariaDBRead",
     "MariaDBWrite",
 ]

@@ -12,7 +12,6 @@ from src.etl_core.metrics.component_metrics.component_metrics import ComponentMe
 class MariaDBRead(MariaDBComponent):
     """MariaDB reader supporting row, bulk, and bigdata modes."""
 
-    # Read-specific fields
     query: str = Field(..., description="SQL query to execute")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
     strategy_type: str = Field(default="bulk", description="Execution strategy type")
@@ -20,12 +19,8 @@ class MariaDBRead(MariaDBComponent):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build objects after validation."""
-        # Call parent _build_objects first
         super()._build_objects()
-
-        # Setup connection with credentials
         self._setup_connection()
-
         return self
 
     async def process_row(
@@ -37,7 +32,7 @@ class MariaDBRead(MariaDBComponent):
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
-            params=self.params
+            params=self.params,
         ):
             yield result
 
@@ -52,7 +47,7 @@ class MariaDBRead(MariaDBComponent):
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
-            params=self.params
+            params=self.params,
         )
 
     async def process_bigdata(
@@ -66,5 +61,5 @@ class MariaDBRead(MariaDBComponent):
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
-            params=self.params
+            params=self.params,
         )

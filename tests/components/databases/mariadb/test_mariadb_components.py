@@ -249,7 +249,10 @@ class TestMariaDBComponents:
 
         # Mock the receiver
         mock_receiver = AsyncMock()
-        mock_receiver.write_row.return_value = {"affected_rows": 1, "row": {"name": "John", "email": "john@example.com"}}
+        mock_receiver.write_row.return_value = {
+            "affected_rows": 1,
+            "row": {"name": "John", "email": "john@example.com"},
+        }
         write_comp._receiver = mock_receiver
 
         # Test process_row - this returns an async iterator
@@ -310,7 +313,9 @@ class TestMariaDBComponents:
 
         # Mock the receiver
         mock_receiver = AsyncMock()
-        mock_receiver.write_bigdata.return_value = sample_dask_dataframe  # Return the Dask DataFrame
+        mock_receiver.write_bigdata.return_value = (
+            sample_dask_dataframe  # Return the Dask DataFrame
+        )
         write_comp._receiver = mock_receiver
 
         # Test process_bigdata - returns a Dask DataFrame directly
@@ -562,7 +567,7 @@ class TestMariaDBComponents:
 
         # Test process_bulk with empty DataFrame
         empty_df = pd.DataFrame()
-        
+
         # Mock the receiver
         mock_receiver = AsyncMock()
         mock_receiver.write_bulk.return_value = empty_df  # Return the empty DataFrame

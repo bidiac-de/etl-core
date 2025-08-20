@@ -158,7 +158,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
-            params={"limit": 10}
+            params={"limit": 10},
         ):
             results.append(result)
 
@@ -190,7 +190,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
-            params={"limit": 10}
+            params={"limit": 10},
         )
 
         assert len(result) == 2
@@ -219,7 +219,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
-            params={"limit": 10}
+            params={"limit": 10},
         )
 
         assert len(result) == 2
@@ -243,14 +243,17 @@ class TestMariaDBReceivers:
             entity_name="users",
             row={"name": "John", "email": "john@example.com"},
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify execute and commit were called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
-        assert result == {"affected_rows": 1, "row": {"name": "John", "email": "john@example.com"}}
+        assert result == {
+            "affected_rows": 1,
+            "row": {"name": "John", "email": "john@example.com"},
+        }
 
     @pytest.mark.asyncio
     async def test_mariadb_receiver_write_bulk(
@@ -270,7 +273,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify execute and commit were called
@@ -293,7 +296,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify no execute or commit calls for empty data
@@ -321,7 +324,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
-                table="users"
+                table="users",
             )
             # Verify return value - result should be the DataFrame
             assert result is not None
@@ -363,7 +366,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 metrics=mock_metrics,
                 query="SELECT * FROM users",
-                params={"limit": 10}
+                params={"limit": 10},
             ):
                 pass
 
@@ -390,7 +393,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
-            params={"limit": 10}
+            params={"limit": 10},
         ):
             results.append(result)
 
@@ -415,7 +418,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 metrics=mock_metrics,
                 query="SELECT 1",
-                params={}
+                params={},
             ):
                 pass
 
@@ -442,7 +445,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query=malicious_query,
-            params={}
+            params={},
         ):
             pass
 
@@ -474,7 +477,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 row={"name": "John"},
                 metrics=mock_metrics,
-                table="users"
+                table="users",
             )
 
         # Verify rollback was called (though in real scenario this would be in __exit__)
@@ -501,7 +504,7 @@ class TestMariaDBReceivers:
                     entity_name="users",
                     frame=ddf,
                     metrics=mock_metrics,
-                    table="users"
+                    table="users",
                 )
 
                 # Verify that map_partitions was called
@@ -526,7 +529,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify no execute or commit calls for empty DataFrame
@@ -555,7 +558,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=single_row_df,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify execute and commit were called
@@ -583,7 +586,7 @@ class TestMariaDBReceivers:
             entity_name="empty_table",
             metrics=mock_metrics,
             query="SELECT * FROM empty_table",
-            params={}
+            params={},
         ):
             results.append(result)
 
@@ -607,7 +610,7 @@ class TestMariaDBReceivers:
             entity_name="empty_table",
             metrics=mock_metrics,
             query="SELECT * FROM empty_table",
-            params={}
+            params={},
         )
 
         assert len(result) == 0
@@ -635,7 +638,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT 1",
-            params={}
+            params={},
         )
 
         # Verify lease context manager was used
@@ -659,7 +662,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT 1",
-            params={}
+            params={},
         )
 
         # Verify metrics object was passed through (not directly used in current impl)
@@ -688,7 +691,7 @@ class TestMariaDBReceivers:
             entity_name="large_table",
             metrics=mock_metrics,
             query="SELECT * FROM large_table",
-            params={}
+            params={},
         )
 
         assert len(result) == 1000
@@ -721,7 +724,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             row=special_data,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify execute was called
@@ -754,7 +757,7 @@ class TestMariaDBReceivers:
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
-            table="numeric_table"
+            table="numeric_table",
         )
 
         # Verify execute was called
@@ -782,7 +785,7 @@ class TestMariaDBReceivers:
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
-            table="boolean_table"
+            table="boolean_table",
         )
 
         # Verify execute was called
@@ -826,7 +829,7 @@ class TestMariaDBReceivers:
                     entity_name="test_table",
                     frame=ddf,
                     metrics=mock_metrics,
-                    table="test_table"
+                    table="test_table",
                 )
 
                 # Verify map_partitions was called
@@ -869,7 +872,7 @@ class TestMariaDBReceivers:
                     entity_name="test_table",
                     frame=ddf,
                     metrics=mock_metrics,
-                    table="test_table"
+                    table="test_table",
                 )
 
                 # Verify map_partitions was called
@@ -918,7 +921,7 @@ class TestMariaDBReceivers:
                     entity_name="test_table",
                     frame=ddf,
                     metrics=mock_metrics,
-                    table="test_table"
+                    table="test_table",
                 )
 
                 # Verify map_partitions was called
@@ -949,7 +952,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify no execute or commit calls for empty DataFrame
@@ -972,7 +975,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            table="users"
+            table="users",
         )
 
         # Verify no execute or commit calls for empty list
@@ -1008,12 +1011,12 @@ class TestMariaDBReceivers:
                     mock_from_pandas.return_value = mock_ddf
 
                     # Test read_bigdata
-                    result = await receiver.read_bigdata(
+                    await receiver.read_bigdata(
                         db=None,
                         entity_name="users",
                         metrics=mock_metrics,
                         query="SELECT * FROM users",
-                        params={}
+                        params={},
                     )
 
                     # Verify from_pandas was called with default npartitions=1
@@ -1042,12 +1045,8 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_bulk with DataFrame
-        result = await receiver.write_bulk(
-            db=None,
-            entity_name="users",
-            frame=df,
-            metrics=mock_metrics,
-            table="users"
+        await receiver.write_bulk(
+            db=None, entity_name="users", frame=df, metrics=mock_metrics, table="users"
         )
 
         # Verify execute was called
@@ -1071,12 +1070,8 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with list (convert to DataFrame first)
         df = pd.DataFrame(list_data)
-        result = await receiver.write_bulk(
-            db=None,
-            entity_name="users",
-            frame=df,
-            metrics=mock_metrics,
-            table="users"
+        await receiver.write_bulk(
+            db=None, entity_name="users", frame=df, metrics=mock_metrics, table="users"
         )
 
         # Verify execute was called

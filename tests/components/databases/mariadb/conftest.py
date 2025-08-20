@@ -67,11 +67,13 @@ def mock_connection_handler():
 @pytest.fixture
 def sample_dataframe():
     """Sample DataFrame for testing."""
-    return pd.DataFrame({
-        "id": [1, 2, 3],
-        "name": ["John", "Jane", "Bob"],
-        "email": ["john@test.com", "jane@test.com", "bob@test.com"]
-    })
+    return pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "name": ["John", "Jane", "Bob"],
+            "email": ["john@test.com", "jane@test.com", "bob@test.com"],
+        }
+    )
 
 
 @pytest.fixture
@@ -79,11 +81,19 @@ def sample_dask_dataframe():
     """Sample Dask DataFrame for testing."""
     try:
         import dask.dataframe as dd
-        df = pd.DataFrame({
-            "id": [1, 2, 3, 4],
-            "name": ["John", "Jane", "Bob", "Alice"],
-            "email": ["john@test.com", "jane@test.com", "bob@test.com", "alice@test.com"]
-        })
+
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4],
+                "name": ["John", "Jane", "Bob", "Alice"],
+                "email": [
+                    "john@test.com",
+                    "jane@test.com",
+                    "bob@test.com",
+                    "alice@test.com",
+                ],
+            }
+        )
         return dd.from_pandas(df, npartitions=2)
     except ImportError:
         # Return a mock if dask is not available
@@ -107,7 +117,10 @@ def mock_metrics():
 @pytest.fixture
 def mariadb_read_component(sample_context):
     """Create a MariaDBRead component with context."""
-    with patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler'):
+    with patch(
+        "src.etl_core.components.databases.sql_connection_handler."
+        "SQLConnectionHandler"
+    ):
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
@@ -126,7 +139,10 @@ def mariadb_read_component(sample_context):
 @pytest.fixture
 def mariadb_write_component(sample_context):
     """Create a MariaDBWrite component with context."""
-    with patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler'):
+    with patch(
+        "src.etl_core.components.databases.sql_connection_handler."
+        "SQLConnectionHandler"
+    ):
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
@@ -184,12 +200,12 @@ def context_with_multiple_credentials(multiple_credentials):
         id=2,
         name="multi_creds_context",
         environment=Environment.TEST,
-        parameters={}
+        parameters={},
     )
-    
+
     for creds in multiple_credentials.values():
         context.add_credentials(creds)
-    
+
     return context
 
 
@@ -198,11 +214,16 @@ def sample_sql_queries():
     """Sample SQL queries for testing."""
     return {
         "simple_select": "SELECT * FROM users",
-        "parameterized": "SELECT * FROM users WHERE id = %(id)s AND active = %(active)s",
+        "parameterized": """
+            SELECT *
+            FROM users
+            WHERE id = %(id)s
+            AND active = %(active)s
+        """,
         "complex_join": """
-            SELECT u.id, u.name, p.title 
-            FROM users u 
-            JOIN posts p ON u.id = p.user_id 
+            SELECT u.id, u.name, p.title
+            FROM users u
+            JOIN posts p ON u.id = p.user_id
             WHERE u.active = %(active)s
         """,
         "aggregation": "SELECT COUNT(*) as count, active FROM users GROUP BY active",

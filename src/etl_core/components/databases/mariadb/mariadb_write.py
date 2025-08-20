@@ -12,10 +12,8 @@ from src.etl_core.metrics.component_metrics.component_metrics import ComponentMe
 class MariaDBWrite(MariaDBComponent):
     """MariaDB writer supporting row, bulk, and bigdata modes."""
 
-    # Write-specific fields
     strategy_type: str = Field(default="bulk", description="Execution strategy type")
 
-    # Optional fields for write operations
     batch_size: int = Field(default=1000, description="Batch size for bulk operations")
     on_duplicate_key_update: List[str] = Field(
         default_factory=list, description="Columns to update on duplicate key"
@@ -24,12 +22,8 @@ class MariaDBWrite(MariaDBComponent):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build objects after validation."""
-        # Call parent _build_objects first
         super()._build_objects()
-
-        # Setup connection with credentials
         self._setup_connection()
-
         return self
 
     async def process_row(
@@ -41,7 +35,7 @@ class MariaDBWrite(MariaDBComponent):
             entity_name=self.entity_name,
             row=row,
             metrics=metrics,
-            table=self.entity_name
+            table=self.entity_name,
         )
         yield result
 
@@ -49,13 +43,12 @@ class MariaDBWrite(MariaDBComponent):
         self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> pd.DataFrame:
         """Write full dataset and yield it as DataFrame."""
-
         result = await self._receiver.write_bulk(
             db=None,
             entity_name=self.entity_name,
             frame=data,
             metrics=metrics,
-            table=self.entity_name
+            table=self.entity_name,
         )
         return result
 
@@ -68,7 +61,7 @@ class MariaDBWrite(MariaDBComponent):
             entity_name=self.entity_name,
             frame=chunk_iterable,
             metrics=metrics,
-            table=self.entity_name
+            table=self.entity_name,
         )
         return result
 
@@ -77,7 +70,9 @@ class MariaDBWrite(MariaDBComponent):
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
 
-        query = f"INSERT INTO {self.entity_name} ({columns_str}) VALUES ({placeholders})"
+        query = (
+            f"INSERT INTO {self.entity_name} ({columns_str}) VALUES ({placeholders})"
+        )
 
         if self.on_duplicate_key_update:
             update_clause = ", ".join(

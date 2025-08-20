@@ -4,6 +4,6 @@ from .sql_receiver import SQLReceiver
 
 __all__ = [
     "ReadDatabaseReceiver",
-    "WriteDatabaseReceiver", 
+    "WriteDatabaseReceiver",
     "SQLReceiver",
 ]

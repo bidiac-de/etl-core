@@ -140,9 +140,10 @@ class TestMariaDBIntegration:
         read_comp._receiver = mock_read_receiver
 
         mock_write_receiver = AsyncMock()
-        mock_write_receiver.write_row.return_value = (
-            {"affected_rows": 1, "row": {"id": 1, "name": "John"}}
-        )
+        mock_write_receiver.write_row.return_value = {
+            "affected_rows": 1,
+            "row": {"id": 1, "name": "John"},
+        }
         write_comp._receiver = mock_write_receiver
 
         # Test read operation
