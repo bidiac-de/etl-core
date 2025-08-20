@@ -39,7 +39,6 @@ def metrics() -> ComponentMetrics:
 
 @pytest.fixture(scope="session")
 def expected_df() -> pd.DataFrame:
-    # Single source of truth for the dataset
     df = pd.read_excel(VALID_XLSX)
     return df[[*df.columns]]
 
@@ -155,7 +154,6 @@ async def test_readexcel_missing_values_bulk_wholeframe(
     lhs = normalize_df(dfs[0])
     rhs = normalize_df(expected_missing_df)
     assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
-    # Sanity: missing values exist in this dataset
     assert lhs.isna().any().any()
     assert metrics.error_count == 0
 
@@ -186,11 +184,6 @@ async def test_readexcel_wrong_types_bulk_does_not_crash(
     assert {"id", "name"}.issubset(df.columns)
     df["id"].astype(str)
     assert metrics.error_count == 0
-
-
-# ------------------------------
-# WRITE tests (use the same Excel data as input)
-# ------------------------------
 
 
 @pytest.mark.asyncio
@@ -280,11 +273,6 @@ async def test_writeexcel_bigdata_wholeframe(
 
     assert metrics.error_count == 0
     assert metrics.lines_forwarded == len(expected_df)
-
-
-# ------------------------------
-# Negative cases
-# ------------------------------
 
 
 @pytest.mark.asyncio

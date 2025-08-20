@@ -26,7 +26,6 @@ def _make_job(cfg_path: Path, in_path: Path, out_path: Path):
 
 
 def test_execute_excel_row_job(tmp_path: Path) -> None:
-    # Row-Streaming: Excel (.xlsx)
     in_fp = tmp_path / "in.xlsx"
     df_in = pd.DataFrame([{"id": 1, "name": "Nina"}, {"id": 2, "name": "Max"}])
     df_in.to_excel(in_fp, index=False)
@@ -48,7 +47,6 @@ def test_execute_excel_row_job(tmp_path: Path) -> None:
 
 
 def test_execute_excel_bulk_job(tmp_path: Path) -> None:
-    # Bulk: Excel (.xlsx)
     in_fp = tmp_path / "in_bulk.xlsx"
     df_in = pd.DataFrame([{"id": 2, "name": "Omar"}, {"id": 3, "name": "Lina"}])
     df_in.to_excel(in_fp, index=False)
@@ -70,7 +68,6 @@ def test_execute_excel_bulk_job(tmp_path: Path) -> None:
 
 
 def test_execute_excel_bigdata_job(tmp_path: Path) -> None:
-    # BigData: Excel in/out (.xlsx) — read as Dask internally, written back to Excel
     in_fp = tmp_path / "in_big.xlsx"
     df_in = pd.DataFrame([{"id": 4, "name": "Max"}, {"id": 5, "name": "Gina"}])
     df_in.to_excel(in_fp, index=False)

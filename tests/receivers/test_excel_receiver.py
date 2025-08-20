@@ -40,7 +40,6 @@ def sample_excel_file() -> Path:
 @pytest.fixture(scope="session")
 def expected_df(sample_excel_file: Path) -> pd.DataFrame:
     df = pd.read_excel(sample_excel_file)
-    # Ensure stable col order (Excel might reorder in some engines)
     return df[[*df.columns]]
 
 
@@ -103,7 +102,6 @@ async def test_excelreceiver_read_bigdata_matches_expected(
     ddf = await receiver.read_bigdata(filepath=sample_excel_file, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
 
-    # Compare with dask's assert_eq against the pandas baseline
     actual = normalize_df(ddf.compute())
     expected = normalize_df(expected_df)
     assert_eq(actual, expected, check_dtype=False, check_index=False)
@@ -125,7 +123,6 @@ async def test_excelreceiver_write_row_from_expected_df(
     out_fp = tmp_path / "out_row.xlsx"
     receiver = ExcelReceiver()
 
-    # Write each row with a timeout and assert incrementally
     for i, rec in enumerate(expected_df.to_dict(orient="records"), start=1):
         await asyncio.wait_for(
             receiver.write_row(filepath=out_fp, metrics=metrics, row=rec),
@@ -133,17 +130,14 @@ async def test_excelreceiver_write_row_from_expected_df(
         )
         assert out_fp.exists()
 
-        # Read back after each write and compare against the first i rows
         actual_partial = pd.read_excel(out_fp)
         lhs = normalize_df(actual_partial)
         rhs = normalize_df(expected_df.iloc[:i, :])
         assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
 
-        # Metrics should track forwarded lines incrementally with no errors
         assert metrics.error_count == 0
         assert metrics.lines_forwarded == i
 
-    # Final whole-frame check
     final_actual = pd.read_excel(out_fp)
     lhs = normalize_df(final_actual)
     rhs = normalize_df(expected_df)
