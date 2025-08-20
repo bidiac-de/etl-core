@@ -1,7 +1,8 @@
-from typing import Iterable, List, Dict, Union, Any, Mapping
+from typing import Iterable, List, Dict, Union, Any, Mapping, Optional
 from etl_core.components.base_component import Component
 from etl_core.job_execution.runtimejob import RuntimeJob
 from etl_core.persistance.configs.job_config import JobConfig
+import pandas as pd
 
 
 def get_component_by_name(job: "RuntimeJob", name: str) -> "Component":
@@ -80,3 +81,18 @@ def detail_message(payload: Dict[str, Any]) -> str:
     if isinstance(detail, dict):
         return str(detail.get("message", ""))
     return ""
+
+
+def normalize_df(
+    df: pd.DataFrame, sort_cols: Optional[List[str]] = None
+) -> pd.DataFrame:
+    """
+    Stable sort + reset index for robust equality checks across engines.
+    Ensures comparisons are not sensitive to ordering.
+    """
+    if sort_cols is None:
+        sort_cols = list(df.columns)
+    sort_cols = [c for c in sort_cols if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(by=sort_cols, kind="mergesort")
+    return df.reset_index(drop=True)
