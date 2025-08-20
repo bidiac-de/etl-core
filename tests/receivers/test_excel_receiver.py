@@ -35,9 +35,10 @@ def sample_excel_file() -> Path:
         / "test_data.xlsx"
     )
 
+
 @pytest.mark.asyncio
 async def test_excelreceiver_read_row_streaming_incremental(
-    sample_excel_file, metrics
+    sample_excel_file: Path, metrics: ComponentMetrics
 ) -> None:
     r = ExcelReceiver()
     rows = r.read_row(filepath=sample_excel_file, metrics=metrics)
@@ -96,7 +97,7 @@ async def test_read_excel_bigdata_matches_expected(
         check_index=False,
     )
 
-    assert metrics.lines_received >= len(expected)
+    assert metrics.lines_received == len(expected)
     assert metrics.error_count == 0
 
 
@@ -132,7 +133,7 @@ async def test_write_excel_row(tmp_path: Path, metrics: ComponentMetrics) -> Non
     assert ids == {"10", "11"}
 
     assert metrics.error_count == 0
-    assert metrics.lines_forwarded >= 0
+    assert metrics.lines_forwarded == 2
 
 
 @pytest.mark.asyncio
@@ -162,13 +163,13 @@ async def test_write_excel_bulk(tmp_path: Path, metrics: ComponentMetrics) -> No
         rows.append(dict(zip(headers, row)))
 
     assert len(rows) == 2
-    names = {str(r["name"]) for r in rows}
-    ids = {str(r["id"]) for r in rows}
+    names = {str(rw["name"]) for rw in rows}
+    ids = {str(rw["id"]) for rw in rows}
     assert names == {"Finn", "Gina"}
     assert ids == {"20", "21"}
 
     assert metrics.error_count == 0
-    assert metrics.lines_forwarded >= 0
+    assert metrics.lines_forwarded == 2
 
 
 @pytest.mark.asyncio
@@ -186,24 +187,32 @@ async def test_write_excel_bigdata(tmp_path: Path, metrics: ComponentMetrics) ->
 
     await r.write_bigdata(filepath=file_path, metrics=metrics, data=ddf_in)
 
-    df_out = await r.read_bulk(
-        filepath=file_path,
-        metrics=ComponentMetrics(
-            started_at=datetime.now(),
-            processing_time=timedelta(0),
-            error_count=0,
-            lines_received=0,
-            lines_forwarded=0,
-        ),
-    )
-    assert len(df_out) == 2
-    assert set(df_out["name"]) == {"Hugo", "Ivy"}
+    assert file_path.exists()
+
+    wb = load_workbook(filename=file_path)
+    ws = wb.active
+
+    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    assert set(headers) == {"id", "name"}
+
+    rows = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        rows.append(dict(zip(headers, row)))
+
+    assert len(rows) == 2
+    names = {str(rw["name"]) for rw in rows}
+    ids = {str(rw["id"]) for rw in rows}
+    assert names == {"Hugo", "Ivy"}
+    assert ids == {"30", "31"}
+
+    assert metrics.error_count == 0
+    assert metrics.lines_forwarded == 2
 
 
 @pytest.mark.asyncio
 async def test_excelreceiver_missing_file_bulk_raises(
     metrics: ComponentMetrics, tmp_path: Path
-):
+) -> None:
     r = ExcelReceiver()
     with pytest.raises(FileNotFoundError):
         await r.read_bulk(filepath=tmp_path / "missing.xlsx", metrics=metrics)
@@ -212,7 +221,7 @@ async def test_excelreceiver_missing_file_bulk_raises(
 @pytest.mark.asyncio
 async def test_excelreceiver_invalid_file_raises(
     metrics: ComponentMetrics, tmp_path: Path
-):
+) -> None:
     invalid = tmp_path / "invalid.xlsx"
     invalid.write_text("not an excel file")
     r = ExcelReceiver()
