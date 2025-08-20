@@ -8,18 +8,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-try:
-    import etl_core.components.file_components.csv.read_csv
-    import etl_core.components.file_components.csv.write_csv
-except Exception:
-    try:
-        import etl_core.components.files.csv.read_csv
-        import etl_core.components.files.csv.write_csv
-    except Exception as exc:
-        raise ImportError(
-            "CSV components not importable. Ensure their module gets imported so "
-            "@register_component('read_csv'/'write_csv') runs before JobConfig(...)."
-        ) from exc
+import etl_core.components.file_components.csv.read_csv # noqa: E402
+import etl_core.components.file_components.csv.write_csv # noqa: E402
 
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
@@ -41,7 +31,7 @@ def _parse_json(text: str) -> Dict[str, Any]:
 
 def _normalize_components(components: List[Dict[str, Any]]) -> None:
     """
-  Normalize components: ensure comp_type, description, options
+    Normalize components: ensure comp_type, description, options
     """
     for comp in components:
         ctype = comp.get("comp_type") or comp.get("type")
