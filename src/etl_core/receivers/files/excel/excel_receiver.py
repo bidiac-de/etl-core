@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional, Iterator
 
 import dask.dataframe as dd
 import pandas as pd
 
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.receivers.files.file_helper import ensure_exists
+from src.etl_core.receivers.files.file_helper import ensure_exists, FileReceiverError
 from src.etl_core.receivers.files.read_file_receiver import ReadFileReceiver
 from src.etl_core.receivers.files.write_file_receiver import WriteFileReceiver
-from src.etl_core.receivers.files.file_helper import FileReceiverError
-from etl_core.receivers.files.excel.excel_helper import (
+from src.etl_core.receivers.files.excel.excel_helper import (
     read_excel_rows,
     read_excel_bulk,
     read_excel_bigdata,
@@ -24,7 +23,7 @@ from etl_core.receivers.files.excel.excel_helper import (
 _SENTINEL: Any = object()
 
 
-def _next_or_sentinel(it) -> Any:
+def _next_or_sentinel(it: Iterator[Dict[str, Any]]) -> Any:
     try:
         return next(it)
     except StopIteration:
@@ -32,7 +31,7 @@ def _next_or_sentinel(it) -> Any:
 
 
 class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
-    """Receiver for Excel files (xlsx/xlsm; xls supported)"""
+    """Receiver for Excel files (xlsx/xlsm; xls supported for reads)."""
 
     async def read_row(
         self,
@@ -42,7 +41,11 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream rows from an Excel sheet one by one."""
         ensure_exists(filepath)
-        it = read_excel_rows(filepath, sheet_name=sheet_name)
+        try:
+            it = read_excel_rows(filepath, sheet_name=sheet_name)
+        except Exception as exc:
+            raise FileReceiverError(f"Failed to open excel for row-read: {exc}") from exc
+
         while True:
             row = await asyncio.to_thread(_next_or_sentinel, it)
             if row is _SENTINEL:
@@ -58,7 +61,10 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
     ) -> pd.DataFrame:
         """Read an entire Excel sheet into a pandas DataFrame."""
         ensure_exists(filepath)
-        df = await asyncio.to_thread(read_excel_bulk, filepath, sheet_name)
+        try:
+            df = await asyncio.to_thread(read_excel_bulk, filepath, sheet_name)
+        except Exception as exc:
+            raise FileReceiverError(f"Failed to read excel bulk: {exc}") from exc
         metrics.lines_received += len(df)
         return df
 
@@ -70,7 +76,11 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
     ) -> dd.DataFrame:
         """Load an Excel sheet as a Dask DataFrame."""
         ensure_exists(filepath)
-        ddf = await asyncio.to_thread(read_excel_bigdata, filepath, sheet_name)
+        try:
+            ddf = await asyncio.to_thread(read_excel_bigdata, filepath, sheet_name)
+        except Exception as exc:
+            raise FileReceiverError(f"Failed to read excel bigdata: {exc}") from exc
+
         try:
             count = await asyncio.to_thread(
                 lambda: int(ddf.map_partitions(len).sum().compute())
@@ -137,4 +147,5 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
         except Exception as exc:
             raise FileReceiverError(f"Failed to write excel: {exc}") from exc
 
-        metrics.lines_forwarded += row_count
+        if row_count is not None:
+            metrics.lines_forwarded += row_count
