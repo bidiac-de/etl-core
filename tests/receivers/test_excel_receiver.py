@@ -2,16 +2,17 @@ import asyncio
 import inspect
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 import pandas as pd
 import pytest
-from openpyxl import load_workbook
+from pandas.testing import assert_frame_equal
 
-from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
+from tests.helpers import normalize_df
 
 
 @pytest.fixture
@@ -25,7 +26,7 @@ def metrics() -> ComponentMetrics:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_excel_file() -> Path:
     return (
         Path(__file__).parent.parent
@@ -36,186 +37,170 @@ def sample_excel_file() -> Path:
     )
 
 
+@pytest.fixture(scope="session")
+def expected_df(sample_excel_file: Path) -> pd.DataFrame:
+    df = pd.read_excel(sample_excel_file)
+    # Ensure stable col order (Excel might reorder in some engines)
+    return df[[*df.columns]]
+
+
 @pytest.mark.asyncio
-async def test_excelreceiver_read_row_streaming_incremental(
-    sample_excel_file: Path, metrics: ComponentMetrics
+async def test_excelreceiver_read_row_streaming_wholeframe(
+    sample_excel_file: Path,
+    expected_df: pd.DataFrame,
+    metrics: ComponentMetrics,
 ) -> None:
-    r = ExcelReceiver()
-    rows = r.read_row(filepath=sample_excel_file, metrics=metrics)
+    """
+    Row mode: consume via async generator with a per-row timeout,
+    then compare the WHOLE output as a DataFrame to the expected_df.
+    """
+    receiver = ExcelReceiver()
+    rows = receiver.read_row(filepath=sample_excel_file, metrics=metrics)
 
     assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
 
-    rec1 = await asyncio.wait_for(anext(rows), timeout=0.5)
-    assert rec1["name"] == "Alice"
-    assert metrics.lines_received == 1
+    collected: List[Dict[str, Any]] = []
+    try:
+        while True:
+            item = await asyncio.wait_for(anext(rows), timeout=0.5)
+            collected.append(item)
+    except StopAsyncIteration:
+        pass
+    finally:
+        await rows.aclose()
+
+    actual_df = pd.DataFrame(collected)
+    lhs = normalize_df(actual_df)
+    rhs = normalize_df(expected_df)
+
+    assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
     assert metrics.error_count == 0
-
-    rec2 = await asyncio.wait_for(anext(rows), timeout=0.5)
-    assert rec2["name"] == "Bob"
-    assert metrics.lines_received == 2
-    assert metrics.error_count == 0
-
-    rec3 = await asyncio.wait_for(anext(rows), timeout=0.5)
-    assert rec3["name"] == "Charlie"
-    assert metrics.lines_received == 3
-    assert metrics.error_count == 0
-
-    with pytest.raises(StopAsyncIteration):
-        await asyncio.wait_for(anext(rows), timeout=0.2)
-
-    await rows.aclose()
+    assert metrics.lines_received == len(expected_df)
 
 
 @pytest.mark.asyncio
-async def test_read_excel_bulk(
-    sample_excel_file: Path, metrics: ComponentMetrics
+async def test_excelreceiver_read_bulk_matches_expected(
+    sample_excel_file: Path,
+    expected_df: pd.DataFrame,
+    metrics: ComponentMetrics,
 ) -> None:
-    r = ExcelReceiver()
-    df = await r.read_bulk(filepath=sample_excel_file, metrics=metrics)
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 3
-    assert set(df.columns) == {"id", "name"}
-    assert set(df["name"]) == {"Alice", "Bob", "Charlie"}
-    assert metrics.lines_received == 3
+    receiver = ExcelReceiver()
+    df = await receiver.read_bulk(filepath=sample_excel_file, metrics=metrics)
+    lhs = normalize_df(df)
+    rhs = normalize_df(expected_df)
+    assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
     assert metrics.error_count == 0
+    assert metrics.lines_received == len(expected_df)
 
 
 @pytest.mark.asyncio
-async def test_read_excel_bigdata_matches_expected(
-    sample_excel_file: Path, metrics: ComponentMetrics
+async def test_excelreceiver_read_bigdata_matches_expected(
+    sample_excel_file: Path,
+    expected_df: pd.DataFrame,
+    metrics: ComponentMetrics,
 ) -> None:
-    r = ExcelReceiver()
-    ddf = await r.read_bigdata(filepath=sample_excel_file, metrics=metrics)
+    receiver = ExcelReceiver()
+    ddf = await receiver.read_bigdata(filepath=sample_excel_file, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
 
-    expected = pd.read_excel(sample_excel_file)
-
-    assert_eq(
-        ddf.set_index(None).compute().sort_values(by=["name"]).reset_index(drop=True),
-        expected.sort_values(by=["name"]).reset_index(drop=True),
-        check_dtype=False,
-        check_index=False,
-    )
-
-    assert metrics.lines_received == len(expected)
+    # Compare with dask's assert_eq against the pandas baseline
+    actual = normalize_df(ddf.compute())
+    expected = normalize_df(expected_df)
+    assert_eq(actual, expected, check_dtype=False, check_index=False)
     assert metrics.error_count == 0
+    assert metrics.lines_received == len(expected_df)
 
 
 @pytest.mark.asyncio
-async def test_write_excel_row(tmp_path: Path, metrics: ComponentMetrics) -> None:
-    file_path = tmp_path / "out_row.xlsx"
-    r = ExcelReceiver()
+async def test_excelreceiver_write_row_from_expected_df(
+    tmp_path: Path,
+    expected_df: pd.DataFrame,
+    metrics: ComponentMetrics,
+) -> None:
+    """
+    Write-row behaves like read-row: each call is awaited with a timeout and
+    we assert incrementally after every write. Final check compares the whole
+    written file against the full expected_df.
+    """
+    out_fp = tmp_path / "out_row.xlsx"
+    receiver = ExcelReceiver()
 
-    await r.write_row(
-        filepath=file_path, metrics=metrics, row={"id": "10", "name": "Daisy"}
-    )
-    await r.write_row(
-        filepath=file_path, metrics=metrics, row={"id": "11", "name": "Eli"}
-    )
+    # Write each row with a timeout and assert incrementally
+    for i, rec in enumerate(expected_df.to_dict(orient="records"), start=1):
+        await asyncio.wait_for(
+            receiver.write_row(filepath=out_fp, metrics=metrics, row=rec),
+            timeout=0.5,
+        )
+        assert out_fp.exists()
 
-    assert file_path.exists()
+        # Read back after each write and compare against the first i rows
+        actual_partial = pd.read_excel(out_fp)
+        lhs = normalize_df(actual_partial)
+        rhs = normalize_df(expected_df.iloc[:i, :])
+        assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
 
-    wb = load_workbook(filename=file_path)
-    ws = wb.active
+        # Metrics should track forwarded lines incrementally with no errors
+        assert metrics.error_count == 0
+        assert metrics.lines_forwarded == i
 
-    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    assert set(headers) == {"id", "name"}
-
-    data = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        data.append(dict(zip(headers, row)))
-
-    assert len(data) == 2
-    names = {str(rec["name"]) for rec in data}
-    assert names == {"Daisy", "Eli"}
-
-    ids = {str(rec["id"]) for rec in data}
-    assert ids == {"10", "11"}
-
-    assert metrics.error_count == 0
-    assert metrics.lines_forwarded == 2
-
-
-@pytest.mark.asyncio
-async def test_write_excel_bulk(tmp_path: Path, metrics: ComponentMetrics) -> None:
-    file_path = tmp_path / "out_bulk.xlsx"
-    r = ExcelReceiver()
-
-    data = pd.DataFrame(
-        [
-            {"id": "20", "name": "Finn"},
-            {"id": "21", "name": "Gina"},
-        ]
-    )
-
-    await r.write_bulk(filepath=file_path, metrics=metrics, data=data)
-
-    assert file_path.exists()
-
-    wb = load_workbook(filename=file_path)
-    ws = wb.active
-
-    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    assert set(headers) == {"id", "name"}
-
-    rows = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        rows.append(dict(zip(headers, row)))
-
-    assert len(rows) == 2
-    names = {str(rw["name"]) for rw in rows}
-    ids = {str(rw["id"]) for rw in rows}
-    assert names == {"Finn", "Gina"}
-    assert ids == {"20", "21"}
-
-    assert metrics.error_count == 0
-    assert metrics.lines_forwarded == 2
+    # Final whole-frame check
+    final_actual = pd.read_excel(out_fp)
+    lhs = normalize_df(final_actual)
+    rhs = normalize_df(expected_df)
+    assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
 
 
 @pytest.mark.asyncio
-async def test_write_excel_bigdata(tmp_path: Path, metrics: ComponentMetrics) -> None:
-    file_path = tmp_path / "out_big.xlsx"
-    r = ExcelReceiver()
+async def test_excelreceiver_write_bulk_from_expected_df(
+    tmp_path: Path,
+    expected_df: pd.DataFrame,
+    metrics: ComponentMetrics,
+) -> None:
+    out_fp = tmp_path / "out_bulk.xlsx"
+    receiver = ExcelReceiver()
 
-    pdf = pd.DataFrame(
-        [
-            {"id": 30, "name": "Hugo"},
-            {"id": 31, "name": "Ivy"},
-        ]
-    )
-    ddf_in = dd.from_pandas(pdf, npartitions=1)
+    await receiver.write_bulk(filepath=out_fp, metrics=metrics, data=expected_df)
+    assert out_fp.exists()
 
-    await r.write_bigdata(filepath=file_path, metrics=metrics, data=ddf_in)
-
-    assert file_path.exists()
-
-    wb = load_workbook(filename=file_path)
-    ws = wb.active
-
-    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    assert set(headers) == {"id", "name"}
-
-    rows = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        rows.append(dict(zip(headers, row)))
-
-    assert len(rows) == 2
-    names = {str(rw["name"]) for rw in rows}
-    ids = {str(rw["id"]) for rw in rows}
-    assert names == {"Hugo", "Ivy"}
-    assert ids == {"30", "31"}
+    actual = pd.read_excel(out_fp)
+    lhs = normalize_df(actual)
+    rhs = normalize_df(expected_df)
+    assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
 
     assert metrics.error_count == 0
-    assert metrics.lines_forwarded == 2
+    assert metrics.lines_forwarded == len(expected_df)
+
+
+@pytest.mark.asyncio
+async def test_excelreceiver_write_bigdata_from_expected_df(
+    tmp_path: Path,
+    expected_df: pd.DataFrame,
+    metrics: ComponentMetrics,
+) -> None:
+    out_fp = tmp_path / "out_big.xlsx"
+    receiver = ExcelReceiver()
+
+    ddf_in = dd.from_pandas(expected_df, npartitions=1)
+    await receiver.write_bigdata(filepath=out_fp, metrics=metrics, data=ddf_in)
+
+    assert out_fp.exists()
+    actual = pd.read_excel(out_fp)
+
+    lhs = normalize_df(actual)
+    rhs = normalize_df(expected_df)
+    assert_frame_equal(lhs, rhs, check_dtype=False, check_exact=False)
+
+    assert metrics.error_count == 0
+    assert metrics.lines_forwarded == len(expected_df)
 
 
 @pytest.mark.asyncio
 async def test_excelreceiver_missing_file_bulk_raises(
     metrics: ComponentMetrics, tmp_path: Path
 ) -> None:
-    r = ExcelReceiver()
+    receiver = ExcelReceiver()
     with pytest.raises(FileNotFoundError):
-        await r.read_bulk(filepath=tmp_path / "missing.xlsx", metrics=metrics)
+        await receiver.read_bulk(filepath=tmp_path / "missing.xlsx", metrics=metrics)
 
 
 @pytest.mark.asyncio
@@ -224,6 +209,6 @@ async def test_excelreceiver_invalid_file_raises(
 ) -> None:
     invalid = tmp_path / "invalid.xlsx"
     invalid.write_text("not an excel file")
-    r = ExcelReceiver()
+    receiver = ExcelReceiver()
     with pytest.raises(Exception):
-        await r.read_bulk(filepath=invalid, metrics=metrics)
+        await receiver.read_bulk(filepath=invalid, metrics=metrics)
