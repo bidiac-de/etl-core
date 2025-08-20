@@ -98,65 +98,97 @@ def dump_records_auto(
     )
 
 
+def _coerce_obj_to_record(obj: Any) -> Dict[str, Any]:
+    """Wrap non-dict JSON values to keep a stable record shape."""
+    return obj if isinstance(obj, dict) else {"_value": obj}
+
+
+def _consume_array_separators(s: str) -> str:
+    """Trim leading whitespace and commas inside a JSON array."""
+    i = 0
+    while i < len(s) and (s[i].isspace() or s[i] == ","):
+        i += 1
+    return s[i:]
+
+
+def _read_until_nonspace(f: io.TextIOBase, initial: str, chunk_size: int) -> str:
+    """
+    Keep reading until we see a non-space character or EOF.
+    Returns the buffer starting at the first non-space char, or '' if empty.
+    """
+    buf = initial
+    while True:
+        stripped = buf.lstrip()
+        if stripped:
+            return stripped
+        chunk = f.read(chunk_size)
+        if not chunk:
+            return ""
+        buf += chunk
+
+
+def _iter_array_stream(
+    f: io.TextIOBase, buf: str, dec: json.JSONDecoder, chunk_size: int
+) -> Iterator[Dict[str, Any]]:
+    """
+    Yield array elements from an open file handle using incremental decoding.
+    `buf` should start after the opening '[' character.
+    """
+    while True:
+        buf = _consume_array_separators(buf)
+
+        # End of array
+        if buf.startswith("]"):
+            return
+
+        # Need more data
+        if not buf.strip():
+            more = f.read(chunk_size)
+            if not more:
+                return
+            buf += more
+            continue
+
+        # Try to decode one JSON value, read more if incomplete
+        try:
+            obj, end = dec.raw_decode(buf)
+        except json.JSONDecodeError:
+            more = f.read(chunk_size)
+            if not more:
+                raise
+            buf += more
+            continue
+
+        yield _coerce_obj_to_record(obj)
+        buf = buf[end:]
+
+
 def read_json_row(path: Path, chunk_size: int = 65536) -> Iterator[Dict[str, Any]]:
     """
     Streaming iterator over JSON content.
 
-    - Single object: yields once
-    - Array: yields per element using a small buffer and JSONDecoder.raw_decode
+    Supported inputs:
+      - Single object: { ... }        -> yields the object once
+      - JSON array:    [ {...}, ... ] -> yields per element
+      - Gzipped files are supported via open_text_auto()
+      - Non-dict values are wrapped as {"_value": <value>}
     """
     dec = json.JSONDecoder()
-    buf = ""
     with open_text_auto(path, "rt") as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk and not buf:
-                return
-            buf += chunk
-            buf_stripped = buf.lstrip()
-            if buf_stripped:
-                break
-            if not chunk:
-                return
+        # Load enough to decide on top-level type
+        buf = _read_until_nonspace(f, "", chunk_size)
+        if not buf:
+            return
 
-        first = buf_stripped[0]
-        buf = buf_stripped
-
+        first = buf[0]
         if first == "{":
+            # Single object
             obj = json.loads(buf + f.read())
-            yield obj if isinstance(obj, dict) else {"_value": obj}
+            yield _coerce_obj_to_record(obj)
             return
 
         if first != "[":
             raise ValueError("Top-level JSON must be '[' or '{'.")
 
-        if buf[0] == "[":
-            buf = buf[1:]
-
-        while True:
-            i = 0
-            while i < len(buf) and (buf[i].isspace() or buf[i] == ","):
-                i += 1
-            buf = buf[i:]
-
-            if buf.startswith("]"):
-                return
-
-            if not buf.strip():
-                more = f.read(chunk_size)
-                if not more:
-                    return
-                buf += more
-                continue
-
-            try:
-                obj, end = dec.raw_decode(buf)
-            except json.JSONDecodeError:
-                more = f.read(chunk_size)
-                if not more:
-                    raise
-                buf += more
-                continue
-
-            yield obj if isinstance(obj, dict) else {"_value": obj}
-            buf = buf[end:]
+        # Stream array elements after the initial [
+        yield from _iter_array_stream(f, buf[1:], dec, chunk_size)
