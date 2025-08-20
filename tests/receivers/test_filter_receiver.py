@@ -59,6 +59,9 @@ async def test_filter_receiver_row_simple_equality(
     assert [r["id"] for r in out] == [1, 3]
     assert all(r["name"] == "Alice" for r in out)
 
+    assert metrics.lines_dismissed == 1
+    assert metrics.lines_forwarded == 2
+
 
 @pytest.mark.asyncio
 async def test_filter_receiver_row_nested_and_or(metrics: FilterMetrics) -> None:
@@ -87,6 +90,9 @@ async def test_filter_receiver_row_nested_and_or(metrics: FilterMetrics) -> None
 
     assert [r["id"] for r in out] == [1, 2]
 
+    assert metrics.lines_dismissed == 1
+    assert metrics.lines_forwarded == 2
+
 
 @pytest.mark.asyncio
 async def test_filter_receiver_bulk_contains_and_not(
@@ -112,6 +118,9 @@ async def test_filter_receiver_bulk_contains_and_not(
     assert out.shape[0] == 1
     assert out.iloc[0]["name"] == "Bob"
 
+    assert metrics.lines_dismissed == 3
+    assert metrics.lines_forwarded == 1
+
 
 @pytest.mark.asyncio
 async def test_filter_receiver_bulk_gt(metrics: FilterMetrics) -> None:
@@ -125,6 +134,9 @@ async def test_filter_receiver_bulk_gt(metrics: FilterMetrics) -> None:
     out = pd.concat(parts, ignore_index=True)
 
     assert list(out["id"]) == [2, 3]
+
+    assert metrics.lines_dismissed == 1
+    assert metrics.lines_forwarded == 2
 
 
 @pytest.mark.asyncio
@@ -146,3 +158,32 @@ async def test_filter_receiver_bigdata_map_partitions(
     async for d in recv.process_bigdata(ddf, metrics=metrics, rule=rule):
         parts.append(d)
     assert parts, "No bigdata result from receiver"
+
+    assert metrics.lines_dismissed == 1
+    assert metrics.lines_forwarded == 2
+
+
+@pytest.mark.asyncio
+async def test_filter_receiver_bulk_no_matches(metrics: FilterMetrics) -> None:
+    df = pd.DataFrame(
+        [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"},
+            {"id": 3, "name": "Charlie"},
+        ]
+    )
+
+    rule = ComparisonRule(column="id", operator=">", value=100)
+
+    recv = FilterReceiver()
+    parts = []
+    async for f in recv.process_bulk(dataframe=df, rule=rule, metrics=metrics):
+        parts.append(f)
+
+    out = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+    assert out.empty
+    assert out.shape[0] == 0
+
+    assert metrics.lines_forwarded == 0
+    assert metrics.lines_dismissed == 3
