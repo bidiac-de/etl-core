@@ -117,7 +117,9 @@ def _optimize_and_neq(
     return ~df[col].isin(values)
 
 
-def _reduce_masks(masks: Iterable[pd.Series], combiner: Callable[[pd.Series, pd.Series], pd.Series]) -> pd.Series:
+def _reduce_masks(
+    masks: Iterable[pd.Series], combiner: Callable[[pd.Series, pd.Series], pd.Series]
+) -> pd.Series:
     """Reduce a sequence of boolean masks using the given combiner (| or &)."""
     masks = list(masks)
     if not masks:
@@ -128,7 +130,11 @@ def _reduce_masks(masks: Iterable[pd.Series], combiner: Callable[[pd.Series, pd.
 def _try_optimizers(
     df: Union[pd.DataFrame, "dd.DataFrame"],
     children: Sequence["ComparisonRule"],
-    optimizers: Sequence[Callable[[Union[pd.DataFrame, "dd.DataFrame"], Sequence["ComparisonRule"]], pd.Series]],
+    optimizers: Sequence[
+        Callable[
+            [Union[pd.DataFrame, "dd.DataFrame"], Sequence["ComparisonRule"]], pd.Series
+        ]
+    ],
 ) -> pd.Series | None:
     """Return the first successful optimized mask or None."""
     for opt in optimizers:
@@ -138,7 +144,9 @@ def _try_optimizers(
     return None
 
 
-def build_mask(df: Union[pd.DataFrame, "dd.DataFrame"], rule: "ComparisonRule") -> pd.Series:
+def build_mask(
+    df: Union[pd.DataFrame, "dd.DataFrame"], rule: "ComparisonRule"
+) -> pd.Series:
     """Build a pandas/dask-compatible boolean mask for the given rule."""
     # leaf: simple comparison on a column
     if rule.logical_operator is None:
@@ -155,7 +163,9 @@ def build_mask(df: Union[pd.DataFrame, "dd.DataFrame"], rule: "ComparisonRule") 
         return ~build_mask(df, children[0])
 
     if op == "OR":
-        optimized = _try_optimizers(df, children, (_optimize_or_eq, _optimize_or_contains))
+        optimized = _try_optimizers(
+            df, children, (_optimize_or_eq, _optimize_or_contains)
+        )
         if optimized is not None:
             return optimized
         child_masks = (build_mask(df, child) for child in children)

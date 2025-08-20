@@ -94,7 +94,6 @@ async def test_filter_component_bigdata(metrics: FilterMetrics) -> None:
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    # component passes through to the receiver, yielding a single ddf
     outs = []
     async for d in comp.process_bigdata(ddf, metrics=metrics):
         outs.append(d)
