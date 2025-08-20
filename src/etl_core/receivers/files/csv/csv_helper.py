@@ -6,7 +6,6 @@ import dask.dataframe as dd
 
 from etl_core.receivers.files.file_helper import (
     resolve_file_path,
-    ensure_exists,
     open_file,
 )
 
@@ -16,7 +15,6 @@ def read_csv_row(path: Path, separator: str) -> Generator[Dict[str, Any], None, 
     Yield CSV rows as dicts, read sequentially from file
     """
     path = resolve_file_path(path)
-    ensure_exists(path)
     with open_file(path, "r", newline="") as f:
         reader = csv.DictReader(f, delimiter=separator)
         for row in reader:
@@ -28,7 +26,6 @@ def read_csv_bulk(path: Path, separator: str) -> pd.DataFrame:
     Read entire CSV into a pandas DataFrame.
     """
     path = resolve_file_path(path)
-    ensure_exists(path)
     return pd.read_csv(path, dtype=str, sep=separator)
 
 
@@ -39,7 +36,6 @@ def read_csv_bigdata(
     Read large CSV as a Dask DataFrame in chunks.
     """
     path = resolve_file_path(path)
-    ensure_exists(path)
     return dd.read_csv(path, blocksize=blocksize, dtype=str, sep=separator)
 
 
@@ -63,11 +59,9 @@ def write_csv_bulk(path: Path, data: pd.DataFrame, separator: str):
     path = resolve_file_path(path)
 
     if data.empty:
-        # Create empty file
         with open_file(path, "w", newline=""):
             return
 
-    # use pandas directly
     with open_file(path, "w", newline="") as f:
         data.to_csv(f, index=False, sep=separator)
 
@@ -76,7 +70,6 @@ def write_csv_bigdata(path: Path, data: dd.DataFrame, separator: str):
     """
     Write large datasets to CSV using Dask.
     """
-
     path = Path(path)
     result = data.to_csv(str(path), single_file=True, index=False, sep=separator)
 

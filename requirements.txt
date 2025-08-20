@@ -24,6 +24,7 @@ pandas
 numpy
 dask
 pyarrow
+sqlmodel
 
 # Async Support
 asyncio
