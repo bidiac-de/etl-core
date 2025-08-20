@@ -132,7 +132,7 @@ class TestMariaDBIntegration:
         # Mock the receivers
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -182,7 +182,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -267,7 +267,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -337,7 +337,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             # Call metrics methods to simulate real usage
             metrics.set_started()
             yield {"id": 1, "name": "John"}
@@ -461,7 +461,7 @@ class TestMariaDBIntegration:
         mock_receiver = AsyncMock()
         call_count = 0
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -531,7 +531,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -589,7 +589,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in source_data:
                 yield item
 
@@ -637,8 +637,6 @@ class TestMariaDBIntegration:
                 "mysql://user:pass@localhost:3306/testdb"
             )
             mock_handler.connect.return_value = None
-            mock_handler.pool_size = 10
-            mock_handler.max_overflow = 20
             mock_handler_class.return_value = mock_handler
 
             # Mock the receiver creation
@@ -649,9 +647,8 @@ class TestMariaDBIntegration:
                 # Call _setup_connection
                 read_comp._setup_connection()
 
-                # Verify connection pool settings
-                assert read_comp._connection_handler.pool_size == 10
-                assert read_comp._connection_handler.max_overflow == 20
+                # Verify connection handler was created
+                assert read_comp._connection_handler is not None
 
     @pytest.mark.asyncio
     async def test_metrics_performance_integration(self, mock_context, mock_metrics):
@@ -672,7 +669,7 @@ class TestMariaDBIntegration:
         # Mock the receiver with performance tracking
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             metrics.set_started()
 
             # Simulate processing time
@@ -725,7 +722,7 @@ class TestMariaDBIntegration:
             {"id": 1, "name": "John"},  # Success case
         ]
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for scenario in error_scenarios:
                 if isinstance(scenario, Exception):
                     raise scenario

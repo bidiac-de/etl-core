@@ -6,54 +6,20 @@ with the MariaDB components.
 """
 
 import pytest
+import pandas as pd
+from unittest.mock import Mock, patch
 
 from src.etl_core.context.credentials import Credentials
 from src.etl_core.context.context import Context
 from src.etl_core.context.environment import Environment
 from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class TestCredentialsIntegration:
     """Test cases for real Credentials and Context integration."""
-
-    @pytest.fixture
-    def sample_credentials(self):
-        """Create a real Credentials object for testing."""
-        return Credentials(
-            credentials_id=1,
-            name="test_db_creds",
-            user="testuser",
-            database="testdb",
-            password="testpass123",
-            pool_max_size=10,
-            pool_timeout_s=30,
-        )
-
-    @pytest.fixture
-    def sample_context(self, sample_credentials):
-        """Create a real Context object with credentials."""
-        context = Context(
-            id=1,
-            name="test_context",
-            environment=Environment.TEST,
-            parameters={
-                "db_host": ContextParameter(
-                    id=1,
-                    key="db_host",
-                    value="localhost",
-                    type="string",
-                    is_secure=False,
-                ),
-                "db_port": ContextParameter(
-                    id=2, key="db_port", value="3306", type="string", is_secure=False
-                ),
-            },
-        )
-        # Add credentials to context
-        context.add_credentials(sample_credentials)
-        return context
 
     def test_credentials_creation(self, sample_credentials):
         """Test that Credentials objects are created correctly."""
@@ -103,8 +69,13 @@ class TestCredentialsIntegration:
         assert retrieved == new_creds
         assert retrieved.user == "user2"
 
-    def test_mariadb_component_with_real_credentials(self, sample_context):
+    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
+    def test_mariadb_read_component_with_real_credentials(self, mock_handler_class, sample_context):
         """Test that MariaDBRead works with real credentials."""
+        # Mock the connection handler
+        mock_handler = Mock()
+        mock_handler_class.return_value = mock_handler
+        
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
@@ -122,6 +93,33 @@ class TestCredentialsIntegration:
 
         # Test that credentials can be retrieved
         creds = read_comp._get_credentials()
+        assert creds["user"] == "testuser"
+        assert creds["password"] == "testpass123"
+        assert creds["database"] == "testdb"
+
+    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
+    def test_mariadb_write_component_with_real_credentials(self, mock_handler_class, sample_context):
+        """Test that MariaDBWrite works with real credentials."""
+        # Mock the connection handler
+        mock_handler = Mock()
+        mock_handler_class.return_value = mock_handler
+        
+        write_comp = MariaDBWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="database",
+            database="testdb",
+            table="users",
+            host="localhost",
+            port=3306,
+            credentials_id=1,
+        )
+
+        # Set the context
+        write_comp.context = sample_context
+
+        # Test that credentials can be retrieved
+        creds = write_comp._get_credentials()
         assert creds["user"] == "testuser"
         assert creds["password"] == "testpass123"
         assert creds["database"] == "testdb"
@@ -345,8 +343,13 @@ class TestCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    def test_credentials_in_mariadb_component_integration(self, sample_context):
+    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
+    def test_credentials_in_mariadb_component_integration(self, mock_handler_class, sample_context):
         """Test complete integration of credentials in MariaDB component."""
+        # Mock the connection handler
+        mock_handler = Mock()
+        mock_handler_class.return_value = mock_handler
+        
         read_comp = MariaDBRead(
             name="integration_test",
             description="Integration test component",
@@ -492,6 +495,161 @@ class TestCredentialsIntegration:
                 id=40 + i, key=key, value=f"value_{i}", type="string", is_secure=False
             )
             assert param.key == key
+
+    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
+    def test_mariadb_write_bulk_operations(self, mock_handler_class, sample_context, sample_dataframe):
+        """Test MariaDB write bulk operations with real credentials."""
+        # Mock the connection handler
+        mock_handler = Mock()
+        mock_handler_class.return_value = mock_handler
+        
+        write_comp = MariaDBWrite(
+            name="test_write_bulk",
+            description="Test write bulk component",
+            comp_type="database",
+            database="testdb",
+            table="users",
+            host="localhost",
+            port=3306,
+            credentials_id=1,
+        )
+
+        # Set the context
+        write_comp.context = sample_context
+
+        # Test credentials retrieval
+        creds = write_comp._get_credentials()
+        assert creds["user"] == "testuser"
+        assert creds["database"] == "testdb"
+
+        # Test that the component is properly configured
+        assert write_comp.table == "users"
+        assert write_comp.database == "testdb"
+        assert write_comp.credentials_id == 1
+
+    @patch('src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler')
+    def test_mariadb_read_query_operations(self, mock_handler_class, sample_context):
+        """Test MariaDB read query operations with real credentials."""
+        # Mock the connection handler
+        mock_handler = Mock()
+        mock_handler_class.return_value = mock_handler
+        
+        read_comp = MariaDBRead(
+            name="test_read_query",
+            description="Test read query component",
+            comp_type="database",
+            database="testdb",
+            table="users",
+            query="SELECT * FROM users WHERE active = %(active)s",
+            params={"active": True},
+            host="localhost",
+            port=3306,
+            credentials_id=1,
+        )
+
+        # Set the context
+        read_comp.context = sample_context
+
+        # Test credentials retrieval
+        creds = read_comp._get_credentials()
+        assert creds["user"] == "testuser"
+        assert creds["database"] == "testdb"
+
+        # Test that the component is properly configured
+        assert read_comp.query == "SELECT * FROM users WHERE active = %(active)s"
+        assert read_comp.params == {"active": True}
+        assert read_comp.table == "users"
+        assert read_comp.database == "testdb"
+        assert read_comp.credentials_id == 1
+
+    # NEW TESTS USING THE IMPROVED FIXTURES
+
+    def test_multiple_credentials_fixture(self, multiple_credentials):
+        """Test the multiple credentials fixture."""
+        assert len(multiple_credentials) == 4
+        assert "minimal" in multiple_credentials
+        assert "with_pool" in multiple_credentials
+        assert "special_chars" in multiple_credentials
+        assert "no_password" in multiple_credentials
+
+        # Test specific credential types
+        minimal_creds = multiple_credentials["minimal"]
+        assert minimal_creds.pool_max_size is None
+        assert minimal_creds.pool_timeout_s is None
+
+        pool_creds = multiple_credentials["with_pool"]
+        assert pool_creds.pool_max_size == 50
+        assert pool_creds.pool_timeout_s == 60
+
+        special_creds = multiple_credentials["special_chars"]
+        assert special_creds.user == "user@domain"
+        assert special_creds.database == "test-db_123"
+
+        no_pass_creds = multiple_credentials["no_password"]
+        assert no_pass_creds.password is None
+
+    def test_context_with_multiple_credentials_fixture(self, context_with_multiple_credentials, multiple_credentials):
+        """Test the context with multiple credentials fixture."""
+        context = context_with_multiple_credentials
+        
+        # Test that all credentials are accessible
+        for creds in multiple_credentials.values():
+            retrieved = context.get_credentials(creds.credentials_id)
+            assert retrieved == creds
+
+    def test_mariadb_component_fixtures(self, mariadb_read_component, mariadb_write_component):
+        """Test the MariaDB component fixtures."""
+        # Test read component
+        assert mariadb_read_component.name == "test_read"
+        assert mariadb_read_component.table == "users"
+        assert mariadb_read_component.query == "SELECT * FROM users"
+        assert mariadb_read_component.credentials_id == 1
+
+        # Test write component
+        assert mariadb_write_component.name == "test_write"
+        assert mariadb_write_component.table == "users"
+        assert mariadb_write_component.credentials_id == 1
+
+        # Test that both have context set
+        assert mariadb_read_component.context is not None
+        assert mariadb_write_component.context is not None
+
+    def test_sample_sql_queries_fixture(self, sample_sql_queries):
+        """Test the sample SQL queries fixture."""
+        assert "simple_select" in sample_sql_queries
+        assert "parameterized" in sample_sql_queries
+        assert "complex_join" in sample_sql_queries
+        assert "aggregation" in sample_sql_queries
+        assert "insert" in sample_sql_queries
+        assert "update" in sample_sql_queries
+        assert "delete" in sample_sql_queries
+
+        # Test specific query content
+        simple_query = sample_sql_queries["simple_select"]
+        assert "SELECT * FROM users" in simple_query
+
+        param_query = sample_sql_queries["parameterized"]
+        assert "%(id)s" in param_query
+        assert "%(active)s" in param_query
+
+    def test_sample_query_params_fixture(self, sample_query_params):
+        """Test the sample query parameters fixture."""
+        assert "simple" in sample_query_params
+        assert "user_lookup" in sample_query_params
+        assert "bulk_insert" in sample_query_params
+        assert "filter" in sample_query_params
+        assert "pagination" in sample_query_params
+
+        # Test specific parameter content
+        user_lookup = sample_query_params["user_lookup"]
+        assert user_lookup["id"] == 1
+        assert user_lookup["active"] is True
+
+        bulk_insert = sample_query_params["bulk_insert"]
+        assert len(bulk_insert) == 3
+        assert bulk_insert[0]["name"] == "John"
+        assert bulk_insert[1]["name"] == "Jane"
+        assert bulk_insert[2]["name"] == "Bob"
 
 
 if __name__ == "__main__":

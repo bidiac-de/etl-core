@@ -37,26 +37,46 @@ class MariaDBWrite(MariaDBComponent):
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
         """Write a single row and yield it."""
-        await self._receiver.write_row(self.table, row, metrics)
+        result = await self._receiver.write_row(
+            db=None,
+            entity_name=self.table,
+            row=row,
+            metrics=metrics,
+            table=self.table
+        )
         yield row
 
     async def process_bulk(
         self, data: Union[List[Dict[str, Any]], pd.DataFrame], metrics: ComponentMetrics
     ) -> pd.DataFrame:
         """Write full dataset and yield it as DataFrame."""
-        await self._receiver.write_bulk(self.table, data, metrics)
-
-        # Convert to DataFrame if it's a list
+        # Convert list to DataFrame if needed
         if isinstance(data, list):
-            return pd.DataFrame(data)
-        return data
+            df = pd.DataFrame(data)
+        else:
+            df = data
+
+        result = await self._receiver.write_bulk(
+            db=None,
+            entity_name=self.table,
+            frame=df,
+            metrics=metrics,
+            table=self.table
+        )
+        return result
 
     async def process_bigdata(
         self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
     ) -> dd.DataFrame:
         """Write Dask DataFrame and yield it."""
-        await self._receiver.write_bigdata(self.table, metrics, chunk_iterable)
-        return chunk_iterable
+        result = await self._receiver.write_bigdata(
+            db=None,
+            entity_name=self.table,
+            frame=chunk_iterable,
+            metrics=metrics,
+            table=self.table
+        )
+        return result
 
     def _build_insert_query(self, columns: List[str]) -> str:
         """Build INSERT query with optional ON DUPLICATE KEY UPDATE."""

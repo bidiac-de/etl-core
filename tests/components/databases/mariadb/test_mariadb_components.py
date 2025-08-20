@@ -160,7 +160,7 @@ class TestMariaDBComponents:
         mock_receiver = AsyncMock()
 
         # Create an async generator for read_row
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -281,9 +281,7 @@ class TestMariaDBComponents:
 
         # Mock the receiver
         mock_receiver = AsyncMock()
-        mock_receiver.write_bulk.return_value = (
-            None  # write_bulk doesn't return anything
-        )
+        mock_receiver.write_bulk.return_value = sample_dataframe  # Return the DataFrame
         write_comp._receiver = mock_receiver
 
         # Test process_bulk - this returns a DataFrame directly, not an async iterator
@@ -310,9 +308,7 @@ class TestMariaDBComponents:
 
         # Mock the receiver
         mock_receiver = AsyncMock()
-        mock_receiver.write_bigdata.return_value = (
-            None  # write_bigdata doesn't return anything
-        )
+        mock_receiver.write_bigdata.return_value = sample_dask_dataframe  # Return the Dask DataFrame
         write_comp._receiver = mock_receiver
 
         # Test process_bigdata - returns a Dask DataFrame directly
@@ -445,7 +441,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -531,7 +527,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John", "age": 25, "city": "Berlin"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -562,13 +558,14 @@ class TestMariaDBComponents:
         )
         write_comp.context = mock_context
 
-        # Mock the receiver
-        mock_receiver = AsyncMock()
-        mock_receiver.write_bulk.return_value = None
-        write_comp._receiver = mock_receiver
-
         # Test process_bulk with empty DataFrame
         empty_df = pd.DataFrame()
+        
+        # Mock the receiver
+        mock_receiver = AsyncMock()
+        mock_receiver.write_bulk.return_value = empty_df  # Return the empty DataFrame
+        write_comp._receiver = mock_receiver
+
         result = await write_comp.process_bulk(empty_df, mock_metrics)
 
         assert len(result) == 0
@@ -645,7 +642,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             # Simulate metrics usage
             metrics.set_started()
             yield {"id": 1, "name": "John"}
@@ -716,7 +713,7 @@ class TestMariaDBComponents:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John", "email": "john@example.com"}
 
         mock_receiver.read_row = mock_read_row_generator
