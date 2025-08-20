@@ -1,5 +1,5 @@
 {
-  "name": "JsonEndToEndJob",
+  "name": "JsonPassThrough",
   "num_of_retries": 0,
   "file_logging": false,
   "strategy_type": "row",
@@ -11,24 +11,14 @@
     {
       "name": "reader",
       "comp_type": "read_json",
-      "filepath": "input.json",
-      "schema": {
-        "columns": [
-          {"name": "id", "dtype": "int64"},
-          {"name": "name", "dtype": "string"}
-        ]
-      }
+      "description": "read json input",
+      "filepath": "__IN__"
     },
     {
       "name": "writer",
       "comp_type": "write_json",
-      "filepath": "output.json",
-      "schema": {
-        "columns": [
-          {"name": "id", "dtype": "int64"},
-          {"name": "name", "dtype": "string"}
-        ]
-      }
+      "description": "write json output",
+      "filepath": "__OUT__"
     }
   ]
 }
