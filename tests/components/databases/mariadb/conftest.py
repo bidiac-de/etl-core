@@ -275,7 +275,7 @@ def credentials_dict():
             user="user@domain",
             host="localhost",
             port=3306,
-            database="special_db",
+            database="special_db_123",
             password="pass@word!",
         ),
         "no_password": Credentials(

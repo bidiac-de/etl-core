@@ -105,7 +105,6 @@ class TestMariaDBIntegration:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            database="testdb",
             entity_name="users",
             credentials_id=1,
         )
