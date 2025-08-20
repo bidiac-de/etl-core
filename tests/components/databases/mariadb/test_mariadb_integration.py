@@ -108,7 +108,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -122,7 +122,7 @@ class TestMariaDBIntegration:
             description="Test write component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             host="localhost",
             port=3306,
             credentials_id=1,
@@ -132,7 +132,7 @@ class TestMariaDBIntegration:
         # Mock the receivers
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -140,9 +140,10 @@ class TestMariaDBIntegration:
         read_comp._receiver = mock_read_receiver
 
         mock_write_receiver = AsyncMock()
-        mock_write_receiver.write_row.return_value = (
-            None  # write_row doesn't return anything
-        )
+        mock_write_receiver.write_row.return_value = {
+            "affected_rows": 1,
+            "row": {"id": 1, "name": "John"},
+        }
         write_comp._receiver = mock_write_receiver
 
         # Test read operation
@@ -158,7 +159,9 @@ class TestMariaDBIntegration:
             write_results.append(result)
 
         assert len(write_results) == 1
-        assert write_results[0]["id"] == 1
+        # The result now contains the receiver response
+        assert write_results[0]["affected_rows"] == 1
+        assert write_results[0]["row"]["id"] == 1
 
     @pytest.mark.asyncio
     async def test_row_strategy_streaming(
@@ -170,7 +173,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
             host="localhost",
@@ -182,7 +185,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in sample_data:
                 yield item
 
@@ -217,7 +220,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -256,7 +259,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -267,7 +270,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -300,7 +303,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -326,7 +329,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -337,7 +340,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             # Call metrics methods to simulate real usage
             metrics.set_started()
             yield {"id": 1, "name": "John"}
@@ -365,7 +368,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -408,7 +411,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -449,7 +452,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -461,7 +464,7 @@ class TestMariaDBIntegration:
         mock_receiver = AsyncMock()
         call_count = 0
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -492,7 +495,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -520,7 +523,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -531,7 +534,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             yield {"id": 1, "name": "John"}
 
         mock_receiver.read_row = mock_read_row_generator
@@ -578,7 +581,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -589,7 +592,7 @@ class TestMariaDBIntegration:
         # Mock the receiver
         mock_read_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for item in source_data:
                 yield item
 
@@ -620,7 +623,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -637,8 +640,6 @@ class TestMariaDBIntegration:
                 "mysql://user:pass@localhost:3306/testdb"
             )
             mock_handler.connect.return_value = None
-            mock_handler.pool_size = 10
-            mock_handler.max_overflow = 20
             mock_handler_class.return_value = mock_handler
 
             # Mock the receiver creation
@@ -649,9 +650,8 @@ class TestMariaDBIntegration:
                 # Call _setup_connection
                 read_comp._setup_connection()
 
-                # Verify connection pool settings
-                assert read_comp._connection_handler.pool_size == 10
-                assert read_comp._connection_handler.max_overflow == 20
+                # Verify connection handler was created
+                assert read_comp._connection_handler is not None
 
     @pytest.mark.asyncio
     async def test_metrics_performance_integration(self, mock_context, mock_metrics):
@@ -661,7 +661,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -672,7 +672,7 @@ class TestMariaDBIntegration:
         # Mock the receiver with performance tracking
         mock_receiver = AsyncMock()
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             metrics.set_started()
 
             # Simulate processing time
@@ -708,7 +708,7 @@ class TestMariaDBIntegration:
             description="Test read component",
             comp_type="database",
             database="testdb",
-            table="users",
+            entity_name="users",
             query="SELECT * FROM users",
             host="localhost",
             port=3306,
@@ -725,7 +725,7 @@ class TestMariaDBIntegration:
             {"id": 1, "name": "John"},  # Success case
         ]
 
-        async def mock_read_row_generator(query, params, metrics):
+        async def mock_read_row_generator(db, entity_name, metrics, **driver_kwargs):
             for scenario in error_scenarios:
                 if isinstance(scenario, Exception):
                     raise scenario

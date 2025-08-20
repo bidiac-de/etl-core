@@ -32,7 +32,6 @@ def build_sql_engine_kwargs(provider: IContextProvider) -> Dict[str, Any]:
     if timeout_s is not None:
         kwargs["pool_timeout"] = timeout_s
 
-    # keep driver defaults for the rest (e.g., max_overflow)
     return kwargs
 
 
@@ -51,5 +50,4 @@ def build_mongo_client_kwargs(provider: IContextProvider) -> Dict[str, Any]:
     if timeout_s is not None:
         kwargs["waitQueueTimeoutMS"] = timeout_s * 1000
 
-    # keep driver defaults for the rest (e.g., minPoolSize)
     return kwargs

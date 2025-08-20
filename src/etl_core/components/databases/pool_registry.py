@@ -14,8 +14,8 @@ from pymongo import MongoClient
 class PoolKey:
     """Uniquely identifies a connection pool."""
 
-    kind: str  # "sql" or "mongo"
-    dsn: str  # full DSN/URI used to connect
+    kind: str
+    dsn: str
 
     @staticmethod
     def _normalize_pairs(pairs: Mapping[str, Any]) -> Tuple[Tuple[str, Any], ...]:
@@ -26,7 +26,6 @@ class PoolKey:
     def for_sql(
         cls, *, url: str, engine_kwargs: Optional[Mapping[str, Any]] = None
     ) -> "PoolKey":
-        # Hash kwargs to disambiguate pools that share URL but differ in pool size, etc.
         engine_kwargs = engine_kwargs or {}
         digest = sha256(
             repr(cls._normalize_pairs(engine_kwargs)).encode("utf-8")
@@ -66,7 +65,6 @@ class ConnectionPoolRegistry:
                     cls._instance = cls()
         return cls._instance
 
-    # SQL
     def get_sql_engine(
         self, *, url: str, engine_kwargs: Optional[Mapping[str, Any]] = None
     ) -> Tuple[PoolKey, Engine]:
@@ -92,7 +90,6 @@ class ConnectionPoolRegistry:
             if slot:
                 slot["leased"] = max(0, slot["leased"] - 1)
 
-    # Mongo
     def get_mongo_client(
         self, *, uri: str, client_kwargs: Optional[Mapping[str, Any]] = None
     ) -> Tuple[PoolKey, MongoClient]:
@@ -118,7 +115,6 @@ class ConnectionPoolRegistry:
             if slot:
                 slot["leased"] = max(0, slot["leased"] - 1)
 
-    # Introspection / Closing
     def stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
         with self._guard:
             sql_stats = {

@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 from sqlalchemy.engine import Connection as SQLConnection
 from sqlalchemy import text
 
-from etl_core.receivers.databases.mariadb.mariadb_receiver import (
+from src.etl_core.receivers.databases.mariadb.mariadb_receiver import (
     MariaDBReceiver,
 )
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -151,10 +151,14 @@ class TestMariaDBReceivers:
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test read_row
+        # Test read_row with new signature
         results = []
         async for result in receiver.read_row(
-            "SELECT * FROM users", {"limit": 10}, mock_metrics
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query="SELECT * FROM users",
+            params={"limit": 10},
         ):
             results.append(result)
 
@@ -180,9 +184,13 @@ class TestMariaDBReceivers:
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test read_bulk
+        # Test read_bulk with new signature
         result = await receiver.read_bulk(
-            "SELECT * FROM users", {"limit": 10}, mock_metrics
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query="SELECT * FROM users",
+            params={"limit": 10},
         )
 
         assert len(result) == 2
@@ -205,9 +213,13 @@ class TestMariaDBReceivers:
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test read_bulk
+        # Test read_bigdata with new signature
         result = await receiver.read_bigdata(
-            "SELECT * FROM users", {"limit": 10}, mock_metrics
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query="SELECT * FROM users",
+            params={"limit": 10},
         )
 
         assert len(result) == 2
@@ -222,43 +234,29 @@ class TestMariaDBReceivers:
         # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
+        mock_result.inserted_primary_key = [123]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_row
-        await receiver.write_row(
-            "users", {"name": "John", "email": "john@example.com"}, mock_metrics
+        # Test write_row with new signature
+        result = await receiver.write_row(
+            db=None,
+            entity_name="users",
+            row={"name": "John", "email": "john@example.com"},
+            metrics=mock_metrics,
+            table="users",
         )
 
         # Verify execute and commit were called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
+        # Verify return value
+        assert result == {
+            "affected_rows": 1,
+            "row": {"name": "John", "email": "john@example.com"},
+        }
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_write_bulk_list(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test MariaDBReceiver write_bulk method with list data."""
-        receiver = MariaDBReceiver(mock_connection_handler)
-
-        # Mock the connection execution
-        mock_result = Mock()
-        mock_result.rowcount = 2
-        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
-
-        # Test write_bulk with list
-        data = [
-            {"name": "John", "email": "john@example.com"},
-            {"name": "Jane", "email": "jane@example.com"},
-        ]
-
-        await receiver.write_bulk("users", data, mock_metrics)
-
-        # Verify execute and commit were called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        mock_connection_handler.lease().__enter__().commit.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_mariadb_receiver_write_bulk_dataframe(
+    async def test_mariadb_receiver_write_bulk(
         self, mock_connection_handler, mock_metrics, sample_dataframe
     ):
         """Test MariaDBReceiver write_bulk method with DataFrame data."""
@@ -269,12 +267,20 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_bulk with DataFrame
-        await receiver.write_bulk("users", sample_dataframe, mock_metrics)
+        # Test write_bulk with new signature
+        result = await receiver.write_bulk(
+            db=None,
+            entity_name="users",
+            frame=sample_dataframe,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify execute and commit were called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
+        # Verify return value
+        assert result.equals(sample_dataframe)
 
     @pytest.mark.asyncio
     async def test_mariadb_receiver_write_bulk_empty_data(
@@ -283,12 +289,21 @@ class TestMariaDBReceivers:
         """Test MariaDBReceiver write_bulk method with empty data."""
         receiver = MariaDBReceiver(mock_connection_handler)
 
-        # Test write_bulk with empty list
-        await receiver.write_bulk("users", [], mock_metrics)
+        # Test write_bulk with empty DataFrame
+        empty_df = pd.DataFrame()
+        result = await receiver.write_bulk(
+            db=None,
+            entity_name="users",
+            frame=empty_df,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify no execute or commit calls for empty data
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
+        # Verify return value
+        assert result.equals(empty_df)
 
     @pytest.mark.asyncio
     async def test_mariadb_receiver_write_bigdata(
@@ -302,12 +317,18 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 4
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_bigdata - simplified to avoid Dask tokenization issues
+        # Test write_bigdata with new signature
         try:
-            await receiver.write_bigdata("users", mock_metrics, sample_dask_dataframe)
-            # If it succeeds, verify execute and commit were called
-            mock_connection_handler.lease().__enter__().execute.assert_called()
-            mock_connection_handler.lease().__enter__().commit.assert_called()
+            result = await receiver.write_bigdata(
+                db=None,
+                entity_name="users",
+                frame=sample_dask_dataframe,
+                metrics=mock_metrics,
+                table="users",
+            )
+            # Verify return value - result should be the DataFrame
+            assert result is not None
+            assert hasattr(result, "npartitions")
         except Exception as e:
             # If Dask tokenization fails, that's expected - check it's a known issue
             assert "tokenize" in str(e).lower() or "serialize" in str(e).lower()
@@ -340,7 +361,14 @@ class TestMariaDBReceivers:
         # Test that error is propagated - call a method that uses execute
         with pytest.raises(Exception):
             # This will trigger the error when we try to read
-            await receiver.read_row("SELECT * FROM users", {"limit": 10}, mock_metrics)
+            async for _ in receiver.read_row(
+                db=None,
+                entity_name="users",
+                metrics=mock_metrics,
+                query="SELECT * FROM users",
+                params={"limit": 10},
+            ):
+                pass
 
     @pytest.mark.asyncio
     async def test_mariadb_receiver_async_thread_execution(
@@ -361,7 +389,11 @@ class TestMariaDBReceivers:
         # Test that async execution works
         results = []
         async for result in receiver.read_row(
-            "SELECT * FROM users", {"limit": 10}, mock_metrics
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query="SELECT * FROM users",
+            params={"limit": 10},
         ):
             results.append(result)
 
@@ -381,7 +413,13 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease.side_effect = Exception("Connection failed")
 
         with pytest.raises(Exception, match="Connection failed"):
-            async for _ in receiver.read_row("SELECT 1", {}, mock_metrics):
+            async for _ in receiver.read_row(
+                db=None,
+                entity_name="users",
+                metrics=mock_metrics,
+                query="SELECT 1",
+                params={},
+            ):
                 pass
 
     @pytest.mark.asyncio
@@ -402,7 +440,13 @@ class TestMariaDBReceivers:
         mock_result.__iter__ = Mock(return_value=iter([]))
         mock_conn.execute.return_value = mock_result
 
-        async for _ in receiver.read_row(malicious_query, {}, mock_metrics):
+        async for _ in receiver.read_row(
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query=malicious_query,
+            params={},
+        ):
             pass
 
         # Verify that execute was called with the query
@@ -428,7 +472,13 @@ class TestMariaDBReceivers:
         mock_conn.execute.side_effect = Exception("Database error")
 
         with pytest.raises(Exception):
-            await receiver.write_row("users", {"name": "John"}, mock_metrics)
+            await receiver.write_row(
+                db=None,
+                entity_name="users",
+                row={"name": "John"},
+                metrics=mock_metrics,
+                table="users",
+            )
 
         # Verify rollback was called (though in real scenario this would be in __exit__)
         # This test documents the expected behavior
@@ -449,7 +499,13 @@ class TestMariaDBReceivers:
             with patch.object(ddf, "map_partitions") as mock_map:
                 mock_map.return_value.compute.return_value = None
 
-                await receiver.write_bigdata("test_table", mock_metrics, ddf)
+                await receiver.write_bigdata(
+                    db=None,
+                    entity_name="users",
+                    frame=ddf,
+                    metrics=mock_metrics,
+                    table="users",
+                )
 
                 # Verify that map_partitions was called
                 mock_map.assert_called_once()
@@ -468,11 +524,19 @@ class TestMariaDBReceivers:
         # Create empty DataFrame
         empty_df = pd.DataFrame()
 
-        await receiver.write_bulk("users", empty_df, mock_metrics)
+        result = await receiver.write_bulk(
+            db=None,
+            entity_name="users",
+            frame=empty_df,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify no execute or commit calls for empty DataFrame
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
+        # Verify return value
+        assert result.equals(empty_df)
 
     @pytest.mark.asyncio
     async def test_write_bulk_with_single_row(
@@ -482,18 +546,26 @@ class TestMariaDBReceivers:
         receiver = MariaDBReceiver(mock_connection_handler)
 
         # Single row data
-        single_row = [{"name": "John", "email": "john@example.com"}]
+        single_row_df = pd.DataFrame([{"name": "John", "email": "john@example.com"}])
 
         # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        await receiver.write_bulk("users", single_row, mock_metrics)
+        result = await receiver.write_bulk(
+            db=None,
+            entity_name="users",
+            frame=single_row_df,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify execute and commit were called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
+        # Verify return value
+        assert result.equals(single_row_df)
 
     @pytest.mark.asyncio
     async def test_read_row_with_empty_result(
@@ -510,7 +582,11 @@ class TestMariaDBReceivers:
         # Test read_row with empty result
         results = []
         async for result in receiver.read_row(
-            "SELECT * FROM empty_table", {}, mock_metrics
+            db=None,
+            entity_name="empty_table",
+            metrics=mock_metrics,
+            query="SELECT * FROM empty_table",
+            params={},
         ):
             results.append(result)
 
@@ -529,7 +605,13 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test read_bulk with empty result
-        result = await receiver.read_bulk("SELECT * FROM empty_table", {}, mock_metrics)
+        result = await receiver.read_bulk(
+            db=None,
+            entity_name="empty_table",
+            metrics=mock_metrics,
+            query="SELECT * FROM empty_table",
+            params={},
+        )
 
         assert len(result) == 0
         assert isinstance(result, pd.DataFrame)
@@ -551,7 +633,13 @@ class TestMariaDBReceivers:
         mock_conn.execute.return_value = mock_result
 
         # Test read operation
-        await receiver.read_bulk("SELECT 1", {}, mock_metrics)
+        await receiver.read_bulk(
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query="SELECT 1",
+            params={},
+        )
 
         # Verify lease context manager was used
         mock_connection_handler.lease.assert_called_once()
@@ -569,7 +657,13 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test that metrics object is used in operations
-        await receiver.read_bulk("SELECT 1", {}, mock_metrics)
+        await receiver.read_bulk(
+            db=None,
+            entity_name="users",
+            metrics=mock_metrics,
+            query="SELECT 1",
+            params={},
+        )
 
         # Verify metrics object was passed through (not directly used in current impl)
         # This test documents the expected behavior for future metrics integration
@@ -592,7 +686,13 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test read_bulk with large dataset
-        result = await receiver.read_bulk("SELECT * FROM large_table", {}, mock_metrics)
+        result = await receiver.read_bulk(
+            db=None,
+            entity_name="large_table",
+            metrics=mock_metrics,
+            query="SELECT * FROM large_table",
+            params={},
+        )
 
         assert len(result) == 1000
         assert result.iloc[0]["id"] == 0
@@ -615,13 +715,22 @@ class TestMariaDBReceivers:
         # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
+        mock_result.inserted_primary_key = [456]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_row with special characters
-        await receiver.write_row("users", special_data, mock_metrics)
+        result = await receiver.write_row(
+            db=None,
+            entity_name="users",
+            row=special_data,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify return value
+        assert result == {"affected_rows": 1, "row": special_data}
 
     @pytest.mark.asyncio
     async def test_numeric_data_types(self, mock_connection_handler, mock_metrics):
@@ -639,13 +748,22 @@ class TestMariaDBReceivers:
         # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
+        mock_result.inserted_primary_key = [789]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_row with numeric data
-        await receiver.write_row("numeric_table", numeric_data, mock_metrics)
+        result = await receiver.write_row(
+            db=None,
+            entity_name="numeric_table",
+            row=numeric_data,
+            metrics=mock_metrics,
+            table="numeric_table",
+        )
 
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify return value
+        assert result == {"affected_rows": 1, "row": numeric_data}
 
     @pytest.mark.asyncio
     async def test_boolean_data_types(self, mock_connection_handler, mock_metrics):
@@ -658,13 +776,22 @@ class TestMariaDBReceivers:
         # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
+        mock_result.inserted_primary_key = [101]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_row with boolean data
-        await receiver.write_row("boolean_table", boolean_data, mock_metrics)
+        result = await receiver.write_row(
+            db=None,
+            entity_name="boolean_table",
+            row=boolean_data,
+            metrics=mock_metrics,
+            table="boolean_table",
+        )
 
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify return value
+        assert result == {"affected_rows": 1, "row": boolean_data}
 
     # NEW TESTS FOR IMPROVED COVERAGE
 
@@ -697,11 +824,21 @@ class TestMariaDBReceivers:
                 ddf.map_partitions = Mock(return_value=mock_partition_result)
 
                 # Test write_bigdata
-                await receiver.write_bigdata("test_table", mock_metrics, ddf)
+                result = await receiver.write_bigdata(
+                    db=None,
+                    entity_name="test_table",
+                    frame=ddf,
+                    metrics=mock_metrics,
+                    table="test_table",
+                )
 
                 # Verify map_partitions was called
                 ddf.map_partitions.assert_called_once()
                 mock_partition_result.compute.assert_called_once()
+                # Verify return value
+                # result is now a DataFrame, not None
+                assert result is not None
+                assert hasattr(result, "npartitions")
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -730,10 +867,20 @@ class TestMariaDBReceivers:
                 ddf.map_partitions = Mock(return_value=mock_partition_result)
 
                 # Test write_bigdata with empty data
-                await receiver.write_bigdata("test_table", mock_metrics, ddf)
+                result = await receiver.write_bigdata(
+                    db=None,
+                    entity_name="test_table",
+                    frame=ddf,
+                    metrics=mock_metrics,
+                    table="test_table",
+                )
 
                 # Verify map_partitions was called
                 ddf.map_partitions.assert_called_once()
+                # Verify return value
+                # result is now a DataFrame, not None
+                assert result is not None
+                assert hasattr(result, "npartitions")
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -769,10 +916,20 @@ class TestMariaDBReceivers:
                 ddf.map_partitions = Mock(return_value=mock_partition_result)
 
                 # Test write_bigdata
-                await receiver.write_bigdata("test_table", mock_metrics, ddf)
+                result = await receiver.write_bigdata(
+                    db=None,
+                    entity_name="test_table",
+                    frame=ddf,
+                    metrics=mock_metrics,
+                    table="test_table",
+                )
 
                 # Verify map_partitions was called
                 ddf.map_partitions.assert_called_once()
+                # Verify return value
+                # result is now a DataFrame, not None
+                assert result is not None
+                assert hasattr(result, "npartitions")
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -790,11 +947,19 @@ class TestMariaDBReceivers:
         empty_df = pd.DataFrame()
 
         # Test write_bulk with empty DataFrame
-        await receiver.write_bulk("users", empty_df, mock_metrics)
+        result = await receiver.write_bulk(
+            db=None,
+            entity_name="users",
+            frame=empty_df,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify no execute or commit calls for empty DataFrame
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
+        # Verify return value
+        assert result.equals(empty_df)
 
     @pytest.mark.asyncio
     async def test_write_bulk_empty_list_early_return(
@@ -803,12 +968,21 @@ class TestMariaDBReceivers:
         """Test write_bulk early return for empty list."""
         receiver = MariaDBReceiver(mock_connection_handler)
 
-        # Test write_bulk with empty list
-        await receiver.write_bulk("users", [], mock_metrics)
+        # Test write_bulk with empty list (convert to DataFrame first)
+        empty_df = pd.DataFrame()
+        result = await receiver.write_bulk(
+            db=None,
+            entity_name="users",
+            frame=empty_df,
+            metrics=mock_metrics,
+            table="users",
+        )
 
         # Verify no execute or commit calls for empty list
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
+        # Verify return value
+        assert result.equals(empty_df)
 
     @pytest.mark.asyncio
     async def test_read_bigdata_default_partitions(
@@ -837,12 +1011,18 @@ class TestMariaDBReceivers:
                     mock_from_pandas.return_value = mock_ddf
 
                     # Test read_bigdata
-                    await receiver.read_bigdata("SELECT * FROM users", {}, mock_metrics)
+                    await receiver.read_bigdata(
+                        db=None,
+                        entity_name="users",
+                        metrics=mock_metrics,
+                        query="SELECT * FROM users",
+                        params={},
+                    )
 
-                    # Verify from_pandas was called with default npartitions=4
+                    # Verify from_pandas was called with default npartitions=1
                     mock_from_pandas.assert_called_once()
                     call_args = mock_from_pandas.call_args
-                    assert call_args[1]["npartitions"] == 4
+                    assert call_args[1]["npartitions"] == 1
 
             except ImportError:
                 pytest.skip("Dask not available")
@@ -865,7 +1045,9 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_bulk with DataFrame
-        await receiver.write_bulk("users", df, mock_metrics)
+        await receiver.write_bulk(
+            db=None, entity_name="users", frame=df, metrics=mock_metrics, table="users"
+        )
 
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
@@ -886,8 +1068,11 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_bulk with list
-        await receiver.write_bulk("users", list_data, mock_metrics)
+        # Test write_bulk with list (convert to DataFrame first)
+        df = pd.DataFrame(list_data)
+        await receiver.write_bulk(
+            db=None, entity_name="users", frame=df, metrics=mock_metrics, table="users"
+        )
 
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()

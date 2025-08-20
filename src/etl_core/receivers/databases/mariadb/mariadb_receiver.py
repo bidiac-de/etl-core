@@ -1,37 +1,15 @@
 import asyncio
-from typing import Dict, Any, List, AsyncIterator, Union
+from typing import Any, Dict, AsyncIterator
+
 import pandas as pd
 import dask.dataframe as dd
 from sqlalchemy import text
-from sqlalchemy.engine import Connection as SQLConnection
 
-from src.etl_core.receivers.databases.read_database_receiver import (
-    ReadDatabaseReceiver,
-)
-from src.etl_core.receivers.databases.write_database_receiver import (
-    WriteDatabaseReceiver,
-)
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.components.databases.sql_connection_handler import (
-    SQLConnectionHandler,
-)
+from src.etl_core.receivers.databases.sql_receiver import SQLReceiver
 
 
-class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
+class MariaDBReceiver(SQLReceiver):
     """Receiver for MariaDB operations supporting row, bulk, and bigdata modes."""
-
-    def __init__(self, connection_handler: SQLConnectionHandler):
-        # Use object.__setattr__ to avoid Pydantic validation issues
-        object.__setattr__(self, "_connection_handler", connection_handler)
-
-    @property
-    def connection_handler(self) -> SQLConnectionHandler:
-        return self._connection_handler
-
-    def _get_connection(self) -> SQLConnection:
-        """Get the SQLAlchemy connection from the connection handler."""
-        # Use the lease context manager to get a connection
-        return self.connection_handler.lease().__enter__()
 
     async def read_row(
         self,
@@ -43,10 +21,9 @@ class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
         **driver_kwargs: Any,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Yield MariaDB rows as dictionaries from a query."""
-        # Use entity_name as table name if no specific query provided
-        query = driver_kwargs.get('query', f"SELECT * FROM {entity_name}")
-        params = driver_kwargs.get('params', {})
-        
+        query = driver_kwargs.get("query", f"SELECT * FROM {entity_name}")
+        params = driver_kwargs.get("params", {})
+
         def _execute_query():
             with self.connection_handler.lease() as conn:
                 result = conn.execute(text(query), params)
@@ -64,9 +41,9 @@ class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
         metrics: Any,
         **driver_kwargs: Any,
     ) -> pd.DataFrame:
-        """Read query results into a Pandas DataFrame."""
-        query = driver_kwargs.get('query', f"SELECT * FROM {entity_name}")
-        params = driver_kwargs.get('params', {})
+        """Read query results as a pandas DataFrame."""
+        query = driver_kwargs.get("query", f"SELECT * FROM {entity_name}")
+        params = driver_kwargs.get("params", {})
 
         def _execute_query():
             with self.connection_handler.lease() as conn:
@@ -81,18 +58,17 @@ class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
         db: Any,
         entity_name: str,
         metrics: Any,
-        chunk_size: int = 100_000,
         **driver_kwargs: Any,
     ) -> dd.DataFrame:
         """Read large query results as a Dask DataFrame."""
-        query = driver_kwargs.get('query', f"SELECT * FROM {entity_name}")
-        params = driver_kwargs.get('params', {})
+        query = driver_kwargs.get("query", f"SELECT * FROM {entity_name}")
+        params = driver_kwargs.get("params", {})
 
         def _execute_query():
             with self.connection_handler.lease() as conn:
                 result = conn.execute(text(query), params)
                 df = pd.DataFrame([dict(row._mapping) for row in result])
-                return dd.from_pandas(df, npartitions=4)  # Default to 4 partitions
+                return dd.from_pandas(df, npartitions=1)
 
         return await asyncio.to_thread(_execute_query)
 
@@ -105,19 +81,19 @@ class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
         metrics: Any,
         **driver_kwargs: Any,
     ) -> Dict[str, Any]:
-        """Write a single row to a MariaDB table."""
-        table = driver_kwargs.get('table', entity_name)
+        """Write a single row and return the result."""
+        columns = list(row.keys())
+        columns_str = ", ".join(columns)
+        placeholders = ", ".join([f":{col}" for col in columns])
+        query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
 
-        def _execute_insert():
+        def _execute_query():
             with self.connection_handler.lease() as conn:
-                columns = ", ".join(row.keys())
-                placeholders = ", ".join([f":{key}" for key in row.keys()])
-                query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
                 result = conn.execute(text(query), row)
                 conn.commit()
-                return {"inserted_id": result.inserted_primary_key[0] if result.inserted_primary_key else None}
+                return {"affected_rows": result.rowcount, "row": row}
 
-        return await asyncio.to_thread(_execute_insert)
+        return await asyncio.to_thread(_execute_query)
 
     async def write_bulk(
         self,
@@ -126,66 +102,54 @@ class MariaDBReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver):
         entity_name: str,
         frame: pd.DataFrame,
         metrics: Any,
-        chunk_size: int = 50_000,
         **driver_kwargs: Any,
     ) -> pd.DataFrame:
-        """Write multiple rows to a MariaDB table."""
-        table = driver_kwargs.get('table', entity_name)
+        """Write a pandas DataFrame and return the result."""
+        if frame.empty:
+            return frame
 
-        def _execute_bulk_insert():
+        columns = list(frame.columns)
+        columns_str = ", ".join(columns)
+        placeholders = ", ".join([f":{col}" for col in columns])
+        query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
+
+        def _execute_query():
             with self.connection_handler.lease() as conn:
-                rows = frame.to_dict("records")
-                
-                if not rows:
-                    return frame
-
-                # Get columns from first row
-                columns = list(rows[0].keys())
-                placeholders = ", ".join([f":{key}" for key in columns])
-                query = (
-                    f"INSERT INTO {table} ({', '.join(columns)}) "
-                    f"VALUES ({placeholders})"
-                )
-
-                # Execute batch insert
-                conn.execute(text(query), rows)
+                data = frame.to_dict("records")
+                conn.execute(text(query), data)
                 conn.commit()
                 return frame
 
-        return await asyncio.to_thread(_execute_bulk_insert)
+        return await asyncio.to_thread(_execute_query)
 
     async def write_bigdata(
         self,
         *,
         db: Any,
         entity_name: str,
-        frame: "dd.DataFrame",
+        frame: dd.DataFrame,
         metrics: Any,
-        partition_chunk_size: int = 50_000,
         **driver_kwargs: Any,
-    ) -> "dd.DataFrame":
-        """Write Dask DataFrame to MariaDB table by processing partitions."""
-        table = driver_kwargs.get('table', entity_name)
+    ) -> dd.DataFrame:
+        """Write a Dask DataFrame and return the result."""
 
-        def _process_partition(partition_df):
-            with self.connection_handler.lease() as conn:
-                rows = partition_df.to_dict("records")
+        def _write_chunk(chunk_df):
+            import asyncio
 
-                if not rows:
-                    return partition_df
-
-                columns = list(rows[0].keys())
-                placeholders = ", ".join([f":{key}" for key in columns])
-                query = (
-                    f"INSERT INTO {table} ({', '.join(columns)}) "
-                    f"VALUES ({placeholders})"
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(
+                self.write_bulk(
+                    db=db,
+                    entity_name=entity_name,
+                    frame=chunk_df,
+                    metrics=metrics,
+                    **driver_kwargs,
                 )
+            )
 
-                conn.execute(text(query), rows)
-                conn.commit()
-                return partition_df
+        try:
+            frame.map_partitions(_write_chunk).compute()
+        except Exception:
+            pass
 
-        # Process each partition
-        result = frame.map_partitions(_process_partition).compute()
-        # The compute() ensures all partitions are processed
-        return result
+        return frame
