@@ -4,11 +4,10 @@ import pandas as pd
 import dask.dataframe as dd
 import asyncio
 
-from etl_core.receivers.files.file_helper import ensure_exists
+from etl_core.receivers.files.file_helper import ensure_file_exists, FileReceiverError
 from etl_core.receivers.files.read_file_receiver import ReadFileReceiver
 from etl_core.receivers.files.write_file_receiver import WriteFileReceiver
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.receivers.files.file_helper import FileReceiverError
 from etl_core.receivers.files.csv.csv_helper import (
     read_csv_row,
     read_csv_bulk,
@@ -21,14 +20,6 @@ from etl_core.receivers.files.csv.csv_helper import (
 _SENTINEL: Any = object()
 
 
-def _next_or_sentinel(it):
-    """Return next item from iterator or sentinel on StopIteration."""
-    try:
-        return next(it)
-    except StopIteration:
-        return _SENTINEL
-
-
 class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
     """Receiver for CSV files."""
 
@@ -39,10 +30,10 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         separator: str,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream CSV rows sequentially in a thread."""
-        ensure_exists(filepath)
+        ensure_file_exists(filepath)
         it = read_csv_row(filepath, separator=separator)
         while True:
-            row = await asyncio.to_thread(_next_or_sentinel, it)
+            row = await asyncio.to_thread(next, it, _SENTINEL)
             if row is _SENTINEL:
                 break
             metrics.lines_received += 1
@@ -52,7 +43,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         self, filepath: Path, metrics: ComponentMetrics, separator: str
     ) -> pd.DataFrame:
         """Read entire CSV into a pandas DataFrame."""
-        ensure_exists(filepath)
+        ensure_file_exists(filepath)
         df = await asyncio.to_thread(read_csv_bulk, filepath, separator=separator)
         metrics.lines_received += len(df)
         return df
@@ -61,7 +52,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         self, filepath: Path, metrics: ComponentMetrics, separator: str
     ) -> dd.DataFrame:
         """Read large CSV into a Dask DataFrame."""
-        ensure_exists(filepath)
+        ensure_file_exists(filepath)
         ddf = await asyncio.to_thread(read_csv_bigdata, filepath, separator=separator)
         metrics.lines_received += int(ddf.map_partitions(len).sum().compute())
         return ddf

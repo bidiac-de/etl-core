@@ -12,8 +12,11 @@ def resolve_file_path(filepath: Path) -> Path:
     return filepath.expanduser().resolve()
 
 
-def ensure_exists(filepath: Path):
-    """Ensure that the given file exists."""
+def ensure_file_exists(filepath: Path):
+    """
+    Ensure that the given file exists (raises FileNotFoundError if not).
+    Unified replacement for earlier ensure_exists / file_exists helpers.
+    """
     if not filepath.exists():
         raise FileNotFoundError(f"File {filepath} does not exist.")
 
@@ -28,8 +31,3 @@ def open_file(
 ) -> IO:
     """Open a file with consistent defaults and allow extra args like newline."""
     return open(path, mode=mode, encoding=encoding, newline=newline, **kwargs)
-
-
-def file_exists(path: Path) -> bool:
-    """Check if a file exists."""
-    return path.exists()

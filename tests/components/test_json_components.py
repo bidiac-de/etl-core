@@ -239,7 +239,7 @@ async def test_read_bulk_mixed_types(metrics: ComponentMetrics) -> None:
     df = dfs[0].sort_values("id").reset_index(drop=True)
     scores = list(df["score"])
     assert scores[0] == 95
-    assert scores[1] == '88'
+    assert scores[1] == "88"
     assert pd.isna(scores[2])
     assert metrics.lines_received == 3
     assert metrics.error_count == 0
