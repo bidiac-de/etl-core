@@ -7,12 +7,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
-from src.components.file_components.excel.read_excel import ReadExcel
-from src.components.file_components.excel.write_excel import WriteExcel
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.strategies.row_strategy import RowExecutionStrategy
-from src.strategies.bulk_strategy import BulkExecutionStrategy
-from src.strategies.bigdata_strategy import BigDataExecutionStrategy
+from etl_core.components.file_components.excel.read_excel import ReadExcel
+from etl_core.components.file_components.excel.write_excel import WriteExcel
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.etl_core.strategies.row_strategy import RowExecutionStrategy
+from src.etl_core.strategies.bulk_strategy import BulkExecutionStrategy
+from src.etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 
 DATA_DIR = Path(__file__).parent / "data"
 VALID_XLSX = DATA_DIR / "test_data.xlsx"

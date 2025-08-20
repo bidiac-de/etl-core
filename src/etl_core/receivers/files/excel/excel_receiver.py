@@ -7,12 +7,12 @@ from typing import Any, AsyncIterator, Dict, Optional
 import dask.dataframe as dd
 import pandas as pd
 
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.receivers.files.file_helper import ensure_exists
-from src.receivers.files.read_file_receiver import ReadFileReceiver
-from src.receivers.files.write_file_receiver import WriteFileReceiver
-from src.receivers.files.file_helper import FileReceiverError
-from src.receivers.files.excel.excel_helper import (
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from src.etl_core.receivers.files.file_helper import ensure_exists
+from src.etl_core.receivers.files.read_file_receiver import ReadFileReceiver
+from src.etl_core.receivers.files.write_file_receiver import WriteFileReceiver
+from src.etl_core.receivers.files.file_helper import FileReceiverError
+from etl_core.receivers.files.excel.excel_helper import (
     read_excel_rows,
     read_excel_bulk,
     read_excel_bigdata,

@@ -7,8 +7,8 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from src.receivers.files.excel.excel_receiver import ExcelReceiver
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 @pytest.fixture

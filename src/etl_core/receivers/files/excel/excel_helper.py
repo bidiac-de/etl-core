@@ -6,7 +6,7 @@ from typing import Dict, Iterator, List, Optional, Union
 import dask.dataframe as dd
 import pandas as pd
 
-from src.receivers.files.file_helper import ensure_exists, resolve_file_path
+from src.etl_core.receivers.files.file_helper import ensure_exists, resolve_file_path
 
 
 READABLE_EXTS = {".xlsx", ".xlsm", ".xls"}

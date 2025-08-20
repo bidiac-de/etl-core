@@ -6,10 +6,10 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import model_validator
 
-from src.components.file_components.excel.excel_component import Excel
-from src.components.component_registry import register_component
-from src.receivers.files.excel.excel_receiver import ExcelReceiver
-from src.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.components.file_components.excel.excel_component import Excel
+from src.etl_core.components.component_registry import register_component
+from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
+from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 @register_component("read_excel")
