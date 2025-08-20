@@ -31,7 +31,9 @@ def _router_has_cache(client: TestClient) -> bool:
 
 def _require_cache_or_skip(client: TestClient) -> None:
     if not _router_has_cache(client):
-        pytest.skip("Schema caching layer not installed in src.api.routers.schemas")
+        pytest.skip(
+            "Schema caching layer not installed in etl_core.api.routers.schemas"
+        )
 
 
 def _get_first_public_component(client: TestClient) -> str | None:
@@ -55,7 +57,7 @@ def test_job_schema_is_cached(
     calls: Dict[str, int] = {"job_model_json_schema": 0, "inline_defs": 0}
 
     # Patch JobBase.model_json_schema
-    import src.persistance.base_models.job_base as job_base
+    import etl_core.persistance.base_models.job_base as job_base
 
     real_job_schema = job_base.JobBase.model_json_schema
 
@@ -108,7 +110,7 @@ def test_component_schema_is_cached_and_invalidates(
     calls: Dict[str, int] = {"model_json_schema": 0, "inline_defs": 0}
 
     # Find the component class in the live registry
-    import src.components.component_registry as registry
+    import etl_core.components.component_registry as registry
 
     cls = registry.component_registry.get(comp)
     assert cls is not None, f"Component {comp!r} not in registry"
@@ -177,7 +179,7 @@ def test_mode_is_part_of_cache_key(
         return _FakeMode("production")
 
     # Count calls
-    import src.persistance.base_models.job_base as job_base
+    import etl_core.persistance.base_models.job_base as job_base
 
     job_calls: Dict[str, int] = {"model_json_schema": 0}
     real_job_schema = job_base.JobBase.model_json_schema
@@ -214,7 +216,7 @@ def test_job_schema_cache_is_thread_safe(
     client = fresh_client("test")
     _require_cache_or_skip(client)
 
-    import src.persistance.base_models.job_base as job_base
+    import etl_core.persistance.base_models.job_base as job_base
 
     schemas_router = _schemas_router_module(client)
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]

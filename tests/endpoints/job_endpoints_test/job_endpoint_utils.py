@@ -5,7 +5,7 @@ from typing import Dict, List, Set, Tuple
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from src.persistance.table_definitions import (
+from etl_core.persistance.table_definitions import (
     ComponentNextLink,
     ComponentTable,
 )
