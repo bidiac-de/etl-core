@@ -23,13 +23,6 @@ from src.etl_core.receivers.files.excel.excel_helper import (
 _SENTINEL: Any = object()
 
 
-def _next_or_sentinel(it: Iterator[Dict[str, Any]]) -> Any:
-    try:
-        return next(it)
-    except StopIteration:
-        return _SENTINEL
-
-
 class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
     """Receiver for Excel files (xlsx/xlsm; xls supported for reads)."""
 
@@ -47,7 +40,7 @@ class ExcelReceiver(ReadFileReceiver, WriteFileReceiver):
             raise FileReceiverError(f"Failed to open excel for row-read: {exc}") from exc
 
         while True:
-            row = await asyncio.to_thread(_next_or_sentinel, it)
+            row = await asyncio.to_thread(next, it, _SENTINEL)
             if row is _SENTINEL:
                 break
             metrics.lines_received += 1
