@@ -21,7 +21,7 @@ class MariaDBWrite(MariaDBComponent):
     def _build_objects(self):
         """Build objects after validation."""
         # Create and assign the MariaDB receiver
-        self._receiver = MariaDBReceiver(self.connection_handler)
+        self._receiver = MariaDBReceiver()
         return self
 
     async def process_row(
@@ -34,6 +34,7 @@ class MariaDBWrite(MariaDBComponent):
             metrics=metrics,
             table=self.entity_name,
             query=self.query,
+            connection_handler=self.connection_handler,
         )
         yield result
 
@@ -47,6 +48,7 @@ class MariaDBWrite(MariaDBComponent):
             metrics=metrics,
             table=self.entity_name,
             query=self.query,
+            connection_handler=self.connection_handler,
         )
         return result
 
@@ -60,5 +62,6 @@ class MariaDBWrite(MariaDBComponent):
             metrics=metrics,
             table=self.entity_name,
             query=self.query,
+            connection_handler=self.connection_handler,
         )
         return result

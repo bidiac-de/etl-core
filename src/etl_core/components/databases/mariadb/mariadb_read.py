@@ -20,7 +20,7 @@ class MariaDBRead(MariaDBComponent):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build objects after validation."""
-        self._receiver = MariaDBReceiver(self.connection_handler)
+        self._receiver = MariaDBReceiver()
         return self
 
     async def process_row(
@@ -32,6 +32,7 @@ class MariaDBRead(MariaDBComponent):
             metrics=metrics,
             query=self.query,
             params=self.params,
+            connection_handler=self.connection_handler,
         ):
             yield result
 
@@ -46,6 +47,7 @@ class MariaDBRead(MariaDBComponent):
             metrics=metrics,
             query=self.query,
             params=self.params,
+            connection_handler=self.connection_handler,
         )
 
     async def process_bigdata(
@@ -59,4 +61,5 @@ class MariaDBRead(MariaDBComponent):
             metrics=metrics,
             query=self.query,
             params=self.params,
+            connection_handler=self.connection_handler,
         )

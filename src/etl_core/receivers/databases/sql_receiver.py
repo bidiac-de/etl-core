@@ -23,24 +23,9 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
     database-specific differences while maintaining the common interface.
     """
 
-    def __init__(self, connection_handler: SQLConnectionHandler):
-        """
-        Initialize the SQL receiver with a connection handler.
-
-        Args:
-            connection_handler: The SQL connection handler to use for database
-                operations
-        """
-        object.__setattr__(self, "_connection_handler", connection_handler)
-
-    @property
-    def connection_handler(self) -> SQLConnectionHandler:
-        """Get the connection handler."""
-        return self._connection_handler
-
-    def _get_connection(self):
+    def _get_connection(self, connection_handler: SQLConnectionHandler) -> Any:
         """Get the SQLAlchemy connection from the connection handler."""
-        return self.connection_handler.lease().__enter__()
+        return connection_handler.lease().__enter__()
 
     @abstractmethod
     async def read_row(
@@ -48,6 +33,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         *,
         entity_name: str,
         metrics: Any,
+        connection_handler: SQLConnectionHandler,
         batch_size: int = 1000,
         **driver_kwargs: Any,
     ) -> AsyncIterator[Dict[str, Any]]:
@@ -60,6 +46,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         *,
         entity_name: str,
         metrics: Any,
+        connection_handler: SQLConnectionHandler,
         **driver_kwargs: Any,
     ) -> pd.DataFrame:
         """Read query results as a pandas DataFrame."""
@@ -71,6 +58,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         *,
         entity_name: str,
         metrics: Any,
+        connection_handler: SQLConnectionHandler,
         **driver_kwargs: Any,
     ) -> dd.DataFrame:
         """Read large query results as a Dask DataFrame."""
@@ -83,6 +71,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         entity_name: str,
         row: Dict[str, Any],
         metrics: Any,
+        connection_handler: SQLConnectionHandler,
         **driver_kwargs: Any,
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
@@ -95,6 +84,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         entity_name: str,
         frame: pd.DataFrame,
         metrics: Any,
+        connection_handler: SQLConnectionHandler,
         **driver_kwargs: Any,
     ) -> pd.DataFrame:
         """Write a pandas DataFrame and return it."""
@@ -107,6 +97,7 @@ class SQLReceiver(ReadDatabaseReceiver, WriteDatabaseReceiver, ABC):
         entity_name: str,
         frame: dd.DataFrame,
         metrics: Any,
+        connection_handler: SQLConnectionHandler,
         **driver_kwargs: Any,
     ) -> dd.DataFrame:
         """Write a Dask DataFrame and return it."""
