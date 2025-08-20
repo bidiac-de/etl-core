@@ -1,0 +1,25 @@
+{
+  "name": "CsvPassThroughRow",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "row",
+  "metadata": {
+    "created_by": "pytest",
+    "created_at": "2025-08-19T14:00:00"
+  },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_csv",
+      "description": "read csv input (row streaming)",
+      "filepath": "__IN__",
+      "next": ["writer"]
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "write csv output",
+      "filepath": "__OUT__"
+    }
+  ]
+}
