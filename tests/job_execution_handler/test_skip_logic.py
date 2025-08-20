@@ -1,13 +1,12 @@
-from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.components.runtime_state import RuntimeState
-import src.job_execution.job as job_module
-from src.components.stubcomponents import StubComponent
-from src.job_execution.job import Job
-from tests.helpers import get_component_by_name
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
+from etl_core.components.runtime_state import RuntimeState
+import etl_core.job_execution.runtimejob as runtimejob_module
+from etl_core.components.stubcomponents import StubComponent
+from tests.helpers import get_component_by_name, runtime_job_from_config
 from datetime import datetime
 
 # ensure Job._build_components() can find TestComponent
-job_module.TestComponent = StubComponent
+runtimejob_module.TestComponent = StubComponent
 
 
 def test_branch_skip_fan_out(tmp_path):
@@ -18,12 +17,12 @@ def test_branch_skip_fan_out(tmp_path):
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "SkipFanOutJob",
+        "name": "SkipFanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -31,23 +30,35 @@ def test_branch_skip_fan_out(tmp_path):
                 "name": "root",
                 "comp_type": "failtest",  # will throw
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["child1", "child2"],
             },
             {
                 "name": "child1",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "child2",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
@@ -58,17 +69,17 @@ def test_branch_skip_fan_out(tmp_path):
     assert "fail stubcomponent failed" in attempt.error
 
     # Component statuses
-    comp1 = get_component_by_name(job, "root")
+    comp1 = get_component_by_name(runtime_job, "root")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
         == RuntimeState.FAILED
     )
-    comp2 = get_component_by_name(job, "child1")
+    comp2 = get_component_by_name(runtime_job, "child1")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
         == RuntimeState.CANCELLED
     )
-    comp3 = get_component_by_name(job, "child2")
+    comp3 = get_component_by_name(runtime_job, "child2")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
         == RuntimeState.CANCELLED
@@ -83,12 +94,12 @@ def test_branch_skip_fan_in(tmp_path):
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "SkipFanInJob",
+        "name": "SkipFanInJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -96,24 +107,36 @@ def test_branch_skip_fan_in(tmp_path):
                 "name": "ok_root",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["join"],
             },
             {
                 "name": "fail_root",
                 "comp_type": "failtest",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["join"],
             },
             {
                 "name": "join",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
@@ -124,17 +147,17 @@ def test_branch_skip_fan_in(tmp_path):
     assert "fail stubcomponent failed" in attempt.error
 
     # ok_root ran, fail_root failed, join skipped
-    comp1 = get_component_by_name(job, "ok_root")
+    comp1 = get_component_by_name(runtime_job, "ok_root")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
         == RuntimeState.SUCCESS
     )
-    comp2 = get_component_by_name(job, "fail_root")
+    comp2 = get_component_by_name(runtime_job, "fail_root")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp2.id).status
         == RuntimeState.FAILED
     )
-    comp3 = get_component_by_name(job, "join")
+    comp3 = get_component_by_name(runtime_job, "join")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp3.id).status
         == RuntimeState.CANCELLED
@@ -149,12 +172,12 @@ def test_chain_skip_linear():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "ChainSkipJob",
+        "name": "ChainSkipJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -162,24 +185,36 @@ def test_chain_skip_linear():
                 "name": "root",
                 "comp_type": "failtest",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["middle"],
             },
             {
                 "name": "middle",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["leaf"],
             },
             {
                 "name": "leaf",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
@@ -189,9 +224,9 @@ def test_chain_skip_linear():
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
 
-    comp1 = get_component_by_name(job, "root")
-    comp2 = get_component_by_name(job, "middle")
-    comp3 = get_component_by_name(job, "leaf")
+    comp1 = get_component_by_name(runtime_job, "root")
+    comp2 = get_component_by_name(runtime_job, "middle")
+    comp3 = get_component_by_name(runtime_job, "leaf")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
         == RuntimeState.FAILED
@@ -214,12 +249,12 @@ def test_skip_diamond():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "SkipDiamondJob",
+        "name": "SkipDiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -227,30 +262,46 @@ def test_skip_diamond():
                 "name": "a",
                 "comp_type": "failtest",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["b", "c"],
             },
             {
                 "name": "b",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["d"],
             },
             {
                 "name": "c",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "next": ["d"],
             },
             {
                 "name": "d",
                 "comp_type": "test",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
@@ -260,10 +311,10 @@ def test_skip_diamond():
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
 
-    comp1 = get_component_by_name(job, "a")
-    comp2 = get_component_by_name(job, "b")
-    comp3 = get_component_by_name(job, "c")
-    comp4 = get_component_by_name(job, "d")
+    comp1 = get_component_by_name(runtime_job, "a")
+    comp2 = get_component_by_name(runtime_job, "b")
+    comp3 = get_component_by_name(runtime_job, "c")
+    comp4 = get_component_by_name(runtime_job, "d")
     assert (
         mh.get_comp_metrics(execution.id, attempt.id, comp1.id).status
         == RuntimeState.FAILED
