@@ -10,10 +10,10 @@ import sys
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
-from src.main import app
-from src.api.dependencies import get_execution_handler, get_job_handler
-from src.persistance.db import engine
-from src.persistance.table_definitions import (
+from etl_core.main import app
+from etl_core.api.dependencies import get_execution_handler, get_job_handler
+from etl_core.persistance.db import engine
+from etl_core.persistance.table_definitions import (
     JobTable,
     MetaDataTable,
     ComponentTable,
@@ -46,13 +46,13 @@ def fresh_client(
         monkeypatch.setenv("ETL_COMPONENT_MODE", mode)
         _purge_modules(
             (
-                "src.main",
-                "src.components",  # component registry and implementations
-                "src.api.routers",  # routers (schemas/jobs/execution/setup)
+                "etl_core.main",
+                "etl_core.components",  # component registry and implementations
+                "etl_core.api.routers",  # routers (schemas/jobs/execution/setup)
             )
         )
         importlib.invalidate_caches()
-        import src.main as main
+        import etl_core.main as main
 
         client = TestClient(main.app)
         client.__enter__()  # run lifespan
@@ -80,10 +80,10 @@ def enable_stub_components():
     """
     os.environ["ETL_COMPONENT_MODE"] = "test"
 
-    if "src.main" in sys.modules:
-        import src.main
+    if "etl_core.main" in sys.modules:
+        import etl_core.main
 
-        importlib.reload(src.main)
+        importlib.reload(etl_core.main)
 
 
 @pytest.fixture(autouse=True)
