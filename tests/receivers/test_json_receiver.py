@@ -251,3 +251,13 @@ async def test_read_json_row_gz(
 
     assert collected == payload
     assert metrics.lines_received == len(payload)
+
+
+@pytest.mark.asyncio
+async def test_jsonreceiver_read_bulk_missing_file_raises(
+    metrics: ComponentMetrics, tmp_path: Path
+):
+    r = JSONReceiver()
+    missing = tmp_path / "missing.json"
+    with pytest.raises(FileNotFoundError):
+        await r.read_bulk(filepath=missing, metrics=metrics)

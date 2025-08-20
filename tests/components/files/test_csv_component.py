@@ -15,11 +15,11 @@ from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 
-DATA_DIR = Path(__file__).parent / "data/csv"
+DATA_DIR = Path(__file__).parent.parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"
 MISSING_VALUES_CSV = DATA_DIR / "test_data_missing_values.csv"
 WRONG_TYPES_CSV = DATA_DIR / "test_data_wrong_types.csv"
-INVALID_CSV_FILE = DATA_DIR / "test_invalid_csv.csv"
+INVALID_CSV_FILE = DATA_DIR / "test_data_not_csv.txt"
 
 
 @pytest.fixture
@@ -212,3 +212,34 @@ async def test_writecsv_bigdata(tmp_path: Path, metrics):
     assert content[0] == "id,name"
     assert content[1] == "10,Nina"
     assert content[2] == "11,Omar"
+
+
+@pytest.mark.asyncio
+async def test_read_csv_missing_file_bulk_raises(metrics, tmp_path: Path):
+    comp = ReadCSV(
+        name="ReadCSV_Bulk_MissingFile",
+        description="missing file should error",
+        comp_type="read_csv",
+        filepath=tmp_path / "nope.csv",
+        separator=Delimiter.COMMA,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    with pytest.raises(FileNotFoundError):
+        gen = comp.execute(payload=None, metrics=metrics)
+        await anext(gen)
+
+@pytest.mark.asyncio
+async def test_read_csv_invalid_file_type_bulk_raises(metrics):
+    comp = ReadCSV(
+        name="ReadCSV_Bulk_InvalidFile",
+        description="invalid file should error",
+        comp_type="read_csv",
+        filepath=INVALID_CSV_FILE,
+        separator=Delimiter.COMMA,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    with pytest.raises(Exception):
+        gen = comp.execute(payload=None, metrics=metrics)
+        await anext(gen)
