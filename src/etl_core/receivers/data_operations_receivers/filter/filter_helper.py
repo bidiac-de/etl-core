@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import re
-from typing import Mapping, Sequence, Union
+import operator
+from functools import reduce
+from typing import Mapping, Sequence, Union, Callable, Iterable
 
 import pandas as pd
+import dask.dataframe as dd
 
-try:
-    import dask.dataframe as dd
-except Exception:
-    dd = None
 
-from src.components.data_operations.filter.comparison_rule import ComparisonRule
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
 
 
 def _ensure_string(series: pd.Series) -> pd.Series:
@@ -118,35 +117,56 @@ def _optimize_and_neq(
     return ~df[col].isin(values)
 
 
-def build_mask(df: Union[pd.DataFrame, "dd.DataFrame"], rule: ComparisonRule):
+def _reduce_masks(masks: Iterable[pd.Series], combiner: Callable[[pd.Series, pd.Series], pd.Series]) -> pd.Series:
+    """Reduce a sequence of boolean masks using the given combiner (| or &)."""
+    masks = list(masks)
+    if not masks:
+        raise ValueError("Cannot combine an empty sequence of masks.")
+    return reduce(combiner, masks)
+
+
+def _try_optimizers(
+    df: Union[pd.DataFrame, "dd.DataFrame"],
+    children: Sequence["ComparisonRule"],
+    optimizers: Sequence[Callable[[Union[pd.DataFrame, "dd.DataFrame"], Sequence["ComparisonRule"]], pd.Series]],
+) -> pd.Series | None:
+    """Return the first successful optimized mask or None."""
+    for opt in optimizers:
+        mask = opt(df, children)
+        if mask is not None:
+            return mask
+    return None
+
+
+def build_mask(df: Union[pd.DataFrame, "dd.DataFrame"], rule: "ComparisonRule") -> pd.Series:
     """Build a pandas/dask-compatible boolean mask for the given rule."""
+    # leaf: simple comparison on a column
     if rule.logical_operator is None:
         return _leaf_mask(df, rule)
 
-    op = rule.logical_operator
+    op = (rule.logical_operator or "").upper()
     children = rule.rules or []
+    if not children:
+        raise ValueError(f"Logical operator '{op}' requires at least one child rule.")
 
     if op == "NOT":
+        if len(children) != 1:
+            raise ValueError("Logical operator 'NOT' requires exactly one child rule.")
         return ~build_mask(df, children[0])
 
     if op == "OR":
-        for opt in (_optimize_or_eq(df, children), _optimize_or_contains(df, children)):
-            if opt is not None:
-                return opt
-        mask = build_mask(df, children[0])
-        for r in children[1:]:
-            mask = mask | build_mask(df, r)
-        return mask
+        optimized = _try_optimizers(df, children, (_optimize_or_eq, _optimize_or_contains))
+        if optimized is not None:
+            return optimized
+        child_masks = (build_mask(df, child) for child in children)
+        return _reduce_masks(child_masks, operator.or_)
 
     if op == "AND":
-        opt = _optimize_and_neq(df, children)
-        if opt is not None:
-            mask = opt
-        else:
-            mask = build_mask(df, children[0])
-        for r in children[1:]:
-            mask = mask & build_mask(df, r)
-        return mask
+        optimized = _try_optimizers(df, children, (_optimize_and_neq,))
+        if optimized is not None:
+            return optimized
+        child_masks = (build_mask(df, child) for child in children)
+        return _reduce_masks(child_masks, operator.and_)
 
     raise ValueError(f"Unknown logical operator: {op}")
 

@@ -7,13 +7,15 @@ import dask.dataframe as dd
 
 from pydantic import ConfigDict, Field
 
-from src.components.data_operations.filter.comparison_rule import ComparisonRule
-from src.components.base_component import Component
-from src.components.component_registry import register_component
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import (
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
+from etl_core.components.base_component import Component
+from etl_core.components.component_registry import register_component
+from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics import (
     FilterMetrics,
 )
-from src.receivers.data_operations_receivers.filter_receiver import FilterReceiver
+from etl_core.receivers.data_operations_receivers.filter.filter_receiver import (
+    FilterReceiver,
+)
 
 
 @register_component("filter")

@@ -5,13 +5,13 @@ from typing import Any, AsyncGenerator, Dict
 import pandas as pd
 import dask.dataframe as dd
 
-from src.receivers.base_receiver import Receiver
-from src.components.data_operations.filter.comparison_rule import ComparisonRule
-from src.receivers.data_operations_receivers.filter_helper import (
+from etl_core.receivers.base_receiver import Receiver
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
+from etl_core.receivers.data_operations_receivers.filter.filter_helper import (
     eval_rule_on_frame,
     eval_rule_on_row,
 )
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import (
+from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics import (
     FilterMetrics,
 )
 

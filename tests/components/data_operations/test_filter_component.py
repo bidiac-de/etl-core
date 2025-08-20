@@ -5,9 +5,9 @@ import pytest
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from src.components.data_operations.filter.filter_component import FilterComponent
-from src.components.data_operations.filter.comparison_rule import ComparisonRule
-from src.metrics.component_metrics.data_operations_metrics.filter_metrics import (
+from etl_core.components.data_operations.filter.filter_component import FilterComponent
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
+from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics import (
     FilterMetrics,
 )
 
