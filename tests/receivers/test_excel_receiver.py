@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 import dask.dataframe as dd
+from dask.dataframe.utils import assert_eq
 import pandas as pd
 import pytest
+from openpyxl import load_workbook
 
 from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -33,28 +35,34 @@ def sample_excel_file() -> Path:
         / "test_data.xlsx"
     )
 
-
 @pytest.mark.asyncio
-async def test_excelreceiver_read_row_streaming(
-    sample_excel_file: Path, metrics: ComponentMetrics
+async def test_excelreceiver_read_row_streaming_incremental(
+    sample_excel_file, metrics
 ) -> None:
     r = ExcelReceiver()
     rows = r.read_row(filepath=sample_excel_file, metrics=metrics)
 
     assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
 
-    collected = []
-    for _ in range(3):
-        rec = await asyncio.wait_for(anext(rows), timeout=0.5)
-        collected.append(rec)
+    rec1 = await asyncio.wait_for(anext(rows), timeout=0.5)
+    assert rec1["name"] == "Alice"
+    assert metrics.lines_received == 1
+    assert metrics.error_count == 0
 
-    await rows.aclose()
+    rec2 = await asyncio.wait_for(anext(rows), timeout=0.5)
+    assert rec2["name"] == "Bob"
+    assert metrics.lines_received == 2
+    assert metrics.error_count == 0
 
-    assert collected[0]["name"] == "Alice"
-    assert collected[1]["name"] == "Bob"
-    assert collected[2]["name"] == "Charlie"
+    rec3 = await asyncio.wait_for(anext(rows), timeout=0.5)
+    assert rec3["name"] == "Charlie"
     assert metrics.lines_received == 3
     assert metrics.error_count == 0
+
+    with pytest.raises(StopAsyncIteration):
+        await asyncio.wait_for(anext(rows), timeout=0.2)
+
+    await rows.aclose()
 
 
 @pytest.mark.asyncio
@@ -72,16 +80,24 @@ async def test_read_excel_bulk(
 
 
 @pytest.mark.asyncio
-async def test_read_excel_bigdata(
+async def test_read_excel_bigdata_matches_expected(
     sample_excel_file: Path, metrics: ComponentMetrics
 ) -> None:
     r = ExcelReceiver()
     ddf = await r.read_bigdata(filepath=sample_excel_file, metrics=metrics)
     assert isinstance(ddf, dd.DataFrame)
-    pdf = ddf.compute()
-    assert len(pdf) == 3
-    assert "Charlie" in pdf["name"].values
-    assert metrics.lines_received >= 3
+
+    expected = pd.read_excel(sample_excel_file)
+
+    assert_eq(
+        ddf.set_index(None).compute().sort_values(by=["name"]).reset_index(drop=True),
+        expected.sort_values(by=["name"]).reset_index(drop=True),
+        check_dtype=False,
+        check_index=False,
+    )
+
+    assert metrics.lines_received >= len(expected)
+    assert metrics.error_count == 0
 
 
 @pytest.mark.asyncio
@@ -98,18 +114,25 @@ async def test_write_excel_row(tmp_path: Path, metrics: ComponentMetrics) -> Non
 
     assert file_path.exists()
 
-    df = await r.read_bulk(
-        filepath=file_path,
-        metrics=ComponentMetrics(
-            started_at=datetime.now(),
-            processing_time=timedelta(0),
-            error_count=0,
-            lines_received=0,
-            lines_forwarded=0,
-        ),
-    )
-    assert len(df) == 2
-    assert set(df["name"]) == {"Daisy", "Eli"}
+    wb = load_workbook(filename=file_path)
+    ws = wb.active
+
+    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    assert set(headers) == {"id", "name"}
+
+    data = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        data.append(dict(zip(headers, row)))
+
+    assert len(data) == 2
+    names = {str(rec["name"]) for rec in data}
+    assert names == {"Daisy", "Eli"}
+
+    ids = {str(rec["id"]) for rec in data}
+    assert ids == {"10", "11"}
+
+    assert metrics.error_count == 0
+    assert metrics.lines_forwarded >= 0
 
 
 @pytest.mark.asyncio
@@ -126,18 +149,26 @@ async def test_write_excel_bulk(tmp_path: Path, metrics: ComponentMetrics) -> No
 
     await r.write_bulk(filepath=file_path, metrics=metrics, data=data)
 
-    df = await r.read_bulk(
-        filepath=file_path,
-        metrics=ComponentMetrics(
-            started_at=datetime.now(),
-            processing_time=timedelta(0),
-            error_count=0,
-            lines_received=0,
-            lines_forwarded=0,
-        ),
-    )
-    assert len(df) == 2
-    assert set(df["name"]) == {"Finn", "Gina"}
+    assert file_path.exists()
+
+    wb = load_workbook(filename=file_path)
+    ws = wb.active
+
+    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    assert set(headers) == {"id", "name"}
+
+    rows = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        rows.append(dict(zip(headers, row)))
+
+    assert len(rows) == 2
+    names = {str(r["name"]) for r in rows}
+    ids = {str(r["id"]) for r in rows}
+    assert names == {"Finn", "Gina"}
+    assert ids == {"20", "21"}
+
+    assert metrics.error_count == 0
+    assert metrics.lines_forwarded >= 0
 
 
 @pytest.mark.asyncio
