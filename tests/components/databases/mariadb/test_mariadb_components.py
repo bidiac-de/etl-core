@@ -8,12 +8,8 @@ without requiring actual MariaDB instances.
 import pytest
 import pandas as pd
 
-try:
-    import dask.dataframe as dd
 
-    DASK_AVAILABLE = True
-except ImportError:
-    DASK_AVAILABLE = False
+import dask.dataframe as dd
 
 from unittest.mock import Mock, AsyncMock, patch
 
@@ -23,6 +19,7 @@ from src.etl_core.metrics.component_metrics.component_metrics import ComponentMe
 from src.etl_core.strategies.base_strategy import ExecutionStrategy
 from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from src.etl_core.components.databases.database import DatabaseComponent
+
 
 class TestMariaDBComponents:
     """Test cases for MariaDB components."""
@@ -62,7 +59,6 @@ class TestMariaDBComponents:
     @pytest.fixture
     def sample_dataframe(self):
         """Sample pandas DataFrame for testing."""
-        import pandas as pd
 
         return pd.DataFrame(
             {
@@ -75,27 +71,19 @@ class TestMariaDBComponents:
     @pytest.fixture
     def sample_dask_dataframe(self):
         """Sample Dask DataFrame for testing."""
-        if DASK_AVAILABLE:
-            df = pd.DataFrame(
-                {
-                    "id": [1, 2, 3, 4],
-                    "name": ["John", "Jane", "Bob", "Alice"],
-                    "email": [
-                        "john@example.com",
-                        "jane@example.com",
-                        "bob@example.com",
-                        "alice@example.com",
-                    ],
-                }
-            )
-            return dd.from_pandas(df, npartitions=3)
-        else:
-            # Return a mock if dask is not available
-            mock_ddf = Mock()
-            mock_ddf.npartitions = 3
-            mock_ddf.map_partitions.return_value = mock_ddf
-            mock_ddf.compute.return_value = mock_ddf
-            return mock_ddf
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4],
+                "name": ["John", "Jane", "Bob", "Alice"],
+                "email": [
+                    "john@example.com",
+                    "jane@example.com",
+                    "bob@example.com",
+                    "alice@example.com",
+                ],
+            }
+        )
+        return dd.from_pandas(df, npartitions=3)
 
     def test_mariadb_read_initialization(self):
         """Test MariaDBRead component initialization."""
@@ -103,7 +91,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             params={"limit": 10},
@@ -136,7 +123,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
@@ -173,7 +159,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -199,7 +184,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -223,7 +207,6 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            
             entity_name="users",
             credentials_id=1,
         )
@@ -258,7 +241,6 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            
             entity_name="users",
             credentials_id=1,
         )
@@ -283,7 +265,6 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            
             entity_name="users",
             credentials_id=1,
         )
@@ -307,7 +288,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -324,18 +304,11 @@ class TestMariaDBComponents:
             )
             mock_handler.connect.return_value = None
             mock_handler_class.return_value = mock_handler
+            read_comp._setup_connection()
 
-            # Mock the receiver creation
-            with patch.object(read_comp, "_create_receiver") as mock_create_receiver:
-                mock_receiver = Mock()
-                mock_create_receiver.return_value = mock_receiver
-
-                # Call _setup_connection
-                read_comp._setup_connection()
-
-                # Verify connection was set up
-                assert read_comp._connection_handler is not None
-                assert read_comp._receiver is not None
+            # Verify connection was set up
+            assert read_comp._connection_handler is not None
+            assert read_comp._receiver is not None
 
     @pytest.mark.asyncio
     async def test_mariadb_component_error_handling(self, mock_context, mock_metrics):
@@ -344,7 +317,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -371,7 +343,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -414,7 +385,6 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            
             entity_name="users",
             credentials_id=1,
             batch_size=500,
@@ -430,7 +400,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users WHERE age > %(min_age)s AND city IN %(cities)s",
             params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
@@ -464,7 +433,6 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            
             entity_name="users",
             credentials_id=1,
         )
@@ -489,7 +457,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=999,  # Use non-existent credentials ID
@@ -518,7 +485,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=999,  # Non-existent credentials
@@ -538,7 +504,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -574,7 +539,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -604,7 +568,6 @@ class TestMariaDBComponents:
             name="test_read",
             description="Test read component",
             comp_type="database",
-            
             entity_name="users",
             query=large_query,
             params={"start_date": "2023-01-01", "limit": 1000},
@@ -640,7 +603,6 @@ class TestMariaDBComponents:
             name="test_write",
             description="Test write component",
             comp_type="database",
-            
             entity_name="user_profiles_2024",  # Table with underscores and numbers
             credentials_id=1,
         )
@@ -658,6 +620,7 @@ class TestMariaDBComponents:
 
         assert len(results) == 1
         assert write_comp.entity_name == "user_profiles_2024"
+
 
 # Create a concrete MariaDB component instance for edge cases
 # where it does not matter if it is read or write
@@ -699,26 +662,6 @@ class TestMariaDBComponent(MariaDBComponent):
 
         assert comp_custom.charset == "latin1"
         assert comp_custom.collation == "latin1_swedish_ci"
-
-    def test_mariadb_component_receiver_creation(self):
-        """Test MariaDB component receiver creation."""
-
-        comp = TestMariaDBComponent(
-            name="test_receiver",
-            description="Test receiver component",
-            comp_type="database",
-            entity_name="users",
-            credentials_id=1,
-        )
-
-        # Mock connection handler
-        comp._connection_handler = Mock()
-
-        # Test receiver creation
-        receiver = comp._create_receiver()
-        assert receiver is not None
-        assert hasattr(receiver, "read_row")
-        assert hasattr(receiver, "write_row")
 
     def test_mariadb_component_connection_setup_with_session_variables(self):
         """Test MariaDB component connection setup with session variables."""
@@ -823,7 +766,7 @@ class TestMariaDBComponent(MariaDBComponent):
 
         assert comp_minimal.charset == "utf8mb4"
         assert comp_minimal.collation == "utf8mb4_unicode_ci"
-        assert comp_minimal.name == "test_minimal"        # Test with custom configuration
+        assert comp_minimal.name == "test_minimal"  # Test with custom configuration
         comp_custom = TestMariaDBComponent(
             name="test_custom",
             description="Test custom component",
@@ -872,6 +815,7 @@ class TestMariaDBComponent(MariaDBComponent):
         # Verify it has MariaDB-specific fields
         assert hasattr(comp, "charset")
         assert hasattr(comp, "collation")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

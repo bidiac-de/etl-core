@@ -7,14 +7,10 @@ of components with actual database operations.
 
 import pytest
 import asyncio
+
+
+import dask.dataframe as dd
 import pandas as pd
-
-try:
-    import dask.dataframe as dd
-
-    DASK_AVAILABLE = True
-except ImportError:
-    DASK_AVAILABLE = False
 
 from unittest.mock import Mock, AsyncMock, patch
 
@@ -22,6 +18,7 @@ from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.etl_core.strategies.base_strategy import ExecutionStrategy
+
 
 class TestMariaDBIntegration:
     """Integration tests for MariaDB components and receivers."""
@@ -61,8 +58,6 @@ class TestMariaDBIntegration:
     @pytest.fixture
     def sample_dataframe(self):
         """Sample pandas DataFrame for testing."""
-        import pandas as pd
-
         return pd.DataFrame(
             {
                 "id": [1, 2],
@@ -74,27 +69,19 @@ class TestMariaDBIntegration:
     @pytest.fixture
     def sample_ddf(self):
         """Sample Dask DataFrame for testing."""
-        if DASK_AVAILABLE:
-            df = pd.DataFrame(
-                {
-                    "id": [1, 2, 3, 4],
-                    "name": ["John", "Jane", "Bob", "Alice"],
-                    "email": [
-                        "john@example.com",
-                        "jane@example.com",
-                        "bob@example.com",
-                        "alice@example.com",
-                    ],
-                }
-            )
-            return dd.from_pandas(df, npartitions=3)
-        else:
-            # Return a mock if dask is not available
-            mock_ddf = Mock()
-            mock_ddf.npartitions = 3
-            mock_ddf.map_partitions.return_value = mock_ddf
-            mock_ddf.compute.return_value = mock_ddf
-            return mock_ddf
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4],
+                "name": ["John", "Jane", "Bob", "Alice"],
+                "email": [
+                    "john@example.com",
+                    "jane@example.com",
+                    "bob@example.com",
+                    "alice@example.com",
+                ],
+            }
+        )
+        return dd.from_pandas(df, npartitions=3)
 
     @pytest.mark.asyncio
     async def test_read_to_write_pipeline(
@@ -370,19 +357,11 @@ class TestMariaDBIntegration:
             mock_handler.connect.return_value = None
             mock_handler_class.return_value = mock_handler
 
-            # Mock the receiver creation
-            with patch.object(read_comp, "_create_receiver") as mock_create_receiver:
-                mock_receiver = Mock()
-                mock_create_receiver.return_value = mock_receiver
+            read_comp._setup_connection()
 
-                # Call _setup_connection
-                read_comp._setup_connection()
-
-                # Verify connection was set up
-                assert read_comp._connection_handler is not None
-                assert read_comp._receiver is not None
-
-    # NEW TESTS FOR IMPROVED INTEGRATION COVERAGE
+            # Verify connection was set up
+            assert read_comp._connection_handler is not None
+            assert read_comp._receiver is not None
 
     @pytest.mark.asyncio
     async def test_bulk_strategy_integration(
@@ -613,16 +592,11 @@ class TestMariaDBIntegration:
             mock_handler.connect.return_value = None
             mock_handler_class.return_value = mock_handler
 
-            # Mock the receiver creation
-            with patch.object(read_comp, "_create_receiver") as mock_create_receiver:
-                mock_receiver = Mock()
-                mock_create_receiver.return_value = mock_receiver
+            # Call _setup_connection
+            read_comp._setup_connection()
 
-                # Call _setup_connection
-                read_comp._setup_connection()
-
-                # Verify connection handler was created
-                assert read_comp._connection_handler is not None
+            # Verify connection handler was created
+            assert read_comp._connection_handler is not None
 
     @pytest.mark.asyncio
     async def test_metrics_performance_integration(self, mock_context, mock_metrics):
@@ -706,6 +680,7 @@ class TestMariaDBIntegration:
         with pytest.raises(Exception, match="Connection timeout"):
             async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

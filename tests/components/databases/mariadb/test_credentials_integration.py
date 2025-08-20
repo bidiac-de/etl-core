@@ -16,6 +16,7 @@ from src.etl_core.context.credentials import Credentials
 from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
+
 class TestCredentialsIntegration:
     """Test cases for real Credentials and Context integration."""
 
@@ -158,15 +159,6 @@ class TestCredentialsIntegration:
 
     def test_credentials_password_handling(self):
         """Test credentials password handling."""
-        creds_with_pass = Credentials(
-            credentials_id=4,
-            name="pass_creds",
-            user="passuser",
-            host="localhost",
-            port=3306,
-            database="passdb",
-            password="secret123",
-        )
 
         creds_no_pass = Credentials(
             credentials_id=5,
@@ -228,28 +220,6 @@ class TestCredentialsIntegration:
         assert special_creds.user == "user@domain"
         assert special_creds.database == "test-db_123"
         assert special_creds.decrypted_password == "pass@word#123"
-
-    def test_credentials_edge_cases(self):
-        """Test credentials edge cases."""
-        empty_creds = Credentials(
-            credentials_id=8,
-            name="",
-            user="",
-            host="localhost",
-            port=3306,
-            database="",
-            password="",
-        )
-
-        long_creds = Credentials(
-            credentials_id=9,
-            name="a" * 100,
-            user="b" * 100,
-            host="localhost",
-            port=3306,
-            database="c" * 100,
-            password="d" * 100,
-        )
 
     def test_context_parameter_types(self):
         """Test different context parameter types."""
@@ -405,10 +375,7 @@ class TestCredentialsIntegration:
     def test_context_credentials_multiple_databases(self):
         """Test context with multiple database credentials."""
         multi_context = Context(
-            id=23,
-            name="multi_db_context",
-            environment=Environment.TEST,
-            parameters={}
+            id=23, name="multi_db_context", environment=Environment.TEST, parameters={}
         )
 
         creds1 = Credentials(
@@ -444,28 +411,6 @@ class TestCredentialsIntegration:
         assert retrieved_creds1.database == "db1"
         assert retrieved_creds2.database == "db2"
 
-    def test_credentials_password_security(self):
-        """Test credentials password security."""
-        secure_creds = Credentials(
-            credentials_id=24,
-            name="secure_creds",
-            user="secureuser",
-            host="localhost",
-            port=3306,
-            database="securedb",
-            password="secure_password_123!@#",
-        )
-
-        special_pass_creds = Credentials(
-            credentials_id=25,
-            name="special_pass_creds",
-            user="specialuser",
-            host="localhost",
-            port=3306,
-            database="specialdb",
-            password="!@#$%^&*()_+-=[]{}|;':\",./<>?",
-        )
-
     def test_context_parameter_immutability(self):
         """Test that context parameters are immutable."""
         param = ContextParameter(
@@ -483,15 +428,6 @@ class TestCredentialsIntegration:
 
     def test_credentials_database_name_validation(self):
         """Test credentials database name validation."""
-        creds = Credentials(
-            credentials_id=30,
-            name="dbname_creds",
-            user="dbnameuser",
-            host="localhost",
-            port=3306,
-            database="testdb",
-            password="pass0",
-        )
 
         # Test valid database names
         valid_db_names = [
@@ -691,6 +627,7 @@ class TestCredentialsIntegration:
         assert bulk_insert[0]["name"] == "John"
         assert bulk_insert[1]["name"] == "Jane"
         assert bulk_insert[2]["name"] == "Bob"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

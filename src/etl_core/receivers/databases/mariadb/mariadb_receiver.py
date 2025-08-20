@@ -79,7 +79,7 @@ class MariaDBReceiver(SQLReceiver):
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
         query = driver_kwargs.get("query")
-        
+
         if query:
             # Use custom query if provided
             def _execute_query():
@@ -87,13 +87,14 @@ class MariaDBReceiver(SQLReceiver):
                     result = conn.execute(text(query), row)
                     conn.commit()
                     return {"affected_rows": result.rowcount, "row": row}
+
         else:
             # Fall back to auto-generated INSERT query
             columns = list(row.keys())
             columns_str = ", ".join(columns)
             placeholders = ", ".join([f":{col}" for col in columns])
             query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
-            
+
             def _execute_query():
                 with self.connection_handler.lease() as conn:
                     result = conn.execute(text(query), row)
@@ -126,6 +127,7 @@ class MariaDBReceiver(SQLReceiver):
                         conn.execute(text(query), row.to_dict())
                     conn.commit()
                     return frame
+
         else:
             # Fall back to pandas.to_sql()
             def _execute_query():
@@ -164,6 +166,7 @@ class MariaDBReceiver(SQLReceiver):
                         conn.execute(text(query), row.to_dict())
                     conn.commit()
                     return frame
+
         else:
             # Fall back to pandas.to_sql()
             def _execute_query():

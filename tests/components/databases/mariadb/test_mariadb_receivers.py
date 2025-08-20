@@ -7,13 +7,7 @@ without requiring actual MariaDB instances.
 
 import pytest
 import pandas as pd
-
-try:
-    import dask.dataframe as dd
-
-    DASK_AVAILABLE = True
-except ImportError:
-    DASK_AVAILABLE = False
+import dask.dataframe as dd
 
 from unittest.mock import Mock, patch
 from sqlalchemy.engine import Connection as SQLConnection
@@ -82,27 +76,19 @@ class TestMariaDBReceivers:
     @pytest.fixture
     def sample_dask_dataframe(self):
         """Sample Dask DataFrame for testing."""
-        if DASK_AVAILABLE:
-            df = pd.DataFrame(
-                {
-                    "id": [1, 2, 3, 4],
-                    "name": ["John", "Jane", "Bob", "Alice"],
-                    "email": [
-                        "john@example.com",
-                        "jane@example.com",
-                        "bob@example.com",
-                        "alice@example.com",
-                    ],
-                }
-            )
-            return dd.from_pandas(df, npartitions=3)
-        else:
-            # Return a mock if dask is not available
-            mock_ddf = Mock()
-            mock_ddf.npartitions = 3
-            mock_ddf.map_partitions.return_value = mock_ddf
-            mock_ddf.compute.return_value = mock_ddf
-            return mock_ddf
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4],
+                "name": ["John", "Jane", "Bob", "Alice"],
+                "email": [
+                    "john@example.com",
+                    "jane@example.com",
+                    "bob@example.com",
+                    "alice@example.com",
+                ],
+            }
+        )
+        return dd.from_pandas(df, npartitions=3)
 
     def test_mariadb_receiver_initialization(self, mock_connection_handler):
         """Test MariaDBReceiver initialization."""
@@ -154,7 +140,6 @@ class TestMariaDBReceivers:
         # Test read_row with new signature
         results = []
         async for result in receiver.read_row(
-            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -186,7 +171,6 @@ class TestMariaDBReceivers:
 
         # Test read_bulk with new signature
         result = await receiver.read_bulk(
-            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -215,7 +199,6 @@ class TestMariaDBReceivers:
 
         # Test read_bigdata with new signature
         result = await receiver.read_bigdata(
-            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -239,7 +222,6 @@ class TestMariaDBReceivers:
 
         # Test write_row with new signature
         result = await receiver.write_row(
-            
             entity_name="users",
             row={"name": "John", "email": "john@example.com"},
             metrics=mock_metrics,
@@ -269,7 +251,6 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with new signature
         result = await receiver.write_bulk(
-            
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
@@ -292,7 +273,6 @@ class TestMariaDBReceivers:
         # Test write_bulk with empty DataFrame
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
-            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -320,7 +300,6 @@ class TestMariaDBReceivers:
         # Test write_bigdata with new signature
         try:
             result = await receiver.write_bigdata(
-                
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
@@ -362,7 +341,6 @@ class TestMariaDBReceivers:
         with pytest.raises(Exception):
             # This will trigger the error when we try to read
             async for _ in receiver.read_row(
-                
                 entity_name="users",
                 metrics=mock_metrics,
                 query="SELECT * FROM users",
@@ -389,7 +367,6 @@ class TestMariaDBReceivers:
         # Test that async execution works
         results = []
         async for result in receiver.read_row(
-            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT * FROM users",
@@ -414,7 +391,6 @@ class TestMariaDBReceivers:
 
         with pytest.raises(Exception, match="Connection failed"):
             async for _ in receiver.read_row(
-                
                 entity_name="users",
                 metrics=mock_metrics,
                 query="SELECT 1",
@@ -441,7 +417,6 @@ class TestMariaDBReceivers:
         mock_conn.execute.return_value = mock_result
 
         async for _ in receiver.read_row(
-            
             entity_name="users",
             metrics=mock_metrics,
             query=malicious_query,
@@ -473,7 +448,6 @@ class TestMariaDBReceivers:
 
         with pytest.raises(Exception):
             await receiver.write_row(
-                
                 entity_name="users",
                 row={"name": "John"},
                 metrics=mock_metrics,
@@ -491,27 +465,22 @@ class TestMariaDBReceivers:
         receiver = MariaDBReceiver(mock_connection_handler)
 
         # Create a real Dask DataFrame for testing
-        if DASK_AVAILABLE:
-            df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
-            ddf = dd.from_pandas(df, npartitions=2)
+        df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
+        ddf = dd.from_pandas(df, npartitions=2)
 
-            # Mock the partition processing
-            with patch.object(ddf, "compute") as mock_compute:
-                mock_compute.return_value = df
+        # Mock the partition processing
+        with patch.object(ddf, "compute") as mock_compute:
+            mock_compute.return_value = df
 
-                await receiver.write_bigdata(
-                    entity_name="users",
-                    frame=ddf,
-                    metrics=mock_metrics,
-                    table="users",
-                )
+            await receiver.write_bigdata(
+                entity_name="users",
+                frame=ddf,
+                metrics=mock_metrics,
+                table="users",
+            )
 
-                # Verify that compute was called
-                mock_compute.assert_called_once()
-
-        else:
-            # Skip if dask is not available
-            pytest.skip("Dask not available")
+            # Verify that compute was called
+            mock_compute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_write_bulk_with_empty_dataframe(
@@ -524,7 +493,6 @@ class TestMariaDBReceivers:
         empty_df = pd.DataFrame()
 
         result = await receiver.write_bulk(
-            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -553,7 +521,6 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         result = await receiver.write_bulk(
-            
             entity_name="users",
             frame=single_row_df,
             metrics=mock_metrics,
@@ -581,7 +548,6 @@ class TestMariaDBReceivers:
         # Test read_row with empty result
         results = []
         async for result in receiver.read_row(
-            
             entity_name="empty_table",
             metrics=mock_metrics,
             query="SELECT * FROM empty_table",
@@ -605,7 +571,6 @@ class TestMariaDBReceivers:
 
         # Test read_bulk with empty result
         result = await receiver.read_bulk(
-            
             entity_name="empty_table",
             metrics=mock_metrics,
             query="SELECT * FROM empty_table",
@@ -633,7 +598,6 @@ class TestMariaDBReceivers:
 
         # Test read operation
         await receiver.read_bulk(
-            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT 1",
@@ -657,7 +621,6 @@ class TestMariaDBReceivers:
 
         # Test that metrics object is used in operations
         await receiver.read_bulk(
-            
             entity_name="users",
             metrics=mock_metrics,
             query="SELECT 1",
@@ -686,7 +649,6 @@ class TestMariaDBReceivers:
 
         # Test read_bulk with large dataset
         result = await receiver.read_bulk(
-            
             entity_name="large_table",
             metrics=mock_metrics,
             query="SELECT * FROM large_table",
@@ -719,7 +681,6 @@ class TestMariaDBReceivers:
 
         # Test write_row with special characters
         result = await receiver.write_row(
-            
             entity_name="users",
             row=special_data,
             metrics=mock_metrics,
@@ -752,7 +713,6 @@ class TestMariaDBReceivers:
 
         # Test write_row with numeric data
         result = await receiver.write_row(
-            
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
@@ -780,7 +740,6 @@ class TestMariaDBReceivers:
 
         # Test write_row with boolean data
         result = await receiver.write_row(
-            
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
@@ -801,45 +760,33 @@ class TestMariaDBReceivers:
         """Test Dask DataFrame partition processing in write_bigdata."""
         receiver = MariaDBReceiver(mock_connection_handler)
 
-        if DASK_AVAILABLE:
-            try:
-                import dask.dataframe as dd
-                import pandas as pd
+        # Create test data
+        df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
+        ddf = dd.from_pandas(df, npartitions=2)
 
-                # Create test data
-                df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
-                ddf = dd.from_pandas(df, npartitions=2)
+        # Mock the connection execution
+        mock_result = Mock()
+        mock_result.rowcount = 2
+        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-                # Mock the connection execution
-                mock_result = Mock()
-                mock_result.rowcount = 2
-                mock_connection_handler.lease().__enter__().execute.return_value = (
-                    mock_result
-                )
+        # Mock compute to return a mock object
+        mock_compute_result = df
+        ddf.compute = Mock(return_value=mock_compute_result)
 
-                # Mock compute to return a mock object
-                mock_compute_result = df
-                ddf.compute = Mock(return_value=mock_compute_result)
+        # Test write_bigdata
+        result = await receiver.write_bigdata(
+            entity_name="test_table",
+            frame=ddf,
+            metrics=mock_metrics,
+            table="test_table",
+        )
 
-                # Test write_bigdata
-                result = await receiver.write_bigdata(
-                    entity_name="test_table",
-                    frame=ddf,
-                    metrics=mock_metrics,
-                    table="test_table",
-                )
-
-                # Verify compute was called
-                ddf.compute.assert_called_once()
-                # Verify return value
-                # result is now a DataFrame, not None
-                assert result is not None
-                assert hasattr(result, "npartitions")
-
-            except ImportError:
-                pytest.skip("Dask not available")
-        else:
-            pytest.skip("Dask not available")
+        # Verify compute was called
+        ddf.compute.assert_called_once()
+        # Verify return value
+        # result is now a DataFrame, not None
+        assert result is not None
+        assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bigdata_empty_partition(
@@ -848,38 +795,28 @@ class TestMariaDBReceivers:
         """Test write_bigdata with empty partition data."""
         receiver = MariaDBReceiver(mock_connection_handler)
 
-        if DASK_AVAILABLE:
-            try:
-                import dask.dataframe as dd
-                import pandas as pd
+        # Create empty DataFrame
+        df = pd.DataFrame()
+        ddf = dd.from_pandas(df, npartitions=1)
 
-                # Create empty DataFrame
-                df = pd.DataFrame()
-                ddf = dd.from_pandas(df, npartitions=1)
+        # Mock compute to return a mock object
+        mock_compute_result = df
+        ddf.compute = Mock(return_value=mock_compute_result)
 
-                # Mock compute to return a mock object
-                mock_compute_result = df
-                ddf.compute = Mock(return_value=mock_compute_result)
+        # Test write_bigdata with empty data
+        result = await receiver.write_bigdata(
+            entity_name="test_table",
+            frame=ddf,
+            metrics=mock_metrics,
+            table="test_table",
+        )
 
-                # Test write_bigdata with empty data
-                result = await receiver.write_bigdata(
-                    entity_name="test_table",
-                    frame=ddf,
-                    metrics=mock_metrics,
-                    table="test_table",
-                )
-
-                # Verify compute was called
-                ddf.compute.assert_called_once()
-                # Verify return value
-                # result is now a DataFrame, not None
-                assert result is not None
-                assert hasattr(result, "npartitions")
-
-            except ImportError:
-                pytest.skip("Dask not available")
-        else:
-            pytest.skip("Dask not available")
+        # Verify compute was called
+        ddf.compute.assert_called_once()
+        # Verify return value
+        # result is now a DataFrame, not None
+        assert result is not None
+        assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bigdata_single_partition(
@@ -888,46 +825,33 @@ class TestMariaDBReceivers:
         """Test write_bigdata with single partition."""
         receiver = MariaDBReceiver(mock_connection_handler)
 
-        if DASK_AVAILABLE:
-            try:
-                import dask.dataframe as dd
-                import pandas as pd
+        # Create single partition DataFrame
+        df = pd.DataFrame({"id": [1], "name": ["A"]})
+        ddf = dd.from_pandas(df, npartitions=1)
 
-                # Create single partition DataFrame
-                df = pd.DataFrame({"id": [1], "name": ["A"]})
-                ddf = dd.from_pandas(df, npartitions=1)
+        # Mock the connection execution
+        mock_result = Mock()
+        mock_result.rowcount = 1
+        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-                # Mock the connection execution
-                mock_result = Mock()
-                mock_result.rowcount = 1
-                mock_connection_handler.lease().__enter__().execute.return_value = (
-                    mock_result
-                )
+        # Mock compute to return a mock object
+        mock_compute_result = df
+        ddf.compute = Mock(return_value=mock_compute_result)
 
-                # Mock compute to return a mock object
-                mock_compute_result = df
-                ddf.compute = Mock(return_value=mock_compute_result)
+        # Test write_bigdata
+        result = await receiver.write_bigdata(
+            entity_name="test_table",
+            frame=ddf,
+            metrics=mock_metrics,
+            table="test_table",
+        )
 
-                # Test write_bigdata
-                result = await receiver.write_bigdata(
-                    
-                    entity_name="test_table",
-                    frame=ddf,
-                    metrics=mock_metrics,
-                    table="test_table",
-                )
-
-                # Verify compute was called
-                ddf.compute.assert_called_once()
-                # Verify return value
-                # result is now a DataFrame, not None
-                assert result is not None
-                assert hasattr(result, "npartitions")
-
-            except ImportError:
-                pytest.skip("Dask not available")
-        else:
-            pytest.skip("Dask not available")
+        # Verify compute was called
+        ddf.compute.assert_called_once()
+        # Verify return value
+        # result is now a DataFrame, not None
+        assert result is not None
+        assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bulk_empty_dataframe_early_return(
@@ -941,7 +865,6 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with empty DataFrame
         result = await receiver.write_bulk(
-            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -964,7 +887,6 @@ class TestMariaDBReceivers:
         # Test write_bulk with empty list (convert to DataFrame first)
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
-            
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
@@ -983,44 +905,33 @@ class TestMariaDBReceivers:
     ):
         """Test read_bigdata default partition setting."""
         receiver = MariaDBReceiver(mock_connection_handler)
+        # Mock the connection execution
+        mock_result = Mock()
+        mock_row1 = Mock()
+        mock_row1._mapping = {"id": 1, "name": "John"}
+        mock_row2 = Mock()
+        mock_row2._mapping = {"id": 2, "name": "Jane"}
+        mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
+        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        if DASK_AVAILABLE:
-            try:
-                # Mock the connection execution
-                mock_result = Mock()
-                mock_row1 = Mock()
-                mock_row1._mapping = {"id": 1, "name": "John"}
-                mock_row2 = Mock()
-                mock_row2._mapping = {"id": 2, "name": "Jane"}
-                mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
-                mock_connection_handler.lease().__enter__().execute.return_value = (
-                    mock_result
-                )
+        # Mock dask.dataframe.from_pandas
+        with patch("dask.dataframe.from_pandas") as mock_from_pandas:
+            mock_ddf = Mock()
+            mock_ddf.npartitions = 4
+            mock_from_pandas.return_value = mock_ddf
 
-                # Mock dask.dataframe.from_pandas
-                with patch("dask.dataframe.from_pandas") as mock_from_pandas:
-                    mock_ddf = Mock()
-                    mock_ddf.npartitions = 4
-                    mock_from_pandas.return_value = mock_ddf
+            # Test read_bigdata
+            await receiver.read_bigdata(
+                entity_name="users",
+                metrics=mock_metrics,
+                query="SELECT * FROM users",
+                params={},
+            )
 
-                    # Test read_bigdata
-                    await receiver.read_bigdata(
-                        
-                        entity_name="users",
-                        metrics=mock_metrics,
-                        query="SELECT * FROM users",
-                        params={},
-                    )
-
-                    # Verify from_pandas was called with default npartitions=1
-                    mock_from_pandas.assert_called_once()
-                    call_args = mock_from_pandas.call_args
-                    assert call_args[1]["npartitions"] == 1
-
-            except ImportError:
-                pytest.skip("Dask not available")
-        else:
-            pytest.skip("Dask not available")
+            # Verify from_pandas was called with default npartitions=1
+            mock_from_pandas.assert_called_once()
+            call_args = mock_from_pandas.call_args
+            assert call_args[1]["npartitions"] == 1
 
     @pytest.mark.asyncio
     async def test_write_bulk_dataframe_to_dict_conversion(
@@ -1039,7 +950,7 @@ class TestMariaDBReceivers:
 
         # Test write_bulk with DataFrame
         await receiver.write_bulk(
-             entity_name="users", frame=df, metrics=mock_metrics, table="users"
+            entity_name="users", frame=df, metrics=mock_metrics, table="users"
         )
 
         # Verify execute was called
@@ -1064,7 +975,7 @@ class TestMariaDBReceivers:
         # Test write_bulk with list (convert to DataFrame first)
         df = pd.DataFrame(list_data)
         await receiver.write_bulk(
-             entity_name="users", frame=df, metrics=mock_metrics, table="users"
+            entity_name="users", frame=df, metrics=mock_metrics, table="users"
         )
 
         # Verify execute was called
@@ -1077,58 +988,44 @@ class TestMariaDBReceivers:
     ):
         """Test the partition processing logic manually by calling internal function."""
 
-        if DASK_AVAILABLE:
-            try:
-                import pandas as pd
-                from sqlalchemy import text
+        # Create test partition data
+        partition_df = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
 
-                # Create test partition data
-                partition_df = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
+        # Mock the connection execution
+        mock_result = Mock()
+        mock_result.rowcount = 2
+        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-                # Mock the connection execution
-                mock_result = Mock()
-                mock_result.rowcount = 2
-                mock_connection_handler.lease().__enter__().execute.return_value = (
-                    mock_result
+        # Manually test the partition processing logic
+        # We'll simulate what _process_partition does
+        table = "test_table"
+
+        # This simulates the _process_partition function logic
+        with mock_connection_handler.lease() as conn:
+            rows = partition_df.to_dict("records")
+
+            if rows:  # Test the non-empty case
+                columns = list(rows[0].keys())
+                placeholders = ", ".join([f":{key}" for key in columns])
+                query = (
+                    f"INSERT INTO {table} ({', '.join(columns)}) "
+                    f"VALUES ({placeholders})"
                 )
 
-                # Manually test the partition processing logic
-                # We'll simulate what _process_partition does
-                table = "test_table"
+                conn.execute(text(query), rows)
+                conn.commit()
 
-                # This simulates the _process_partition function logic
-                with mock_connection_handler.lease() as conn:
-                    rows = partition_df.to_dict("records")
+        # Verify the connection was used correctly
+        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
-                    if rows:  # Test the non-empty case
-                        columns = list(rows[0].keys())
-                        placeholders = ", ".join([f":{key}" for key in columns])
-                        query = (
-                            f"INSERT INTO {table} ({', '.join(columns)}) "
-                            f"VALUES ({placeholders})"
-                        )
-
-                        conn.execute(text(query), rows)
-                        conn.commit()
-
-                # Verify the connection was used correctly
-                mock_connection_handler.lease().__enter__().execute.assert_called_once()
-                mock_connection_handler.lease().__enter__().commit.assert_called_once()
-
-                # Verify the correct SQL was generated
-                call_args = (
-                    mock_connection_handler.lease().__enter__().execute.call_args
-                )
-                assert call_args is not None
-                # The first argument should be a SQLAlchemy text object
-                sql_query = call_args[0][0]
-                assert "INSERT INTO test_table" in str(sql_query)
-                assert "id, name" in str(sql_query) or "name, id" in str(sql_query)
-
-            except ImportError:
-                pytest.skip("SQLAlchemy not available")
-        else:
-            pytest.skip("SQLAlchemy not available")
+        # Verify the correct SQL was generated
+        call_args = mock_connection_handler.lease().__enter__().execute.call_args
+        assert call_args is not None
+        # The first argument should be a SQLAlchemy text object
+        sql_query = call_args[0][0]
+        assert "INSERT INTO test_table" in str(sql_query)
+        assert "id, name" in str(sql_query) or "name, id" in str(sql_query)
 
     @pytest.mark.asyncio
     async def test_write_bigdata_empty_partition_logic(
@@ -1136,109 +1033,88 @@ class TestMariaDBReceivers:
     ):
         """Test the empty partition logic manually."""
 
-        if DASK_AVAILABLE:
-            try:
-                import pandas as pd
+        # Create empty partition data
+        empty_partition_df = pd.DataFrame()
 
-                # Create empty partition data
-                empty_partition_df = pd.DataFrame()
+        # Mock the connection execution
+        mock_result = Mock()
+        mock_result.rowcount = 0
+        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-                # Mock the connection execution
-                mock_result = Mock()
-                mock_result.rowcount = 0
-                mock_connection_handler.lease().__enter__().execute.return_value = (
-                    mock_result
+        # Manually test the empty partition processing logic
+        table = "test_table"
+
+        # This simulates the _process_partition function logic with empty data
+        with mock_connection_handler.lease() as conn:
+            rows = empty_partition_df.to_dict("records")
+
+            if not rows:  # Test the empty case - should return early
+                # This should not execute any database operations
+                pass
+            else:
+                # This should not be reached with empty data
+                columns = list(rows[0].keys())
+                placeholders = ", ".join([f":{key}" for key in columns])
+                query = (
+                    f"INSERT INTO {table} ({', '.join(columns)}) "
+                    f"VALUES ({placeholders})"
                 )
 
-                # Manually test the empty partition processing logic
-                table = "test_table"
+                conn.execute(text(query), rows)
+                conn.commit()
 
-                # This simulates the _process_partition function logic with empty data
-                with mock_connection_handler.lease() as conn:
-                    rows = empty_partition_df.to_dict("records")
-
-                    if not rows:  # Test the empty case - should return early
-                        # This should not execute any database operations
-                        pass
-                    else:
-                        # This should not be reached with empty data
-                        columns = list(rows[0].keys())
-                        placeholders = ", ".join([f":{key}" for key in columns])
-                        query = (
-                            f"INSERT INTO {table} ({', '.join(columns)}) "
-                            f"VALUES ({placeholders})"
-                        )
-
-                        conn.execute(text(query), rows)
-                        conn.commit()
-
-                # Verify no database operations were performed for empty partition
-                mock_connection_handler.lease().__enter__().execute.assert_not_called()
-                mock_connection_handler.lease().__enter__().commit.assert_not_called()
-
-            except ImportError:
-                pytest.skip("Pandas not available")
-        else:
-            pytest.skip("Pandas not available")
+        # Verify no database operations were performed for empty partition
+        mock_connection_handler.lease().__enter__().execute.assert_not_called()
+        mock_connection_handler.lease().__enter__().commit.assert_not_called()
 
     def test_partition_processing_column_logic(self, mock_connection_handler):
         """Test the column and placeholder generation logic from _process_partition."""
 
-        if DASK_AVAILABLE:
-            try:
-                import pandas as pd
-                from sqlalchemy import text
+        # Test different column configurations
+        test_cases = [
+            # Single column
+            pd.DataFrame({"id": [1, 2]}),
+            # Multiple columns
+            pd.DataFrame({"id": [1, 2], "name": ["A", "B"], "age": [25, 30]}),
+            # Different data types
+            pd.DataFrame({"id": [1], "active": [True], "score": [98.5]}),
+        ]
 
-                # Test different column configurations
-                test_cases = [
-                    # Single column
-                    pd.DataFrame({"id": [1, 2]}),
-                    # Multiple columns
-                    pd.DataFrame({"id": [1, 2], "name": ["A", "B"], "age": [25, 30]}),
-                    # Different data types
-                    pd.DataFrame({"id": [1], "active": [True], "score": [98.5]}),
-                ]
+        for i, partition_df in enumerate(test_cases):
+            # Mock the connection execution
+            mock_result = Mock()
+            mock_result.rowcount = len(partition_df)
+            mock_connection_handler.lease().__enter__().execute.return_value = (
+                mock_result
+            )
 
-                for i, partition_df in enumerate(test_cases):
-                    # Mock the connection execution
-                    mock_result = Mock()
-                    mock_result.rowcount = len(partition_df)
-                    mock_connection_handler.lease().__enter__().execute.return_value = (
-                        mock_result
+            table = f"test_table_{i}"
+
+            # Simulate the _process_partition logic
+            with mock_connection_handler.lease() as conn:
+                rows = partition_df.to_dict("records")
+
+                if rows:
+                    columns = list(rows[0].keys())
+                    placeholders = ", ".join([f":{key}" for key in columns])
+                    query = (
+                        f"INSERT INTO {table} ({', '.join(columns)}) "
+                        f"VALUES ({placeholders})"
                     )
 
-                    table = f"test_table_{i}"
+                    conn.execute(text(query), rows)
+                    conn.commit()
 
-                    # Simulate the _process_partition logic
-                    with mock_connection_handler.lease() as conn:
-                        rows = partition_df.to_dict("records")
-
-                        if rows:
-                            columns = list(rows[0].keys())
-                            placeholders = ", ".join([f":{key}" for key in columns])
-                            query = (
-                                f"INSERT INTO {table} ({', '.join(columns)}) "
-                                f"VALUES ({placeholders})"
-                            )
-
-                            conn.execute(text(query), rows)
-                            conn.commit()
-
-                    # Verify correct number of calls
-                    expected_calls = i + 1
-                    assert (
-                        mock_connection_handler.lease().__enter__().execute.call_count
-                        == expected_calls
-                    )
-                    assert (
-                        mock_connection_handler.lease().__enter__().commit.call_count
-                        == expected_calls
-                    )
-
-            except ImportError:
-                pytest.skip("Pandas or SQLAlchemy not available")
-        else:
-            pytest.skip("Pandas or SQLAlchemy not available")
+            # Verify correct number of calls
+            expected_calls = i + 1
+            assert (
+                mock_connection_handler.lease().__enter__().execute.call_count
+                == expected_calls
+            )
+            assert (
+                mock_connection_handler.lease().__enter__().commit.call_count
+                == expected_calls
+            )
 
 
 if __name__ == "__main__":

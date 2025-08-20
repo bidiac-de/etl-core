@@ -7,6 +7,7 @@ This file provides common test fixtures that can be used across all MariaDB test
 import pytest
 import pandas as pd
 from unittest.mock import Mock, patch
+import dask.dataframe as dd
 
 from src.etl_core.context.credentials import Credentials
 from src.etl_core.context.context import Context
@@ -81,29 +82,20 @@ def sample_dataframe():
 @pytest.fixture
 def sample_dask_dataframe():
     """Sample Dask DataFrame for testing."""
-    try:
-        import dask.dataframe as dd
 
-        df = pd.DataFrame(
-            {
-                "id": [1, 2, 3, 4],
-                "name": ["John", "Jane", "Bob", "Alice"],
-                "email": [
-                    "john@test.com",
-                    "jane@test.com",
-                    "bob@test.com",
-                    "alice@test.com",
-                ],
-            }
-        )
-        return dd.from_pandas(df, npartitions=2)
-    except ImportError:
-        # Return a mock if dask is not available
-        mock_ddf = Mock()
-        mock_ddf.npartitions = 2
-        mock_ddf.map_partitions.return_value = mock_ddf
-        mock_ddf.compute.return_value = mock_ddf
-        return mock_ddf
+    df = pd.DataFrame(
+        {
+            "id": [1, 2, 3, 4],
+            "name": ["John", "Jane", "Bob", "Alice"],
+            "email": [
+                "john@test.com",
+                "jane@test.com",
+                "bob@test.com",
+                "alice@test.com",
+            ],
+        }
+    )
+    return dd.from_pandas(df, npartitions=2)
 
 
 @pytest.fixture
@@ -309,6 +301,7 @@ def mock_credentials():
         database="testdb",
         password="testpass",
     )
+
 
 @pytest.fixture
 def mock_credentials_no_password():

@@ -8,7 +8,9 @@ import dask.dataframe as dd
 from pydantic import Field, model_validator
 
 from src.etl_core.components.databases.database import DatabaseComponent
-from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from src.etl_core.components.databases.sql_connection_handler import (
+    SQLConnectionHandler,
+)
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
@@ -31,7 +33,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build SQL database-specific objects after validation."""
-        super()._build_objects()
         self._setup_connection()
         return self
 
@@ -60,7 +61,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         engine_kwargs = build_sql_engine_kwargs(credentials_obj)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
-        self._receiver = self._create_receiver()
 
         if self._connection_handler and self.charset:
             try:
@@ -72,10 +72,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
                     conn.commit()
             except Exception as e:
                 print(f"Warning: Could not set SQL session variables: {e}")
-
-    def _create_receiver(self):
-        """Create the SQL database receiver."""
-        raise NotImplementedError("Subclasses must implement _create_receiver")
 
     def __del__(self):
         """Cleanup connection when component is destroyed."""
