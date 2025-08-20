@@ -5,16 +5,14 @@ import pandas as pd
 import dask.dataframe as dd
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, AsyncGenerator
+from typing import AsyncGenerator
 
 from src.components.file_components.excel.read_excel import ReadExcel
 from src.components.file_components.excel.write_excel import WriteExcel
-from src.components.column_definition import ColumnDefinition, DataType
 from src.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.strategies.row_strategy import RowExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.bigdata_strategy import BigDataExecutionStrategy
-from src.components import Schema
 
 DATA_DIR = Path(__file__).parent / "data"
 VALID_XLSX = DATA_DIR / "test_data.xlsx"
@@ -34,24 +32,13 @@ def metrics():
     )
 
 
-@pytest.fixture
-def schema_definition():
-    return Schema(
-        columns=[
-            ColumnDefinition(name="id", data_type=DataType.STRING),
-            ColumnDefinition(name="name", data_type=DataType.STRING),
-        ]
-    )
-
-
 @pytest.mark.asyncio
-async def test_readexcel_valid_bulk(metrics, schema_definition):
+async def test_readexcel_valid_bulk(metrics):
     comp = ReadExcel(
         name="ReadExcel_Bulk_Valid",
         description="Valid Excel file",
         comp_type="read_excel",
         filepath=VALID_XLSX,
-        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -64,13 +51,12 @@ async def test_readexcel_valid_bulk(metrics, schema_definition):
 
 
 @pytest.mark.asyncio
-async def test_readexcel_missing_values_bulk(metrics, schema_definition):
+async def test_readexcel_missing_values_bulk(metrics):
     comp = ReadExcel(
         name="ReadExcel_Bulk_Missing",
         description="Missing values",
         comp_type="read_excel",
         filepath=MISSING_VALUES_XLSX,
-        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -81,13 +67,12 @@ async def test_readexcel_missing_values_bulk(metrics, schema_definition):
 
 
 @pytest.mark.asyncio
-async def test_readexcel_row_streaming(schema_definition, metrics):
+async def test_readexcel_row_streaming(metrics):
     comp = ReadExcel(
         name="ReadExcel_Row_Stream",
         description="Row streaming",
         comp_type="read_excel",
         filepath=VALID_XLSX,
-        schema=schema_definition,
     )
     comp.strategy = RowExecutionStrategy()
 
@@ -104,13 +89,12 @@ async def test_readexcel_row_streaming(schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_readexcel_bigdata(schema_definition, metrics):
+async def test_readexcel_bigdata(metrics):
     comp = ReadExcel(
         name="ReadExcel_BigData",
         description="Read Excel with Dask",
         comp_type="read_excel",
         filepath=VALID_XLSX,
-        schema=schema_definition,
     )
     comp.strategy = BigDataExecutionStrategy()
 
@@ -122,7 +106,7 @@ async def test_readexcel_bigdata(schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writeexcel_row(tmp_path: Path, schema_definition, metrics):
+async def test_writeexcel_row(tmp_path: Path, metrics):
     out_fp = tmp_path / "single.xlsx"
 
     comp = WriteExcel(
@@ -130,7 +114,6 @@ async def test_writeexcel_row(tmp_path: Path, schema_definition, metrics):
         description="Write single row",
         comp_type="write_excel",
         filepath=out_fp,
-        schema=schema_definition,
     )
     comp.strategy = RowExecutionStrategy()
 
@@ -145,7 +128,7 @@ async def test_writeexcel_row(tmp_path: Path, schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writeexcel_bulk(tmp_path: Path, schema_definition, metrics):
+async def test_writeexcel_bulk(tmp_path: Path, metrics):
     out_fp = tmp_path / "bulk.xlsx"
 
     comp = WriteExcel(
@@ -153,7 +136,6 @@ async def test_writeexcel_bulk(tmp_path: Path, schema_definition, metrics):
         description="Write multiple rows",
         comp_type="write_excel",
         filepath=out_fp,
-        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -174,7 +156,7 @@ async def test_writeexcel_bulk(tmp_path: Path, schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_writeexcel_bigdata(tmp_path: Path, schema_definition, metrics):
+async def test_writeexcel_bigdata(tmp_path: Path, metrics):
     out_fp = tmp_path / "big.xlsx"
 
     comp = WriteExcel(
@@ -182,7 +164,6 @@ async def test_writeexcel_bigdata(tmp_path: Path, schema_definition, metrics):
         description="Write Dask DataFrame",
         comp_type="write_excel",
         filepath=out_fp,
-        schema=schema_definition,
     )
     comp.strategy = BigDataExecutionStrategy()
 
@@ -205,30 +186,12 @@ async def test_writeexcel_bigdata(tmp_path: Path, schema_definition, metrics):
 
 
 @pytest.mark.asyncio
-async def test_readexcel_schema_mismatch_bulk(schema_definition, metrics):
-    comp = ReadExcel(
-        name="ReadExcel_Bulk_Schema",
-        description="Schema mismatch",
-        comp_type="read_excel",
-        filepath=DATA_DIR / "test_data_schema.xlsx",
-        schema=schema_definition,
-    )
-    comp.strategy = BulkExecutionStrategy()
-
-    res = comp.execute(payload=None, metrics=metrics)
-    async for df in res:
-        expected_cols = {col.name for col in schema_definition.columns}
-        actual_cols = set(df.columns)
-        assert expected_cols != actual_cols
-
-@pytest.mark.asyncio
-async def test_readexcel_wrong_types_bulk(schema_definition, metrics):
+async def test_readexcel_wrong_types_bulk(metrics):
     comp = ReadExcel(
         name="ReadExcel_Bulk_WrongTypes",
         description="Wrong data types",
         comp_type="read_excel",
         filepath=DATA_DIR / "test_data_types.xlsx",
-        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 
@@ -238,8 +201,9 @@ async def test_readexcel_wrong_types_bulk(schema_definition, metrics):
         # all values should be read as object (string) instead of numeric
         assert df["id"].dtype == object
 
+
 @pytest.mark.asyncio
-async def test_readexcel_invalid_file(metrics, schema_definition, tmp_path: Path):
+async def test_readexcel_invalid_file(metrics, tmp_path: Path):
     # Create an invalid Excel file (actually just text)
     invalid_fp = tmp_path / "invalid.xlsx"
     invalid_fp.write_text("not a real excel file")
@@ -249,7 +213,6 @@ async def test_readexcel_invalid_file(metrics, schema_definition, tmp_path: Path
         description="Invalid Excel file",
         comp_type="read_excel",
         filepath=invalid_fp,
-        schema=schema_definition,
     )
     comp.strategy = BulkExecutionStrategy()
 

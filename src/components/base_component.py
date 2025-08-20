@@ -19,7 +19,6 @@ from src.strategies.bigdata_strategy import BigDataExecutionStrategy
 from src.strategies.bulk_strategy import BulkExecutionStrategy
 from src.strategies.row_strategy import RowExecutionStrategy
 from pandas import DataFrame
-from src.components.schema import Schema
 
 
 class StrategyType(str, Enum):
@@ -49,7 +48,6 @@ class Component(BaseModel, ABC):
     next: List[str] = []  # List of names of next components from config
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata: MetaData = Field(default_factory=lambda: MetaData())
-    schema: Schema = Field(..., description="Schema definition for this component")
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
@@ -161,9 +159,9 @@ class Component(BaseModel, ABC):
         self._prev_components.append(prev)
 
     def execute(
-            self,
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Any]:
         """
         Invoke the strategy’s async `execute`, streaming native outputs.
@@ -174,7 +172,7 @@ class Component(BaseModel, ABC):
     @abstractmethod
     @abstractmethod
     async def process_row(
-            self, *args: Any, **kwargs: Any
+        self, *args: Any, **kwargs: Any
     ) -> AsyncIterator[Dict[str, Any]]:
         """Async generator: yield dict rows."""
         raise NotImplementedError
