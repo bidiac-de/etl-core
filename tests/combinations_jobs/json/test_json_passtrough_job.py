@@ -40,7 +40,7 @@ async def test_execute_json_row_job(tmp_path: Path):
     job = _make_job(cfg, strategy="row", in_path=in_fp, out_path=out_fp)
 
     handler = JobExecutionHandler()
-    execution = handler.execute_job(job)
+    execution = await handler.aexecute_job(job)
 
     assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     out = pd.read_json(out_fp, lines=True)
@@ -59,7 +59,7 @@ async def test_execute_json_bulk_job(tmp_path: Path):
     job = _make_job(cfg, strategy="bulk", in_path=in_fp, out_path=out_fp)
 
     handler = JobExecutionHandler()
-    execution = handler.execute_job(job)
+    execution = await handler.aexecute_job(job)
 
     assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
     out = pd.read_json(out_fp, orient="records").sort_values("id")
@@ -80,7 +80,7 @@ async def test_execute_json_bigdata_job(tmp_path: Path):
     job = _make_job(cfg, strategy="bigdata", in_path=in_fp, out_path=out_dir)
 
     handler = JobExecutionHandler()
-    execution = handler.execute_job(job)
+    execution = await handler.aexecute_job(job)
 
     assert handler.job_info.metrics_handler.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 

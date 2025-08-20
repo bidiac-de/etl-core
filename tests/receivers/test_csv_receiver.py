@@ -84,6 +84,12 @@ async def test_write_csv_row(tmp_path: Path, metrics: ComponentMetrics):
         row={"id": "10", "name": "Daisy"},
         separator=",",
     )
+
+    assert file_path.exists()
+    lines = file_path.read_text().splitlines()
+    assert lines[0] == "id,name"
+    assert lines[1] == "10,Daisy"
+
     await r.write_row(
         filepath=file_path,
         metrics=metrics,
@@ -91,9 +97,11 @@ async def test_write_csv_row(tmp_path: Path, metrics: ComponentMetrics):
         separator=",",
     )
 
-    df = await r.read_bulk(filepath=file_path, metrics=metrics, separator=",")
-    assert len(df) == 2
-    assert set(df["name"]) == {"Daisy", "Eli"}
+    assert file_path.exists()
+    lines = file_path.read_text().splitlines()
+    assert lines[0] == "id,name"
+    assert lines[1] == "10,Daisy"
+    assert lines[2] == "11,Eli"
 
 
 @pytest.mark.asyncio
@@ -103,16 +111,16 @@ async def test_write_csv_bulk(tmp_path: Path, metrics: ComponentMetrics):
     r = CSVReceiver()
 
     data = [
-        {"id": "20", "name": "Finn"},
-        {"id": "21", "name": "Gina"},
+        {"id": 20, "name": "Finn"},
+        {"id": 21, "name": "Gina"},
     ]
     df = pd.DataFrame(data)
 
     await r.write_bulk(filepath=file_path, metrics=metrics, data=df, separator=",")
 
-    df = await r.read_bulk(filepath=file_path, metrics=metrics, separator=",")
-    assert len(df) == 2
-    assert set(df["name"]) == {"Finn", "Gina"}
+    assert file_path.exists()
+    df_out = pd.read_csv(file_path)
+    pd.testing.assert_frame_equal(df_out, df)
 
 
 @pytest.mark.asyncio
@@ -135,8 +143,15 @@ async def test_write_csv_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 
     assert file_path.exists()
 
-    content = file_path.read_text().splitlines()
+    df_out = pd.read_csv(file_path)
+    pd.testing.assert_frame_equal(df_out, pdf)
 
-    assert content[0] == "id,name"
-    assert content[1] == "30,Hugo"
-    assert content[2] == "31,Ivy"
+
+@pytest.mark.asyncio
+async def test_csvreceiver_read_row_missing_file_raises(
+    metrics: ComponentMetrics, tmp_path: Path
+):
+    r = CSVReceiver()
+    rows = r.read_row(filepath=tmp_path / "missing.csv", metrics=metrics, separator=",")
+    with pytest.raises(FileNotFoundError):
+        await anext(rows)
