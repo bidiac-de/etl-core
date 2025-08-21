@@ -5,7 +5,6 @@ from uuid import uuid4
 
 import pandas as pd
 import dask.dataframe as dd
-from dask.dataframe.utils import make_meta
 
 from etl_core.receivers.base_receiver import Receiver
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
@@ -17,9 +16,11 @@ from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics i
     FilterMetrics,
 )
 
+
 def _apply_filter_partition(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
     mask = eval_rule_on_frame(pdf, rule)
     return pdf[mask]
+
 
 class FilterReceiver(Receiver):
     """
