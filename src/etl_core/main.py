@@ -6,7 +6,7 @@ from starlette.config import Config
 from fastapi import FastAPI
 
 from .logger.logging_setup import setup_logging
-from .api.routers import schemas, setup, jobs, execution
+from .api.routers import schemas, setup, jobs, execution, contexts
 from .api.helpers import autodiscover_components
 from .components.component_registry import (
     RegistryMode,
@@ -40,6 +40,7 @@ app.include_router(schemas.router)
 app.include_router(setup.router)
 app.include_router(jobs.router)
 app.include_router(execution.router)
+app.include_router(contexts.router)
 
 
 if __name__ == "__main__":
