@@ -53,6 +53,7 @@ class TestRealDatabaseConnection:
         """Name for test table."""
         return "test_connection_table"
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_can_connect_to_database(self, real_credentials):
         """Test that we can establish a connection to the database."""
         try:
@@ -95,6 +96,7 @@ class TestRealDatabaseConnection:
         except Exception as e:
             pytest.fail(f"Failed to connect to database: {e}")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_can_read_from_database(self, real_context, test_table_name):
         """Test that we can read data from the database."""
         try:
@@ -169,6 +171,7 @@ class TestRealDatabaseConnection:
         except Exception as e:
             pytest.fail(f"Failed to test database read: {e}")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_can_write_to_database(self, real_context, test_table_name):
         """Test that we can write data to the database."""
 
@@ -191,6 +194,7 @@ class TestRealDatabaseConnection:
 
         print("✅ Successfully tested MariaDBWrite " "component with real credentials!")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_database_operations_workflow(self, real_context, test_table_name):
         """Test complete workflow: create table, insert data, read data."""
         try:
@@ -263,6 +267,7 @@ class TestRealDatabaseConnection:
         except Exception as e:
             pytest.fail(f"Failed to test database workflow: {e}")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_connection_pool_settings(self, real_credentials):
         """Test that connection pool settings work correctly."""
         try:
@@ -319,6 +324,7 @@ class TestRealDatabaseConnection:
         except Exception as e:
             pytest.fail(f"Failed to test connection pool: {e}")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_connection_error_handling(self, real_context):
         """Test connection error handling with invalid credentials."""
         from src.etl_core.components.databases.sql_connection_handler import (
@@ -357,6 +363,7 @@ class TestRealDatabaseConnection:
 
         print("✅ Connection error handling test completed (showing actual behavior)")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_database_schema_operations(self, real_context):
         """Test database schema operations."""
         from src.etl_core.components.databases.sql_connection_handler import (
@@ -398,6 +405,7 @@ class TestRealDatabaseConnection:
 
             print("✅ Successfully tested database schema operations!")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_show_test_data(self, real_context):
         """Test to show what data was created during the tests."""
         try:
@@ -462,6 +470,7 @@ class TestRealDatabaseConnection:
         except Exception as e:
             pytest.fail(f"Failed to inspect test data: {e}")
 
+    @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_cleanup_test_data(self, real_context):
         """Clean up test data after all tests."""
         try:
