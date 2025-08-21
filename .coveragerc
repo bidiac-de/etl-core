@@ -12,6 +12,8 @@ omit =
     */coverage/*
     */htmlcov/*
     */htmlcov_*
+    # Critical tests that require real database connections
+    tests/components/databases/mariadb/test_real_database_connection.py
 
 [report]
 exclude_lines =
