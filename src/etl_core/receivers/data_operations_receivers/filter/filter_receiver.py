@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict
+from uuid import uuid4
 
 import pandas as pd
 import dask.dataframe as dd
@@ -16,6 +17,9 @@ from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics i
     FilterMetrics,
 )
 
+def _apply_filter_partition(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
+    mask = eval_rule_on_frame(pdf, rule)
+    return pdf[mask]
 
 class FilterReceiver(Receiver):
     """
@@ -38,7 +42,6 @@ class FilterReceiver(Receiver):
             metrics.lines_forwarded += 1
             yield row
         else:
-            # no match, no yield
             metrics.lines_dismissed += 1
 
     async def process_bulk(
@@ -58,7 +61,6 @@ class FilterReceiver(Receiver):
         if total_forwarded:
             yield dataframe[mask].reset_index(drop=True)
         else:
-            # yield an empty frame if nothing matches
             yield dataframe.iloc[0:0].copy()
 
     async def process_bigdata(
@@ -67,16 +69,13 @@ class FilterReceiver(Receiver):
         rule: ComparisonRule,
         metrics: FilterMetrics,
     ) -> AsyncGenerator[dd.DataFrame, None]:
-        def _apply(pdf: pd.DataFrame) -> pd.DataFrame:
-            mask = eval_rule_on_frame(pdf, rule)
-            return pdf[mask]
-
         filtered = ddf.map_partitions(
-            _apply,
-            meta=make_meta(ddf),
+            _apply_filter_partition,
+            rule,
+            meta=ddf._meta,
+            token=f"filter-{uuid4().hex}",
         )
 
-        # Best-effort metrics (safe-guarded)
         try:
             total_received = int(ddf.map_partitions(len).sum().compute())
             total_forwarded = int(filtered.map_partitions(len).sum().compute())
