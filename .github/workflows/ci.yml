@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11"]
+        python-version: ["3.12"]
 
     steps:
       - name: Checkout repository
@@ -46,7 +46,7 @@ jobs:
           pytest --cov=src --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage reports to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -62,7 +62,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -89,10 +89,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install test deps
         run: |
@@ -117,4 +117,4 @@ jobs:
             -Dsonar.sources=src
             -Dsonar.tests=tests
             -Dsonar.python.coverage.reportPaths=coverage.xml
-            -Dsonar.python.version=3.11
+            -Dsonar.python.version=3.12
