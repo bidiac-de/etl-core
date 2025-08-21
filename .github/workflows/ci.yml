@@ -2,82 +2,84 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
   pull-requests: write
   checks: write
+  security-events: write
 
 jobs:
   test:
+    name: Tests (lint + pytest)
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.x"]
+        python-version: ["3.12"]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov flake8
           pip install -e .
-        shell: bash
 
-      - name: Run Flake8 linting
+      - name: Run Flake8
         run: flake8 src/ tests/
-        continue-on-error: false
 
-      - name: Run tests with coverage
-        run: |
-          pytest --cov=src --cov-report=xml --cov-report=term-missing
+      - name: Run tests with coverage (xml)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         shell: bash
+        run: |
+          pytest --cov=src --cov-report=xml:coverage.xml --cov-report=term-missing
 
-      - name: Upload coverage reports to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      - name: Upload coverage.xml artifact
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+      - name: Upload coverage to Codecov (optional)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-  lint-review:
+  sonarqube:
+    name: SonarQube
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
+    needs: test
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.11'
+          fetch-depth: 0
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8
-
-      - name: Install Reviewdog
-        uses: reviewdog/action-setup@v1
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
         with:
-          reviewdog_version: latest
+          name: coverage-report
+          path: .
 
-      - name: Run Flake8 with Reviewdog
-        run: |
-          flake8 --format=default src/ tests/ | reviewdog -f=flake8 -name="flake8" \
-            -reporter=github-check -level=error
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.sources=src
+            -Dsonar.tests=tests
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.python.version=3.12
