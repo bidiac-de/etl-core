@@ -70,6 +70,11 @@ class FilterReceiver(Receiver):
         rule: ComparisonRule,
         metrics: FilterMetrics,
     ) -> AsyncGenerator[dd.DataFrame, None]:
+        """
+        Apply the filter across partitions. With the normalize_token hook
+        registered for ComparisonRule (see filter_helper.py), Dask can
+        deterministically hash 'rule' across platforms (incl. Windows).
+        """
         filtered = ddf.map_partitions(
             _apply_filter_partition,
             rule,
