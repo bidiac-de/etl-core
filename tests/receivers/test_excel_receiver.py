@@ -31,8 +31,8 @@ def sample_excel_file() -> Path:
     return (
         Path(__file__).parent.parent
         / "components"
-        / "files"
         / "data"
+        / "excel"
         / "test_data.xlsx"
     )
 
