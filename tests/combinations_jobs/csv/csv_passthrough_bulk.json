@@ -13,12 +13,14 @@
       "comp_type": "read_csv",
       "description": "read full csv as dataframe",
       "filepath": "__IN__",
+      "delimiter": ";",
       "next": ["writer"]
     },
     {
       "name": "writer",
       "comp_type": "write_csv",
       "description": "write dataframe to csv",
+      "delimiter": ";",
       "filepath": "__OUT__"
     }
   ]

@@ -13,12 +13,14 @@
       "comp_type": "read_csv",
       "description": "read csv input (row streaming)",
       "filepath": "__IN__",
+      "delimiter": ",",
       "next": ["writer"]
     },
     {
       "name": "writer",
       "comp_type": "write_csv",
       "description": "write csv output",
+      "delimiter": ",",
       "filepath": "__OUT__"
     }
   ]
