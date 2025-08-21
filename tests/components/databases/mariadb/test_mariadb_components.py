@@ -25,21 +25,6 @@ class TestMariaDBComponents:
     """Test cases for MariaDB components."""
 
     @pytest.fixture
-    def mock_context(self):
-        """Create a mock context with credentials."""
-        context = Mock()
-        # Create mock credentials with get_parameter method
-        mock_credentials = Mock()
-        mock_credentials.get_parameter.side_effect = lambda param: {
-            "user": "testuser",
-            "password": "testpass",
-            "database": "testdb",
-        }.get(param)
-        mock_credentials.decrypted_password = "testpass"
-        context.get_credentials.return_value = mock_credentials
-        return context
-
-    @pytest.fixture
     def mock_metrics(self):
         """Create mock component metrics."""
         metrics = Mock(spec=ComponentMetrics)
