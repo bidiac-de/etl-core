@@ -33,6 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov flake8
+          pip install -e .
         shell: bash
 
       - name: Run Flake8 linting
@@ -42,8 +43,6 @@ jobs:
       - name: Run tests with coverage
         run: |
           pytest --cov=src --cov-report=xml --cov-report=term-missing
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         shell: bash
 
       - name: Upload coverage reports to Codecov
