@@ -1,51 +1,27 @@
-class ContextParameter:
-    def __init__(self, id: int, key: str, value: str, type: str, is_secure: bool):
-        self._id = id
-        self._key = key
-        self._value = value
-        self._type = type
-        self._is_secure = is_secure
+from __future__ import annotations
 
-    @property
-    def id(self) -> int:
-        return self._id
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-    @id.setter
-    def id(self, value: int):
-        if value <= 0:
-            raise ValueError("ID must be positive")
-        self._id = value
 
-    @property
-    def key(self) -> str:
-        return self._key
+class ContextParameter(BaseModel):
+    """
+    Pydantic version of ContextParameter with the same attributes and rules.
+    """
 
-    @key.setter
-    def key(self, value: str):
-        if not value:
+    model_config = ConfigDict(
+        extra="ignore",
+        validate_assignment=True,
+    )
+
+    id: int = Field(..., gt=0)
+    key: str = Field(..., min_length=1)
+    value: str
+    type: str
+    is_secure: bool
+
+    @field_validator("key")
+    @classmethod
+    def _non_empty_key(cls, v: str) -> str:
+        if not v.strip():
             raise ValueError("Key cannot be empty")
-        self._key = value
-
-    @property
-    def value(self) -> str:
-        return self._value
-
-    @value.setter
-    def value(self, val: str):
-        self._value = val
-
-    @property
-    def type(self) -> str:
-        return self._type
-
-    @type.setter
-    def type(self, val: str):
-        self._type = val
-
-    @property
-    def is_secure(self) -> bool:
-        return self._is_secure
-
-    @is_secure.setter
-    def is_secure(self, val: bool):
-        self._is_secure = val
+        return v.strip()
