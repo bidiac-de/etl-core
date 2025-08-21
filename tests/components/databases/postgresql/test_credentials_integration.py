@@ -1,15 +1,15 @@
 """
-Integration tests for MariaDB credentials and context system.
+Integration tests for PostgreSQL credentials and context system.
 
 These tests verify that the real Credentials and Context objects work correctly
-with the MariaDB components.
+with the PostgreSQL components.
 """
 
 import pytest
 from unittest.mock import Mock, patch
 
-from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from src.etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
+from src.etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
 from src.etl_core.context.context import Context
 from src.etl_core.context.environment import Environment
 from src.etl_core.context.credentials import Credentials
@@ -17,8 +17,8 @@ from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
-class TestCredentialsIntegration:
-    """Test cases for real Credentials and Context integration."""
+class TestPostgreSQLCredentialsIntegration:
+    """Test cases for real Credentials and Context integration with PostgreSQL."""
 
     def test_credentials_creation(self, sample_credentials):
         """Test that Credentials objects are created correctly."""
@@ -57,7 +57,7 @@ class TestCredentialsIntegration:
             name="new_creds",
             user="newuser",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="newdb",
             password="pass2",
         )
@@ -71,18 +71,18 @@ class TestCredentialsIntegration:
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_mariadb_read_component_with_real_credentials(
+    def test_postgresql_read_component_with_real_credentials(
         self, mock_handler_class, sample_context
     ):
-        """Test that MariaDBRead works with real credentials."""
+        """Test that PostgreSQLRead works with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -101,18 +101,18 @@ class TestCredentialsIntegration:
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_mariadb_write_component_with_real_credentials(
+    def test_postgresql_write_component_with_real_credentials(
         self, mock_handler_class, sample_context
     ):
-        """Test that MariaDBWrite works with real credentials."""
+        """Test that PostgreSQLWrite works with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        write_comp = MariaDBWrite(
+        write_comp = PostgreSQLWrite(
             name="test_write",
             description="Test write component",
-            comp_type="read_mariadb",
+            comp_type="write_postgresql",
             database="testdb",
             entity_name="users",
             credentials_id=1,
@@ -144,7 +144,7 @@ class TestCredentialsIntegration:
             name="minimal_creds",
             user="minuser",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="mindb",
             password="minpass",
         )
@@ -165,7 +165,7 @@ class TestCredentialsIntegration:
             name="nopass_creds",
             user="nopassuser",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="nopassdb",
         )
         assert creds_no_pass.decrypted_password is None
@@ -173,7 +173,7 @@ class TestCredentialsIntegration:
     def test_context_parameter_retrieval(self, sample_context):
         """Test that Context.get_parameter works for regular parameters."""
         assert sample_context.get_parameter("db_host") == "localhost"
-        assert sample_context.get_parameter("db_port") == "3306"
+        assert sample_context.get_parameter("db_port") == "5432"  # PostgreSQL default port
 
         # Test non-existent parameter
         with pytest.raises(
@@ -190,7 +190,7 @@ class TestCredentialsIntegration:
             name="valid_creds",
             user="validuser",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="validdb",
             password="validpass",
         )
@@ -200,7 +200,7 @@ class TestCredentialsIntegration:
             name="special_creds",
             user="user@domain",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="special_db",
             password="pass@word#123",
         )
@@ -213,7 +213,7 @@ class TestCredentialsIntegration:
             name="special_creds_2024",
             user="user@domain",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="test-db_123",
             password="pass@word#123",
         )
@@ -292,7 +292,7 @@ class TestCredentialsIntegration:
             name="pool_creds",
             user="pooluser",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="pooldb",
             password="poolpass",
             pool_max_size=50,
@@ -304,7 +304,7 @@ class TestCredentialsIntegration:
             name="min_pool_creds",
             user="minpooluser",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="minpooldb",
             password="minpoolpass",
             pool_max_size=1,
@@ -339,18 +339,18 @@ class TestCredentialsIntegration:
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_credentials_in_mariadb_component_integration(
+    def test_credentials_in_postgresql_component_integration(
         self, mock_handler_class, sample_context
     ):
-        """Test complete integration of credentials in MariaDB component."""
+        """Test complete integration of credentials in PostgreSQL component."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="integration_test",
             description="Integration test component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
@@ -383,7 +383,7 @@ class TestCredentialsIntegration:
             name="db1_creds",
             user="user1",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="db1",
             password="pass1",
         )
@@ -393,7 +393,7 @@ class TestCredentialsIntegration:
             name="db2_creds",
             user="user2",
             host="localhost",
-            port=3306,
+            port=5432,  # PostgreSQL default port
             database="db2",
             password="pass2",
         )
@@ -445,7 +445,7 @@ class TestCredentialsIntegration:
                 name=f"creds_{i}",
                 user=f"user{i}",
                 host="localhost",
-                port=3306,
+                port=5432,  # PostgreSQL default port
                 database=db_name,
                 password=f"pass{i}",
             )
@@ -472,18 +472,18 @@ class TestCredentialsIntegration:
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_mariadb_write_bulk_operations(
+    def test_postgresql_write_bulk_operations(
         self, mock_handler_class, sample_context, sample_dataframe
     ):
-        """Test MariaDB write bulk operations with real credentials."""
+        """Test PostgreSQL write bulk operations with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        write_comp = MariaDBWrite(
+        write_comp = PostgreSQLWrite(
             name="test_write_bulk",
             description="Test write bulk component",
-            comp_type="read_mariadb",
+            comp_type="write_postgresql",
             database="testdb",
             entity_name="users",
             credentials_id=1,
@@ -504,16 +504,16 @@ class TestCredentialsIntegration:
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_mariadb_read_query_operations(self, mock_handler_class, sample_context):
-        """Test MariaDB read query operations with real credentials."""
+    def test_postgresql_read_query_operations(self, mock_handler_class, sample_context):
+        """Test PostgreSQL read query operations with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read_query",
             description="Test read query component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users WHERE active = %(active)s",
@@ -572,24 +572,24 @@ class TestCredentialsIntegration:
             retrieved = context.get_credentials(creds.credentials_id)
             assert retrieved == creds
 
-    def test_mariadb_component_fixtures(
-        self, mariadb_read_component, mariadb_write_component
+    def test_postgresql_component_fixtures(
+        self, postgresql_read_component, postgresql_write_component
     ):
-        """Test the MariaDB component fixtures."""
+        """Test the PostgreSQL component fixtures."""
         # Test read component
-        assert mariadb_read_component.name == "test_read"
-        assert mariadb_read_component.entity_name == "users"
-        assert mariadb_read_component.query == "SELECT * FROM users"
-        assert mariadb_read_component.credentials_id == 1
+        assert postgresql_read_component.name == "test_read"
+        assert postgresql_read_component.entity_name == "users"
+        assert postgresql_read_component.query == "SELECT * FROM users"
+        assert postgresql_read_component.credentials_id == 1
 
         # Test write component
-        assert mariadb_write_component.name == "test_write"
-        assert mariadb_write_component.entity_name == "users"
-        assert mariadb_write_component.credentials_id == 1
+        assert postgresql_write_component.name == "test_write"
+        assert postgresql_write_component.entity_name == "users"
+        assert postgresql_write_component.credentials_id == 1
 
         # Test that both have context set
-        assert mariadb_read_component.context is not None
-        assert mariadb_write_component.context is not None
+        assert postgresql_read_component.context is not None
+        assert postgresql_write_component.context is not None
 
     def test_sample_sql_queries_fixture(self, sample_sql_queries):
         """Test the sample SQL queries fixture."""

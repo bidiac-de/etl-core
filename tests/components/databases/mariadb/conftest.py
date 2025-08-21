@@ -118,7 +118,7 @@ def mariadb_read_component(sample_context):
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="database",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -137,7 +137,7 @@ def mariadb_write_component(sample_context):
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
-            comp_type="database",
+            comp_type="read_mariadb",
             entity_name="users",
             credentials_id=1,
         )

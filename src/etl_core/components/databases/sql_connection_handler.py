@@ -19,6 +19,7 @@ class SQLConnectionHandler:
 
     DIALECTS: Dict[str, str] = {
         "postgres": "postgresql+psycopg2",
+        "postgresql": "postgresql+psycopg2",
         "mysql": "mysql+mysqlconnector",
         "mariadb": "mysql+mysqlconnector",
         "sqlite": "sqlite",
