@@ -109,7 +109,6 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@2500896589ef8f7247069a56136f8dc177c27ccf
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >-
             -Dsonar.projectKey=${{ github.event.repository.name }}
