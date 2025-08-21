@@ -106,11 +106,11 @@ def normalize_df(
 def create_temp_job_config(config_data: Dict[str, Any]) -> Path:
     """
     Create a temporary JSON file with job configuration for CLI testing.
-    
+
     :param config_data: Job configuration dictionary
     :return: Path to temporary file
     """
-    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+    temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
     json.dump(config_data, temp_file)
     temp_file.close()
     return Path(temp_file.name)
@@ -119,7 +119,7 @@ def create_temp_job_config(config_data: Dict[str, Any]) -> Path:
 def cleanup_temp_file(file_path: Path) -> None:
     """
     Clean up temporary file created for CLI testing.
-    
+
     :param file_path: Path to temporary file
     """
     try:
@@ -132,7 +132,7 @@ def cleanup_temp_file(file_path: Path) -> None:
 def get_sample_job_config() -> Dict[str, Any]:
     """
     Get a sample job configuration for testing.
-    
+
     :return: Sample job configuration dictionary
     """
     return {
@@ -143,6 +143,6 @@ def get_sample_job_config() -> Dict[str, Any]:
         "components": [],
         "metadata_": {
             "description": "Test job for CLI testing",
-            "tags": ["test", "cli"]
-        }
+            "tags": ["test", "cli"],
+        },
     }
