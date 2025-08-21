@@ -11,7 +11,9 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 
 @register_component("read_json")
 class ReadJSON(JSON):
-    """Component that reads data from a JSON/NDJSON file (async streaming)."""
+    """
+    Component that reads data from a JSON/NDJSON file (async streaming).
+    """
 
     @model_validator(mode="after")
     def _build_objects(self):

@@ -19,7 +19,7 @@ from etl_core.strategies.row_strategy import RowExecutionStrategy
 from tests.helpers import normalize_df
 
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).parent.parent / "data" / "excel"
 VALID_XLSX = DATA_DIR / "test_data.xlsx"
 MISSING_VALUES_XLSX = DATA_DIR / "test_data_missing.xlsx"
 SCHEMA_MISMATCH_XLSX = DATA_DIR / "test_data_schema.xlsx"

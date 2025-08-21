@@ -14,8 +14,8 @@ from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 
-from etl_core.components.file_components.json.read_json_component import ReadJSON
-from etl_core.components.file_components.json.write_json_component import WriteJSON
+from etl_core.components.file_components.json.read_json import ReadJSON
+from etl_core.components.file_components.json.write_json import WriteJSON
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "json"
 VALID_JSON = DATA_DIR / "testdata.json"
