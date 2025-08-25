@@ -1,8 +1,7 @@
 from pathlib import Path
-from typing import Union
 
 
-def resolve_path(filepath: Union[str, Path]) -> Path:
+def resolve_path(filepath: str | Path) -> Path:
     """
     Resolves a given filepath into a Path object.
     """
@@ -12,7 +11,7 @@ def resolve_path(filepath: Union[str, Path]) -> Path:
     return path
 
 
-def file_exists(filepath: Union[str, Path]) -> bool:
+def file_exists(filepath: str | Path) -> bool:
     """
     Checks if the given filepath exists.
     """
@@ -23,7 +22,7 @@ def file_exists(filepath: Union[str, Path]) -> bool:
         return False
 
 
-def ensure_directory(filepath: Union[str, Path]) -> None:
+def ensure_directory(filepath: str | Path) -> None:
     """
     Ensures the directory for a given file path exists.
     Creates parent directories if they are missing.

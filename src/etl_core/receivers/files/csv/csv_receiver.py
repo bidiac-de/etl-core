@@ -27,7 +27,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         self,
         filepath: Path,
         metrics: ComponentMetrics,
-        separator: str,
+        separator: str = ",",
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream CSV rows sequentially in a thread."""
         ensure_file_exists(filepath)
@@ -40,7 +40,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
             yield row
 
     async def read_bulk(
-        self, filepath: Path, metrics: ComponentMetrics, separator: str
+        self, filepath: Path, metrics: ComponentMetrics, separator: str = ","
     ) -> pd.DataFrame:
         """Read entire CSV into a pandas DataFrame."""
         ensure_file_exists(filepath)
@@ -49,7 +49,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         return df
 
     async def read_bigdata(
-        self, filepath: Path, metrics: ComponentMetrics, separator: str
+        self, filepath: Path, metrics: ComponentMetrics, separator: str = ","
     ) -> dd.DataFrame:
         """Read large CSV into a Dask DataFrame."""
         ensure_file_exists(filepath)
@@ -62,7 +62,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         filepath: Path,
         metrics: ComponentMetrics,
         row: Dict[str, Any],
-        separator: str,
+        separator: str = ",",
     ):
         """Append one row to a CSV file."""
         metrics.lines_received += 1
@@ -74,7 +74,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         filepath: Path,
         metrics: ComponentMetrics,
         data: pd.DataFrame,
-        separator: str,
+        separator: str = ",",
     ):
         """Write multiple rows to a CSV file."""
         metrics.lines_received += len(data)
@@ -86,7 +86,7 @@ class CSVReceiver(ReadFileReceiver, WriteFileReceiver):
         filepath: Path,
         metrics: ComponentMetrics,
         data: dd.DataFrame,
-        separator: str,
+        separator: str = ",",
     ):
         """Write large dataset to a CSV file."""
         try:
