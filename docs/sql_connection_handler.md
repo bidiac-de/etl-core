@@ -44,7 +44,7 @@ The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for al
 ```python
 @staticmethod
 def build_url(
-    *, 
+    *,
     db_type: str,
     user: Optional[str] = None,
     password: Optional[str] = None,
@@ -78,9 +78,9 @@ url = SQLConnectionHandler.build_url(
 ### **2. Connection Setup**
 ```python
 def connect(
-    self, 
-    *, 
-    url: str, 
+    self,
+    *,
+    url: str,
     engine_kwargs: Optional[Dict[str, Any]] = None
 ) -> Tuple[PoolKey, Engine]
 ```
@@ -140,10 +140,10 @@ with handler.lease() as conn:
     # Simple query
     result = conn.execute("SELECT COUNT(*) FROM users")
     count = result.fetchone()[0]
-    
+
     # Parameterized query
     result = conn.execute(
-        "SELECT * FROM users WHERE age > %s", 
+        "SELECT * FROM users WHERE age > %s",
         (18,)
     )
     users = result.fetchall()
@@ -157,14 +157,14 @@ handler.close_pool()
 with handler.lease() as conn:
     # psycopg2-specific bulk operations
     from psycopg2.extras import RealDictCursor, execute_batch
-    
+
     # Fast bulk inserts
     users_data = [
         ("Alice", "alice@example.com", 25),
         ("Bob", "bob@example.com", 30),
         ("Charlie", "charlie@example.com", 35)
     ]
-    
+
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         execute_batch(
             cur,
@@ -172,15 +172,15 @@ with handler.lease() as conn:
             users_data,
             page_size=1000
         )
-    
+
     # COPY FROM for extremely fast bulk inserts
     with conn.cursor() as cur:
         cur.execute("COPY users (name, email, age) FROM STDIN")
-        
+
         # Write data directly to COPY stream
         for user in users_data:
             cur.write_row(user)
-        
+
         cur.close()
 ```
 

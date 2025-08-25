@@ -1,14 +1,11 @@
+import shutil
 import pytest
 import tempfile
 import os
 from pathlib import Path
 from unittest.mock import patch, Mock
 
-from src.etl_core.utils.file_utils import (
-    resolve_path,
-    file_exists,
-    ensure_directory
-)
+from src.etl_core.utils.file_utils import resolve_path, file_exists, ensure_directory
 
 
 class TestResolvePath:
@@ -45,21 +42,21 @@ class TestResolvePath:
 
     def test_resolve_path_expands_user(self):
         """Test that resolve_path expands user directory."""
-        with patch('pathlib.Path.expanduser') as mock_expanduser:
+        with patch("pathlib.Path.expanduser") as mock_expanduser:
             mock_path = Mock(spec=Path)
             mock_expanduser.return_value = mock_path
             mock_path.resolve.return_value = mock_path
-            
+
             resolve_path("~/test_file.txt")
             mock_expanduser.assert_called_once()
 
     def test_resolve_path_resolves_path(self):
         """Test that resolve_path calls resolve() on the path."""
-        with patch('pathlib.Path.resolve') as mock_resolve:
+        with patch("pathlib.Path.resolve") as mock_resolve:
             mock_path = Mock(spec=Path)
             mock_path.expanduser.return_value = mock_path
             mock_resolve.return_value = mock_path
-            
+
             resolve_path("test_file.txt")
             mock_resolve.assert_called_once()
 
@@ -97,7 +94,7 @@ class TestFileExists:
         """Test file_exists returns True for existing file."""
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = temp_file.name
-            
+
         try:
             result = file_exists(temp_path)
             assert result is True
@@ -119,7 +116,7 @@ class TestFileExists:
         """Test file_exists with string input."""
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = temp_file.name
-            
+
         try:
             result = file_exists(str(temp_path))
             assert result is True
@@ -130,7 +127,7 @@ class TestFileExists:
         """Test file_exists with Path object input."""
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = Path(temp_file.name)
-            
+
         try:
             result = file_exists(temp_path)
             assert result is True
@@ -158,7 +155,7 @@ class TestFileExists:
         """Test file_exists with invalid path returns False."""
         # Create a path that would cause an error when resolved
         invalid_path = "/" + "a" * 1000  # Very long path that might cause issues
-        
+
         result = file_exists(invalid_path)
         assert result is False
 
@@ -166,12 +163,12 @@ class TestFileExists:
         """Test file_exists with symbolic link."""
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = temp_file.name
-            
+
         try:
             # Create a symlink
             symlink_path = temp_path + "_link"
             os.symlink(temp_path, symlink_path)
-            
+
             try:
                 result = file_exists(symlink_path)
                 assert result is True
@@ -184,9 +181,9 @@ class TestFileExists:
         """Test file_exists with relative path."""
         # Create a file in current directory
         test_file = "test_file_exists.txt"
-        with open(test_file, 'w') as f:
+        with open(test_file, "w") as f:
             f.write("test content")
-            
+
         try:
             result = file_exists(test_file)
             assert result is True
@@ -197,7 +194,7 @@ class TestFileExists:
         """Test file_exists with absolute path."""
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = os.path.abspath(temp_file.name)
-            
+
         try:
             result = file_exists(temp_path)
             assert result is True
@@ -212,9 +209,9 @@ class TestEnsureDirectory:
         """Test ensure_directory creates parent directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "new_subdir", "nested")
-            
+
             ensure_directory(new_dir)
-            
+
             # ensure_directory creates the parent directory, not the file path itself
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
@@ -225,7 +222,7 @@ class TestEnsureDirectory:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Directory already exists
             ensure_directory(temp_dir)
-            
+
             assert os.path.exists(temp_dir)
             assert os.path.isdir(temp_dir)
 
@@ -233,9 +230,9 @@ class TestEnsureDirectory:
         """Test ensure_directory creates nested parent directory structure."""
         with tempfile.TemporaryDirectory() as temp_dir:
             nested_path = os.path.join(temp_dir, "level1", "level2", "level3")
-            
+
             ensure_directory(nested_path)
-            
+
             # ensure_directory creates the parent directory structure
             parent_dir = os.path.dirname(nested_path)
             assert os.path.exists(parent_dir)
@@ -245,9 +242,9 @@ class TestEnsureDirectory:
         """Test ensure_directory with string input."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "string_test")
-            
+
             ensure_directory(str(new_dir))
-            
+
             # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
@@ -257,9 +254,9 @@ class TestEnsureDirectory:
         """Test ensure_directory with Path object input."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = Path(temp_dir) / "path_object_test"
-            
+
             ensure_directory(new_dir)
-            
+
             # ensure_directory creates the parent directory
             parent_dir = new_dir.parent
             assert parent_dir.exists()
@@ -269,14 +266,14 @@ class TestEnsureDirectory:
         """Test ensure_directory with file path creates parent directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = os.path.join(temp_dir, "subdir", "test_file.txt")
-            
+
             ensure_directory(file_path)
-            
+
             # Parent directory should be created
             parent_dir = os.path.dirname(file_path)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
-            
+
             # File itself should not exist
             assert not os.path.exists(file_path)
 
@@ -284,12 +281,12 @@ class TestEnsureDirectory:
         """Test multiple calls to ensure_directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "multi_call_test")
-            
+
             # First call
             ensure_directory(new_dir)
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
-            
+
             # Second call (should not fail)
             ensure_directory(new_dir)
             assert os.path.exists(parent_dir)
@@ -298,9 +295,9 @@ class TestEnsureDirectory:
         """Test ensure_directory with path containing spaces."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "path with spaces", "nested")
-            
+
             ensure_directory(new_dir)
-            
+
             # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
@@ -310,9 +307,9 @@ class TestEnsureDirectory:
         """Test ensure_directory with special characters in path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "path@with#special$chars", "nested")
-            
+
             ensure_directory(new_dir)
-            
+
             # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
@@ -322,19 +319,19 @@ class TestEnsureDirectory:
         """Test that ensure_directory creates directories with proper permissions."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "permission_test")
-            
+
             ensure_directory(new_dir)
-            
+
             # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
-            
+
             # Check that directory is writable
             test_file = os.path.join(parent_dir, "test.txt")
-            with open(test_file, 'w') as f:
+            with open(test_file, "w") as f:
                 f.write("test")
-            
+
             # Clean up
             os.unlink(test_file)
 
@@ -355,29 +352,32 @@ class TestEnsureDirectory:
         # Should not raise an error
 
     def test_ensure_directory_root_path(self):
-        """Test ensure_directory with root path."""
-        # This test might fail on some systems due to permissions
-        # We'll test with a path that should always be accessible
-        root_test_dir = "/tmp/etl_core_test_root"
-        
+        """
+        Test ensure_directory works cross-platform by
+        creating a directory under the system temp dir.
+        """
+        temp_root = tempfile.gettempdir()
+        test_root_dir = os.path.join(temp_root, "etl_core_test_root")
+        nested_path = os.path.join(test_root_dir, "nested_dir")
+
         try:
-            ensure_directory(root_test_dir)
-            # ensure_directory creates the parent directory
-            parent_dir = os.path.dirname(root_test_dir)
+            ensure_directory(nested_path)
+
+            # ensure_directory should create the parent directory (test_root_dir)
+            parent_dir = os.path.dirname(nested_path)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
         finally:
-            # Clean up
-            if os.path.exists(parent_dir):
-                os.rmdir(parent_dir)
+            if os.path.exists(test_root_dir):
+                shutil.rmtree(test_root_dir, ignore_errors=True)
 
     def test_ensure_directory_unicode_path(self):
         """Test ensure_directory with Unicode characters in path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             unicode_dir = os.path.join(temp_dir, "директория_с_кириллицей", "nested")
-            
+
             ensure_directory(unicode_dir)
-            
+
             # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(unicode_dir)
             assert os.path.exists(parent_dir)
@@ -388,15 +388,13 @@ class TestEnsureDirectory:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a file
             file_path = os.path.join(temp_dir, "test_file.txt")
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 f.write("test content")
-            
+
             # Try to create a directory with the same name as parent
             nested_path = os.path.join(file_path, "nested_dir")
-            
-            # This should not fail because ensure_directory only creates parent directories
-            # and the parent of the file is the temp_dir which exists
+
             ensure_directory(nested_path)
-            
+
             # Clean up
             os.unlink(file_path)
