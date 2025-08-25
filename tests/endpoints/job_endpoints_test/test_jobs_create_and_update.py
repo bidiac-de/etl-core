@@ -11,7 +11,7 @@ from etl_core.persistance.table_definitions import (
 )
 
 
-def test_create_job_with_components(client: TestClient) -> None:
+def test_create_job_with_components(client: TestClient, schema_row_min) -> None:
     config = {
         "name": "test_job",
         "num_of_retries": 2,
@@ -26,9 +26,18 @@ def test_create_job_with_components(client: TestClient) -> None:
                 "comp_type": "test",
                 "name": "test1",
                 "description": "",
-                "next": ["test2"],
+                "routes": {"out": []},
+                "in_port_schemas": {"in": schema_row_min},
+                "out_port_schemas": {"out": schema_row_min},
             },
-            {"comp_type": "test", "name": "test2", "description": "", "next": []},
+            {
+                "comp_type": "test",
+                "name": "test2",
+                "description": "",
+                "routes": {"out": []},
+                "in_port_schemas": {"in": schema_row_min},
+                "out_port_schemas": {"out": schema_row_min},
+            },
         ],
     }
     create_resp = client.post("/jobs/", json=config)

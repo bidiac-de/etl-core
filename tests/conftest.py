@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generator, Callable, Iterable, Tuple
+from typing import Generator, Callable, Iterable, Tuple, Dict
 from fastapi.requests import Request
 
 import pytest
@@ -74,13 +74,12 @@ def client() -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def enable_stub_components():
+def enable_stub_components() -> None:
     """
     Automatically run before any tests.
     Sets the registry mode to 'test' so stub components are visible.
     """
     os.environ["ETL_COMPONENT_MODE"] = "test"
-
     if "etl_core.main" in sys.modules:
         import etl_core.main
 
@@ -109,7 +108,7 @@ def clear_db() -> Generator[None, None, None]:
 
 @pytest.fixture()
 def shared_job_handler(client: TestClient):
-    req = Request({"type": "http", "app": client.app})  # method needs request
+    req = Request({"type": "http", "app": client.app})
     return get_job_handler(req)
 
 
@@ -174,3 +173,26 @@ def test_creds(_set_test_env: Tuple[str, str]) -> Tuple[str, str]:
     Reads from env guaranteed by '_set_test_env'.
     """
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
+
+
+@pytest.fixture()
+def schema_row_min() -> Dict[str, object]:
+    """
+    Minimal row schema used by most tests.
+    Named to allow adding more schema variants later (e.g., schema_row_with_meta).
+    """
+    return {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
+
+
+@pytest.fixture()
+def schema_row_two_fields() -> Dict[str, object]:
+    """
+    Example extension for future tests: two-field integer schema.
+    Not used by current tests, but here to demonstrate the pattern.
+    """
+    return {
+        "fields": [
+            {"name": "id", "data_type": "integer", "nullable": False},
+            {"name": "value", "data_type": "integer", "nullable": True},
+        ]
+    }

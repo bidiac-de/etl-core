@@ -31,8 +31,6 @@ from etl_core.persistance.base_models.component_base import ComponentBase
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec, EdgeRef
-import pandas as pd
-import dask.dataframe as dd
 
 
 class StrategyType(str, Enum):
@@ -65,12 +63,11 @@ class Component(ComponentBase, ABC):
         validate_assignment=True,
     )
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    next: List[str] = Field(default_factory=list)  # List of names of next components
 
     routes: Dict[str, List[EdgeRef | str]] = Field(
         default_factory=dict,
         description="out_port -> [EdgeRef|target_name]. Use EdgeRef to "
-                    "specify target input port.",
+        "specify target input port.",
     )
     out_port_schemas: Dict[str, Schema] = Field(
         default_factory=dict,
@@ -85,12 +82,12 @@ class Component(ComponentBase, ABC):
     extra_output_ports: List[OutPortSpec] = Field(
         default_factory=list,
         description="Additional output ports declared by config "
-                    "(merged with class-level OUTPUT_PORTS).",
+        "(merged with class-level OUTPUT_PORTS).",
     )
     extra_input_ports: List[InPortSpec] = Field(
         default_factory=list,
         description="Additional input ports declared by config "
-                    "(merged with class-level INPUT_PORTS).",
+        "(merged with class-level INPUT_PORTS).",
     )
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
@@ -98,7 +95,7 @@ class Component(ComponentBase, ABC):
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
 
-    # Runtime, set during wiring in Job
+    # Runtime, set during wiring in Job creation
     _out_routes: Dict[str, List["Component"]] = PrivateAttr(default_factory=dict)
     _out_edges_in_ports: Dict[str, List[str]] = PrivateAttr(default_factory=dict)
 

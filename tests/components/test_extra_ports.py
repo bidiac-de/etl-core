@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 import pytest
 
 # Ensure stub components are registered with the component registry
 # before Job tries to instantiate them.
-import src.components.stubcomponents as _ensure_registration  # noqa: F401
-
-from src.job_execution.job import Job
-from src.job_execution.job_execution_handler import JobExecutionHandler
+import etl_core.components.stubcomponents as _ensure_registration  # noqa: F401
+from tests.helpers import runtime_job_from_config
 
 
 def test_extra_output_ports_are_visible_and_routable() -> None:
@@ -51,7 +49,7 @@ def test_extra_output_ports_are_visible_and_routable() -> None:
         ],
     }
 
-    job = Job(**job_cfg)
+    job = runtime_job_from_config(job_cfg)
 
     router = next(c for c in job.components if c.name == "router")
     out_names = {p.name for p in router.expected_ports()}
@@ -101,7 +99,7 @@ def test_unknown_dynamic_out_port_in_routes_is_rejected() -> None:
     }
 
     with pytest.raises(ValueError) as ei:
-        Job(**bad_cfg)
+        runtime_job_from_config(bad_cfg)
     msg = str(ei.value)
     assert (
         "unknown out port(s) in routes" in msg
@@ -135,7 +133,7 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
         ],
     }
     with pytest.raises(ValueError) as ei1:
-        Job(**ambiguous_cfg)
+        runtime_job_from_config(ambiguous_cfg)
     assert "has multiple input ports" in str(ei1.value)
 
     # Explicit in_port: should pass and execute
@@ -157,7 +155,7 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
             },
         ],
     }
-    job = Job(**ok_cfg)
+    job = runtime_job_from_config(ok_cfg)
 
     src = next(c for c in job.components if c.name == "src")
     in_ports_for_out = src.out_edges_in_ports.get("out", [])

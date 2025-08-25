@@ -4,8 +4,6 @@ from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.components.envelopes import Out
 
-import pandas as pd
-
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
 

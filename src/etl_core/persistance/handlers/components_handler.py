@@ -2,31 +2,37 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Set, Tuple
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
-from etl_core.persistance.errors import PersistLinkageError
+from etl_core.components.wiring.ports import EdgeRef
 from etl_core.persistance.handlers.dataclasses_handler import DataClassHandler
 from etl_core.persistance.table_definitions import (
-    ComponentNextLink,
     ComponentTable,
     JobTable,
+    ComponentLinkTable,
 )
 
 BASE_FIELDS: Set[str] = {
     "name",
     "description",
     "comp_type",
-    "next",
     "layout",
     "metadata_",
 }
+
+TRANSIENT_FIELDS: Set[str] = {"routes"}
 
 
 def _split_base_and_payload(
     data: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Normalize aliases (metadata/layout) and split fields that live on ComponentTable
+    vs. everything else that remains JSON payload, while dropping transient
+    runtime fields.
+    """
     norm = dict(data)
     if "metadata" in norm and "metadata_" not in norm:
         norm["metadata_"] = norm.pop("metadata")
@@ -34,51 +40,84 @@ def _split_base_and_payload(
         norm["layout"] = norm.pop("layout_")
 
     base = {k: v for k, v in norm.items() if k in BASE_FIELDS}
-    payload = {k: v for k, v in norm.items() if k not in BASE_FIELDS}
+    payload = {
+        k: v
+        for k, v in norm.items()
+        if k not in BASE_FIELDS and k not in TRANSIENT_FIELDS
+    }
     return base, payload
+
+
+def _to_edgeref(target: Any) -> EdgeRef:
+    """Coerce a routes target into an EdgeRef."""
+    if isinstance(target, EdgeRef):
+        return target
+    return EdgeRef(to=str(target))
+
+
+def _resolve_dst_id(
+    name_to_id: Dict[str, str],
+    cfg_name: str,
+    out_port: str,
+    dst_name: str,
+) -> str:
+    """Resolve target component id or raise a helpful error."""
+    try:
+        return name_to_id[dst_name]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown target {dst_name!r} in routes[{cfg_name}][{out_port!r}]"
+        ) from exc
+
+
+def _iter_routes(cfg: Component) -> List[Tuple[str, List[EdgeRef]]]:
+    """
+    Yield (out_port, [EdgeRef,...]) pairs with normalization.
+    Keep user order per port.
+    """
+    routes = cfg.routes or {}
+    items: List[Tuple[str, List[EdgeRef]]] = []
+    for out_port, targets in routes.items():
+        refs = [_to_edgeref(t) for t in targets]
+        items.append((out_port, refs))
+    return items
+
+
+def _add_link_row(
+    session: Session,
+    job_id: str,
+    src_id: str,
+    out_port: str,
+    dst_id: str,
+    in_port: str,
+    position: int,
+) -> None:
+    """Create one ComponentLinkTable row."""
+    link = ComponentLinkTable(
+        job_id=job_id,
+        src_component_id=src_id,
+        src_out_port=out_port,
+        dst_component_id=dst_id,
+        dst_in_port=in_port,
+        position=position,
+    )
+    session.add(link)
 
 
 class ComponentHandler:
     """
-    Handler for CRUD operations on ComponentTable and
-    re-building runtime components.
+    CRUD for ComponentTable; rebuild runtime components (routes-only).
     """
 
-    def __init__(self, dc_handler: DataClassHandler):
-        self.dc = dc_handler
-
-    def _name_id_map(self, session: Session, job_record: JobTable) -> Dict[str, str]:
-        stmt = select(ComponentTable).where(ComponentTable.job_id == job_record.id)
-        return {row.name: row.id for row in session.exec(stmt)}
-
-    def _wire_links(
-        self,
-        session: Session,
-        job_record: JobTable,
-        items: List[Tuple[str, List[str]]],
-        *,
-        name_to_id: Dict[str, str] | None = None,
-    ) -> None:
-        mapping = name_to_id or self._name_id_map(session, job_record)
-        id_to_name = {v: k for k, v in mapping.items()}
-
-        for src_id, next_names in items:
-            for nxt in next_names:
-                dst_id = mapping.get(nxt)
-                if dst_id is None:
-                    src_name = id_to_name.get(src_id, "<unknown>")
-                    raise PersistLinkageError(
-                        f"Component '{src_name}' references unknown next '{nxt}'"
-                    )
-                session.add(ComponentNextLink(component_id=src_id, next_id=dst_id))
+    def __init__(self, dc: DataClassHandler) -> None:
+        self.dc = dc
 
     def _insert_component_row(
-        self,
-        session: Session,
-        job_record: JobTable,
-        cfg: Component,
+        self, session: Session, job_record: JobTable, cfg: Component
     ) -> ComponentTable:
-        raw: Dict[str, Any] = cfg.model_dump(by_alias=False, exclude_none=True)
+        raw: Dict[str, Any] = cfg.model_dump(
+            by_alias=False, exclude_none=True, exclude_defaults=True
+        )
         base_fields, payload_fields = _split_base_and_payload(raw)
 
         ct = ComponentTable(
@@ -97,27 +136,53 @@ class ComponentHandler:
         )
         return ct
 
+    def _create_links(
+        self,
+        session: Session,
+        job_record: JobTable,
+        component_cfgs: List[Component],
+        name_to_id: Dict[str, str],
+    ) -> None:
+        """
+        Materialize cfg.routes into ComponentLinkTable rows.
+        Delegates to helpers to keep complexity low and messages clear.
+        """
+        for cfg in component_cfgs:
+            src_id = name_to_id[cfg.name]
+            for out_port, refs in _iter_routes(cfg):
+                for idx, ref in enumerate(refs):
+                    dst_id = _resolve_dst_id(name_to_id, cfg.name, out_port, ref.to)
+                    in_port = ref.in_port or ""
+                    _add_link_row(
+                        session=session,
+                        job_id=job_record.id,
+                        src_id=src_id,
+                        out_port=out_port,
+                        dst_id=dst_id,
+                        in_port=in_port,
+                        position=idx,
+                    )
+        session.flush()
+
     def create_component_entry(
         self, session: Session, job_record: JobTable, cfg: Component
     ) -> ComponentTable:
         ct = self._insert_component_row(session, job_record, cfg)
         session.flush()
-        self._wire_links(session, job_record, items=[(ct.id, cfg.next)])
         return ct
 
     def create_all_from_configs(
         self, session: Session, job_record: JobTable, component_cfgs: List[Component]
     ) -> Dict[str, str]:
+        # Insert all components, collect ids
         name_to_id: Dict[str, str] = {}
         for cfg in component_cfgs:
             ct = self._insert_component_row(session, job_record, cfg)
             session.flush()
             name_to_id[cfg.name] = ct.id
 
-        items: List[Tuple[str, List[str]]] = [
-            (name_to_id[cfg.name], cfg.next) for cfg in component_cfgs
-        ]
-        self._wire_links(session, job_record, items=items, name_to_id=name_to_id)
+        # Insert all links using resolved ids
+        self._create_links(session, job_record, component_cfgs, name_to_id)
         return name_to_id
 
     def replace_all_from_configs(
@@ -132,32 +197,53 @@ class ComponentHandler:
         if not job_record.components:
             return
         with session.no_autoflush:
-            job_record.components.clear()  # delete-orphan
+            # deleting components cascades and delete‑orphans the links
+            job_record.components.clear()
         session.flush()
         session.expire(job_record, ["components"])
 
     def build_runtime_for_all(self, job_record: JobTable) -> List[Component]:
+        """
+        Rebuild Component objects from DB rows and re‑hydrate
+        Component.routes from link rows.
+        Do NOT wire next/prev; RuntimeJob wires via `routes`.
+        """
         comps: List[Component] = []
+        # Build a map id --> name to write "to" by name in EdgeRef
+        id_to_name: Dict[str, str] = {ct.id: ct.name for ct in job_record.components}
+
         for ct in job_record.components:
             base = {
                 "id": ct.id,
                 "name": ct.name,
                 "description": ct.description,
                 "comp_type": ct.comp_type,
-                "next": [n.name for n in ct.next_components],
                 "layout": self.dc.dump_layout(ct.layout) if ct.layout else {},
                 "metadata": self.dc.dump_metadata(ct.metadata_) if ct.metadata_ else {},
             }
             data = {**ct.payload, **base}
+
+            # rehydrate routes from outgoing_links
+            routes: Dict[str, List[EdgeRef]] = {}
+            for link in sorted(
+                ct.outgoing_links or [],
+                key=lambda lin: (lin.src_out_port, lin.position),
+            ):
+                to_name = id_to_name.get(link.dst_component_id)
+                if not to_name:
+                    # If dangling (shouldn't happen due to FK), skip safely
+                    continue
+                # empty string in DB means "unspecified" in config
+                in_port = link.dst_in_port or None
+                routes.setdefault(link.src_out_port, []).append(
+                    EdgeRef(to=to_name, in_port=in_port)
+                )
+
+            if routes:
+                data["routes"] = routes
+
             cls = component_registry[ct.comp_type]
             obj = cls(**data)
             object.__setattr__(obj, "_id", ct.id)
             comps.append(obj)
-
-        name_map = {c.name: c for c in comps}
-        for comp in comps:
-            next_objs = [name_map[n] for n in comp.next]
-            comp.next_components = next_objs
-            for nxt in next_objs:
-                nxt.prev_components.append(comp)
         return comps

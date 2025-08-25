@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, TYPE_CHECKING
-from src.components.envelopes import Out
+from etl_core.components.envelopes import Out
 
 from pydantic import BaseModel
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics

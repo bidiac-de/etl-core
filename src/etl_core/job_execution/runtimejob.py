@@ -1,4 +1,5 @@
-from typing import List, Dict, Self
+from typing import List, Dict, Tuple, Any, Set, Self
+from collections import Counter
 from etl_core.components.dataclasses import MetaData
 from pydantic import (
     Field,
@@ -8,7 +9,7 @@ from pydantic import (
 )
 import asyncio
 
-from etl_core.components.base_component import Component, get_strategy, StrategyType
+from etl_core.components.base_component import Component, get_strategy
 from etl_core.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
 from etl_core.persistance.base_models.job_base import JobBase
 from etl_core.components.wiring.ports import EdgeRef
@@ -43,7 +44,7 @@ class RuntimeJob(JobBase):
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
 
     @model_validator(mode="after")
-    def _wire_and_validate(self) -> "Job":
+    def _wire_and_validate(self) -> Self:
         """
         Build a port-to-port graph:
           routes: out_port -> [EdgeRef(to=..., in_port=...)]
@@ -314,7 +315,7 @@ class RuntimeJob(JobBase):
             return
 
         # Fallback: look at common dict attributes
-        out_schemas: Dict[str, object] = getattr(comp, "port_schemas", {})
+        out_schemas: Dict[str, object] = getattr(comp, "out_port_schemas", {})
         in_schemas: Dict[str, object] = getattr(comp, "in_port_schemas", {})
         for p, n in used_out.items():
             if n > 0 and p not in out_schemas:
@@ -324,7 +325,7 @@ class RuntimeJob(JobBase):
                 raise ValueError(f"Component {comp.name}: in port {p!r} has no schema")
 
     @model_validator(mode="after")
-    def _assign_strategies(self) -> "Job":
+    def _assign_strategies(self) -> Self:
         """
         After wiring, give every component the Job’s strategy.
         """

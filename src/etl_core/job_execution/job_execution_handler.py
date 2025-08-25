@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import threading
-from typing import Any, Dict, List, Set
 from typing import Any, Dict, List, Set, Tuple
 from collections import deque
 
@@ -261,7 +260,7 @@ class JobExecutionHandler:
             item = await queue.get()
 
             # End-of-stream sentinel from a predecessor
-            if isinstance(item, _Sentinel) and item.component_id in remaining:
+            if isinstance(item, Sentinel) and item.component_id in remaining:
                 remaining.discard(item.component_id)
                 continue
 
