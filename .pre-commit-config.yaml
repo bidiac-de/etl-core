@@ -3,6 +3,7 @@ repos:
     rev: v5.0.0
     hooks:
     -   id: check-json
+        exclude: 'tests/components/data/json/testdata_bad\.json'
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
 
@@ -15,9 +16,3 @@ repos:
   rev: 25.1.0
   hooks:
     - id: black
-
-- repo: https://github.com/pre-commit/mirrors-eslint
-  rev: v9.22.0
-  hooks:
-      - id: eslint
-        exclude: ^server/static/frameworks/

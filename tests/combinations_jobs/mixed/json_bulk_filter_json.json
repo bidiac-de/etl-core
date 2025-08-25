@@ -1,0 +1,29 @@
+{
+  "name": "JSON Bulk Filter to JSON",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bulk",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "JSON array in (bulk)",
+      "filepath": "__IN__",
+      "next": ["flt"]
+    },
+    {
+      "name": "flt",
+      "comp_type": "filter",
+      "description": "id >= 2",
+      "rule": { "column": "id", "operator": ">=", "value": 2 },
+      "next": ["writer"]
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_json",
+      "description": "JSON array out",
+      "filepath": "__OUT__"
+    }
+  ]
+}

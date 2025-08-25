@@ -1,0 +1,25 @@
+{
+  "name": "JsonPassThrough",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "row",
+  "metadata": {
+    "created_by": "pytest",
+    "created_at": "2025-08-19T14:00:00"
+  },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "read json input",
+      "filepath": "__IN__",
+      "next": ["writer"]
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_json",
+      "description": "write json output",
+      "filepath": "__OUT__"
+    }
+  ]
+}
