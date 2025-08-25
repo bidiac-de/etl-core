@@ -3,15 +3,15 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
+from src.etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
 from src.etl_core.components.component_registry import register_component
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
+from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
 
 
-@register_component("read_mariadb")
-class MariaDBRead(MariaDBComponent):
-    """MariaDB reader supporting row, bulk, and bigdata modes."""
+@register_component("read_postgresql")
+class PostgreSQLRead(PostgreSQLComponent):
+    """PostgreSQL reader supporting row, bulk, and bigdata modes."""
 
     query: str = Field(..., description="SQL query to execute")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
@@ -19,7 +19,7 @@ class MariaDBRead(MariaDBComponent):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build objects after validation."""
-        self._receiver = MariaDBReceiver()
+        self._receiver = PostgreSQLReceiver()
         return self
 
     async def process_row(

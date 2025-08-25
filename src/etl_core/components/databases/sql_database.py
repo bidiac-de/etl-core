@@ -48,8 +48,10 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         creds = self._get_credentials()
 
         self._connection_handler = SQLConnectionHandler()
+        
+        # Direct usage of comp_type - no mapping logic needed!
         url = SQLConnectionHandler.build_url(
-            db_type="mariadb",
+            db_type=self.comp_type,
             user=creds["user"],
             password=creds["password"],
             host=creds["host"],
@@ -61,22 +63,15 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         engine_kwargs = build_sql_engine_kwargs(credentials_obj)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
-
-        if self._connection_handler and self.charset:
-            try:
-                with self._connection_handler.lease() as conn:
-                    if self.charset:
-                        conn.execute(f"SET NAMES {self.charset}")
-                    if self.collation:
-                        conn.execute(f"SET collation_connection = {self.collation}")
-                    conn.commit()
-            except Exception as e:
-                print(f"Warning: Could not set SQL session variables: {e}")
+        
+        # Session variables will be set by specific database components
 
     def __del__(self):
         """Cleanup connection when component is destroyed."""
         if hasattr(self, "_connection_handler") and self._connection_handler:
             self._connection_handler.close_pool(force=True)
+
+
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
