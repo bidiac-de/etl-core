@@ -15,7 +15,6 @@ class MariaDBRead(MariaDBComponent):
 
     query: str = Field(..., description="SQL query to execute")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
-    strategy_type: str = Field(default="bulk", description="Execution strategy type")
 
     @model_validator(mode="after")
     def _build_objects(self):
