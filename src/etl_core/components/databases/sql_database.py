@@ -49,12 +49,9 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         self._connection_handler = SQLConnectionHandler()
         
-        # Determine database type from comp_type
-        db_type = self._get_db_type_from_comp_type()
-        
-        # Build connection URL
+        # Direct usage of comp_type - no mapping logic needed!
         url = SQLConnectionHandler.build_url(
-            db_type=db_type,
+            db_type=self.comp_type,
             user=creds["user"],
             password=creds["password"],
             host=creds["host"],
@@ -67,47 +64,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
         
-        # Set session variables based on database type
-        self._setup_session_variables(db_type)
-
-    def _get_db_type_from_comp_type(self) -> str:
-        """Determine database type from comp_type."""
-        comp_type = self.comp_type.lower()
-        
-        if "mariadb" in comp_type:
-            return "mariadb"
-        elif "postgresql" in comp_type or "postgres" in comp_type:
-            return "postgresql"
-        elif "sqlexpress" in comp_type:
-            return "sqlexpress"
-        elif "firebase" in comp_type:
-            return "firebase"
-        else:
-            raise ValueError(f"Unsupported database type in comp_type: '{self.comp_type}'. "
-                           f"Supported types: mariadb, postgresql, mysql, sqlite")
-
-    def _setup_session_variables(self, db_type: str):
-        """Setup database-specific session variables."""
-        if not self._connection_handler or not self.charset:
-            return
-
-        try:
-            with self._connection_handler.lease() as conn:
-                if db_type in ["mariadb", "mysql"]:
-                    # MySQL/MariaDB specific session variables
-                    if self.charset:
-                        conn.execute(f"SET NAMES {self.charset}")
-                    if self.collation:
-                        conn.execute(f"SET collation_connection = {self.collation}")
-                elif db_type == "postgresql":
-                    # PostgreSQL specific session variables
-                    if self.charset:
-                        conn.execute(f"SET client_encoding = '{self.charset}'")
-                    if self.collation:
-                        conn.execute(f"SET lc_collate = '{self.collation}'")
-                conn.commit()
-        except Exception as e:
-            print(f"Warning: Could not set SQL session variables: {e}")
+        # Session variables will be set by specific database components
 
     def __del__(self):
         """Cleanup connection when component is destroyed."""

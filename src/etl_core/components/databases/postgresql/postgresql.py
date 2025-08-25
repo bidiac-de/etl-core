@@ -11,4 +11,26 @@ class PostgreSQLComponent(SQLDatabaseComponent):
         default="en_US.UTF-8", description="Collation for PostgreSQL"
     )
 
+    def _setup_session_variables(self):
+        """Setup PostgreSQL-specific session variables."""
+        if not self._connection_handler or not self.charset:
+            return
+
+        try:
+            with self._connection_handler.lease() as conn:
+                if self.charset:
+                    conn.execute(f"SET client_encoding = '{self.charset}'")
+                if self.collation:
+                    conn.execute(f"SET lc_collate = '{self.collation}'")
+                conn.commit()
+        except Exception as e:
+            print(f"Warning: Could not set PostgreSQL session variables: {e}")
+
+    def _build_objects(self):
+        """Build PostgreSQL-specific objects after validation."""
+        super()._build_objects()
+        # Set session variables after connection is established
+        self._setup_session_variables()
+        return self
+
 

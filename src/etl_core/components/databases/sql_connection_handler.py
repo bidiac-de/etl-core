@@ -17,14 +17,6 @@ class SQLConnectionHandler:
     Keeps URL building outside; focuses on leasing from the registry.
     """
 
-    DIALECTS: Dict[str, str] = {
-        "postgres": "postgresql+psycopg2",
-        "postgresql": "postgresql+psycopg2",
-        "mysql": "mysql+mysqlconnector",
-        "mariadb": "mysql+mysqlconnector",
-        "sqlite": "sqlite",
-    }
-
     def __init__(self) -> None:
         self._registry = ConnectionPoolRegistry.instance()
         self._key: Optional[PoolKey] = None
@@ -40,19 +32,10 @@ class SQLConnectionHandler:
         port: Optional[int] = None,
         database: Optional[str] = None,
     ) -> str:
-        db = db_type.lower()
-        driver = SQLConnectionHandler.DIALECTS.get(db)
-        if driver is None:
-            raise ValueError(f"Unsupported SQL dialect: {db_type!r}")
-
-        if driver == "sqlite":
-            if not database:
-                raise ValueError("SQLite requires a database (file path).")
-            return f"sqlite:///{database}"
-
+        # Direct usage of db_type (comp_type) - no mapping needed!
         if not all([user, password, host, port, database]):
-            raise ValueError(f"{db} requires user, password, host, port, and database.")
-        return f"{driver}://{user}:{password}@{host}:{port}/{database}"
+            raise ValueError(f"{db_type} requires user, password, host, port, and database.")
+        return f"{db_type}://{user}:{password}@{host}:{port}/{database}"
 
     def connect(
         self, *, url: str, engine_kwargs: Optional[Dict[str, Any]] = None
