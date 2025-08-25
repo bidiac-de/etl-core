@@ -1,11 +1,11 @@
-from typing import TYPE_CHECKING
+from typing import Iterable, List, Dict, Union, Any, Mapping, Optional
+from etl_core.components.base_component import Component
+from etl_core.job_execution.runtimejob import RuntimeJob
+from etl_core.persistance.configs.job_config import JobConfig
+import pandas as pd
 
-if TYPE_CHECKING:
-    from src.job_execution.job import Job
-    from src.components.base_component import Component
 
-
-def get_component_by_name(job: "Job", name: str) -> "Component":
+def get_component_by_name(job: "RuntimeJob", name: str) -> "Component":
     """
     Look up a Component in job.components by its unique .name.
 
@@ -18,3 +18,81 @@ def get_component_by_name(job: "Job", name: str) -> "Component":
         if comp.name == name:
             return comp
     raise ValueError(f"No component named {name!r} found in job.components")
+
+
+def _wire_components(components: Iterable[Component]) -> None:
+    """
+    Wire in-memory component objects using their `next` names:
+      - sets `comp.next_components`
+      - appends to `nxt.prev_components`
+    Assumes names are unique and `next` names were validated.
+    """
+    comps: List[Component] = list(components)
+    name_map: Dict[str, Component] = {c.name: c for c in comps}
+
+    for comp in comps:
+        # Map configured next names -> actual component objects
+        try:
+            next_objs = [name_map[n] for n in comp.next]
+        except KeyError as exc:
+            raise ValueError(f"Unknown next-component name: {exc.args[0]!r}") from exc
+
+        comp.next_components = next_objs
+        for nxt in next_objs:
+            nxt.add_prev(comp)
+
+
+def runtime_job_from_config(
+    cfg_like: Union[Mapping[str, Any], JobConfig],
+) -> RuntimeJob:
+    """
+    Build a RuntimeJob directly from a config (no DB involved).
+
+    Steps:
+      1) Validate/inflate via JobConfig (also checks duplicate names & next refs).
+      2) Construct RuntimeJob with components/metadata.
+      3) Wire next/prev relationships in-memory.
+
+    Returns:
+        RuntimeJob: ready for execution in tests.
+    """
+    cfg = cfg_like if isinstance(cfg_like, JobConfig) else JobConfig(**cfg_like)
+
+    # Create the runtime job with components present so the job-level validator
+    # assigns strategies to each component.
+    job = RuntimeJob(
+        name=cfg.name,
+        num_of_retries=cfg.num_of_retries,
+        file_logging=cfg.file_logging,
+        strategy_type=cfg.strategy_type,
+        components=list(cfg.components),  # copy for safety
+        metadata=cfg.metadata_.model_dump(),
+    )
+
+    # Wire component relationships in-memory
+    _wire_components(job.components)
+    return job
+
+
+def detail_message(payload: Dict[str, Any]) -> str:
+    detail = payload.get("detail")
+    if isinstance(detail, str):
+        return detail
+    if isinstance(detail, dict):
+        return str(detail.get("message", ""))
+    return ""
+
+
+def normalize_df(
+    df: pd.DataFrame, sort_cols: Optional[List[str]] = None
+) -> pd.DataFrame:
+    """
+    Stable sort + reset index for robust equality checks across engines.
+    Ensures comparisons are not sensitive to ordering.
+    """
+    if sort_cols is None:
+        sort_cols = list(df.columns)
+    sort_cols = [c for c in sort_cols if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(by=sort_cols, kind="mergesort")
+    return df.reset_index(drop=True)

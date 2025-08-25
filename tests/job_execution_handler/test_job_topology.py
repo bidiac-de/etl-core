@@ -1,14 +1,12 @@
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
+from etl_core.components.runtime_state import RuntimeState
+import etl_core.job_execution.runtimejob as runtimejob_module
+from etl_core.components.stubcomponents import StubComponent
+from tests.helpers import get_component_by_name, runtime_job_from_config
 from datetime import datetime
 
-from src.job_execution.job_execution_handler import JobExecutionHandler
-from src.components.runtime_state import RuntimeState
-import src.job_execution.job as job_module
-from src.components.stubcomponents import StubComponent
-from src.job_execution.job import Job
-from tests.helpers import get_component_by_name
-
-# ensure Job can resolve "test" to the stub component in registry
-job_module.TestComponent = StubComponent
+# ensure Job._build_components() can find TestComponent
+runtimejob_module.TestComponent = StubComponent
 
 
 def _schema():
@@ -22,12 +20,12 @@ def test_fan_out_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanOutJob",
+        "name": "FanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -38,6 +36,10 @@ def test_fan_out_topology():
                 "routes": {"out": ["child1", "child2"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "child1",
@@ -46,6 +48,10 @@ def test_fan_out_topology():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "child2",
@@ -54,20 +60,24 @@ def test_fan_out_topology():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "root")
-    comp2 = get_component_by_name(job, "child1")
-    comp3 = get_component_by_name(job, "child2")
+    comp1 = get_component_by_name(runtime_job, "root")
+    comp2 = get_component_by_name(runtime_job, "child1")
+    comp3 = get_component_by_name(runtime_job, "child2")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
@@ -88,12 +98,12 @@ def test_fan_in_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanInJob",
+        "name": "FanInJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -104,6 +114,10 @@ def test_fan_in_topology():
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "b",
@@ -112,6 +126,10 @@ def test_fan_in_topology():
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "c",
@@ -120,20 +138,24 @@ def test_fan_in_topology():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "a")
-    comp2 = get_component_by_name(job, "b")
-    comp3 = get_component_by_name(job, "c")
+    comp1 = get_component_by_name(runtime_job, "a")
+    comp2 = get_component_by_name(runtime_job, "b")
+    comp3 = get_component_by_name(runtime_job, "c")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)
@@ -154,12 +176,12 @@ def test_diamond_topology():
     """
     handler = JobExecutionHandler()
     config = {
-        "job_name": "DiamondJob",
+        "name": "DiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
         "metadata": {
-            "created_by": 42,
-            "created_at": datetime.now(),
+            "user_id": 42,
+            "timestamp": datetime.now(),
         },
         "strategy_type": "row",
         "components": [
@@ -170,6 +192,10 @@ def test_diamond_topology():
                 "routes": {"out": ["a", "b"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "a",
@@ -178,6 +204,10 @@ def test_diamond_topology():
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "b",
@@ -186,6 +216,11 @@ def test_diamond_topology():
                 "routes": {"out": ["c"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
+                "next": ["c"]
             },
             {
                 "name": "c",
@@ -194,21 +229,25 @@ def test_diamond_topology():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    comp1 = get_component_by_name(job, "root")
-    comp2 = get_component_by_name(job, "a")
-    comp3 = get_component_by_name(job, "b")
-    comp4 = get_component_by_name(job, "c")
+    comp1 = get_component_by_name(runtime_job, "root")
+    comp2 = get_component_by_name(runtime_job, "a")
+    comp3 = get_component_by_name(runtime_job, "b")
+    comp4 = get_component_by_name(runtime_job, "c")
 
     comp1_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp1.id)
     comp2_metrics = mh.get_comp_metrics(execution.id, attempt.id, comp2.id)

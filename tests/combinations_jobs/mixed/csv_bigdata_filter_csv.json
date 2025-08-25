@@ -1,0 +1,29 @@
+{
+  "name": "CSV BigData Filter to CSV",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bigdata",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_csv",
+      "description": "CSV in (dask)",
+      "filepath": "__IN__",
+      "next": ["flt"]
+    },
+    {
+      "name": "flt",
+      "comp_type": "filter",
+      "description": "name contains 'i'",
+      "rule": { "column": "name", "operator": "contains", "value": "i" },
+      "next": ["writer"]
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "CSV out (dask)",
+      "filepath": "__OUT__"
+    }
+  ]
+}

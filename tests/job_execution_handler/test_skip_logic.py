@@ -1,11 +1,12 @@
-# tests/job_execution_handler/test_skip_logic.py
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
+from etl_core.components.runtime_state import RuntimeState
+import etl_core.job_execution.runtimejob as runtimejob_module
+from etl_core.components.stubcomponents import StubComponent
+from tests.helpers import get_component_by_name, runtime_job_from_config
 from datetime import datetime
 
-from src.components.runtime_state import RuntimeState
-from src.job_execution.job import Job
-from src.job_execution.job_execution_handler import JobExecutionHandler
-from tests.helpers import get_component_by_name
-
+# ensure Job._build_components() can find TestComponent
+runtimejob_module.TestComponent = StubComponent
 
 def _schema() -> dict:
     # minimal single-field schema used across skip tests
@@ -23,7 +24,10 @@ def test_branch_skip_fan_out() -> None:
         "name": "SkipFanOutJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "metadata": {"created_by": 42, "created_at": datetime.now()},
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "strategy_type": "row",
         "components": [
             {
@@ -32,30 +36,44 @@ def test_branch_skip_fan_out() -> None:
                 "description": "",
                 "routes": {"out": ["child1", "child2"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "child1",
                 "comp_type": "test",
                 "description": "",
                 "in_port_schemas": {"in": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "child2",
                 "comp_type": "test",
                 "description": "",
                 "in_port_schemas": {"in": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     # Job failed and root failed
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
-    assert attempt.error and "fail stubcomponent failed" in attempt.error
+    assert attempt.error is not None
+    assert "fail stubcomponent failed" in attempt.error
 
     root = get_component_by_name(job, "root")
     child1 = get_component_by_name(job, "child1")
@@ -86,7 +104,10 @@ def test_branch_skip_fan_in() -> None:
         "name": "SkipFanInJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "metadata": {"created_by": 42, "created_at": datetime.now()},
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "strategy_type": "row",
         "components": [
             {
@@ -95,6 +116,10 @@ def test_branch_skip_fan_in() -> None:
                 "description": "",
                 "routes": {"out": ["join"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "fail_root",
@@ -102,19 +127,28 @@ def test_branch_skip_fan_in() -> None:
                 "description": "",
                 "routes": {"out": ["join"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "join",
                 "comp_type": "test",
                 "description": "",
                 "in_port_schemas": {"in": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
@@ -149,7 +183,10 @@ def test_chain_skip_linear() -> None:
         "name": "ChainSkipJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "metadata": {"created_by": 42, "created_at": datetime.now()},
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "strategy_type": "row",
         "components": [
             {
@@ -158,6 +195,10 @@ def test_chain_skip_linear() -> None:
                 "description": "",
                 "routes": {"out": ["middle"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "middle",
@@ -166,19 +207,28 @@ def test_chain_skip_linear() -> None:
                 "routes": {"out": ["leaf"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "leaf",
                 "comp_type": "test",
                 "description": "",
                 "in_port_schemas": {"in": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
@@ -213,7 +263,10 @@ def test_skip_diamond() -> None:
         "name": "SkipDiamondJob",
         "num_of_retries": 0,
         "file_logging": False,
-        "metadata": {"created_by": 42, "created_at": datetime.now()},
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "strategy_type": "row",
         "components": [
             {
@@ -222,6 +275,10 @@ def test_skip_diamond() -> None:
                 "description": "",
                 "routes": {"out": ["b", "c"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "b",
@@ -230,6 +287,10 @@ def test_skip_diamond() -> None:
                 "routes": {"out": ["d"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "c",
@@ -238,21 +299,31 @@ def test_skip_diamond() -> None:
                 "routes": {"out": ["d"]},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "d",
                 "comp_type": "test",
                 "description": "",
                 "in_port_schemas": {"in": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
 
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
+    assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
+    # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error and "fail stubcomponent failed" in attempt.error
 

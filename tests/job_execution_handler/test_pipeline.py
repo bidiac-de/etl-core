@@ -1,12 +1,13 @@
-from src.job_execution.job_execution_handler import JobExecutionHandler, Job
-from src.components.runtime_state import RuntimeState
-from tests.helpers import get_component_by_name
-import src.job_execution.job as job_module
-from src.components.stubcomponents import MultiSource, MultiEcho
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
+from etl_core.components.runtime_state import RuntimeState
+from tests.helpers import get_component_by_name, runtime_job_from_config
+import etl_core.job_execution.runtimejob as runtimejob_module
+from etl_core.components.stubcomponents import MultiSource, MultiEcho
+from datetime import datetime
 
-# ensure Job can resolve these stub types for the tests
-job_module.MultiSourceComponent = MultiSource
-job_module.MultiEchoComponent = MultiEcho
+# ensure Job._build_components() can find TestComponent
+runtimejob_module.MultiSourceComponent = MultiSource
+runtimejob_module.MultiEchoComponent = MultiEcho
 
 
 def _schema():
@@ -16,15 +17,23 @@ def _schema():
 def test_linear_stream_multiple_rows():
     handler = JobExecutionHandler()
     config = {
-        "job_name": "LinearStreamJob",
+        "name": "LinearStreamJob",
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "components": [
             {
                 "name": "source",
                 "comp_type": "multi_source",
                 "description": "",
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
                 "routes": {"out": ["echo"]},
                 "out_port_schemas": {"out": _schema()},
             },
@@ -35,18 +44,22 @@ def test_linear_stream_multiple_rows():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    src_comp = get_component_by_name(job, "source")
-    echo_comp = get_component_by_name(job, "echo")
+    src_comp = get_component_by_name(runtime_job, "source")
+    echo_comp = get_component_by_name(runtime_job, "echo")
 
     src_metrics = mh.get_comp_metrics(execution.id, attempt.id, src_comp.id)
     echo_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo_comp.id)
@@ -61,10 +74,14 @@ def test_linear_stream_multiple_rows():
 def test_fan_out_multiple_rows():
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanOutStreamJob",
+        "name": "FanOutStreamJob",
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "components": [
             {
                 "name": "source",
@@ -88,19 +105,23 @@ def test_fan_out_multiple_rows():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
-    job = Job(**config)
-    execution = handler.execute_job(job)
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    source = get_component_by_name(job, "source")
-    echo1 = get_component_by_name(job, "echo1")
-    echo2 = get_component_by_name(job, "echo2")
+    source = get_component_by_name(runtime_job, "source")
+    echo1 = get_component_by_name(runtime_job, "echo1")
+    echo2 = get_component_by_name(runtime_job, "echo2")
 
     src_metrics = mh.get_comp_metrics(execution.id, attempt.id, source.id)
     e1_metrics = mh.get_comp_metrics(execution.id, attempt.id, echo1.id)
@@ -114,10 +135,14 @@ def test_fan_out_multiple_rows():
 def test_fan_in_multiple_rows():
     handler = JobExecutionHandler()
     config = {
-        "job_name": "FanInStreamJob",
+        "name": "FanInStreamJob",
         "num_of_retries": 0,
         "file_logging": False,
         "strategy_type": "row",
+        "metadata": {
+            "user_id": 42,
+            "timestamp": datetime.now(),
+        },
         "components": [
             {
                 "name": "src1",
@@ -125,6 +150,10 @@ def test_fan_in_multiple_rows():
                 "description": "",
                 "routes": {"out": ["echo"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
             {
                 "name": "src2",
@@ -132,6 +161,10 @@ def test_fan_in_multiple_rows():
                 "description": "",
                 "routes": {"out": ["echo"]},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                }
             },
             {
                 "name": "echo",
@@ -140,19 +173,24 @@ def test_fan_in_multiple_rows():
                 "routes": {"out": []},
                 "in_port_schemas": {"in": _schema()},
                 "out_port_schemas": {"out": _schema()},
+                "metadata": {
+                    "user_id": 42,
+                    "timestamp": datetime.now(),
+                },
             },
         ],
     }
-    job = Job(**config)
-    execution = handler.execute_job(job)
+
+    runtime_job = runtime_job_from_config(config)
+    execution = handler.execute_job(runtime_job)
     attempt = execution.attempts[0]
     mh = handler.job_info.metrics_handler
 
     assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
 
-    src1 = get_component_by_name(job, "src1")
-    src2 = get_component_by_name(job, "src2")
-    echo = get_component_by_name(job, "echo")
+    src1 = get_component_by_name(runtime_job, "src1")
+    src2 = get_component_by_name(runtime_job, "src2")
+    echo = get_component_by_name(runtime_job, "echo")
 
     src1_metrics = mh.get_comp_metrics(execution.id, attempt.id, src1.id)
     src2_metrics = mh.get_comp_metrics(execution.id, attempt.id, src2.id)
