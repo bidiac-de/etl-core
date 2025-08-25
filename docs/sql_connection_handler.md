@@ -1,46 +1,46 @@
-# SQLConnectionHandler - Zentrale Datenbank-Schnittstelle
+# SQLConnectionHandler - Central Database Interface
 
-## 🎯 **Überblick**
+## 🎯 **Overview**
 
-Der `SQLConnectionHandler` ist eine **zentrale Schnittstelle** (Abstraction Layer) für alle SQL-Datenbanken in der ETL-Core. Er nutzt SQLAlchemy als universelle Datenbank-Engine und bietet eine einheitliche API für PostgreSQL, MySQL, MariaDB und SQLite.
+The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for all SQL databases in the ETL-Core. It uses SQLAlchemy as a universal database engine and provides a unified API for PostgreSQL, MySQL, MariaDB and SQLite.
 
-## 🏗️ **Architektur-Prinzipien**
+## 🏗️ **Architecture Principles**
 
 ### **1. Database-Agnostic Design**
-- Der Handler weiß nicht, welche spezifische Datenbank dahinter liegt
-- Einheitliche API für alle unterstützten Datenbanken
-- Automatische Driver-Auswahl basierend auf dem `db_type`
+- The handler doesn't know which specific database is behind it
+- Unified API for all supported databases
+- Automatic driver selection based on `db_type`
 
 ### **2. Layered Architecture**
 ```
 ┌─────────────────────────────────────┐
-│        SQLConnectionHandler         │ ← Deine Anwendung
+│        SQLConnectionHandler         │ ← Your Application
 ├─────────────────────────────────────┤
-│         SQLAlchemy Engine           │ ← Vermittler
+│         SQLAlchemy Engine           │ ← Mediator
 ├─────────────────────────────────────┤
-│    Spezifische DB-Drivers          │ ← psycopg2, mysqlconnector, etc.
+│    Specific DB-Drivers              │ ← psycopg2, mysqlconnector, etc.
 ├─────────────────────────────────────┤
-│        Native DB-Protokoll         │ ← PostgreSQL, MySQL, etc.
+│        Native DB-Protocol           │ ← PostgreSQL, MySQL, etc.
 └─────────────────────────────────────┘
 ```
 
 ### **3. Connection Pooling**
-- Nutzt den `ConnectionPoolRegistry` für effiziente Verbindungsverwaltung
-- Automatisches Leasing und Freigabe von Verbindungen
-- Thread-sichere Verbindungsverwaltung
+- Uses the `ConnectionPoolRegistry` for efficient connection management
+- Automatic leasing and release of connections
+- Thread-safe connection management
 
-## 🔧 **Unterstützte Datenbanken und Drivers**
+## 🔧 **Supported Databases and Drivers**
 
-| Datenbank | SQLAlchemy Dialekt | Native Driver | Besonderheiten |
-|-----------|-------------------|---------------|----------------|
-| **PostgreSQL** | `postgresql+psycopg2` | psycopg2 | Bulk-Operationen, COPY FROM |
-| **MySQL** | `mysql+mysqlconnector` | mysql-connector-python | Replikation, Clustering |
-| **MariaDB** | `mysql+mysqlconnector` | mysql-connector-python | Kompatibilität mit MySQL |
-| **SQLite** | `sqlite` | built-in | Datei-basiert, Einzelanwendung |
+| Database | SQLAlchemy Dialect | Native Driver | Special Features |
+|----------|-------------------|---------------|------------------|
+| **PostgreSQL** | `postgresql+psycopg2` | psycopg2 | Bulk operations, COPY FROM |
+| **MySQL** | `mysql+mysqlconnector` | mysql-connector-python | Replication, Clustering |
+| **MariaDB** | `mysql+mysqlconnector` | mysql-connector-python | MySQL compatibility |
+| **SQLite** | `sqlite` | built-in | File-based, single application |
 
-## 📋 **Kern-Funktionalitäten**
+## 📋 **Core Functionalities**
 
-### **1. URL-Building**
+### **1. URL Building**
 ```python
 @staticmethod
 def build_url(
@@ -54,7 +54,7 @@ def build_url(
 ) -> str
 ```
 
-**Beispiele:**
+**Examples:**
 ```python
 # PostgreSQL
 url = SQLConnectionHandler.build_url(
@@ -65,17 +65,17 @@ url = SQLConnectionHandler.build_url(
     port=5432,
     database="mydb"
 )
-# Ergebnis: "postgresql+psycopg2://myuser:mypass@localhost:5432/mydb"
+# Result: "postgresql+psycopg2://myuser:mypass@localhost:5432/mydb"
 
 # SQLite
 url = SQLConnectionHandler.build_url(
     db_type="sqlite",
     database="/path/to/database.db"
 )
-# Ergebnis: "sqlite:////path/to/database.db"
+# Result: "sqlite:////path/to/database.db"
 ```
 
-### **2. Verbindungsaufbau**
+### **2. Connection Setup**
 ```python
 def connect(
     self, 
@@ -85,7 +85,7 @@ def connect(
 ) -> Tuple[PoolKey, Engine]
 ```
 
-**Beispiel:**
+**Example:**
 ```python
 handler = SQLConnectionHandler()
 key, engine = handler.connect(
@@ -100,29 +100,29 @@ key, engine = handler.connect(
 def lease(self) -> Generator[Connection, None, None]
 ```
 
-**Beispiel:**
+**Example:**
 ```python
 with handler.lease() as conn:
     result = conn.execute("SELECT * FROM users")
     users = result.fetchall()
 ```
 
-### **4. Pool-Verwaltung**
+### **4. Pool Management**
 ```python
 def close_pool(self, *, force: bool = False) -> bool
 def stats(self) -> dict
 ```
 
-## 🚀 **Praktische Nutzung**
+## 🚀 **Practical Usage**
 
-### **Grundlegende Verwendung**
+### **Basic Usage**
 ```python
 from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
 
-# Handler initialisieren
+# Initialize handler
 handler = SQLConnectionHandler()
 
-# Verbindungs-URL erstellen
+# Create connection URL
 url = handler.build_url(
     db_type="postgres",
     user="etl_user",
@@ -132,33 +132,33 @@ url = handler.build_url(
     database="etl_database"
 )
 
-# Verbindung aufbauen
+# Establish connection
 key, engine = handler.connect(url=url)
 
-# Datenbank-Operationen
+# Database operations
 with handler.lease() as conn:
-    # Einfache Abfrage
+    # Simple query
     result = conn.execute("SELECT COUNT(*) FROM users")
     count = result.fetchone()[0]
     
-    # Parameterisierte Abfrage
+    # Parameterized query
     result = conn.execute(
         "SELECT * FROM users WHERE age > %s", 
         (18,)
     )
     users = result.fetchall()
 
-# Pool schließen (optional)
+# Close pool (optional)
 handler.close_pool()
 ```
 
-### **Bulk-Operationen mit PostgreSQL (psycopg2)**
+### **Bulk Operations with PostgreSQL (psycopg2)**
 ```python
 with handler.lease() as conn:
-    # psycopg2-spezifische Bulk-Operationen
+    # psycopg2-specific bulk operations
     from psycopg2.extras import RealDictCursor, execute_batch
     
-    # Schnelle Bulk-Inserts
+    # Fast bulk inserts
     users_data = [
         ("Alice", "alice@example.com", 25),
         ("Bob", "bob@example.com", 30),
@@ -173,77 +173,77 @@ with handler.lease() as conn:
             page_size=1000
         )
     
-    # COPY FROM für extrem schnelle Bulk-Inserts
+    # COPY FROM for extremely fast bulk inserts
     with conn.cursor() as cur:
         cur.execute("COPY users (name, email, age) FROM STDIN")
         
-        # Daten direkt in den COPY-Stream schreiben
+        # Write data directly to COPY stream
         for user in users_data:
             cur.write_row(user)
         
         cur.close()
 ```
 
-### **Fehlerbehandlung**
+### **Error Handling**
 ```python
 try:
     with handler.lease() as conn:
         result = conn.execute("SELECT * FROM non_existent_table")
 except Exception as e:
-    print(f"Datenbankfehler: {e}")
-    # Handler automatisch aufräumen
+    print(f"Database error: {e}")
+    # Handler automatically cleans up
 finally:
-    # Pool-Statistiken anzeigen
+    # Show pool statistics
     stats = handler.stats()
-    print(f"Aktive Verbindungen: {stats}")
+    print(f"Active connections: {stats}")
 ```
 
-## 🔒 **Sicherheitsaspekte**
+## 🔒 **Security Aspects**
 
 ### **1. Credential Management**
-- Passwörter werden nicht im Code gespeichert
-- Nutzung des `SecureContextAdapter` für sichere Parameter-Verwaltung
-- Unterstützung für Umgebungsvariablen und Secret Stores
+- Passwords are not stored in code
+- Use of `SecureContextAdapter` for secure parameter management
+- Support for environment variables and secret stores
 
 ### **2. Connection Pooling**
-- Automatische Verbindungsverwaltung
-- Verhindert Connection Leaks
-- Thread-sichere Implementierung
+- Automatic connection management
+- Prevents connection leaks
+- Thread-safe implementation
 
 ### **3. SQL Injection Protection**
 ```python
-# ✅ Sicher - Parameterisierte Abfragen
+# ✅ Secure - Parameterized queries
 with handler.lease() as conn:
     result = conn.execute(
         "SELECT * FROM users WHERE name = %s AND age > %s",
         (user_name, min_age)
     )
 
-# ❌ Unsicher - String-Formatting
+# ❌ Insecure - String formatting
 query = f"SELECT * FROM users WHERE name = '{user_name}'"
 ```
 
-## 📊 **Performance-Optimierungen**
+## 📊 **Performance Optimizations**
 
 ### **1. Connection Pooling**
 ```python
-# Optimierte Pool-Einstellungen
+# Optimized pool settings
 engine_kwargs = {
-    "pool_size": 20,           # Basis-Pool-Größe
-    "max_overflow": 30,        # Maximale zusätzliche Verbindungen
-    "pool_timeout": 30,        # Timeout für Pool-Verbindungen
-    "pool_recycle": 3600,      # Verbindungen nach 1 Stunde erneuern
-    "pool_pre_ping": True      # Verbindungen vor Nutzung testen
+    "pool_size": 20,           # Base pool size
+    "max_overflow": 30,        # Maximum additional connections
+    "pool_timeout": 30,        # Timeout for pool connections
+    "pool_recycle": 3600,      # Renew connections after 1 hour
+    "pool_pre_ping": True      # Test connections before use
 }
 
 key, engine = handler.connect(url=url, engine_kwargs=engine_kwargs)
 ```
 
-### **2. Bulk-Operationen**
+### **2. Bulk Operations**
 ```python
-# Für große Datenmengen
+# For large data volumes
 with handler.lease() as conn:
-    # Transaktion für Bulk-Inserts
+    # Transaction for bulk inserts
     with conn.begin():
         for batch in data_batches:
             conn.execute(
@@ -252,58 +252,58 @@ with handler.lease() as conn:
             )
 ```
 
-### **3. Query-Optimierung**
+### **3. Query Optimization**
 ```python
 with handler.lease() as conn:
-    # Explizite Transaktionen für komplexe Operationen
+    # Explicit transactions for complex operations
     with conn.begin():
-        # Mehrere Operationen in einer Transaktion
+        # Multiple operations in one transaction
         conn.execute("UPDATE table1 SET status = 'processing'")
         conn.execute("INSERT INTO table2 SELECT * FROM table1 WHERE status = 'processing'")
         conn.execute("UPDATE table1 SET status = 'completed'")
 ```
 
-## 🔄 **Abwärtskompatibilität**
+## 🔄 **Backward Compatibility**
 
-### **1. SQLAlchemy Versionen**
-- **SQLAlchemy 1.4+**: Vollständig unterstützt
-- **SQLAlchemy 2.0**: Kompatibel mit Legacy-Syntax
-- **Zukünftige Versionen**: Automatische Kompatibilität durch SQLAlchemy
+### **1. SQLAlchemy Versions**
+- **SQLAlchemy 1.4+**: Fully supported
+- **SQLAlchemy 2.0**: Compatible with legacy syntax
+- **Future versions**: Automatic compatibility through SQLAlchemy
 
-### **2. Datenbank-Versionen**
-- **PostgreSQL**: 9.6+ (durch psycopg2)
-- **MySQL**: 5.7+ (durch mysql-connector-python)
-- **MariaDB**: 10.2+ (durch mysql-connector-python)
+### **2. Database Versions**
+- **PostgreSQL**: 9.6+ (through psycopg2)
+- **MySQL**: 5.7+ (through mysql-connector-python)
+- **MariaDB**: 10.2+ (through mysql-connector-python)
 - **SQLite**: 3.0+ (built-in)
 
-### **3. Framework-Integration**
+### **3. Framework Integration**
 ```python
-# Funktioniert mit verschiedenen ORMs
+# Works with various ORMs
 from sqlalchemy.orm import sessionmaker
 
-# Session erstellen
+# Create session
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# ORM-Operationen
+# ORM operations
 users = session.query(User).filter(User.age > 18).all()
 ```
 
-## 🧪 **Testing und Debugging**
+## 🧪 **Testing and Debugging**
 
-### **1. Pool-Statistiken**
+### **1. Pool Statistics**
 ```python
-# Aktuelle Pool-Status anzeigen
+# Show current pool status
 stats = handler.stats()
 print(f"SQL Pools: {stats['sql']}")
 print(f"MongoDB Pools: {stats['mongo']}")
 ```
 
-### **2. Connection-Monitoring**
+### **2. Connection Monitoring**
 ```python
-# Verbindungsstatus überwachen
+# Monitor connection status
 with handler.lease() as conn:
-    # PostgreSQL-spezifische Informationen
+    # PostgreSQL-specific information
     if hasattr(conn, 'info'):
         print(f"Server Version: {conn.info.server_version}")
         print(f"Protocol Version: {conn.info.protocol_version}")
@@ -315,25 +315,25 @@ try:
     with handler.lease() as conn:
         conn.execute("SELECT * FROM table")
 except Exception as e:
-    # Spezifische Fehlerbehandlung
+    # Specific error handling
     if "relation" in str(e).lower():
-        print("Tabelle existiert nicht")
+        print("Table does not exist")
     elif "connection" in str(e).lower():
-        print("Verbindungsfehler")
+        print("Connection error")
     else:
-        print(f"Unbekannter Fehler: {e}")
+        print(f"Unknown error: {e}")
 ```
 
 ## 📝 **Best Practices**
 
 ### **1. Resource Management**
 ```python
-# ✅ Korrekt - Context Manager nutzen
+# ✅ Correct - Use context manager
 with handler.lease() as conn:
     result = conn.execute("SELECT * FROM table")
     data = result.fetchall()
 
-# ❌ Falsch - Manuelle Verbindungsverwaltung
+# ❌ Wrong - Manual connection management
 conn = handler._engine.connect()
 try:
     result = conn.execute("SELECT * FROM table")
@@ -341,10 +341,10 @@ finally:
     conn.close()
 ```
 
-### **2. Transaktionsmanagement**
+### **2. Transaction Management**
 ```python
 with handler.lease() as conn:
-    # Explizite Transaktionen für kritische Operationen
+    # Explicit transactions for critical operations
     with conn.begin():
         conn.execute("UPDATE accounts SET balance = balance - %s", (amount,))
         conn.execute("UPDATE accounts SET balance = balance + %s", (amount,))
@@ -352,7 +352,7 @@ with handler.lease() as conn:
 
 ### **3. Connection Pooling**
 ```python
-# Pool-Einstellungen an die Anwendung anpassen
+# Adapt pool settings to application
 if is_production:
     engine_kwargs = {"pool_size": 50, "max_overflow": 100}
 else:
@@ -361,26 +361,26 @@ else:
 key, engine = handler.connect(url=url, engine_kwargs=engine_kwargs)
 ```
 
-## 🔮 **Zukünftige Erweiterungen**
+## 🔮 **Future Extensions**
 
-### **1. Neue Datenbank-Support**
+### **1. New Database Support**
 - **Oracle**: `oracle+cx_oracle`
 - **SQL Server**: `mssql+pyodbc`
 - **DB2**: `ibm_db_sa`
 
-### **2. Erweiterte Features**
-- Automatische Failover
-- Read-Replica-Support
-- Connection-Health-Checks
-- Metriken und Monitoring
+### **2. Enhanced Features**
+- Automatic failover
+- Read-replica support
+- Connection health checks
+- Metrics and monitoring
 
-### **3. Cloud-Integration**
+### **3. Cloud Integration**
 - AWS RDS Support
 - Azure SQL Database
 - Google Cloud SQL
-- Kubernetes-native Verbindungsverwaltung
+- Kubernetes-native connection management
 
-## 📚 **Weitere Ressourcen**
+## 📚 **Additional Resources**
 
 - [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
 - [psycopg2 Documentation](https://www.psycopg.org/docs/)
@@ -389,4 +389,4 @@ key, engine = handler.connect(url=url, engine_kwargs=engine_kwargs)
 
 ---
 
-**Hinweis**: Der `SQLConnectionHandler` ist so konzipiert, dass du dir **keine Gedanken** über spezifische Datenbank-Drivers machen musst. Wähle einfach den `db_type` und der Rest wird automatisch gehandhabt! 🎯
+**Note**: The `SQLConnectionHandler` is designed so that you **don't need to worry** about specific database drivers. Simply choose the `db_type` and the rest is handled automatically! 🎯
