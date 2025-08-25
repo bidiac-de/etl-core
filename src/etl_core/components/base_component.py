@@ -47,7 +47,6 @@ class Component(ComponentBase, ABC):
     next: List[str] = Field(default_factory=list)  # List of names of next components
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
-    strategy_type: StrategyType = Field(default=StrategyType.BULK, description="Execution strategy type")
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)

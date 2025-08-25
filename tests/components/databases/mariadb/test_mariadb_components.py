@@ -542,11 +542,14 @@ class TestMariaDBComponents:
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
-            strategy_type="row",  # Explicit strategy type
+            # strategy_type is now handled at Job level, not Component level
         )
         read_comp.context = mock_context
 
-        assert read_comp.strategy_type == "row"
+        # Strategy is now assigned by the Job, not stored in the Component
+        # We can test that the component can be created without strategy_type
+        assert read_comp.name == "test_read"
+        assert read_comp.query == "SELECT * FROM users"
 
     @pytest.mark.asyncio
     async def test_mariadb_component_large_query_handling(
