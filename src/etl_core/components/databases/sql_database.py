@@ -78,10 +78,10 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
             return "mariadb"
         elif "postgresql" in comp_type or "postgres" in comp_type:
             return "postgresql"
-        elif "mysql" in comp_type:
-            return "mysql"
-        elif "sqlite" in comp_type:
-            return "sqlite"
+        elif "sqlexpress" in comp_type:
+            return "sqlexpress"
+        elif "firebase" in comp_type:
+            return "firebase"
         else:
             raise ValueError(f"Unsupported database type in comp_type: '{self.comp_type}'. "
                            f"Supported types: mariadb, postgresql, mysql, sqlite")
