@@ -11,15 +11,35 @@
     {
       "name": "reader",
       "comp_type": "read_json",
-      "description": "read json input",
+      "description": "read ndjson input",
       "filepath": "__IN__",
-      "next": ["writer"]
+      "routes": {
+        "out": [
+          { "to": "writer", "in_port": "in" }
+        ]
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
     },
     {
       "name": "writer",
       "comp_type": "write_json",
-      "description": "write json output",
-      "filepath": "__OUT__"
+      "description": "write ndjson output",
+      "filepath": "__OUT__",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
     }
   ]
 }

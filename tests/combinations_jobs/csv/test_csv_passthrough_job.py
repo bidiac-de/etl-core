@@ -29,25 +29,6 @@ def _parse_json(text: str) -> Dict[str, Any]:
     return json.loads(text)
 
 
-def _normalize_components(components: List[Dict[str, Any]]) -> None:
-    """
-    Normalize components: ensure comp_type, description, options
-    """
-    for comp in components:
-        ctype = comp.get("comp_type") or comp.get("type")
-        if not ctype:
-            raise AssertionError("Component missing 'comp_type'/'type'")
-        comp["comp_type"] = ctype
-        if "type" in comp:
-            del comp["type"]
-
-        if "description" not in comp or comp["description"] is None:
-            comp["description"] = ""
-
-        if "options" not in comp or comp["options"] is None:
-            comp["options"] = {}
-
-
 def _inject_filepaths(
     components: List[Dict[str, Any]], in_fp: Path, out_fp: Path
 ) -> None:
@@ -72,8 +53,6 @@ def _render_job_cfg(cfg_path: Path, in_fp: Path, out_fp: Path) -> Dict[str, Any]
     cfg = _parse_json(text)
 
     comps = cfg.get("components", [])
-    _normalize_components(comps)
-
     _inject_filepaths(comps, in_fp, out_fp)
     return cfg
 

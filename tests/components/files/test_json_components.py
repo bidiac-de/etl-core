@@ -9,13 +9,13 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
+from etl_core.components.envelopes import Out
+from etl_core.components.file_components.json.read_json import ReadJSON
+from etl_core.components.file_components.json.write_json import WriteJSON
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
-
-from etl_core.components.file_components.json.read_json import ReadJSON
-from etl_core.components.file_components.json.write_json import WriteJSON
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "json"
 VALID_JSON = DATA_DIR / "testdata.json"
@@ -51,8 +51,9 @@ async def test_read_row_ndjson_happy_path(metrics: ComponentMetrics) -> None:
     comp.strategy = RowExecutionStrategy()
 
     collected: List[Dict[str, Any]] = []
-    async for rec in comp.execute(payload=None, metrics=metrics):
-        collected.append(rec)
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        collected.append(item.payload)
 
     assert collected == [
         {"id": 1, "name": "Alice"},
@@ -76,8 +77,9 @@ async def test_read_row_ndjson_with_bad_line_skips_and_counts_error(
     comp.strategy = RowExecutionStrategy()
 
     collected: List[Dict[str, Any]] = []
-    async for rec in comp.execute(payload=None, metrics=metrics):
-        collected.append(rec)
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        collected.append(item.payload)
 
     assert collected == [
         {"id": 1, "name": "Alice"},
@@ -98,8 +100,9 @@ async def test_read_row_ndjson_mixed_schema(metrics: ComponentMetrics) -> None:
     comp.strategy = RowExecutionStrategy()
 
     out: List[Dict[str, Any]] = []
-    async for rec in comp.execute(payload=None, metrics=metrics):
-        out.append(rec)
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        out.append(item.payload)
 
     assert out == [
         {"id": 1, "name": "Alice"},
@@ -120,12 +123,13 @@ async def test_read_bulk_json_array(metrics: ComponentMetrics) -> None:
     )
     comp.strategy = BulkExecutionStrategy()
 
-    dfs: List[pd.DataFrame] = []
-    async for df in comp.execute(payload=None, metrics=metrics):
-        dfs.append(df)
+    frames: List[pd.DataFrame] = []
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        frames.append(item.payload)
 
-    assert len(dfs) == 1
-    df = dfs[0].sort_values("id").reset_index(drop=True)
+    assert len(frames) == 1
+    df = frames[0].sort_values("id").reset_index(drop=True)
     expected = (
         pd.DataFrame(
             [
@@ -153,12 +157,13 @@ async def test_read_bulk_json_array_nested_and_nulls(metrics: ComponentMetrics) 
     )
     comp.strategy = BulkExecutionStrategy()
 
-    dfs: List[pd.DataFrame] = []
-    async for df in comp.execute(payload=None, metrics=metrics):
-        dfs.append(df)
+    frames: List[pd.DataFrame] = []
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        frames.append(item.payload)
 
-    assert len(dfs) == 1
-    df = dfs[0].sort_values("id").reset_index(drop=True)
+    assert len(frames) == 1
+    df = frames[0].sort_values("id").reset_index(drop=True)
 
     assert df.shape[0] == 3
     assert list(df["id"]) == [1, 2, 3]
@@ -200,12 +205,13 @@ async def test_read_bulk_extra_and_missing_columns(metrics: ComponentMetrics) ->
     )
     comp.strategy = BulkExecutionStrategy()
 
-    dfs: List[pd.DataFrame] = []
-    async for df in comp.execute(payload=None, metrics=metrics):
-        dfs.append(df)
+    frames: List[pd.DataFrame] = []
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        frames.append(item.payload)
 
-    assert len(dfs) == 1
-    df = dfs[0].sort_values("id").reset_index(drop=True)
+    assert len(frames) == 1
+    df = frames[0].sort_values("id").reset_index(drop=True)
 
     assert set(df.columns) == {"id", "name", "age", "city", "nickname"}
     row1 = df[df["id"] == 1].iloc[0].to_dict()
@@ -231,12 +237,13 @@ async def test_read_bulk_mixed_types(metrics: ComponentMetrics) -> None:
     )
     comp.strategy = BulkExecutionStrategy()
 
-    dfs: List[pd.DataFrame] = []
-    async for df in comp.execute(payload=None, metrics=metrics):
-        dfs.append(df)
+    frames: List[pd.DataFrame] = []
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        frames.append(item.payload)
 
-    assert len(dfs) == 1
-    df = dfs[0].sort_values("id").reset_index(drop=True)
+    assert len(frames) == 1
+    df = frames[0].sort_values("id").reset_index(drop=True)
     scores = list(df["score"])
     assert scores[0] == 95
     assert scores[1] == "88"
@@ -256,8 +263,9 @@ async def test_read_bigdata_from_ndjson(metrics: ComponentMetrics) -> None:
     comp.strategy = BigDataExecutionStrategy()
 
     ddfs: List[dd.DataFrame] = []
-    async for ddf in comp.execute(payload=None, metrics=metrics):
-        ddfs.append(ddf)
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and item.port == "out"
+        ddfs.append(item.payload)
 
     assert len(ddfs) == 1
     df = ddfs[0].compute().sort_values("id").reset_index(drop=True)
@@ -298,7 +306,8 @@ async def test_write_row_to_ndjson_and_read_back(
     for r in rows:
         gen = writer.execute(payload=r, metrics=metrics)
         yielded = await anext(gen)
-        assert yielded == r
+        assert isinstance(yielded, Out) and yielded.port == "out"
+        assert yielded.payload == r
 
     read_back: List[Dict[str, Any]] = []
     for line in out.read_text(encoding="utf-8").splitlines():
@@ -318,7 +327,7 @@ async def test_write_row_to_ndjson_and_read_back(
     reader.strategy = RowExecutionStrategy()
 
     collected: List[Dict[str, Any]] = []
-    async for rec in reader.execute(
+    async for item in reader.execute(
         payload=None,
         metrics=ComponentMetrics(
             started_at=datetime.now(),
@@ -328,7 +337,8 @@ async def test_write_row_to_ndjson_and_read_back(
             lines_forwarded=0,
         ),
     ):
-        collected.append(rec)
+        assert isinstance(item, Out) and item.port == "out"
+        collected.append(item.payload)
     assert collected == rows
 
 
@@ -355,8 +365,11 @@ async def test_write_bulk_to_json_array_and_read_back(
 
     gen = writer.execute(payload=df, metrics=metrics)
     got = await anext(gen)
+    assert isinstance(got, Out) and got.port == "out"
     pd.testing.assert_frame_equal(
-        got.sort_values("id"), df.sort_values("id"), check_dtype=False
+        got.payload.sort_values("id"),
+        df.sort_values("id"),
+        check_dtype=False,
     )
 
     on_disk = json.loads(out.read_text(encoding="utf-8"))
@@ -383,7 +396,8 @@ async def test_write_bulk_to_ndjson_lines_and_roundtrip(
 
     df = pd.DataFrame([{"id": 2, "name": "b"}, {"id": 1, "name": "a"}])
     gen = writer.execute(payload=df, metrics=metrics)
-    _ = await anext(gen)
+    item = await anext(gen)
+    assert isinstance(item, Out) and item.port == "out"
 
     raw = [
         json.loads(s) for s in out.read_text(encoding="utf-8").splitlines() if s.strip()

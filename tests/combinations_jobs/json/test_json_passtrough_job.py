@@ -1,3 +1,6 @@
+import etl_core.components.file_components.json.read_json  # noqa: F401
+import etl_core.components.file_components.json.write_json  # noqa: F401
+
 import json
 import pandas as pd
 import dask.dataframe as dd

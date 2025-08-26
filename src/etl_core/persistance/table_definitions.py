@@ -107,7 +107,9 @@ class ComponentLinkTable(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
 
     job_id: str = Field(
-        sa_column=Column(ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"), nullable=False)
+        sa_column=Column(
+            ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"), nullable=False
+        )
     )
 
     src_component_id: str = Field(
