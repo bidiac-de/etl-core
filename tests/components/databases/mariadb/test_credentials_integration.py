@@ -112,7 +112,7 @@ class TestCredentialsIntegration:
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
-            comp_type="read_mariadb",
+            comp_type="write_mariadb",
             database="testdb",
             entity_name="users",
             credentials_id=1,
@@ -483,7 +483,7 @@ class TestCredentialsIntegration:
         write_comp = MariaDBWrite(
             name="test_write_bulk",
             description="Test write bulk component",
-            comp_type="read_mariadb",
+            comp_type="write_mariadb",
             database="testdb",
             entity_name="users",
             credentials_id=1,

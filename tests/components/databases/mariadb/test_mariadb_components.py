@@ -90,7 +90,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             params={"limit": 10},
@@ -122,7 +122,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
@@ -158,7 +158,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -183,7 +183,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -287,7 +287,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -296,7 +296,7 @@ class TestMariaDBComponents:
 
         # Test that the component can be created and has the right properties
         assert read_comp.name == "test_read"
-        assert read_comp.comp_type == "write_mariadb"
+        assert read_comp.comp_type == "read_mariadb"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
@@ -315,7 +315,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -341,7 +341,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -398,7 +398,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users WHERE age > %(min_age)s AND city IN %(cities)s",
             params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
@@ -455,7 +455,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=999,  # Use non-existent credentials ID
@@ -483,7 +483,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=999,  # Non-existent credentials
@@ -502,7 +502,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -537,7 +537,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -569,7 +569,7 @@ class TestMariaDBComponents:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             query=large_query,
             params={"start_date": "2023-01-01", "limit": 1000},

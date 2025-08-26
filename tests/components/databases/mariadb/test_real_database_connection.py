@@ -147,7 +147,7 @@ class TestRealDatabaseConnection:
                 read_comp = MariaDBRead(
                     name="test_real_read",
                     description="Test real database read",
-                    comp_type="database",
+                    comp_type="read_mariadb",
                     database="etl_core",
                     entity_name=test_table_name,
                     query=f"SELECT * FROM {test_table_name} ORDER BY id",
@@ -179,7 +179,7 @@ class TestRealDatabaseConnection:
         write_comp = MariaDBWrite(
             name="test_real_write",
             description="Test real database write",
-            comp_type="database",
+            comp_type="write_mariadb",
             database="etl_core",
             entity_name=test_table_name,
             credentials_id=1,

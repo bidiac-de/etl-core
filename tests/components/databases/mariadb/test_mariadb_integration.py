@@ -104,7 +104,7 @@ class TestMariaDBIntegration:
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
-            comp_type="read_mariadb",
+            comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
         )
