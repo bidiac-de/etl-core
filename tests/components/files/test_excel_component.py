@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
@@ -25,17 +24,6 @@ VALID_XLSX = DATA_DIR / "test_data.xlsx"
 MISSING_VALUES_XLSX = DATA_DIR / "test_data_missing.xlsx"
 SCHEMA_MISMATCH_XLSX = DATA_DIR / "test_data_schema.xlsx"
 WRONG_TYPES_XLSX = DATA_DIR / "test_data_types.xlsx"
-
-
-@pytest.fixture
-def metrics() -> ComponentMetrics:
-    return ComponentMetrics(
-        started_at=datetime.now(),
-        processing_time=timedelta(0),
-        error_count=0,
-        lines_received=0,
-        lines_forwarded=0,
-    )
 
 
 @pytest.fixture(scope="session")

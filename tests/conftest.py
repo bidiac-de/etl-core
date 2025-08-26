@@ -10,6 +10,7 @@ import secrets
 import sys
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
+from datetime import datetime, timedelta
 
 from etl_core.main import app
 from etl_core.api.dependencies import get_execution_handler, get_job_handler
@@ -20,6 +21,7 @@ from etl_core.persistance.table_definitions import (
     ComponentTable,
     LayoutTable,
 )
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
@@ -71,6 +73,17 @@ def client() -> Generator[TestClient, None, None]:
     """
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)

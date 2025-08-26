@@ -29,17 +29,6 @@ BAD_LINE_NDJSON = DATA_DIR / "testdata_bad_line.jsonl"
 MIXED_SCHEMA_NDJSON = DATA_DIR / "testdata_mixed_schema.jsonl"
 
 
-@pytest.fixture
-def metrics() -> ComponentMetrics:
-    return ComponentMetrics(
-        started_at=datetime.now(),
-        processing_time=timedelta(0),
-        error_count=0,
-        lines_received=0,
-        lines_forwarded=0,
-    )
-
-
 @pytest.mark.asyncio
 async def test_read_row_ndjson_happy_path(metrics: ComponentMetrics) -> None:
     comp = ReadJSON(

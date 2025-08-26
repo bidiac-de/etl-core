@@ -3,14 +3,12 @@ import inspect
 import pytest
 import pandas as pd
 import dask.dataframe as dd
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
 from etl_core.components.file_components.csv.read_csv import ReadCSV
 from etl_core.components.file_components.csv.write_csv import WriteCSV
 from etl_core.components.file_components.csv.csv_component import Delimiter
-from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
@@ -21,17 +19,6 @@ VALID_CSV = DATA_DIR / "test_data.csv"
 MISSING_VALUES_CSV = DATA_DIR / "test_data_missing_values.csv"
 WRONG_TYPES_CSV = DATA_DIR / "test_data_wrong_types.csv"
 INVALID_CSV_FILE = DATA_DIR / "test_data_not_csv.txt"
-
-
-@pytest.fixture
-def metrics():
-    return ComponentMetrics(
-        started_at=datetime.now(),
-        processing_time=timedelta(0),
-        error_count=0,
-        lines_received=0,
-        lines_forwarded=0,
-    )
 
 
 @pytest.mark.asyncio
