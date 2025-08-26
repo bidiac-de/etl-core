@@ -7,9 +7,43 @@ from typing import Mapping, Sequence, Union, Callable, Iterable
 
 import pandas as pd
 import dask.dataframe as dd
-
+from dask.base import normalize_token
 
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
+
+
+def _freeze_for_token(x):
+    """
+    Recursively convert objects into deterministic, hashable structures so that
+    Dask can compute a stable token across platforms/runs.
+    """
+    if isinstance(x, dict):
+        return tuple(sorted((k, _freeze_for_token(v)) for k, v in x.items()))
+    if isinstance(x, set):
+        return tuple(sorted(_freeze_for_token(v) for v in x))
+    if isinstance(x, (list, tuple)):
+        return tuple(_freeze_for_token(v) for v in x)
+    return x
+
+
+def _freeze_rule(rule: ComparisonRule):
+    """
+    Represent a ComparisonRule (including nested children) as a tuple of
+    simple, deterministic components.
+    """
+    return (
+        "ComparisonRule",
+        rule.column,
+        rule.operator,
+        _freeze_for_token(rule.value),
+        rule.logical_operator,
+        tuple(_freeze_rule(r) for r in (rule.rules or ())),
+    )
+
+
+@normalize_token.register(ComparisonRule)
+def _normalize_comparison_rule(rule: ComparisonRule):
+    return _freeze_rule(rule)
 
 
 def _ensure_string(series: pd.Series) -> pd.Series:
@@ -148,7 +182,6 @@ def build_mask(
     df: Union[pd.DataFrame, "dd.DataFrame"], rule: "ComparisonRule"
 ) -> pd.Series:
     """Build a pandas/dask-compatible boolean mask for the given rule."""
-    # leaf: simple comparison on a column
     if rule.logical_operator is None:
         return _leaf_mask(df, rule)
 

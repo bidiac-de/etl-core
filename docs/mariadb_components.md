@@ -250,9 +250,9 @@ write_comp = MariaDBWrite(
     credentials_id=1,
     entity_name="users",
     query="""
-        INSERT INTO users (id, name, email) 
-        VALUES (:id, :name, :email) 
-        ON DUPLICATE KEY UPDATE 
+        INSERT INTO users (id, name, email)
+        VALUES (:id, :name, :email)
+        ON DUPLICATE KEY UPDATE
         name = VALUES(name), email = VALUES(email)
     """,
     strategy_type="bulk"
