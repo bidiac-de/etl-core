@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional
 import keyring
 from keyring.errors import KeyringError
-from src.etl_core.context.secrets.secret_provider import SecretProvider
+from etl_core.context.secrets.secret_provider import SecretProvider
 
 
 class KeyringSecretProvider(SecretProvider):

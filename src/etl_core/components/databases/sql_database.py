@@ -7,11 +7,11 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.databases.database import DatabaseComponent
-from src.etl_core.components.databases.sql_connection_handler import (
+from etl_core.components.databases.database import DatabaseComponent
+from etl_core.components.databases.sql_connection_handler import (
     SQLConnectionHandler,
 )
-from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
+from etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class SQLDatabaseComponent(DatabaseComponent, ABC):
@@ -64,7 +64,16 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
         
-        # Session variables will be set by specific database components
+        # Force subclasses to set their own session variables
+        self._setup_session_variables()
+
+    @abstractmethod
+    def _setup_session_variables(self):
+        """
+        Setup database-specific session variables.
+        Must be implemented by subclasses (MariaDB, PostgreSQL, etc.).
+        """
+        raise NotImplementedError
 
     def __del__(self):
         """Cleanup connection when component is destroyed."""

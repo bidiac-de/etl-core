@@ -8,13 +8,13 @@ with the MariaDB components.
 import pytest
 from unittest.mock import Mock, patch
 
-from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.context_parameter import ContextParameter
-from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
+from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
+from etl_core.context.context_parameter import ContextParameter
+from etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class TestCredentialsIntegration:
@@ -69,7 +69,7 @@ class TestCredentialsIntegration:
         assert retrieved.user == "newuser"
 
     @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_mariadb_read_component_with_real_credentials(
         self, mock_handler_class, sample_context
@@ -99,7 +99,7 @@ class TestCredentialsIntegration:
         assert creds["database"] == "testdb"
 
     @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_mariadb_write_component_with_real_credentials(
         self, mock_handler_class, sample_context
@@ -337,7 +337,7 @@ class TestCredentialsIntegration:
         assert valid_param.key == "valid_key"
 
     @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_credentials_in_mariadb_component_integration(
         self, mock_handler_class, sample_context
@@ -470,7 +470,7 @@ class TestCredentialsIntegration:
             assert param.key == key
 
     @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_mariadb_write_bulk_operations(
         self, mock_handler_class, sample_context, sample_dataframe
@@ -502,9 +502,11 @@ class TestCredentialsIntegration:
         assert write_comp.credentials_id == 1
 
     @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_mariadb_read_query_operations(self, mock_handler_class, sample_context):
+    def test_mariadb_read_component_with_real_credentials(
+        self, mock_handler_class, sample_context
+    ):
         """Test MariaDB read query operations with real credentials."""
         # Mock the connection handler
         mock_handler = Mock()

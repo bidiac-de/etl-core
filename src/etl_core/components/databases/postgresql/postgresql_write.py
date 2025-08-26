@@ -3,9 +3,9 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
-from src.etl_core.components.component_registry import register_component
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
+from etl_core.components.component_registry import register_component
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
 
 

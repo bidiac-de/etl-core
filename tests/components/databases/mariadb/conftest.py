@@ -9,12 +9,12 @@ import pandas as pd
 from unittest.mock import Mock, patch
 import dask.dataframe as dd
 
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.context_parameter import ContextParameter
-from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.context.credentials import Credentials
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.context_parameter import ContextParameter
+from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 
 
 @pytest.fixture
@@ -112,7 +112,7 @@ def mock_metrics():
 def mariadb_read_component(sample_context):
     """Create a MariaDBRead component with context."""
     with patch(
-        "src.etl_core.components.databases.sql_connection_handler."
+        "etl_core.components.databases.sql_connection_handler."
         "SQLConnectionHandler"
     ):
         read_comp = MariaDBRead(
@@ -131,7 +131,7 @@ def mariadb_read_component(sample_context):
 def mariadb_write_component(sample_context):
     """Create a MariaDBWrite component with context."""
     with patch(
-        "src.etl_core.components.databases.sql_connection_handler."
+        "etl_core.components.databases.sql_connection_handler."
         "SQLConnectionHandler"
     ):
         write_comp = MariaDBWrite(
