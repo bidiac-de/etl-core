@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class RowExecutionStrategy(ExecutionStrategy):
     """
     True streaming row-by-row mode:
-    Delegates to component.process_rows(...) which MUST be an async-iterable.
+    Delegates to component.process_row(...) which MUST be an async-iterable.
     """
 
     async def execute(

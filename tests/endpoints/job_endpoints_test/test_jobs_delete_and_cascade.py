@@ -40,7 +40,7 @@ def test_delete_job_cascades_all_related_rows(client: TestClient) -> None:
                     "description": "",
                     "routes": {"out": ["b"]},
                 },
-                {"comp_type": "test", "name": "b", "description": "", "next": []},
+                {"comp_type": "test", "name": "b", "description": "", "routes": {}},
             ],
         },
     ).json()

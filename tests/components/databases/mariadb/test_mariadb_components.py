@@ -180,7 +180,7 @@ class TestMariaDBComponents:
         mock_receiver.read_bigdata.return_value = sample_dask_dataframe
         read_comp._receiver = mock_receiver
 
-        gen = read_comp.process_bulk(sample_dask_dataframe, mock_metrics)
+        gen = read_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
         result = await anext(gen)
 
         assert hasattr(result.payload, "npartitions")
@@ -316,7 +316,7 @@ class TestMariaDBComponents:
         # Test that error is handled gracefully - we need to actually call the method
         with pytest.raises(Exception):
             # This will trigger the error when we try to read
-            async for result in read_comp.process_row({"id": 1}, mock_metrics):
+            async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
 
     @pytest.mark.asyncio
