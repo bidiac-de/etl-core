@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Dict
+from typing import Any, AsyncGenerator, Dict, Tuple
 from uuid import uuid4
 
 import pandas as pd
@@ -22,11 +22,17 @@ def _apply_filter_partition(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataF
     return pdf[mask]
 
 
+def _apply_remainder_partition(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
+    mask = eval_rule_on_frame(pdf, rule)
+    return pdf[~mask]
+
+
 class FilterReceiver(Receiver):
     """
-    Receiver that applies filter rules to all execution paths.
-    All public process_* methods are yield-only (streaming). No payload returns.
-    Metrics are forwarded unchanged (execution layer does the accounting).
+    Split incoming data into two streams:
+      - 'pass': rows that match the rule
+      - 'fail': rows that do not match the rule
+    All methods yield (port, payload) tuples. Metrics are updated consistently.
     """
 
     async def process_row(
@@ -34,61 +40,67 @@ class FilterReceiver(Receiver):
         row: Dict[str, Any],
         rule: ComparisonRule,
         metrics: FilterMetrics,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Yield each incoming row that matches the rule.
-        """
+    ) -> AsyncGenerator[Tuple[str, Dict[str, Any]], None]:
         metrics.lines_received += 1
         if eval_rule_on_row(row, rule):
             metrics.lines_forwarded += 1
-            yield row
+            yield "pass", row
         else:
             metrics.lines_dismissed += 1
+            yield "fail", row
 
     async def process_bulk(
         self,
         dataframe: pd.DataFrame,
         rule: ComparisonRule,
         metrics: FilterMetrics,
-    ) -> AsyncGenerator[pd.DataFrame, None]:
+    ) -> AsyncGenerator[Tuple[str, pd.DataFrame], None]:
         mask = eval_rule_on_frame(dataframe, rule)
+
         total_received = int(len(dataframe))
-        total_forwarded = int(mask.sum())
+        total_pass = int(mask.sum())
+        total_fail = total_received - total_pass
 
         metrics.lines_received += total_received
-        metrics.lines_forwarded += total_forwarded
-        metrics.lines_dismissed += max(0, total_received - total_forwarded)
+        metrics.lines_forwarded += total_pass
+        metrics.lines_dismissed += max(0, total_fail)
 
-        if total_forwarded:
-            yield dataframe[mask].reset_index(drop=True)
-        else:
-            yield dataframe.iloc[0:0].copy()
+        if total_pass:
+            yield "pass", dataframe[mask].reset_index(drop=True)
+        if total_fail:
+            yield "fail", dataframe[~mask].reset_index(drop=True)
 
     async def process_bigdata(
         self,
         ddf: dd.DataFrame,
         rule: ComparisonRule,
         metrics: FilterMetrics,
-    ) -> AsyncGenerator[dd.DataFrame, None]:
+    ) -> AsyncGenerator[Tuple[str, dd.DataFrame], None]:
         """
-        Apply the filter across partitions. With the normalize_token hook
-        registered for ComparisonRule (see filter_helper.py), Dask can
-        deterministically hash 'rule' across platforms (incl. Windows).
+        Build two Dask DataFrames (pass/fail) without computing them here.
         """
-        filtered = ddf.map_partitions(
+        passed = ddf.map_partitions(
             _apply_filter_partition,
             rule,
             meta=ddf._meta,
-            token=f"filter-{uuid4().hex}",
+            token=f"filter-pass-{uuid4().hex}",
         )
-
+        failed = ddf.map_partitions(
+            _apply_remainder_partition,
+            rule,
+            meta=ddf._meta,
+            token=f"filter-fail-{uuid4().hex}",
+        )
         try:
             total_received = int(ddf.map_partitions(len).sum().compute())
-            total_forwarded = int(filtered.map_partitions(len).sum().compute())
+            total_pass = int(passed.map_partitions(len).sum().compute())
+            total_fail = max(0, total_received - total_pass)
+
             metrics.lines_received += total_received
-            metrics.lines_forwarded += total_forwarded
-            metrics.lines_dismissed += max(0, total_received - total_forwarded)
+            metrics.lines_forwarded += total_pass
+            metrics.lines_dismissed += total_fail
         except Exception:
             pass
 
-        yield filtered
+        yield "pass", passed
+        yield "fail", failed

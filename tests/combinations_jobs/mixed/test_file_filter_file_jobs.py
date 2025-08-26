@@ -1,4 +1,3 @@
-# test_file_filter_file_jobs.py
 from __future__ import annotations
 
 import json
@@ -57,23 +56,11 @@ def _inject_filepaths(
     """
     components = cfg.get("components", [])
     for comp in components:
-        ctype = comp.get("comp_type", "")
-
-        # Replace explicit placeholders only when present
+        # Replace explicit placeholders
         fp = comp.get("filepath")
         if fp == "__IN__":
             comp["filepath"] = str(in_fp)
         elif fp == "__OUT__":
-            comp["filepath"] = str(out_path)
-
-        # Provide sensible defaults if filepath is missing
-        if ctype in {"read_csv", "read_json", "read_excel"} and not comp.get(
-            "filepath"
-        ):
-            comp["filepath"] = str(in_fp)
-        elif ctype in {"write_csv", "write_json", "write_excel"} and not comp.get(
-            "filepath"
-        ):
             comp["filepath"] = str(out_path)
 
     return cfg
