@@ -1,5 +1,42 @@
+# Development and Testing
 pre-commit
+pytest
 pytest-cov
-fastapi
-pydantic == v2.5.3
 pytest-asyncio
+
+# Web Framework
+fastapi
+uvicorn
+typer
+requests
+
+# Data Validation and Models
+pydantic
+
+# Database and ORM
+sqlalchemy
+mysql-connector-python
+pymongo
+keyring
+
+# Data Processing
+pandas
+numpy
+dask
+pyarrow
+sqlmodel
+
+# Async Support
+asyncio
+aiofiles
+
+# Utilities
+python-dotenv
+click
+rich
+psutil
+xlrd
+
+# Type Checking
+mypy
+types-requests
