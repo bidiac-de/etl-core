@@ -302,14 +302,14 @@ def convert_frame_top_level(df: pd.DataFrame, rules: Sequence[TypeConversionRule
 
         casted = out[col].map(_apply)
 
-        # Zeilen, die wegen DROP raus müssen, markieren
+
         mask = casted.apply(lambda v: v is _DROP)
         if mask.any():
             drop_mask |= mask
-            # Werte an den DROP-Positionen zu None setzen, damit wir Objekt-Dtype konsistent halten
+
             casted = casted.mask(mask, other=None)
 
-        # <<< NEU: NaN -> None, 23.0 -> 23, alles als echte Python-Objekte >>>
+
         py_vals: List[Any] = []
         for v in casted.tolist():
             if pd.isna(v):
@@ -320,7 +320,7 @@ def convert_frame_top_level(df: pd.DataFrame, rules: Sequence[TypeConversionRule
                 py_vals.append(v)
 
         casted = pd.Series(py_vals, index=casted.index, dtype="object")
-        # >>> END NEU
+
 
         out[col] = casted
 
