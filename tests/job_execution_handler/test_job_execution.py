@@ -83,7 +83,6 @@ def test_execute_job_chain_components_file_logging(schema_row_min):
                 "comp_type": "test",
                 "description": "first",
                 "routes": {"out": ["comp2"]},
-                "in_port_schemas": {"in": schema_row_min},
                 "out_port_schemas": {"out": schema_row_min},
                 "metadata": {
                     "user_id": 42,
@@ -96,7 +95,6 @@ def test_execute_job_chain_components_file_logging(schema_row_min):
                 "description": "second",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": schema_row_min},
-                "out_port_schemas": {"out": schema_row_min},
                 "metadata": {
                     "user_id": 42,
                     "timestamp": datetime.now(),
@@ -158,7 +156,6 @@ def test_execute_job_failing_and_cancelled_components(schema_row_min):
                     "timestamp": datetime.now(),
                 },
                 "routes": {"out": ["comp2"]},
-                "in_port_schemas": {"in": schema_row_min},
                 "out_port_schemas": {"out": schema_row_min},
             },
             {
@@ -171,7 +168,6 @@ def test_execute_job_failing_and_cancelled_components(schema_row_min):
                 "description": "should be cancelled",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": schema_row_min},
-                "out_port_schemas": {"out": schema_row_min},
             },
         ],
     }
@@ -211,7 +207,6 @@ def test_retry_logic_and_metrics(schema_row_min):
                 "comp_type": "stub_fail_once",
                 "description": "",
                 "routes": {"out": []},
-                "in_port_schemas": {"in": schema_row_min},
                 "out_port_schemas": {"out": schema_row_min},
                 "metadata": {
                     "user_id": 42,
@@ -255,7 +250,6 @@ def test_execute_job_linear_chain(schema_row_min):
                 "comp_type": "test",
                 "description": "",
                 "routes": {"out": ["c2"]},
-                "in_port_schemas": {"in": schema_row_min},
                 "out_port_schemas": {"out": schema_row_min},
                 "metadata": {
                     "user_id": 42,
@@ -292,7 +286,6 @@ def test_execute_job_linear_chain(schema_row_min):
                 "description": "",
                 "routes": {"out": []},
                 "in_port_schemas": {"in": schema_row_min},
-                "out_port_schemas": {"out": schema_row_min},
                 "metadata": {
                     "user_id": 42,
                     "timestamp": datetime.now(),
@@ -357,7 +350,6 @@ def test_execute_linear_chain_with_retry_metrics(schema_row_min):
                     "timestamp": datetime.now(),
                 },
                 "routes": {"out": ["c2"]},
-                "in_port_schemas": {"in": schema_row_min},
                 "out_port_schemas": {"out": schema_row_min},
             },
             {
@@ -381,7 +373,6 @@ def test_execute_linear_chain_with_retry_metrics(schema_row_min):
                     "timestamp": datetime.now(),
                 },
                 "in_port_schemas": {"in": schema_row_min},
-                "out_port_schemas": {"out": schema_row_min},
             },
         ],
     }

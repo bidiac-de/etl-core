@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, field_validator
+from typing import List, Optional
+
+from pydantic import BaseModel, ValidationInfo, field_validator
 
 
 class DataType(str, Enum):
@@ -32,9 +33,10 @@ class FieldDef(BaseModel):
     @field_validator("children")
     @classmethod
     def _children_only_for_objects(
-        cls, v: Optional[List["FieldDef"]], values: Dict[str, Any]
+        cls, v: Optional[List["FieldDef"]], info: ValidationInfo
     ) -> Optional[List["FieldDef"]]:
-        if v and values.get("data_type") != DataType.OBJECT:
+        data_type = info.data.get("data_type") if info and info.data else None
+        if v and data_type != DataType.OBJECT:
             msg = "children allowed only for OBJECT"
             raise ValueError(msg)
         return v
@@ -42,9 +44,10 @@ class FieldDef(BaseModel):
     @field_validator("item")
     @classmethod
     def _item_only_for_arrays(
-        cls, v: Optional["FieldDef"], values: Dict[str, Any]
+        cls, v: Optional["FieldDef"], info: ValidationInfo
     ) -> Optional["FieldDef"]:
-        if v and values.get("data_type") != DataType.ARRAY:
+        data_type = info.data.get("data_type") if info and info.data else None
+        if v and data_type != DataType.ARRAY:
             msg = "item allowed only for ARRAY"
             raise ValueError(msg)
         return v
@@ -52,9 +55,10 @@ class FieldDef(BaseModel):
     @field_validator("enum_values")
     @classmethod
     def _enum_only_for_enum(
-        cls, v: Optional[List[str]], values: Dict[str, Any]
+        cls, v: Optional[List[str]], info: ValidationInfo
     ) -> Optional[List[str]]:
-        if v and values.get("data_type") != DataType.ENUM:
+        data_type = info.data.get("data_type") if info and info.data else None
+        if v and data_type != DataType.ENUM:
             msg = "enum_values allowed only for ENUM"
             raise ValueError(msg)
         return v

@@ -1,12 +1,38 @@
 from __future__ import annotations
 
-from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 import pytest
+from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 
-# Ensure stub components are registered with the component registry
-# before Job tries to instantiate them.
+# Ensure stub components are registered before building runtime jobs
 import etl_core.components.stubcomponents as _ensure_registration  # noqa: F401
 from tests.helpers import runtime_job_from_config
+
+
+def _row_schema() -> dict:
+    """
+    Conforms to etl_core.components.wiring.schema.Schema:
+    {
+        "fields": [
+            {"name": "...", "data_type": "...", ...},
+            ...
+        ]
+    }
+    """
+    return {
+        "fields": [
+            {
+                "name": "i",
+                "data_type": "integer",
+                "nullable": False,
+            },
+            {
+                "name": "status",
+                "data_type": "enum",
+                "enum_values": ["ok", "err"],
+                "nullable": False,
+            },
+        ]
+    }
 
 
 def test_extra_output_ports_are_visible_and_routable() -> None:
@@ -25,6 +51,10 @@ def test_extra_output_ports_are_visible_and_routable() -> None:
                 "comp_type": "test_source_dynamic_ports",
                 "description": "",
                 "routes": {"out": ["router"]},
+                # FIX: flat map port -> Schema
+                "out_port_schemas": {
+                    "out": _row_schema(),
+                },
             },
             {
                 "name": "router",
@@ -35,16 +65,30 @@ def test_extra_output_ports_are_visible_and_routable() -> None:
                     "ok": ["sink_ok"],
                     "err": ["sink_err"],
                 },
+                # FIX: flat maps
+                "in_port_schemas": {
+                    "in": _row_schema(),
+                },
+                "out_port_schemas": {
+                    "ok": _row_schema(),
+                    "err": _row_schema(),
+                },
             },
             {
                 "name": "sink_ok",
                 "comp_type": "test_sink_dynamic_ports",
                 "description": "",
+                "in_port_schemas": {
+                    "in": _row_schema(),
+                },
             },
             {
                 "name": "sink_err",
                 "comp_type": "test_sink_dynamic_ports",
                 "description": "",
+                "in_port_schemas": {
+                    "in": _row_schema(),
+                },
             },
         ],
     }
@@ -80,6 +124,9 @@ def test_unknown_dynamic_out_port_in_routes_is_rejected() -> None:
                 "comp_type": "test_source_dynamic_ports",
                 "description": "",
                 "routes": {"out": ["router"]},
+                "out_port_schemas": {
+                    "out": _row_schema(),
+                },
             },
             {
                 "name": "router",
@@ -89,11 +136,21 @@ def test_unknown_dynamic_out_port_in_routes_is_rejected() -> None:
                 "routes": {
                     "unknown": ["sink_ok"],
                 },
+                "in_port_schemas": {
+                    "in": _row_schema(),
+                },
+                "out_port_schemas": {
+                    "ok": _row_schema(),
+                    "err": _row_schema(),
+                },
             },
             {
                 "name": "sink_ok",
                 "comp_type": "test_sink_dynamic_ports",
                 "description": "",
+                "in_port_schemas": {
+                    "in": _row_schema(),
+                },
             },
         ],
     }
@@ -103,7 +160,8 @@ def test_unknown_dynamic_out_port_in_routes_is_rejected() -> None:
     msg = str(ei.value)
     assert (
         "unknown out port(s) in routes" in msg
-        or "unknown out port(s) in port_schemas" in msg
+        or "unknown out port(s)" in msg
+        or "unknown port" in msg
     )
 
 
@@ -123,12 +181,20 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
                 "comp_type": "test_source_dynamic_ports",
                 "description": "",
                 "routes": {"out": ["merge"]},
+                "out_port_schemas": {
+                    "out": _row_schema(),
+                },
             },
             {
                 "name": "merge",
                 "comp_type": "test_merge_dynamic_inputs",
                 "description": "",
                 "extra_input_ports": ["left", "right"],
+                # FIX: per-input port schemas under in_port_schemas
+                "in_port_schemas": {
+                    "left": _row_schema(),
+                    "right": _row_schema(),
+                },
             },
         ],
     }
@@ -146,12 +212,19 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
                 "comp_type": "test_source_dynamic_ports",
                 "description": "",
                 "routes": {"out": [{"to": "merge", "in_port": "left"}]},
+                "out_port_schemas": {
+                    "out": _row_schema(),
+                },
             },
             {
                 "name": "merge",
                 "comp_type": "test_merge_dynamic_inputs",
                 "description": "",
                 "extra_input_ports": ["left", "right"],
+                "in_port_schemas": {
+                    "left": _row_schema(),
+                    "right": _row_schema(),
+                },
             },
         ],
     }

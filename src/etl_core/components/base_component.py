@@ -10,6 +10,8 @@ from typing import (
     Iterable,
 )
 from uuid import uuid4
+import pandas as pd
+import dask.dataframe as dd
 
 from pydantic import (
     Field,
@@ -31,6 +33,11 @@ from etl_core.persistance.base_models.component_base import ComponentBase
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec, EdgeRef
+from etl_core.components.wiring.validation import (
+    validate_row_against_schema,
+    validate_dataframe_against_schema,
+    validate_dask_dataframe_against_schema,
+)
 
 
 class StrategyType(str, Enum):
@@ -56,6 +63,49 @@ class Component(ComponentBase, ABC):
     OUTPUT_PORTS: ClassVar[Sequence[OutPortSpec]] = ()
     INPUT_PORTS: ClassVar[Sequence[InPortSpec]] = ()
     ALLOW_NO_INPUTS: ClassVar[bool] = False
+
+    _schema_path_separator: ClassVar[str] = "."
+
+    def _validate_payload_against(
+        self, schema: "Schema", payload: Any, *, schema_name: str
+    ) -> None:
+        if payload is None:
+            return
+        sep = getattr(self, "_schema_path_separator", ".")
+        if isinstance(payload, dict):
+            validate_row_against_schema(
+                payload, schema, schema_name=schema_name, path_separator=sep
+            )
+            return
+        if isinstance(payload, pd.DataFrame):
+            validate_dataframe_against_schema(
+                payload, schema, schema_name=schema_name, path_separator=sep
+            )
+            return
+        if isinstance(payload, dd.DataFrame):
+            validate_dask_dataframe_against_schema(
+                payload, schema, schema_name=schema_name, path_separator=sep
+            )
+            return
+        raise TypeError(
+            f"{schema_name}: unsupported payload type {type(payload).__name__}"
+        )
+
+    def validate_out_payload(self, port: str, payload: Any) -> None:
+        schema = self.schema_for_out_port(port)
+        if not schema:
+            raise ValueError(f"{self.name}: no schema configured for out port {port!r}")
+        self._validate_payload_against(
+            schema, payload, schema_name=f"{self.name}.out:{port}"
+        )
+
+    def validate_in_payload(self, port: str, payload: Any) -> None:
+        schema = self.schema_for_in_port(port)
+        if not schema:
+            raise ValueError(f"{self.name}: no schema configured for in port {port!r}")
+        self._validate_payload_against(
+            schema, payload, schema_name=f"{self.name}.in:{port}"
+        )
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,

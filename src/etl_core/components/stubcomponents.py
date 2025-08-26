@@ -28,7 +28,7 @@ class StubComponent(Component):
     Declares per-port schemas via `in_schema` / `out_schema` mapped during build.
     """
 
-    # Explicit ports: no implicit single-input
+    # Explicit ports:
     INPUT_PORTS = (InPortSpec(name="in"),)
     OUTPUT_PORTS = (OutPortSpec(name="out"),)
 
@@ -44,7 +44,7 @@ class StubComponent(Component):
         Echo a single row and bump the counter. Always yield an Out envelope.
         """
         metrics.lines_received += 1
-        payload: Dict[str, Any] = row if isinstance(row, dict) else {"value": row}
+        payload = row if isinstance(row, dict) else {"id": 1}
         yield Out("out", payload)
 
     async def process_bulk(
@@ -103,13 +103,12 @@ class StubFailOnce(StubComponent):
     ) -> AsyncIterator[Out]:
         if not self._called:
             self._called = True
-            # same pattern as above to preserve async-generator contract
             for _ in ():
                 yield Out("out", {})  # pragma: no cover
             raise RuntimeError("fail first time")
 
         metrics.lines_received += 1
-        yield Out("out", {"recovered": True})
+        yield Out("out", {"id": 1})
 
 
 @register_component("multi_source", hidden=True)
@@ -135,7 +134,7 @@ class MultiSource(StubComponent):
     ) -> AsyncIterator[Out]:
         for i in range(self.count):
             metrics.lines_received = i + 1
-            yield Out("out", {"source": self.name, "index": i})
+            yield Out("out", {"id": i})
 
     async def process_bulk(
         self, data: pd.DataFrame, metrics: ComponentMetrics
@@ -162,8 +161,7 @@ class MultiEcho(StubComponent):
         self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
-        payload: Dict[str, Any] = row if isinstance(row, dict) else {"value": row}
-        echoed = self.receiver.execute(payload)
+        echoed = self.receiver.execute(row)
         yield Out("out", echoed)
 
     async def process_bulk(

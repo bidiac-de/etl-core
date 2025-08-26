@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import threading
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple, Optional
 from collections import deque
 
 from etl_core.components.runtime_state import RuntimeState
@@ -238,6 +238,11 @@ class JobExecutionHandler:
                 raise TypeError(
                     f"{component.name} must yield Out(port, payload) with port routing"
                 )
+            edges = out_edges_by_port.get(batch.port, [])
+            # validate output payload if any edge receives it
+            if edges:
+                component.validate_out_payload(batch.port, batch.payload)
+
             for q, dest_in, needs_tag in out_edges_by_port.get(batch.port, []):
                 await q.put(
                     batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
@@ -252,9 +257,17 @@ class JobExecutionHandler:
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.
+        For single-input components we expect untagged payloads.
+        For multi-input components we require InTagged(in_port, payload).
         """
         queue = in_queues[0]
         remaining = {p.id for p in component.prev_components}
+
+        # Resolve the single expected in-port name if applicable
+        in_port_names = component.expected_in_port_names()
+        single_in_port: Optional[str] = None
+        if len(in_port_names) == 1:
+            single_in_port = in_port_names[0]
 
         while remaining:
             item = await queue.get()
@@ -264,9 +277,21 @@ class JobExecutionHandler:
                 remaining.discard(item.component_id)
                 continue
 
-            # If this is a tagged envelope, unwrap to the payload
+            # Tagged envelope, unwrap and validate for the specified in-port
             if isinstance(item, InTagged):
-                item = item.payload
+                dest_port = item.in_port
+                payload = item.payload
+                component.validate_in_payload(dest_port, payload)
+                item = payload
+            else:
+                # Untagged: only valid for components with exactly one input port
+                if single_in_port is None:
+                    raise ValueError(
+                        f"{component.name}: received untagged input but component "
+                        f"declares multiple input ports {in_port_names!r}; "
+                        "fan-in must use tagged envelopes."
+                    )
+                component.validate_in_payload(single_in_port, item)
 
             await self._run_component(component, item, metrics, out_edges_by_port)
 
