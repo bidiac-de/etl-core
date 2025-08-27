@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, Iterable, List, Tuple
+from typing import Any, AsyncIterator, Dict, Iterable, List, Tuple, Union
 
 import dask.dataframe as dd
 import pandas as pd
@@ -25,11 +25,20 @@ class _Path:
         return cls(parts=parts)
 
 
+# Rules can be string-based (bulk/bigdata) or compiled (row)
+_StrRule = Tuple[str, str, str, str]
+_CompiledRule = Tuple[str, _Path, str, _Path]
+_Rule = Union[_StrRule, _CompiledRule]
+
+
 class SchemaMappingReceiver(Receiver):
     """
     Receiver that performs schema mapping (fan-in / fan-out).
     It yields (dst_port, payload) tuples, for the component to
     build Out envelopes.
+
+    New:
+    - Accepts compiled _Path rules for row mode to avoid reparsing per row
     """
 
     async def process_row(
@@ -37,12 +46,12 @@ class SchemaMappingReceiver(Receiver):
         row: Dict[str, Any],
         *,
         metrics: DataOperationsMetrics,
-        rules: Iterable[Tuple[str, str, str, str]],
+        rules: Iterable[_Rule],
     ) -> AsyncIterator[Tuple[str, Dict[str, Any]]]:
         metrics.lines_received += 1
 
         # Group rules by dst_port, for fan out and collecting multiple inputs
-        rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
+        rules_by_dst: Dict[str, List[Tuple[Union[str, _Path], Union[str, _Path]]]] = {}
         for _src_port, src_path, dst_port, dst_path in rules:
             rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
 
@@ -50,8 +59,14 @@ class SchemaMappingReceiver(Receiver):
         for dst_port, pairs in rules_by_dst.items():
             out: Dict[str, Any] = {}
             for src_path, dst_path in pairs:
-                val = _read_path(row, _Path.parse(src_path))
-                _write_path(out, _Path.parse(dst_path), val)
+                src_p = (
+                    src_path if isinstance(src_path, _Path) else _Path.parse(src_path)
+                )  # cached for compiled
+                dst_p = (
+                    dst_path if isinstance(dst_path, _Path) else _Path.parse(dst_path)
+                )
+                val = _read_path(row, src_p)
+                _write_path(out, dst_p, val)
             if out:
                 metrics.lines_processed += 1
                 metrics.lines_forwarded += 1
@@ -62,14 +77,16 @@ class SchemaMappingReceiver(Receiver):
         dataframe: pd.DataFrame,
         *,
         metrics: DataOperationsMetrics,
-        rules: Iterable[Tuple[str, str, str, str]],
+        rules: Iterable[_Rule],
     ) -> AsyncIterator[Tuple[str, pd.DataFrame]]:
         metrics.lines_received += int(dataframe.shape[0])
 
-        # Group rules by dst_port
+        # Group rules by dst_port, string column names
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _src_port, src_path, dst_port, dst_path in rules:
-            rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
+            src = src_path.parts[-1] if isinstance(src_path, _Path) else src_path
+            dst = dst_path.parts[-1] if isinstance(dst_path, _Path) else dst_path
+            rules_by_dst.setdefault(dst_port, []).append((src, dst))
 
         # apply mapping rules
         for dst_port, pairs in rules_by_dst.items():
@@ -84,7 +101,7 @@ class SchemaMappingReceiver(Receiver):
         ddf: dd.DataFrame,
         *,
         metrics: DataOperationsMetrics,
-        rules: Iterable[Tuple[str, str, str, str]],
+        rules: Iterable[_Rule],
     ) -> AsyncIterator[Tuple[str, dd.DataFrame]]:
         try:
             rows_in = int(ddf.map_partitions(len).sum().compute())
@@ -95,7 +112,9 @@ class SchemaMappingReceiver(Receiver):
         # Group rules by dst_port
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _src_port, src_path, dst_port, dst_path in rules:
-            rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
+            src = src_path.parts[-1] if isinstance(src_path, _Path) else src_path
+            dst = dst_path.parts[-1] if isinstance(dst_path, _Path) else dst_path
+            rules_by_dst.setdefault(dst_port, []).append((src, dst))
 
         # apply mapping rules
         for dst_port, pairs in rules_by_dst.items():

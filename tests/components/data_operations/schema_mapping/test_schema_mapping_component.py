@@ -15,9 +15,71 @@ from etl_core.components.data_operations.schema_mapping.schema_mapping_component
 from etl_core.components.data_operations.schema_mapping.mapping_rule import (
     FieldMapping,
 )
+from etl_core.components.wiring.schema import Schema
+from etl_core.components.wiring.column_definition import FieldDef
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
+
+
+def _schema_row_fanout_in() -> Schema:
+    return Schema(
+        fields=[
+            FieldDef(
+                name="user",
+                data_type="object",
+                children=[
+                    FieldDef(name="id", data_type="integer"),
+                    FieldDef(name="name", data_type="string"),
+                    FieldDef(
+                        name="address",
+                        data_type="object",
+                        children=[FieldDef(name="city", data_type="string")],
+                    ),
+                ],
+            )
+        ]
+    )
+
+
+def _schema_row_fanout_out_a() -> Schema:
+    return Schema(
+        fields=[
+            FieldDef(name="uid", data_type="integer"),
+            FieldDef(name="uname", data_type="string"),
+        ]
+    )
+
+
+def _schema_row_fanout_out_b() -> Schema:
+    return Schema(fields=[FieldDef(name="city", data_type="string")])
+
+
+def _schema_id_name_in() -> Schema:
+    return Schema(
+        fields=[
+            FieldDef(name="id", data_type="integer"),
+            FieldDef(name="name", data_type="string"),
+        ]
+    )
+
+
+def _schema_uid_uname_out() -> Schema:
+    return Schema(
+        fields=[
+            FieldDef(name="uid", data_type="integer"),
+            FieldDef(name="uname", data_type="string"),
+        ]
+    )
+
+
+def _schema_userid_username_out() -> Schema:
+    return Schema(
+        fields=[
+            FieldDef(name="user_id", data_type="integer"),
+            FieldDef(name="user_name", data_type="string"),
+        ]
+    )
 
 
 @pytest.fixture
@@ -38,61 +100,19 @@ async def test_component_process_row_fanout(metrics: DataOperationsMetrics) -> N
         name="MapRow",
         description="row",
         comp_type="schema_mapping",
-        extra_input_ports={
-            "in": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "user": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer"},
-                                "name": {"type": "string"},
-                                "address": {
-                                    "type": "object",
-                                    "properties": {
-                                        "city": {"type": "string"},
-                                    },
-                                    "required": ["city"],
-                                },
-                            },
-                            "required": ["id", "name", "address"],
-                        }
-                    },
-                    "required": ["user"],
-                }
-            }
-        },
-        extra_output_ports={
-            "A": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "uid": {"type": "integer"},
-                        "uname": {"type": "string"},
-                    },
-                    "required": ["uid", "uname"],
-                }
-            },
-            "B": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "city": {"type": "string"},
-                    },
-                    "required": ["city"],
-                }
-            },
+        extra_input_ports=["in"],
+        in_port_schemas={"in": _schema_row_fanout_in()},
+        extra_output_ports=["A", "B"],
+        out_port_schemas={
+            "A": _schema_row_fanout_out_a(),
+            "B": _schema_row_fanout_out_b(),
         },
         rules=[
             FieldMapping(
                 src_port="in", src_path="user.id", dst_port="A", dst_path="uid"
             ),
             FieldMapping(
-                src_port="in",
-                src_path="user.name",
-                dst_port="A",
-                dst_path="uname",
+                src_port="in", src_path="user.name", dst_port="A", dst_path="uname"
             ),
             FieldMapping(
                 src_port="in",
@@ -128,39 +148,16 @@ async def test_component_process_bulk_dataframe(metrics: DataOperationsMetrics) 
         name="MapBulk",
         description="bulk",
         comp_type="schema_mapping",
-        extra_input_ports={
-            "in": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "integer"},
-                        "name": {"type": "string"},
-                    },
-                    "required": ["id", "name"],
-                }
-            }
-        },
-        extra_output_ports={
-            "X": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "integer"},
-                        "user_name": {"type": "string"},
-                    },
-                    "required": ["user_id", "user_name"],
-                }
-            }
-        },
+        extra_input_ports=["in"],
+        in_port_schemas={"in": _schema_id_name_in()},
+        extra_output_ports=["X"],
+        out_port_schemas={"X": _schema_userid_username_out()},
         rules=[
             FieldMapping(
                 src_port="in", src_path="id", dst_port="X", dst_path="user_id"
             ),
             FieldMapping(
-                src_port="in",
-                src_path="name",
-                dst_port="X",
-                dst_path="user_name",
+                src_port="in", src_path="name", dst_port="X", dst_path="user_name"
             ),
         ],
     )
@@ -187,37 +184,14 @@ async def test_component_process_bigdata(metrics: DataOperationsMetrics) -> None
         name="MapBig",
         description="big",
         comp_type="schema_mapping",
-        extra_input_ports={
-            "in": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "integer"},
-                        "name": {"type": "string"},
-                    },
-                    "required": ["id", "name"],
-                }
-            }
-        },
-        extra_output_ports={
-            "out": {
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "uid": {"type": "integer"},
-                        "uname": {"type": "string"},
-                    },
-                    "required": ["uid", "uname"],
-                }
-            }
-        },
+        extra_input_ports=["in"],
+        in_port_schemas={"in": _schema_id_name_in()},
+        extra_output_ports=["out"],
+        out_port_schemas={"out": _schema_uid_uname_out()},
         rules=[
             FieldMapping(src_port="in", src_path="id", dst_port="out", dst_path="uid"),
             FieldMapping(
-                src_port="in",
-                src_path="name",
-                dst_port="out",
-                dst_path="uname",
+                src_port="in", src_path="name", dst_port="out", dst_path="uname"
             ),
         ],
     )

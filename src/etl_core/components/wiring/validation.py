@@ -309,3 +309,19 @@ def validate_dask_dataframe_against_schema(
     """
     _ensure_df_columns(ddf.columns, schema, schema_name=schema_name, sep=path_separator)
     _enum_and_null_checks_dask(ddf, schema, schema_name=schema_name, sep=path_separator)
+
+
+def get_leaf_field_map(
+    schema: Schema,
+    *,
+    path_separator: str = ".",
+) -> Dict[str, FieldDef]:
+    """
+    Public helper for components: return a mapping of flattened leaf paths to
+    FieldDef, reusing the same leaf-flattening logic as our dataframe validators.
+    Arrays are considered leaves at their flattened path.
+    """
+    field_map = {}
+    for path, fd in _leaf_field_paths(schema.fields, path_separator):
+        field_map[path] = fd
+    return field_map
