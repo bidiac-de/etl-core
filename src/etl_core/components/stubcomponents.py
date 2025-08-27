@@ -175,7 +175,7 @@ class MultiEcho(StubComponent):
         yield Out("out", chunk_iterable)
 
 
-@register_component("test_source_dynamic_ports")
+@register_component("test_source_dynamic_ports", hidden=True)
 class TestSource(Component):
     """
     Simple source that emits a few rows.
@@ -216,7 +216,7 @@ class TestSource(Component):
             yield Out("out_bigdata", None)
 
 
-@register_component("test_router_dynamic_ports")
+@register_component("test_router_dynamic_ports", hidden=True)
 class TestRouter(Component):
     """
     Router that sends row to Out(row['status'], row).
@@ -253,7 +253,7 @@ class TestRouter(Component):
             yield Out("unused_bigdata", None)
 
 
-@register_component("test_sink_dynamic_ports")
+@register_component("test_sink_dynamic_ports", hidden=True)
 class TestSink(Component):
     """
     Sink with a single input port "in". No outputs needed for these tests.
@@ -288,7 +288,7 @@ class TestSink(Component):
             yield Out("unused_bigdata", None)
 
 
-@register_component("test_merge_dynamic_inputs")
+@register_component("test_merge_dynamic_inputs", hidden=True)
 class TestMerge(Component):
     """
     Component with dynamic input ports (extra_input_ports).
