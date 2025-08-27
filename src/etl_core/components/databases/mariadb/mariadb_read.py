@@ -13,7 +13,6 @@ from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceive
 class MariaDBRead(MariaDBComponent):
     """MariaDB reader supporting row, bulk, and bigdata modes."""
 
-    query: str = Field(..., description="SQL query to execute")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 
     @model_validator(mode="after")
