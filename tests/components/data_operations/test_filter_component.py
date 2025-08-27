@@ -147,7 +147,9 @@ async def test_filter_component_bigdata_splits_ddf(metrics: FilterMetrics) -> No
     pass_ddf = None
     fail_ddf = None
 
-    outs = [o async for o in comp.process_bigdata(ddf, metrics=metrics)]
+    outs = []
+    async for o in comp.process_bigdata(ddf, metrics=metrics):
+        outs.append(o)
     for out in outs:
         assert isinstance(out, Out)
         if out.port == "pass":
