@@ -8,12 +8,12 @@ import pytest
 import pandas as pd
 import dask.dataframe as dd
 
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.context_parameter import ContextParameter
-from src.etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
-from src.etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
+from etl_core.context.context_parameter import ContextParameter
+from etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
+from etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
 
 
 @pytest.fixture

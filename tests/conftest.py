@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Generator, Callable, Iterable
+from typing import Generator, Callable, Iterable, Tuple
 from fastapi.requests import Request
 
 import pytest
 import os
 import importlib
+import secrets
 import sys
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
@@ -151,3 +152,25 @@ def override_exec_handler() -> Generator[None, None, None]:
     finally:
         if get_execution_handler in app.dependency_overrides:
             del app.dependency_overrides[get_execution_handler]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _set_test_env() -> Tuple[str, str]:
+    """
+    Session-wide: ensure test creds exist in the environment exactly once,
+    without using the function-scoped 'monkeypatch'.
+    """
+    user = os.environ.get("APP_TEST_USER") or "test_user"
+    password = os.environ.get("APP_TEST_PASSWORD") or secrets.token_urlsafe(24)
+    os.environ["APP_TEST_USER"] = user
+    os.environ["APP_TEST_PASSWORD"] = password
+    return user, password
+
+
+@pytest.fixture()
+def test_creds(_set_test_env: Tuple[str, str]) -> Tuple[str, str]:
+    """
+    Function-scoped handle for tests that need the values.
+    Reads from env guaranteed by '_set_test_env'.
+    """
+    return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]

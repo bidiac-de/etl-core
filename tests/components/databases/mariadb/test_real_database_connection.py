@@ -13,11 +13,11 @@ Test database configuration:
 
 import pytest
 
-from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.credentials import Credentials
+from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
 
 
 class TestRealDatabaseConnection:
@@ -58,7 +58,7 @@ class TestRealDatabaseConnection:
         """Test that we can establish a connection to the database."""
         try:
             # Import here to avoid import errors if MariaDB is not available
-            from src.etl_core.components.databases.sql_connection_handler import (
+            from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
             from sqlalchemy import text
@@ -100,7 +100,7 @@ class TestRealDatabaseConnection:
     def test_can_read_from_database(self, real_context, test_table_name):
         """Test that we can read data from the database."""
         try:
-            from src.etl_core.components.databases.sql_connection_handler import (
+            from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
             from sqlalchemy import text
@@ -147,7 +147,7 @@ class TestRealDatabaseConnection:
                 read_comp = MariaDBRead(
                     name="test_real_read",
                     description="Test real database read",
-                    comp_type="database",
+                    comp_type="read_mariadb",
                     database="etl_core",
                     entity_name=test_table_name,
                     query=f"SELECT * FROM {test_table_name} ORDER BY id",
@@ -179,7 +179,7 @@ class TestRealDatabaseConnection:
         write_comp = MariaDBWrite(
             name="test_real_write",
             description="Test real database write",
-            comp_type="database",
+            comp_type="write_mariadb",
             database="etl_core",
             entity_name=test_table_name,
             credentials_id=1,
@@ -198,7 +198,7 @@ class TestRealDatabaseConnection:
     def test_database_operations_workflow(self, real_context, test_table_name):
         """Test complete workflow: create table, insert data, read data."""
         try:
-            from src.etl_core.components.databases.sql_connection_handler import (
+            from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
             from sqlalchemy import text
@@ -271,10 +271,10 @@ class TestRealDatabaseConnection:
     def test_connection_pool_settings(self, real_credentials):
         """Test that connection pool settings work correctly."""
         try:
-            from src.etl_core.components.databases.sql_connection_handler import (
+            from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
-            from src.etl_core.components.databases.pool_args import (
+            from etl_core.components.databases.pool_args import (
                 build_sql_engine_kwargs,
             )
             from sqlalchemy import text
@@ -327,7 +327,7 @@ class TestRealDatabaseConnection:
     @pytest.mark.skip(reason="Wird gerade manuell deaktiviert")
     def test_connection_error_handling(self, real_context):
         """Test connection error handling with invalid credentials."""
-        from src.etl_core.components.databases.sql_connection_handler import (
+        from etl_core.components.databases.sql_connection_handler import (
             SQLConnectionHandler,
         )
 
@@ -409,7 +409,7 @@ class TestRealDatabaseConnection:
     def test_show_test_data(self, real_context):
         """Test to show what data was created during the tests."""
         try:
-            from src.etl_core.components.databases.sql_connection_handler import (
+            from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
             from sqlalchemy import text
@@ -474,7 +474,7 @@ class TestRealDatabaseConnection:
     def test_cleanup_test_data(self, real_context):
         """Clean up test data after all tests."""
         try:
-            from src.etl_core.components.databases.sql_connection_handler import (
+            from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
             from sqlalchemy import text

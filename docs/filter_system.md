@@ -141,7 +141,7 @@ The system supports unlimited nesting of logical operators:
 # Rule: age > 18
 # Row: {"age": None} -> Result: False (filtered out)
 
-# Rule: status == "active"  
+# Rule: status == "active"
 # Row: {"status": None} -> Result: False (filtered out)
 ```
 

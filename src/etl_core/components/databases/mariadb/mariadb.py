@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from src.etl_core.components.databases.sql_database import SQLDatabaseComponent
+from etl_core.components.databases.sql_database import SQLDatabaseComponent
 
 
 class MariaDBComponent(SQLDatabaseComponent):
