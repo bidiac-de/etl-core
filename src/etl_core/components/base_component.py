@@ -73,17 +73,26 @@ class Component(ComponentBase, ABC):
             return
         if isinstance(payload, dict):
             validate_row_against_schema(
-                payload, schema, schema_name=schema_name, path_separator=self._schema_path_separator
+                payload,
+                schema,
+                schema_name=schema_name,
+                path_separator=self._schema_path_separator,
             )
             return
         if isinstance(payload, pd.DataFrame):
             validate_dataframe_against_schema(
-                payload, schema, schema_name=schema_name, path_separator=self._schema_path_separator
+                payload,
+                schema,
+                schema_name=schema_name,
+                path_separator=self._schema_path_separator,
             )
             return
         if isinstance(payload, dd.DataFrame):
             validate_dask_dataframe_against_schema(
-                payload, schema, schema_name=schema_name, path_separator=self._schema_path_separator
+                payload,
+                schema,
+                schema_name=schema_name,
+                path_separator=self._schema_path_separator,
             )
             return
         raise TypeError(
