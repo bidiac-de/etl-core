@@ -8,6 +8,7 @@ from etl_core.persistance.base_models.dataclasses_base import MetaDataBase
 from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
 from etl_core.components.wiring.ports import EdgeRef
+from etl_core.utils.common_helpers import assert_unique
 
 
 def _known_component_types() -> Set[str]:
@@ -97,7 +98,7 @@ class JobConfig(JobBase):
         """
         valid_types = _known_component_types()
         _assert_known_types(self.components, valid_types)
-        _assert_unique_names(self.components)
+        assert_unique([c.name for c in self.components], context="component names")
         _assert_routes_point_to_existing(self.components)
         return self
 
