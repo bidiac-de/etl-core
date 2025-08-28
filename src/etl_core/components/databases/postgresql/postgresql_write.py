@@ -25,7 +25,7 @@ class PostgreSQLWrite(PostgreSQLComponent):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    if_exists: str = Field(default="append", description="How to behave if the table already exists")
+
 
     @model_validator(mode="after")
     def _build_objects(self):
