@@ -1,5 +1,4 @@
 from typing import List, Dict, Tuple, Any, Set, Self
-from collections import Counter
 from etl_core.components.dataclasses import MetaData
 from pydantic import (
     Field,
@@ -13,6 +12,7 @@ from etl_core.components.base_component import Component, get_strategy
 from etl_core.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
 from etl_core.persistance.base_models.job_base import JobBase
 from etl_core.components.wiring.ports import EdgeRef
+from etl_core.utils.common_helpers import assert_unique
 from uuid import uuid4
 import logging
 
@@ -54,7 +54,7 @@ class RuntimeJob(JobBase):
           - required/fanin on inputs
           - schema presence for all *used* ports
         """
-        self._ensure_unique_names()
+        assert_unique([c.name for c in self.components], context="component names")
         name_map = self._build_name_map()
         self._reset_runtime_links()
 
@@ -62,12 +62,6 @@ class RuntimeJob(JobBase):
         self._enforce_contracts(incoming)
 
         return self
-
-    def _ensure_unique_names(self) -> None:
-        counts = Counter(c.name for c in self.components)
-        dupes = [name for name, cnt in counts.items() if cnt > 1]
-        if dupes:
-            raise ValueError(f"Duplicate component names: {sorted(dupes)}")
 
     def _build_name_map(self) -> Dict[str, Component]:
         return {c.name: c for c in self.components}

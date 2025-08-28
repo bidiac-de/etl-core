@@ -6,9 +6,9 @@ import dask.dataframe as dd
 import pandas as pd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.component_registry import register_component
-from src.etl_core.components.databases.mariadb.mariadb import MariaDBComponent
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.components.component_registry import register_component
+from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec
 from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver

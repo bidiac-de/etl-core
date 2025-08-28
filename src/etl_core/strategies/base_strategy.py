@@ -21,7 +21,7 @@ class ExecutionStrategy(BaseModel, ABC):
         component: "Component",
         payload: Any,
         metrics: ComponentMetrics,
-    ) -> AsyncIterator[Out]:  # <-- align with subclasses
+    ) -> AsyncIterator[Out]:
         """
         Stream through the component logic, yielding native outputs.
         """

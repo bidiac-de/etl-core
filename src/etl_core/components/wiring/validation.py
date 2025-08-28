@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List
 
 import pandas as pd
 import dask.dataframe as dd
 
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
+from etl_core.utils.common_helpers import (
+    required_names,
+    child_map,
+    leaf_field_paths_with_defs,
+    type_ok_scalar,
+    enum_ok,
+    ensure_df_columns,
+)
 
 
 @dataclass(frozen=True)
@@ -17,35 +25,6 @@ class _Ctx:
 
 
 # tiny helpers
-
-
-def _is_null(v: Any) -> bool:
-    return v is None
-
-
-def _type_ok_scalar(v: Any, fd: FieldDef) -> bool:
-    if _is_null(v):
-        return fd.nullable
-
-    t = fd.data_type
-    if t == DataType.STRING or t == DataType.PATH:
-        return isinstance(v, str)
-    if t == DataType.INTEGER:
-        return isinstance(v, int) and not isinstance(v, bool)
-    if t == DataType.FLOAT:
-        return isinstance(v, (float, int)) and not isinstance(v, bool)
-    if t == DataType.BOOLEAN:
-        return isinstance(v, bool)
-    if t == DataType.ENUM:
-        # enums accept primitive scalars
-        return isinstance(v, (str, int, float, bool)) or v is None
-    return True
-
-
-def _enum_ok(v: Any, fd: FieldDef) -> bool:
-    if fd.data_type != DataType.ENUM or _is_null(v) or not fd.enum_values:
-        return True
-    return str(v) in set(fd.enum_values or [])
 
 
 def _require_map(obj: Any, ctx: _Ctx, path: str) -> Dict[str, Any]:
@@ -58,39 +37,6 @@ def _require_list(obj: Any, ctx: _Ctx, path: str) -> List[Any]:
     if not isinstance(obj, list):
         raise ValueError(f"{ctx.schema_name}: '{path}' must be an array (list)")
     return obj
-
-
-# schema walking for nested structures
-
-
-def _required_names(children: Sequence[FieldDef]) -> Set[str]:
-    return {c.name for c in children if not c.nullable}
-
-
-def _child_map(children: Sequence[FieldDef]) -> Dict[str, FieldDef]:
-    return {c.name: c for c in children}
-
-
-def _leaf_field_paths(
-    fields: Sequence[FieldDef],
-    sep: str,
-    prefix: Optional[str] = None,
-) -> List[Tuple[str, FieldDef]]:
-    """
-    Produce (flattened_path, fielddef) for **scalar/enum** leaves.
-    Arrays of scalars are considered leaves too (validate row-wise only).
-    """
-    out: List[Tuple[str, FieldDef]] = []
-    for f in fields:
-        p = f"{prefix}{sep}{f.name}" if prefix else f.name
-        if f.data_type == DataType.OBJECT and f.children:
-            out.extend(_leaf_field_paths(f.children, sep, p))
-        elif f.data_type == DataType.ARRAY and f.item:
-            # Arrays are leaves for the df view, elements validated in row mode.
-            out.append((p, f))
-        else:
-            out.append((p, f))
-    return out
 
 
 # row validation helpers
@@ -110,8 +56,8 @@ def _validate_object_row(value: Any, fd: FieldDef, ctx: _Ctx, path: str) -> None
             raise ValueError(f"{ctx.schema_name}: '{path}' is required (object)")
         return
 
-    req = _required_names(fd.children or [])
-    fm = _child_map(fd.children or [])
+    req = required_names(fd.children or [])
+    fm = child_map(fd.children or [])
     missing = sorted([n for n in req if n not in obj])
     if missing:
         raise ValueError(f"{ctx.schema_name}: '{path}' missing fields {missing}")
@@ -151,12 +97,12 @@ def _validate_scalar_row(value: Any, fd: FieldDef, ctx: _Ctx, path: str) -> None
     Validate scalar/enum leaves.
     We first check python-level type compatibility, then enum domain membership.
     """
-    if not _type_ok_scalar(value, fd):
+    if not type_ok_scalar(value, fd):
         tname = type(value).__name__
         raise ValueError(
             f"{ctx.schema_name}: '{path}' expected {fd.data_type}, got {tname}"
         )
-    if not _enum_ok(value, fd):
+    if not enum_ok(value, fd):
         raise ValueError(
             f"{ctx.schema_name}: '{path}' must be one of {fd.enum_values}, "
             f"got {value!r}"
@@ -200,8 +146,8 @@ def validate_row_against_schema(
     ctx = _Ctx(schema_name=schema_name, sep=path_separator)
     root = _require_map(payload, ctx, "$")
 
-    req = _required_names(schema.fields)
-    fmap = _child_map(schema.fields)
+    req = required_names(schema.fields)
+    fmap = child_map(schema.fields)
     missing = sorted([n for n in req if n not in root])
     if missing:
         raise ValueError(f"{schema_name}: missing required fields {missing}")
@@ -213,28 +159,6 @@ def validate_row_against_schema(
         _validate_value_row(root.get(k), sub, ctx, k)
 
 
-def _ensure_df_columns(
-    df_cols: Iterable[str],
-    schema: Schema,
-    *,
-    schema_name: str,
-    sep: str,
-) -> None:
-    """
-    DataFrames are flat: we validate against **flattened** leaf paths.
-    Arrays are treated as single columns at path 'a.b' that typically hold
-    JSON-like lists; we won't type-validate array elements in df-mode.
-    """
-    leaf_paths = [p for p, _ in _leaf_field_paths(schema.fields, sep)]
-    missing = sorted([c for c in leaf_paths if c not in df_cols])
-    if missing:
-        raise ValueError(f"{schema_name}: missing required columns {missing}")
-
-    extras = sorted([c for c in df_cols if c not in leaf_paths])
-    if extras:
-        raise ValueError(f"{schema_name}: unknown columns present {extras}")
-
-
 def _enum_and_null_checks_pandas(
     df: pd.DataFrame,
     schema: Schema,
@@ -242,7 +166,7 @@ def _enum_and_null_checks_pandas(
     schema_name: str,
     sep: str,
 ) -> None:
-    for path, fd in _leaf_field_paths(schema.fields, sep):
+    for path, fd in leaf_field_paths_with_defs(schema.fields, sep):
         s = df[path]
         if not fd.nullable and s.isna().any():
             raise ValueError(f"{schema_name}: column '{path}' contains nulls")
@@ -270,7 +194,7 @@ def validate_dataframe_against_schema(
       * non-null for non-nullable leaves
       * enum membership
     """
-    _ensure_df_columns(df.columns, schema, schema_name=schema_name, sep=path_separator)
+    ensure_df_columns(df.columns, schema, schema_name=schema_name, sep=path_separator)
     _enum_and_null_checks_pandas(
         df, schema, schema_name=schema_name, sep=path_separator
     )
@@ -283,7 +207,7 @@ def _enum_and_null_checks_dask(
     schema_name: str,
     sep: str,
 ) -> None:
-    for path, fd in _leaf_field_paths(schema.fields, sep):
+    for path, fd in leaf_field_paths_with_defs(schema.fields, sep):
         s = ddf[path]
         if not fd.nullable and s.isna().any().compute():
             raise ValueError(f"{schema_name}: column '{path}' contains nulls")
@@ -307,21 +231,5 @@ def validate_dask_dataframe_against_schema(
     """
     Same as pandas but computed lazily. Columns are compared to flattened leaves.
     """
-    _ensure_df_columns(ddf.columns, schema, schema_name=schema_name, sep=path_separator)
+    ensure_df_columns(ddf.columns, schema, schema_name=schema_name, sep=path_separator)
     _enum_and_null_checks_dask(ddf, schema, schema_name=schema_name, sep=path_separator)
-
-
-def get_leaf_field_map(
-    schema: Schema,
-    *,
-    path_separator: str = ".",
-) -> Dict[str, FieldDef]:
-    """
-    Public helper for components: return a mapping of flattened leaf paths to
-    FieldDef, reusing the same leaf-flattening logic as our dataframe validators.
-    Arrays are considered leaves at their flattened path.
-    """
-    field_map = {}
-    for path, fd in _leaf_field_paths(schema.fields, path_separator):
-        field_map[path] = fd
-    return field_map

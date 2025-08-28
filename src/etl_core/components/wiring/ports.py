@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, List, Literal, Sequence
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,38 +34,6 @@ class InPortSpec(BaseModel):
     fanin: Fanin = Field(
         default="many", description="If 'one', enforce exactly 1 upstream edge."
     )
-
-
-class DeclaresOutPorts:
-    """
-    Mixin: components declare output ports in PORTS.
-    """
-
-    OUTPUT_PORTS: ClassVar[Sequence[OutPortSpec]] = ()
-
-    @classmethod
-    def expected_ports(cls) -> List[OutPortSpec]:
-        return list(cls.OUTPUT_PORTS)
-
-    @classmethod
-    def expected_port_names(cls) -> List[str]:
-        return [p.name for p in cls.OUTPUT_PORTS]
-
-
-class DeclaresInPorts:
-    """
-    Mixin: components declare input ports in INPUT_PORTS.
-    """
-
-    INPUT_PORTS: ClassVar[Sequence[InPortSpec]] = ()
-
-    @classmethod
-    def expected_in_ports(cls) -> List[InPortSpec]:
-        return list(cls.INPUT_PORTS)
-
-    @classmethod
-    def expected_in_port_names(cls) -> List[str]:
-        return [p.name for p in cls.INPUT_PORTS]
 
 
 class EdgeRef(BaseModel):
