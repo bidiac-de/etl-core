@@ -161,6 +161,33 @@ class TestFileExists:
 
     def test_file_exists_symlink(self):
         """Test file_exists with symbolic link."""
+        import platform
+        import sys
+        
+        # Skip symlink test on Windows if we don't have permission
+        if platform.system() == "Windows":
+            try:
+                # Test if we can create symlinks on Windows
+                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    temp_path = temp_file.name
+                    symlink_path = temp_path + "_link"
+                    
+                    # Try to create a symlink to test permissions
+                    os.symlink(temp_path, symlink_path)
+                    os.unlink(symlink_path)  # Clean up test symlink
+                    os.unlink(temp_path)      # Clean up test file
+                    
+                    # If we get here, we have permission - run the full test
+                    can_create_symlinks = True
+            except (OSError, PermissionError):
+                # No permission for symlinks on Windows - skip this test
+                pytest.skip("Windows: No permission to create symlinks (run as Administrator or enable Developer Mode)")
+                return
+        else:
+            # On Linux/macOS, symlinks should work
+            can_create_symlinks = True
+        
+        # Run the actual symlink test
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = temp_file.name
 

@@ -68,15 +68,21 @@ class FilterReceiver(Receiver):
             # yield an empty frame if nothing matches
             yield dataframe.iloc[0:0].copy()
 
+    def _filter_partition(self, pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
+        """Apply filter rule to a pandas DataFrame partition."""
+        return self._apply_filter(pdf, rule)
+
     async def process_bigdata(
         self,
         ddf: dd.DataFrame,
         rule: ComparisonRule,
         metrics: FilterMetrics,
     ) -> AsyncGenerator[dd.DataFrame, None]:
-        # Use a lambda to capture the rule parameter for the static method
+        # Use a partial function to bind the rule parameter to the instance method
+        from functools import partial
+        
         filtered = ddf.map_partitions(
-            lambda pdf: self._apply_filter(pdf, rule),
+            partial(self._filter_partition, rule=rule),
             meta=make_meta(ddf),
         )
 
