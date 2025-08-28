@@ -15,7 +15,7 @@ class BigDataExecutionStrategy(ExecutionStrategy):
     containing the dask dataframe.
     """
 
-    async def execute(  # noqa: D401
+    async def execute(
         self,
         component: "Component",
         payload: Any,

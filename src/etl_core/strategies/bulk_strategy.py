@@ -15,7 +15,7 @@ class BulkExecutionStrategy(ExecutionStrategy):
     containing the pandas dataframe.
     """
 
-    async def execute(  # noqa: D401
+    async def execute(
         self,
         component: "Component",
         payload: Any,
