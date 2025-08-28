@@ -13,7 +13,6 @@ from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreS
 class PostgreSQLRead(PostgreSQLComponent):
     """PostgreSQL reader supporting row, bulk, and bigdata modes."""
 
-    query: str = Field(..., description="SQL query to execute")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 
     @model_validator(mode="after")

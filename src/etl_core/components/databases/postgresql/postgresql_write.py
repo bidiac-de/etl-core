@@ -13,8 +13,6 @@ from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreS
 class PostgreSQLWrite(PostgreSQLComponent):
     """PostgreSQL writer supporting row, bulk, and bigdata modes."""
 
-    query: str = Field(default="", description="Custom INSERT query (optional)")
-    strategy_type: str = Field(default="bulk", description="Execution strategy type")
     batch_size: int = Field(default=1000, description="Batch size for bulk operations")
 
     @model_validator(mode="after")

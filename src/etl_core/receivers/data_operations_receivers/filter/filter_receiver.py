@@ -24,6 +24,12 @@ class FilterReceiver(Receiver):
     Metrics are forwarded unchanged (execution layer does the accounting).
     """
 
+    @staticmethod
+    def _apply_filter(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
+        """Apply filter rule to a pandas DataFrame partition."""
+        mask = eval_rule_on_frame(pdf, rule)
+        return pdf[mask]
+
     async def process_row(
         self,
         row: Dict[str, Any],
@@ -67,12 +73,9 @@ class FilterReceiver(Receiver):
         rule: ComparisonRule,
         metrics: FilterMetrics,
     ) -> AsyncGenerator[dd.DataFrame, None]:
-        def _apply(pdf: pd.DataFrame) -> pd.DataFrame:
-            mask = eval_rule_on_frame(pdf, rule)
-            return pdf[mask]
-
+        # Use a lambda to capture the rule parameter for the static method
         filtered = ddf.map_partitions(
-            _apply,
+            lambda pdf: self._apply_filter(pdf, rule),
             meta=make_meta(ddf),
         )
 
