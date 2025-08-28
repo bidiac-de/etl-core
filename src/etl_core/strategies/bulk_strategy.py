@@ -2,8 +2,7 @@ from typing import Any, AsyncIterator, TYPE_CHECKING
 
 from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-
-import pandas as pd
+from etl_core.components.envelopes import Out
 
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
@@ -12,7 +11,8 @@ if TYPE_CHECKING:
 class BulkExecutionStrategy(ExecutionStrategy):
     """
     Streaming bulk mode:
-    Calls component.receiver.process_bulk once and yields the DataFrame.
+    Calls component.receiver.process_bulk once and yields an envelope
+    containing the pandas dataframe.
     """
 
     async def execute(
@@ -20,6 +20,10 @@ class BulkExecutionStrategy(ExecutionStrategy):
         component: "Component",
         payload: Any,
         metrics: ComponentMetrics,
-    ) -> AsyncIterator[pd.DataFrame]:
-        async for df in component.process_bulk(payload, metrics):
-            yield df
+    ) -> AsyncIterator[Out]:
+        async for item in component.process_bulk(payload, metrics):
+            if not isinstance(item, Out):
+                raise TypeError(
+                    f"{component.name}.process_bulk must yield Out(port, payload)"
+                )
+            yield item

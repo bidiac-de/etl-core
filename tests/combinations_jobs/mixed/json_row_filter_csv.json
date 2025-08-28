@@ -10,7 +10,13 @@
       "comp_type": "read_json",
       "description": "NDJSON in (row)",
       "filepath": "__IN__",
-      "next": ["flt"]
+      "routes": { "out": [ { "to": "flt", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
     },
     {
       "name": "flt",
@@ -23,13 +29,32 @@
           { "column": "name", "operator": "==", "value": "Charlie" }
         ]
       },
-      "next": ["writer"]
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "pass": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "pass": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
     },
     {
       "name": "writer",
       "comp_type": "write_csv",
       "description": "CSV out",
-      "filepath": "__OUT__"
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
     }
   ]
 }

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 import dask.dataframe as dd
 import pytest
@@ -6,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from pandas.testing import assert_frame_equal
 
-
+from etl_core.components.envelopes import Out
 from etl_core.components.data_operations.filter.filter_component import FilterComponent
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
 from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics import (
@@ -41,21 +43,30 @@ async def test_filter_component_row(metrics: FilterMetrics) -> None:
         {"id": 3, "name": "Alice"},
     ]
 
-    out: List[Dict[str, Any]] = []
-    for row in rows_in:
-        async for r in comp.process_row(row=row, metrics=metrics):
-            out.append(r)
+    passed: List[Dict[str, Any]] = []
+    failed: List[Dict[str, Any]] = []
 
-    assert [r["id"] for r in out] == [1, 3]
-    assert all(r["name"] == "Alice" for r in out)
-    assert metrics.lines_dismissed == 1
+    for row in rows_in:
+        async for out in comp.process_row(row=row, metrics=metrics):
+            assert isinstance(out, Out)
+            if out.port == "pass":
+                passed.append(out.payload)
+            elif out.port == "fail":
+                failed.append(out.payload)
+            else:
+                pytest.fail(f"Unexpected port {out.port!r}")
+
+    assert [r["id"] for r in passed] == [1, 3]
+    assert all(r["name"] == "Alice" for r in passed)
+    assert [r["id"] for r in failed] == [2]
+
+    assert metrics.lines_received == 3
     assert metrics.lines_forwarded == 2
+    assert metrics.lines_dismissed == 1
 
 
 @pytest.mark.asyncio
-async def test_filter_component_bulk_keeps_rows_meeting_rule(
-    metrics: FilterMetrics,
-) -> None:
+async def test_filter_component_bulk_splits_frames(metrics: FilterMetrics) -> None:
     comp = FilterComponent(
         name="Filter bulk",
         description="bulk path",
@@ -68,32 +79,49 @@ async def test_filter_component_bulk_keeps_rows_meeting_rule(
         pd.DataFrame([{"id": 3, "name": "C"}]),
     ]
 
-    parts = []
-    for frame in frames:
-        parts.extend(
-            [df async for df in comp.process_bulk(dataframe=frame, metrics=metrics)]
-        )
+    pass_parts: List[pd.DataFrame] = []
+    fail_parts: List[pd.DataFrame] = []
 
-    out_df = (
-        pd.concat(parts, ignore_index=True)
-        if parts
+    for frame in frames:
+        async for out in comp.process_bulk(dataframe=frame, metrics=metrics):
+            assert isinstance(out, Out)
+            if out.port == "pass":
+                pass_parts.append(out.payload)
+            elif out.port == "fail":
+                fail_parts.append(out.payload)
+            else:
+                pytest.fail(f"Unexpected port {out.port!r}")
+
+    passed = (
+        pd.concat(pass_parts, ignore_index=True)
+        if pass_parts
+        else pd.DataFrame(columns=["id", "name"])
+    )
+    failed = (
+        pd.concat(fail_parts, ignore_index=True)
+        if fail_parts
         else pd.DataFrame(columns=["id", "name"])
     )
 
-    expected = pd.DataFrame([{"id": 2, "name": "B"}, {"id": 3, "name": "C"}])
+    expected_pass = pd.DataFrame([{"id": 2, "name": "B"}, {"id": 3, "name": "C"}])
+    expected_fail = pd.DataFrame([{"id": 1, "name": "A"}])
 
-    out_df_sorted = out_df.sort_values(["id", "name"]).reset_index(drop=True)
-    expected_sorted = expected.sort_values(["id", "name"]).reset_index(drop=True)
-    assert_frame_equal(out_df_sorted, expected_sorted)
+    assert_frame_equal(
+        passed.sort_values(["id", "name"]).reset_index(drop=True),
+        expected_pass.sort_values(["id", "name"]).reset_index(drop=True),
+    )
+    assert_frame_equal(
+        failed.sort_values(["id", "name"]).reset_index(drop=True),
+        expected_fail.sort_values(["id", "name"]).reset_index(drop=True),
+    )
 
-    assert metrics.lines_dismissed == 1
+    assert metrics.lines_received == 3
     assert metrics.lines_forwarded == 2
+    assert metrics.lines_dismissed == 1
 
 
 @pytest.mark.asyncio
-async def test_filter_component_bigdata_filters_expected_names(
-    metrics: FilterMetrics,
-) -> None:
+async def test_filter_component_bigdata_splits_ddf(metrics: FilterMetrics) -> None:
     comp = FilterComponent(
         name="Filter big",
         description="bigdata path",
@@ -116,26 +144,36 @@ async def test_filter_component_bigdata_filters_expected_names(
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    outs = [d async for d in comp.process_bigdata(ddf, metrics=metrics)]
-    assert outs, "FilterComponent yielded no bigdata result"
+    pass_ddf = None
+    fail_ddf = None
 
-    result_ddf = dd.concat(outs, axis=0) if len(outs) > 1 else outs[0]
-    out = result_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
+    outs = [o async for o in comp.process_bigdata(ddf, metrics=metrics)]
+    for out in outs:
+        assert isinstance(out, Out)
+        if out.port == "pass":
+            pass_ddf = out.payload
+        elif out.port == "fail":
+            fail_ddf = out.payload
 
-    expected = (
-        pd.DataFrame(
-            [
-                {"id": 1, "name": "Alice"},
-                {"id": 3, "name": "Charlie"},
-            ]
-        )
+    assert pass_ddf is not None and fail_ddf is not None
+
+    passed = pass_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
+    failed = fail_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
+
+    expected_pass = (
+        pd.DataFrame([{"id": 1, "name": "Alice"}, {"id": 3, "name": "Charlie"}])
+        .sort_values(["id", "name"])
+        .reset_index(drop=True)
+    )
+    expected_fail = (
+        pd.DataFrame([{"id": 2, "name": "Bob"}])
         .sort_values(["id", "name"])
         .reset_index(drop=True)
     )
 
-    expected = expected.astype({col: out[col].dtype for col in expected.columns})
+    assert_frame_equal(passed, expected_pass, check_dtype=False)
+    assert_frame_equal(failed, expected_fail, check_dtype=False)
 
-    assert_frame_equal(out, expected)
-
-    assert metrics.lines_dismissed == 1
+    assert metrics.lines_received == 3
     assert metrics.lines_forwarded == 2
+    assert metrics.lines_dismissed == 1

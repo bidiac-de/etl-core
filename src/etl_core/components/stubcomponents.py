@@ -4,12 +4,12 @@ from typing import Any, AsyncIterator, Dict, ClassVar
 
 from pydantic import PrivateAttr
 
-from src.etl_core.components.base_component import Component
-from src.etl_core.components.component_registry import register_component
-from src.etl_core.components.envelopes import Out
-from src.etl_core.components.wiring.ports import InPortSpec, OutPortSpec
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.receivers.base_receiver import Receiver
+from etl_core.components.base_component import Component
+from etl_core.components.component_registry import register_component
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.base_receiver import Receiver
+from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
 import pandas as pd
 import dask.dataframe as dd
@@ -17,17 +17,18 @@ import dask.dataframe as dd
 
 class StubReceiver(Receiver):
     def execute(self, data: Any, **kwargs: Any) -> Any:
+        # trivial pass-through
         return data
 
 
-@register_component("test")
+@register_component("test", hidden=True)
 class StubComponent(Component):
     """
     Basic echo component with one explicit input and one explicit output.
     Declares per-port schemas via `in_schema` / `out_schema` mapped during build.
     """
 
-    # Explicit ports: no implicit single-input
+    # Explicit ports:
     INPUT_PORTS = (InPortSpec(name="in"),)
     OUTPUT_PORTS = (OutPortSpec(name="out"),)
 
@@ -37,17 +38,17 @@ class StubComponent(Component):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
+        self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """
         Echo a single row and bump the counter. Always yield an Out envelope.
         """
         metrics.lines_received += 1
-        payload: Dict[str, Any] = row if isinstance(row, dict) else {"value": row}
+        payload = row if isinstance(row, dict) else {"id": 1}
         yield Out("out", payload)
 
     async def process_bulk(
-            self, data: pd.DataFrame, metrics: ComponentMetrics
+        self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """
         Trivial bulk implementation so BulkExecutionStrategy's envelope check passes.
@@ -56,7 +57,7 @@ class StubComponent(Component):
         yield Out("out", data)
 
     async def process_bigdata(
-            self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
+        self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """
         Trivial bigdata implementation so BigDataExecutionStrategy's
@@ -65,7 +66,7 @@ class StubComponent(Component):
         yield Out("out", chunk_iterable)
 
 
-@register_component("failtest")
+@register_component("failtest", hidden=True)
 class FailStubComponent(StubComponent):
     """
     Fails immediately while preserving async-generator
@@ -77,7 +78,7 @@ class FailStubComponent(StubComponent):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
+        self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         # keep generator type (no actual yield executed)
         for _ in ():
@@ -85,7 +86,7 @@ class FailStubComponent(StubComponent):
         raise RuntimeError("fail stubcomponent failed")
 
 
-@register_component("stub_fail_once")
+@register_component("stub_fail_once", hidden=True)
 class StubFailOnce(StubComponent):
     """
     Fails the first time, succeeds on the next try.
@@ -98,7 +99,7 @@ class StubFailOnce(StubComponent):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
+        self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         if not self._called:
             self._called = True
@@ -107,10 +108,10 @@ class StubFailOnce(StubComponent):
             raise RuntimeError("fail first time")
 
         metrics.lines_received += 1
-        yield Out("out", {"recovered": True})
+        yield Out("out", {"id": 1})
 
 
-@register_component("multi_source")
+@register_component("multi_source", hidden=True)
 class MultiSource(StubComponent):
     """
     True source component: no input ports, only an output.
@@ -129,27 +130,27 @@ class MultiSource(StubComponent):
         return self
 
     async def process_row(
-            self, payload: Any, metrics: ComponentMetrics
+        self, payload: Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         for i in range(self.count):
             metrics.lines_received = i + 1
-            yield Out("out", {"source": self.name, "index": i})
+            yield Out("out", {"id": i})
 
     async def process_bulk(
-            self, data: pd.DataFrame, metrics: ComponentMetrics
+        self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         yield Out("out", data)
 
     async def process_bigdata(
-            self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
+        self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         yield Out("out", chunk_iterable)
 
 
-@register_component("multi_echo")
+@register_component("multi_echo", hidden=True)
 class MultiEcho(StubComponent):
     """
-    Echoes each received row downstream using the receiver.
+    Echoes each received row downstream; used by pipeline tests.
     """
 
     def _build_objects(self) -> "MultiEcho":
@@ -157,25 +158,24 @@ class MultiEcho(StubComponent):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
+        self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
-        payload: Dict[str, Any] = row if isinstance(row, dict) else {"value": row}
-        echoed = self.receiver.execute(payload)
+        echoed = self.receiver.execute(row)
         yield Out("out", echoed)
 
     async def process_bulk(
-            self, data: pd.DataFrame, metrics: ComponentMetrics
+        self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         yield Out("out", data)
 
     async def process_bigdata(
-            self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
+        self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         yield Out("out", chunk_iterable)
 
 
-@register_component("test_source_dynamic_ports")
+@register_component("test_source_dynamic_ports", hidden=True)
 class TestSource(Component):
     """
     Simple source that emits a few rows.
@@ -192,15 +192,15 @@ class TestSource(Component):
         return self
 
     def ensure_schemas_for_used_ports(
-            self,
-            used_in_ports: Dict[str, int],
-            used_out_ports: Dict[str, int],
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
     ) -> None:
         # tests focus on port behavior; skip schema enforcement
         return
 
     async def process_row(
-            self, payload: Any, metrics: ComponentMetrics
+        self, payload: Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         for i in range(self.count):
             metrics.lines_received = i + 1
@@ -216,7 +216,7 @@ class TestSource(Component):
             yield Out("out_bigdata", None)
 
 
-@register_component("test_router_dynamic_ports")
+@register_component("test_router_dynamic_ports", hidden=True)
 class TestRouter(Component):
     """
     Router that sends row to Out(row['status'], row).
@@ -231,14 +231,14 @@ class TestRouter(Component):
         return self
 
     def ensure_schemas_for_used_ports(
-            self,
-            used_in_ports: Dict[str, int],
-            used_out_ports: Dict[str, int],
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
     ) -> None:
         return
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
         port = row.get("status", "default")
@@ -253,7 +253,7 @@ class TestRouter(Component):
             yield Out("unused_bigdata", None)
 
 
-@register_component("test_sink_dynamic_ports")
+@register_component("test_sink_dynamic_ports", hidden=True)
 class TestSink(Component):
     """
     Sink with a single input port "in". No outputs needed for these tests.
@@ -266,14 +266,14 @@ class TestSink(Component):
         return self
 
     def ensure_schemas_for_used_ports(
-            self,
-            used_in_ports: Dict[str, int],
-            used_out_ports: Dict[str, int],
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
     ) -> None:
         return
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
         for _ in ():
@@ -288,7 +288,7 @@ class TestSink(Component):
             yield Out("unused_bigdata", None)
 
 
-@register_component("test_merge_dynamic_inputs")
+@register_component("test_merge_dynamic_inputs", hidden=True)
 class TestMerge(Component):
     """
     Component with dynamic input ports (extra_input_ports).
@@ -302,14 +302,14 @@ class TestMerge(Component):
         return self
 
     def ensure_schemas_for_used_ports(  # type: ignore[override]
-            self,
-            used_in_ports: Dict[str, int],
-            used_out_ports: Dict[str, int],
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
     ) -> None:
         return
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         metrics.lines_received += 1
         for _ in ():

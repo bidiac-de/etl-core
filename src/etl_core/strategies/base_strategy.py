@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, TYPE_CHECKING
+from etl_core.components.envelopes import Out
 
 from pydantic import BaseModel
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -20,7 +21,8 @@ class ExecutionStrategy(BaseModel, ABC):
         component: "Component",
         payload: Any,
         metrics: ComponentMetrics,
-    ) -> AsyncIterator[Any]:
+    ) -> AsyncIterator[Out]:
         """
         Stream through the component logic, yielding native outputs.
         """
+        raise NotImplementedError

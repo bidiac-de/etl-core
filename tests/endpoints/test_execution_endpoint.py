@@ -28,13 +28,27 @@ def test_start_execution_minimal_ok(client: TestClient, shared_job_handler) -> N
 
 
 def test_start_execution_simple_chain_ok(
-    client: TestClient, shared_job_handler
+    client: TestClient, shared_job_handler, schema_row_min
 ) -> None:
-    # Real handler, real components (assumes 'test' component is registered)
+    # Real handler, real test components
     cfg = JobConfig(
         components=[
-            {"comp_type": "test", "name": "a", "description": "", "next": ["b"]},
-            {"comp_type": "test", "name": "b", "description": "", "next": []},
+            {
+                "comp_type": "test",
+                "name": "a",
+                "description": "",
+                "routes": {"out": ["b"]},
+                "in_port_schemas": {"in": schema_row_min},
+                "out_port_schemas": {"out": schema_row_min},
+            },
+            {
+                "comp_type": "test",
+                "name": "b",
+                "description": "",
+                "routes": {"out": []},
+                "in_port_schemas": {"in": schema_row_min},
+                "out_port_schemas": {"out": schema_row_min},
+            },
         ]
     )
     job_id = _create_job(shared_job_handler, cfg)

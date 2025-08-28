@@ -1,17 +1,20 @@
-import pandas as pd
-import dask.dataframe as dd
-import pytest
+from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
+import dask.dataframe as dd
+import pandas as pd
+import pytest
+from pandas.testing import assert_frame_equal
+
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
 from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics import (
     FilterMetrics,
 )
 from etl_core.receivers.data_operations_receivers.filter.filter_receiver import (
     FilterReceiver,
 )
-from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
 
 
 @pytest.fixture
@@ -26,20 +29,29 @@ def metrics() -> FilterMetrics:
     )
 
 
-async def _collect_rows(
+async def _collect_rows_split(
     recv: FilterReceiver,
     rows: List[Dict[str, Any]],
     rule: ComparisonRule,
     metrics: FilterMetrics,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Feed rows one-by-one into the receiver and collect yielded rows.
+    Feed rows one-by-one and split outputs by port ('pass' / 'fail').
+    Receiver yields (port, payload) tuples now.
     """
-    out: List[Dict[str, Any]] = []
+    passed: List[Dict[str, Any]] = []
+    failed: List[Dict[str, Any]] = []
     for row in rows:
-        async for r in recv.process_row(row=row, rule=rule, metrics=metrics):
-            out.append(r)
-    return out
+        async for port, payload in recv.process_row(
+            row=row, rule=rule, metrics=metrics
+        ):
+            if port == "pass":
+                passed.append(payload)
+            elif port == "fail":
+                failed.append(payload)
+            else:
+                pytest.fail(f"Unexpected port {port!r}")
+    return passed, failed
 
 
 @pytest.mark.asyncio
@@ -54,13 +66,15 @@ async def test_filter_receiver_row_simple_equality(
     rule = ComparisonRule(column="name", operator="==", value="Alice")
 
     recv = FilterReceiver()
-    out = await _collect_rows(recv, rows, rule, metrics)
+    passed, failed = await _collect_rows_split(recv, rows, rule, metrics)
 
-    assert [r["id"] for r in out] == [1, 3]
-    assert all(r["name"] == "Alice" for r in out)
+    assert [r["id"] for r in passed] == [1, 3]
+    assert all(r["name"] == "Alice" for r in passed)
+    assert [r["id"] for r in failed] == [2]
 
     assert metrics.lines_dismissed == 1
     assert metrics.lines_forwarded == 2
+    assert metrics.lines_received == 3
 
 
 @pytest.mark.asyncio
@@ -86,12 +100,14 @@ async def test_filter_receiver_row_nested_and_or(metrics: FilterMetrics) -> None
     )
 
     recv = FilterReceiver()
-    out = await _collect_rows(recv, rows, rule, metrics)
+    passed, failed = await _collect_rows_split(recv, rows, rule, metrics)
 
-    assert [r["id"] for r in out] == [1, 2]
+    assert [r["id"] for r in passed] == [1, 2]
+    assert [r["id"] for r in failed] == [3]
 
     assert metrics.lines_dismissed == 1
     assert metrics.lines_forwarded == 2
+    assert metrics.lines_received == 3
 
 
 @pytest.mark.asyncio
@@ -108,18 +124,39 @@ async def test_filter_receiver_bulk_contains_and_not(
 
     recv = FilterReceiver()
 
-    parts = []
+    pass_parts: List[pd.DataFrame] = []
+    fail_parts: List[pd.DataFrame] = []
+
     for df in (df1, df2):
-        async for f in recv.process_bulk(dataframe=df, rule=rule, metrics=metrics):
-            parts.append(f)
+        async for port, payload in recv.process_bulk(
+            dataframe=df, rule=rule, metrics=metrics
+        ):
+            if port == "pass":
+                pass_parts.append(payload)
+            elif port == "fail":
+                fail_parts.append(payload)
+            else:
+                pytest.fail(f"Unexpected port {port!r}")
 
-    out = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+    passed = (
+        pd.concat(pass_parts, ignore_index=True)
+        if pass_parts
+        else pd.DataFrame(columns=["id", "name"])
+    )
+    failed = (
+        pd.concat(fail_parts, ignore_index=True)
+        if fail_parts
+        else pd.DataFrame(columns=["id", "name"])
+    )
 
-    assert out.shape[0] == 1
-    assert out.iloc[0]["name"] == "Bob"
+    # NOT contains 'li' keeps only 'Bob'
+    assert passed.shape[0] == 1
+    assert passed.iloc[0]["name"] == "Bob"
+    assert failed.shape[0] == 3
 
     assert metrics.lines_dismissed == 3
     assert metrics.lines_forwarded == 1
+    assert metrics.lines_received == 4
 
 
 @pytest.mark.asyncio
@@ -128,15 +165,32 @@ async def test_filter_receiver_bulk_gt(metrics: FilterMetrics) -> None:
     rule = ComparisonRule(column="id", operator=">", value=1)
 
     recv = FilterReceiver()
-    parts = []
-    async for f in recv.process_bulk(dataframe=df, rule=rule, metrics=metrics):
-        parts.append(f)
-    out = pd.concat(parts, ignore_index=True)
+    pass_parts: List[pd.DataFrame] = []
+    fail_parts: List[pd.DataFrame] = []
 
-    assert list(out["id"]) == [2, 3]
+    async for port, payload in recv.process_bulk(
+        dataframe=df, rule=rule, metrics=metrics
+    ):
+        if port == "pass":
+            pass_parts.append(payload)
+        elif port == "fail":
+            fail_parts.append(payload)
+        else:
+            pytest.fail(f"Unexpected port {port!r}")
+
+    passed = pd.concat(pass_parts, ignore_index=True)
+    failed = (
+        pd.concat(fail_parts, ignore_index=True)
+        if fail_parts
+        else pd.DataFrame(columns=["id"])
+    )
+
+    assert list(passed["id"]) == [2, 3]
+    assert list(failed["id"]) == [1]
 
     assert metrics.lines_dismissed == 1
     assert metrics.lines_forwarded == 2
+    assert metrics.lines_received == 3
 
 
 @pytest.mark.asyncio
@@ -154,10 +208,35 @@ async def test_filter_receiver_bigdata_map_partitions(
     rule = ComparisonRule(column="name", operator="contains", value="li")
 
     recv = FilterReceiver()
-    parts = []
-    async for d in recv.process_bigdata(ddf, metrics=metrics, rule=rule):
-        parts.append(d)
-    assert parts, "No bigdata result from receiver"
+    pass_ddf = None
+    fail_ddf = None
+    async for port, payload in recv.process_bigdata(ddf, metrics=metrics, rule=rule):
+        if port == "pass":
+            pass_ddf = payload
+        elif port == "fail":
+            fail_ddf = payload
+        else:
+            pytest.fail(f"Unexpected port {port!r}")
+
+    assert pass_ddf is not None and fail_ddf is not None
+
+    # Compute and compare results (dtype-agnostic)
+    passed = pass_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
+    failed = fail_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
+
+    expected_pass = (
+        pd.DataFrame([{"id": 1, "name": "Alice"}, {"id": 3, "name": "Charlie"}])
+        .sort_values(["id", "name"])
+        .reset_index(drop=True)
+    )
+    expected_fail = (
+        pd.DataFrame([{"id": 2, "name": "Bob"}])
+        .sort_values(["id", "name"])
+        .reset_index(drop=True)
+    )
+
+    assert_frame_equal(passed, expected_pass, check_dtype=False)
+    assert_frame_equal(failed, expected_fail, check_dtype=False)
 
     assert metrics.lines_dismissed == 1
     assert metrics.lines_forwarded == 2
@@ -176,14 +255,33 @@ async def test_filter_receiver_bulk_no_matches(metrics: FilterMetrics) -> None:
     rule = ComparisonRule(column="id", operator=">", value=100)
 
     recv = FilterReceiver()
-    parts = []
-    async for f in recv.process_bulk(dataframe=df, rule=rule, metrics=metrics):
-        parts.append(f)
+    pass_parts: List[pd.DataFrame] = []
+    fail_parts: List[pd.DataFrame] = []
 
-    out = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+    async for port, payload in recv.process_bulk(
+        dataframe=df, rule=rule, metrics=metrics
+    ):
+        if port == "pass":
+            pass_parts.append(payload)
+        elif port == "fail":
+            fail_parts.append(payload)
+        else:
+            pytest.fail(f"Unexpected port {port!r}")
 
-    assert out.empty
-    assert out.shape[0] == 0
+    passed = (
+        pd.concat(pass_parts, ignore_index=True)
+        if pass_parts
+        else pd.DataFrame(columns=["id", "name"])
+    )
+    failed = (
+        pd.concat(fail_parts, ignore_index=True)
+        if fail_parts
+        else pd.DataFrame(columns=["id", "name"])
+    )
+
+    assert passed.empty
+    assert failed.shape[0] == 3
 
     assert metrics.lines_forwarded == 0
     assert metrics.lines_dismissed == 3
+    assert metrics.lines_received == 3

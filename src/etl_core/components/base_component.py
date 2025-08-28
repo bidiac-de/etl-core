@@ -10,6 +10,8 @@ from typing import (
     Iterable,
 )
 from uuid import uuid4
+import pandas as pd
+import dask.dataframe as dd
 
 from pydantic import (
     Field,
@@ -31,6 +33,11 @@ from etl_core.persistance.base_models.component_base import ComponentBase
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec, EdgeRef
+from etl_core.components.wiring.validation import (
+    validate_row_against_schema,
+    validate_dataframe_against_schema,
+    validate_dask_dataframe_against_schema,
+)
 
 
 class StrategyType(str, Enum):
@@ -57,6 +64,57 @@ class Component(ComponentBase, ABC):
     INPUT_PORTS: ClassVar[Sequence[InPortSpec]] = ()
     ALLOW_NO_INPUTS: ClassVar[bool] = False
 
+    _schema_path_separator: ClassVar[str] = "."
+
+    def _validate_payload_against(
+        self, schema: "Schema", payload: Any, *, schema_name: str
+    ) -> None:
+        if payload is None:
+            return
+        if isinstance(payload, dict):
+            validate_row_against_schema(
+                payload,
+                schema,
+                schema_name=schema_name,
+                path_separator=self._schema_path_separator,
+            )
+            return
+        if isinstance(payload, pd.DataFrame):
+            validate_dataframe_against_schema(
+                payload,
+                schema,
+                schema_name=schema_name,
+                path_separator=self._schema_path_separator,
+            )
+            return
+        if isinstance(payload, dd.DataFrame):
+            validate_dask_dataframe_against_schema(
+                payload,
+                schema,
+                schema_name=schema_name,
+                path_separator=self._schema_path_separator,
+            )
+            return
+        raise TypeError(
+            f"{schema_name}: unsupported payload type {type(payload).__name__}"
+        )
+
+    def validate_out_payload(self, port: str, payload: Any) -> None:
+        schema = self.schema_for_out_port(port)
+        if not schema:
+            raise ValueError(f"{self.name}: no schema configured for out port {port!r}")
+        self._validate_payload_against(
+            schema, payload, schema_name=f"{self.name}.out:{port}"
+        )
+
+    def validate_in_payload(self, port: str, payload: Any) -> None:
+        schema = self.schema_for_in_port(port)
+        if not schema:
+            raise ValueError(f"{self.name}: no schema configured for in port {port!r}")
+        self._validate_payload_against(
+            schema, payload, schema_name=f"{self.name}.in:{port}"
+        )
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
@@ -67,7 +125,7 @@ class Component(ComponentBase, ABC):
     routes: Dict[str, List[EdgeRef | str]] = Field(
         default_factory=dict,
         description="out_port -> [EdgeRef|target_name]. Use EdgeRef to "
-                    "specify target input port.",
+        "specify target input port.",
     )
     out_port_schemas: Dict[str, Schema] = Field(
         default_factory=dict,
@@ -82,12 +140,12 @@ class Component(ComponentBase, ABC):
     extra_output_ports: List[OutPortSpec] = Field(
         default_factory=list,
         description="Additional output ports declared by config "
-                    "(merged with class-level OUTPUT_PORTS).",
+        "(merged with class-level OUTPUT_PORTS).",
     )
     extra_input_ports: List[InPortSpec] = Field(
         default_factory=list,
         description="Additional input ports declared by config "
-                    "(merged with class-level INPUT_PORTS).",
+        "(merged with class-level INPUT_PORTS).",
     )
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
@@ -106,7 +164,7 @@ class Component(ComponentBase, ABC):
     @field_validator("extra_output_ports", mode="before")
     @classmethod
     def _coerce_extra_output_ports(
-            cls, v: Iterable[OutPortSpec | str | dict] | None
+        cls, v: Iterable[OutPortSpec | str | dict] | None
     ) -> List[OutPortSpec]:
         """
         Accept List[OutPortSpec] | List[str] | List[dict], cast to List[OutPortSpec].
@@ -130,7 +188,7 @@ class Component(ComponentBase, ABC):
     @field_validator("extra_input_ports", mode="before")
     @classmethod
     def _coerce_extra_input_ports(
-            cls, v: Iterable[InPortSpec | str | dict] | None
+        cls, v: Iterable[InPortSpec | str | dict] | None
     ) -> List[InPortSpec]:
         """
         Accept List[InPortSpec] | List[str] | List[dict], cast to List[InPortSpec].
@@ -245,7 +303,7 @@ class Component(ComponentBase, ABC):
     @field_validator("routes")
     @classmethod
     def _no_empty_route_keys(
-            cls, v: Dict[str, List[EdgeRef | str]]
+        cls, v: Dict[str, List[EdgeRef | str]]
     ) -> Dict[str, List[EdgeRef | str]]:
         if any(not k for k in v):
             raise ValueError("routes may not contain empty port names")
@@ -399,9 +457,9 @@ class Component(ComponentBase, ABC):
         return self.in_port_schemas.get(port)
 
     def ensure_schemas_for_used_ports(
-            self,
-            used_in_ports: Dict[str, int],
-            used_out_ports: Dict[str, int],
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
     ) -> None:
         """
         Called after wiring: any port with edges must have a schema.
@@ -423,9 +481,9 @@ class Component(ComponentBase, ABC):
                 )
 
     async def execute(
-            self,
-            payload: Any,
-            metrics: ComponentMetrics,
+        self,
+        payload: Any,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Out]:
         """
         Invoke the strategy’s async execute and yield items so callers

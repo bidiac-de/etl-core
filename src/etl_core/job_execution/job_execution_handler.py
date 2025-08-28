@@ -1,17 +1,24 @@
 import asyncio
 import logging
-from typing import Any, Dict, List, Set, Tuple
+import threading
+from typing import Any, Dict, List, Set, Tuple, Optional
 from collections import deque
 
-from src.etl_core.components.runtime_state import RuntimeState
-from src.etl_core.job_execution.job import Job, JobExecution, _Sentinel
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.components.base_component import Component
-from src.etl_core.job_execution.job_information_handler import JobInformationHandler
-from src.etl_core.metrics.system_metrics import SystemMetricsHandler
-from src.etl_core.metrics.metrics_registry import get_metrics_class
-from src.etl_core.metrics.execution_metrics import ExecutionMetrics
-from src.etl_core.components.envelopes import InTagged, Out
+from etl_core.components.runtime_state import RuntimeState
+from etl_core.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.components.base_component import Component
+from etl_core.job_execution.job_information_handler import JobInformationHandler
+from etl_core.metrics.system_metrics import SystemMetricsHandler
+from etl_core.metrics.metrics_registry import get_metrics_class
+from etl_core.metrics.execution_metrics import ExecutionMetrics
+from etl_core.components.envelopes import InTagged, Out
+
+
+class ExecutionAlreadyRunning(Exception):
+    """
+    Raised when attempting to start an execution for a job that is already running.
+    """
 
 
 class JobExecutionHandler:
@@ -24,16 +31,18 @@ class JobExecutionHandler:
     - Retries up to job.num_of_retries
     """
 
-    def __init__(
-            self,
-    ) -> None:
+    # process-wide storage for job-ids of currently running jobs
+    _running_jobs: Set[str] = set()
+    # guard locks to ensure thread-safety
+    _guard_lock = threading.Lock()
+
+    def __init__(self) -> None:
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
-        self.running_executions: List[JobExecution] = []
 
-    def execute_job(self, job: Job) -> JobExecution:
+    def execute_job(self, job: RuntimeJob) -> JobExecution:
         """
         top-level method to execute a Job, managing its execution lifecycle:
         - checks if the job is already running
@@ -43,16 +52,22 @@ class JobExecutionHandler:
         :param job: Job instance to execute
         :return: Execution instance containing job execution details
         """
-        # guard condition: dont allow executing the same job multiple times concurrently
-        for exec_ in self.running_executions:
-            if exec_.job == job:
-                self.logger.warning("Job '%s' already running", job.name)
-                return exec_
+        with self._guard_lock:
+            if job.id in self._running_jobs:
+                self.logger.warning("Job '%s' is already running", job.name)
+                raise ExecutionAlreadyRunning(
+                    f"Job '{job.name}' ({job.id}) is already running."
+                )
+            # mark as running and create the execution instance
+            self._running_jobs.add(job.id)
+            execution = JobExecution(job)
 
-        execution = JobExecution(job)
-        self.running_executions.append(execution)
-
-        return asyncio.run(self._main_loop(execution))
+        try:
+            return asyncio.run(self._main_loop(execution))
+        finally:
+            # cleanup in both success/failure paths
+            with self._guard_lock:
+                self._running_jobs.discard(job.id)
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
@@ -108,7 +123,9 @@ class JobExecutionHandler:
 
         return execution
 
-    async def _run_latest_attempt(self, execution) -> Dict[str, asyncio.Task]:
+    async def _run_latest_attempt(
+        self, execution: JobExecution
+    ) -> Dict[str, asyncio.Task]:
         """
         Wire queues, create workers, and store tasks for cancellation.
         """
@@ -154,12 +171,12 @@ class JobExecutionHandler:
         return execution.latest_attempt().current_tasks
 
     async def _worker(
-            self,
-            execution,
-            component: Component,
-            in_queues: List[asyncio.Queue],
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-            metrics: ComponentMetrics,
+        self,
+        execution,
+        component: Component,
+        in_queues: List[asyncio.Queue],
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        metrics: ComponentMetrics,
     ) -> None:
         """
         async Worker loop per component.
@@ -167,6 +184,7 @@ class JobExecutionHandler:
         attempt = execution.latest_attempt()
         sentinel = execution.sentinels[component.id]
 
+        # if already marked canceled, short-circuit
         if metrics.status == RuntimeState.CANCELLED:
             await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
             return
@@ -179,11 +197,15 @@ class JobExecutionHandler:
                     component, metrics, in_queues, out_edges_by_port
                 )
         except asyncio.CancelledError:
+            # mark cancelled in our metrics, then re-raise so upstream sees it
             metrics.status = RuntimeState.CANCELLED
             raise
+
         except Exception as exc:
+            # component failure: mark FAILED, increment error, cancel successors
             self._handle_worker_exception(component, exc, metrics, execution, attempt)
             raise
+
         else:
             if metrics.status != RuntimeState.CANCELLED:
                 metrics.status = RuntimeState.SUCCESS
@@ -191,7 +213,7 @@ class JobExecutionHandler:
             await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
 
     async def _broadcast_to_next_inputs(
-            self, item: Any, edges: Dict[str, List[Tuple[asyncio.Queue, str, bool]]]
+        self, item: Any, edges: Dict[str, List[Tuple[asyncio.Queue, str, bool]]]
     ) -> None:
         """
         Fan-out an item to all successor input queues.
@@ -201,11 +223,11 @@ class JobExecutionHandler:
                 await q.put(item)
 
     async def _run_component(
-            self,
-            component: Component,
-            payload: Any,
-            metrics: ComponentMetrics,
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        self,
+        component: Component,
+        payload: Any,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
     ) -> None:
         """
         Execute the component and route its results.
@@ -216,45 +238,70 @@ class JobExecutionHandler:
                 raise TypeError(
                     f"{component.name} must yield Out(port, payload) with port routing"
                 )
+            edges = out_edges_by_port.get(batch.port, [])
+            # validate output payload if any edge receives it
+            if edges:
+                component.validate_out_payload(batch.port, batch.payload)
+
             for q, dest_in, needs_tag in out_edges_by_port.get(batch.port, []):
                 await q.put(
                     batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
                 )
 
     async def _consume_and_run(
-            self,
-            component: Component,
-            metrics: ComponentMetrics,
-            in_queues: List[asyncio.Queue],
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        self,
+        component: Component,
+        metrics: ComponentMetrics,
+        in_queues: List[asyncio.Queue],
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.
+        For single-input components we expect untagged payloads.
+        For multi-input components we require InTagged(in_port, payload).
         """
         queue = in_queues[0]
         remaining = {p.id for p in component.prev_components}
+
+        # Resolve the single expected in-port name if applicable
+        in_port_names = component.expected_in_port_names()
+        single_in_port: Optional[str] = None
+        if len(in_port_names) == 1:
+            single_in_port = in_port_names[0]
 
         while remaining:
             item = await queue.get()
 
             # End-of-stream sentinel from a predecessor
-            if isinstance(item, _Sentinel) and item.component_id in remaining:
+            if isinstance(item, Sentinel) and item.component_id in remaining:
                 remaining.discard(item.component_id)
                 continue
 
-            # If this is a tagged envelope, unwrap to the payload
+            # Tagged envelope, unwrap and validate for the specified in-port
             if isinstance(item, InTagged):
-                item = item.payload
+                dest_port = item.in_port
+                payload = item.payload
+                component.validate_in_payload(dest_port, payload)
+                item = payload
+            else:
+                # Untagged: only valid for components with exactly one input port
+                if single_in_port is None:
+                    raise ValueError(
+                        f"{component.name}: received untagged input but component "
+                        f"declares multiple input ports {in_port_names!r}; "
+                        "fan-in must use tagged envelopes."
+                    )
+                component.validate_in_payload(single_in_port, item)
 
             await self._run_component(component, item, metrics, out_edges_by_port)
 
     def _handle_worker_exception(
-            self,
-            component: Component,
-            exc: Exception,
-            metrics: ComponentMetrics,
-            execution: JobExecution,
-            attempt: Any,
+        self,
+        component: Component,
+        exc: Exception,
+        metrics: ComponentMetrics,
+        execution: JobExecution,
+        attempt: Any,
     ) -> None:
         """
         Handle exceptions raised by a component worker
@@ -286,10 +333,10 @@ class JobExecutionHandler:
             dq.extend(nxt.next_components)
 
     def _cancel_successors(
-            self,
-            component: Component,
-            execution: JobExecution,
-            attempt: Any,
+        self,
+        component: Component,
+        execution: JobExecution,
+        attempt: Any,
     ) -> None:
         """
         BFS through downstream components: mark each CANCELLED in metrics
@@ -319,7 +366,7 @@ class JobExecutionHandler:
             dq.extend(nxt.next_components)
 
     def _finalize_success(
-            self, execution: JobExecution, job_metrics: "ExecutionMetrics"
+        self, execution: JobExecution, job_metrics: "ExecutionMetrics"
     ) -> None:
         """
         Final actions when a streaming execution succeeds.
@@ -344,11 +391,10 @@ class JobExecutionHandler:
             self.job_info.logging_handler.log(cm)
 
         # cleanup
-        self.running_executions.remove(execution)
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
     def _finalize_failure(
-            self, exc: Exception, execution: JobExecution, job_metrics: "ExecutionMetrics"
+        self, exc: Exception, execution: JobExecution, job_metrics: "ExecutionMetrics"
     ) -> None:
         """
         Final actions when all retries are exhausted or streaming execution fails.
@@ -357,7 +403,6 @@ class JobExecutionHandler:
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         # cleanup
-        self.running_executions.remove(execution)
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",
             execution.job.name,
