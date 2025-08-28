@@ -1,27 +1,43 @@
 {
-  "name": "CsvPassThroughBigData",
+  "name": "csv_passthrough_bigdata",
+  "strategy_type": "bigdata",
   "num_of_retries": 0,
   "file_logging": false,
-  "strategy_type": "bigdata",
-  "metadata": {
-    "created_by": "pytest",
-    "created_at": "2025-08-19T14:00:00"
-  },
   "components": [
     {
       "name": "reader",
       "comp_type": "read_csv",
-      "description": "read big csv input (dask)",
+      "description": "CSV source (Dask)",
       "filepath": "__IN__",
-      "delimiter": ",",
-      "next": ["writer"]
+      "separator": ",",
+      "routes": {
+        "out": [
+          { "to": "writer", "in_port": "in" }
+        ]
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
     },
     {
       "name": "writer",
       "comp_type": "write_csv",
-      "description": "write big csv output",
-      "delimiter": ";",
-      "filepath": "__OUT__"
+      "description": "CSV sink (Dask)",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
     }
   ]
 }

@@ -3,34 +3,22 @@ import inspect
 import pytest
 import pandas as pd
 import dask.dataframe as dd
-from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, AsyncGenerator
+from typing import AsyncGenerator
 
 from etl_core.components.file_components.csv.read_csv import ReadCSV
 from etl_core.components.file_components.csv.write_csv import WriteCSV
 from etl_core.components.file_components.csv.csv_component import Delimiter
-from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
+from etl_core.components.envelopes import Out
 
 DATA_DIR = Path(__file__).parent.parent / "data/csv"
 VALID_CSV = DATA_DIR / "test_data.csv"
 MISSING_VALUES_CSV = DATA_DIR / "test_data_missing_values.csv"
 WRONG_TYPES_CSV = DATA_DIR / "test_data_wrong_types.csv"
 INVALID_CSV_FILE = DATA_DIR / "test_data_not_csv.txt"
-
-
-@pytest.fixture
-def metrics():
-    return ComponentMetrics(
-        started_at=datetime.now(),
-        processing_time=timedelta(0),
-        error_count=0,
-        lines_received=0,
-        lines_forwarded=0,
-    )
 
 
 @pytest.mark.asyncio
@@ -48,9 +36,12 @@ async def test_read_csv_valid_bulk(metrics):
     assert isinstance(res, AsyncGenerator)
 
     async for item in res:
-        assert isinstance(item, pd.DataFrame)
-        assert len(item) == 3
-        assert set(item.columns) == {"id", "name"}
+        assert isinstance(item, Out)
+        assert item.port == "out"
+        df = item.payload
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 3
+        assert set(df.columns) == {"id", "name"}
 
 
 @pytest.mark.asyncio
@@ -66,12 +57,15 @@ async def test_read_csv_missing_values_bulk(metrics):
 
     res = comp.execute(payload=None, metrics=metrics)
     async for item in res:
-        assert isinstance(item, pd.DataFrame)
-        assert len(item) == 3
-        assert item.iloc[0, 0] == "1"
-        assert item.iloc[0, 1] == "Alice"
-        assert item.iloc[1, 0] == "2"
-        assert pd.isna(item.iloc[1, 1])
+        assert isinstance(item, Out)
+        assert item.port == "out"
+        df = item.payload
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 3
+        assert df.iloc[0, 0] == "1"
+        assert df.iloc[0, 1] == "Alice"
+        assert df.iloc[1, 0] == "2"
+        assert pd.isna(df.iloc[1, 1])
 
 
 @pytest.mark.asyncio
@@ -85,19 +79,22 @@ async def test_read_csv_row_streaming(metrics):
     )
     comp.strategy = RowExecutionStrategy()
 
-    rows: Dict[str, Any] = comp.execute(payload=None, metrics=metrics)
-
+    rows = comp.execute(payload=None, metrics=metrics)
     assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
 
     first = await asyncio.wait_for(anext(rows), timeout=0.25)
-    assert set(first.keys()) == {"id", "name"}
-    assert first["id"] == "1"
-    assert first["name"] == "Alice"
+    assert isinstance(first, Out) and first.port == "out"
+    f = first.payload
+    assert set(f.keys()) == {"id", "name"}
+    assert f["id"] == "1"
+    assert f["name"] == "Alice"
 
     second = await asyncio.wait_for(anext(rows), timeout=0.25)
-    assert set(second.keys()) == {"id", "name"}
-    assert second["id"] == "2"
-    assert second["name"] == "Bob"
+    assert isinstance(second, Out) and second.port == "out"
+    s = second.payload
+    assert set(s.keys()) == {"id", "name"}
+    assert s["id"] == "2"
+    assert s["name"] == "Bob"
 
     await rows.aclose()
 
@@ -114,10 +111,12 @@ async def test_readcsv_bigdata(metrics):
     comp.strategy = BigDataExecutionStrategy()
 
     res = comp.execute(payload=None, metrics=metrics)
-
     async for item in res:
-        assert isinstance(item, dd.DataFrame)
-        pdf = item.compute()
+        assert isinstance(item, Out)
+        assert item.port == "out"
+        ddf = item.payload
+        assert isinstance(ddf, dd.DataFrame)
+        pdf = ddf.compute()
         assert len(pdf) == 3
         assert pdf.iloc[0, 0] == "1"
         assert pdf.iloc[0, 1] == "Alice"
@@ -138,12 +137,13 @@ async def test_writecsv_row(tmp_path: Path, metrics):
     comp.strategy = RowExecutionStrategy()
 
     row = {"id": "1", "name": "Zoe"}
-    await anext(comp.execute(payload=row, metrics=metrics), None)
+    out = await anext(comp.execute(payload=row, metrics=metrics), None)
+    assert isinstance(out, Out)
+    assert out.port == "out"
+    assert out.payload == row
 
     assert out_fp.exists()
-
     content = out_fp.read_text().splitlines()
-
     assert content[0] == "id,name"
     assert content[1] == "1,Zoe"
 
@@ -168,12 +168,15 @@ async def test_writecsv_bulk(tmp_path: Path, metrics):
         ]
     )
 
-    await anext(comp.execute(payload=data, metrics=metrics), None)
+    out = await anext(comp.execute(payload=data, metrics=metrics), None)
+    assert isinstance(out, Out)
+    assert out.port == "out"
+    pd.testing.assert_frame_equal(
+        out.payload.reset_index(drop=True), data.reset_index(drop=True)
+    )
 
     assert out_fp.exists()
-
     content = out_fp.read_text().splitlines()
-
     assert content[0] == "id,name"
     assert content[1] == "1,A"
     assert content[2] == "2,B"
@@ -203,12 +206,17 @@ async def test_writecsv_bigdata(tmp_path: Path, metrics):
         npartitions=2,
     )
 
-    await anext(comp.execute(payload=ddf_in, metrics=metrics), None)
+    out = await anext(comp.execute(payload=ddf_in, metrics=metrics), None)
+    assert isinstance(out, Out)
+    assert out.port == "out"
+    # Compare as pandas for determinism
+    pd.testing.assert_frame_equal(
+        out.payload.compute().reset_index(drop=True),
+        ddf_in.compute().reset_index(drop=True),
+    )
 
     assert out_fp.exists()
-
     content = out_fp.read_text().splitlines()
-
     assert content[0] == "id,name"
     assert content[1] == "10,Nina"
     assert content[2] == "11,Omar"

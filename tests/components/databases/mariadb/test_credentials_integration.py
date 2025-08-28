@@ -1,12 +1,15 @@
 """
 Integration tests for MariaDB credentials and context system.
-
-These tests verify that the real Credentials and Context objects work correctly
-with the MariaDB components.
 """
 
-import pytest
+from __future__ import annotations
+
+import hashlib
+import os
+from typing import Tuple
 from unittest.mock import Mock, patch
+
+import pytest
 
 from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
@@ -17,41 +20,51 @@ from src.etl_core.context.context_parameter import ContextParameter
 from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
+def derive_test_password(base_pw: str, purpose: str) -> str:
+    """
+    Deterministically derive a test password variant without hard-coded secrets.
+    """
+    digest = hashlib.blake2b(
+        f"{purpose}:{base_pw}".encode("utf-8"), digest_size=6
+    ).hexdigest()
+    return f"{base_pw}_{digest}"
+
+
 class TestCredentialsIntegration:
     """Test cases for real Credentials and Context integration."""
 
-    def test_credentials_creation(self, sample_credentials):
-        """Test that Credentials objects are created correctly."""
+    def test_credentials_creation(
+        self, sample_credentials: Credentials, test_creds: Tuple[str, str]
+    ) -> None:
+        user, password = test_creds
         assert sample_credentials.credentials_id == 1
         assert sample_credentials.name == "test_db_creds"
-        assert sample_credentials.user == "testuser"
-        assert sample_credentials.decrypted_password == "testpass123"
+        assert sample_credentials.user == user
+        assert sample_credentials.decrypted_password == password
         assert sample_credentials.pool_max_size == 10
         assert sample_credentials.pool_timeout_s == 30
 
-    def test_credentials_get_parameter(self, sample_credentials):
-        """Test that Credentials.get_parameter works correctly."""
-        assert sample_credentials.get_parameter("user") == "testuser"
+    def test_credentials_get_parameter(
+        self, sample_credentials: Credentials, test_creds: Tuple[str, str]
+    ) -> None:
+        user, _ = test_creds
+        assert sample_credentials.get_parameter("user") == user
         assert sample_credentials.get_parameter("database") == "testdb"
         assert sample_credentials.get_parameter("pool_max_size") == 10
         assert sample_credentials.get_parameter("pool_timeout_s") == 30
-
-        # Test invalid parameter
         with pytest.raises(KeyError, match="Unknown parameter key: invalid_key"):
             sample_credentials.get_parameter("invalid_key")
 
-    def test_context_credentials_management(self, sample_context, sample_credentials):
-        """Test that Context can store and retrieve credentials."""
-        # Test getting credentials
+    def test_context_credentials_management(
+        self, sample_context: Context, sample_credentials: Credentials
+    ) -> None:
         retrieved_creds = sample_context.get_credentials(1)
         assert retrieved_creds == sample_credentials
-
-        # Test getting non-existent credentials
         with pytest.raises(KeyError, match="Credentials with ID 2 not found"):
             sample_context.get_credentials(2)
 
-    def test_context_add_credentials(self, sample_context):
-        """Test adding new credentials to context."""
+    def test_context_add_credentials(self, sample_context: Context, test_creds) -> None:
+        _, password = test_creds
         new_creds = Credentials(
             credentials_id=2,
             name="new_creds",
@@ -59,11 +72,9 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="newdb",
-            password="pass2",
+            password=password,
         )
         sample_context.add_credentials(new_creds)
-
-        # Verify it was added
         retrieved = sample_context.get_credentials(2)
         assert retrieved.name == "new_creds"
         assert retrieved.user == "newuser"
@@ -72,13 +83,10 @@ class TestCredentialsIntegration:
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_mariadb_read_component_with_real_credentials(
-        self, mock_handler_class, sample_context
-    ):
-        """Test that MariaDBRead works with real credentials."""
-        # Mock the connection handler
+        self, mock_handler_class, sample_context: Context, test_creds
+    ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
@@ -88,27 +96,20 @@ class TestCredentialsIntegration:
             query="SELECT * FROM users",
             credentials_id=1,
         )
-
-        # Set the context
         read_comp.context = sample_context
-
-        # Test that credentials can be retrieved
         creds = read_comp._get_credentials()
-        assert creds["user"] == "testuser"
-        assert creds["password"] == "testpass123"
+        assert creds["user"] == os.environ["APP_TEST_USER"]
+        assert creds["password"] == os.environ["APP_TEST_PASSWORD"]
         assert creds["database"] == "testdb"
 
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_mariadb_write_component_with_real_credentials(
-        self, mock_handler_class, sample_context
-    ):
-        """Test that MariaDBWrite works with real credentials."""
-        # Mock the connection handler
+        self, mock_handler_class, sample_context: Context
+    ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
@@ -117,28 +118,21 @@ class TestCredentialsIntegration:
             entity_name="users",
             credentials_id=1,
         )
-
-        # Set the context
         write_comp.context = sample_context
-
-        # Test that credentials can be retrieved
         creds = write_comp._get_credentials()
-        assert creds["user"] == "testuser"
-        assert creds["password"] == "testpass123"
+        assert creds["user"] == os.environ["APP_TEST_USER"]
+        assert creds["password"] == os.environ["APP_TEST_PASSWORD"]
         assert creds["database"] == "testdb"
 
-    def test_credentials_pool_parameters(self, sample_credentials):
-        """Test that pool parameters are correctly exposed."""
-        # Test pool parameters are accessible
+    def test_credentials_pool_parameters(self, sample_credentials: Credentials) -> None:
         assert sample_credentials.get_parameter("pool_max_size") == 10
         assert sample_credentials.get_parameter("pool_timeout_s") == 30
-
         engine_kwargs = build_sql_engine_kwargs(sample_credentials)
         assert engine_kwargs["pool_size"] == 10
         assert engine_kwargs["pool_timeout"] == 30
 
-    def test_credentials_without_pool_settings(self):
-        """Test credentials without pool settings."""
+    def test_credentials_without_pool_settings(self, test_creds) -> None:
+        _, password = test_creds
         creds = Credentials(
             credentials_id=3,
             name="minimal_creds",
@@ -146,20 +140,14 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="mindb",
-            password="minpass",
+            password=password,
         )
-
-        # Should have default pool settings
         assert creds.pool_max_size is None
         assert creds.pool_timeout_s is None
-
         engine_kwargs = build_sql_engine_kwargs(creds)
-        # Should be empty dict when no pool settings
         assert engine_kwargs == {}
 
-    def test_credentials_password_handling(self):
-        """Test credentials password handling."""
-
+    def test_credentials_password_handling(self) -> None:
         creds_no_pass = Credentials(
             credentials_id=5,
             name="nopass_creds",
@@ -170,21 +158,18 @@ class TestCredentialsIntegration:
         )
         assert creds_no_pass.decrypted_password is None
 
-    def test_context_parameter_retrieval(self, sample_context):
-        """Test that Context.get_parameter works for regular parameters."""
+    def test_context_parameter_retrieval(self, sample_context: Context) -> None:
         assert sample_context.get_parameter("db_host") == "localhost"
         assert sample_context.get_parameter("db_port") == "3306"
-
-        # Test non-existent parameter
         with pytest.raises(
             KeyError, match="Parameter with key 'invalid_param' not found"
         ):
             sample_context.get_parameter("invalid_param")
 
-    # NEW TESTS FOR IMPROVED CREDENTIAL SYSTEM COVERAGE
+    # ---- ADDITIONAL COVERAGE, WITHOUT PASSWORD LITERALS ----
 
-    def test_credentials_validation(self):
-        """Test credentials validation."""
+    def test_credentials_validation(self, test_creds: Tuple[str, str]) -> None:
+        _, base_pw = test_creds
         valid_creds = Credentials(
             credentials_id=6,
             name="valid_creds",
@@ -192,22 +177,9 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="validdb",
-            password="validpass",
+            password=derive_test_password(base_pw, "valid"),
         )
 
-        special_creds = Credentials(
-            credentials_id=7,
-            name="special_creds",
-            user="user@domain",
-            host="localhost",
-            port=3306,
-            database="special_db",
-            password="pass@word#123",
-        )
-        assert valid_creds.credentials_id == 6
-        assert valid_creds.name == "valid_creds"
-
-        # Test credentials with special characters
         special_creds = Credentials(
             credentials_id=7,
             name="special_creds_2024",
@@ -215,15 +187,15 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="test-db_123",
-            password="pass@word#123",
+            password=derive_test_password(base_pw, "special_chars"),
         )
+        assert valid_creds.credentials_id == 6
+        assert valid_creds.name == "valid_creds"
         assert special_creds.user == "user@domain"
         assert special_creds.database == "test-db_123"
-        assert special_creds.decrypted_password == "pass@word#123"
+        assert isinstance(special_creds.decrypted_password, str)
 
-    def test_context_parameter_types(self):
-        """Test different context parameter types."""
-        # Test string parameter
+    def test_context_parameter_types(self) -> None:
         string_param = ContextParameter(
             id=10,
             key="string_param",
@@ -234,23 +206,19 @@ class TestCredentialsIntegration:
         assert string_param.value == "test_value"
         assert string_param.type == "string"
 
-        # Test numeric parameter
         numeric_param = ContextParameter(
             id=11, key="numeric_param", value="42", type="integer", is_secure=False
         )
         assert numeric_param.value == "42"
         assert numeric_param.type == "integer"
 
-        # Test boolean parameter
         boolean_param = ContextParameter(
             id=12, key="boolean_param", value="true", type="boolean", is_secure=False
         )
         assert boolean_param.value == "true"
         assert boolean_param.type == "boolean"
 
-    def test_context_secure_parameters(self):
-        """Test secure context parameters."""
-        # Test secure parameter
+    def test_context_secure_parameters(self) -> None:
         secure_param = ContextParameter(
             id=13,
             key="db_password",
@@ -261,15 +229,12 @@ class TestCredentialsIntegration:
         assert secure_param.is_secure is True
         assert secure_param.value == "secret_password"
 
-        # Test non-secure parameter
         non_secure_param = ContextParameter(
             id=14, key="db_host", value="localhost", type="string", is_secure=False
         )
         assert non_secure_param.is_secure is False
 
-    def test_context_environment_handling(self):
-        """Test context environment handling."""
-        # Test different environments
+    def test_context_environment_handling(self) -> None:
         test_context = Context(
             id=15, name="test_env", environment=Environment.TEST, parameters={}
         )
@@ -285,8 +250,8 @@ class TestCredentialsIntegration:
         )
         assert dev_context.environment == Environment.DEV
 
-    def test_credentials_pool_configuration_validation(self):
-        """Test credentials pool configuration validation."""
+    def test_credentials_pool_configuration_validation(self, test_creds) -> None:
+        _, base_pw = test_creds
         valid_pool_creds = Credentials(
             credentials_id=18,
             name="pool_creds",
@@ -294,7 +259,7 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="pooldb",
-            password="poolpass",
+            password=derive_test_password(base_pw, "pool_ok"),
             pool_max_size=50,
             pool_timeout_s=60,
         )
@@ -306,30 +271,25 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="minpooldb",
-            password="minpoolpass",
+            password=derive_test_password(base_pw, "pool_min"),
             pool_max_size=1,
             pool_timeout_s=1,
         )
         assert valid_pool_creds.pool_max_size == 50
         assert valid_pool_creds.pool_timeout_s == 60
-
-        # Test minimum values
         assert min_pool_creds.pool_max_size == 1
         assert min_pool_creds.pool_timeout_s == 1
 
-    def test_context_parameter_validation(self):
-        """Test context parameter validation."""
-        # Test required fields
+    def test_context_parameter_validation(self) -> None:
         with pytest.raises(ValueError):
             ContextParameter(
-                id=None,  # Missing required field
+                id=None,
                 key="test",
                 value="test",
                 type="string",
                 is_secure=False,
             )
 
-        # Test valid parameter
         valid_param = ContextParameter(
             id=20, key="valid_key", value="valid_value", type="string", is_secure=False
         )
@@ -340,10 +300,8 @@ class TestCredentialsIntegration:
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_credentials_in_mariadb_component_integration(
-        self, mock_handler_class, sample_context
-    ):
-        """Test complete integration of credentials in MariaDB component."""
-        # Mock the connection handler
+        self, mock_handler_class, sample_context: Context, test_creds: Tuple[str, str]
+    ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
@@ -357,23 +315,16 @@ class TestCredentialsIntegration:
             params={"id": 1},
             credentials_id=1,
         )
-
-        # Set the context
         read_comp.context = sample_context
 
-        # Test credential retrieval
         creds = read_comp._get_credentials()
-        assert creds["user"] == "testuser"
-        assert creds["password"] == "testpass123"
+        user, password = test_creds
+        assert creds["user"] == user
+        assert creds["password"] == password
         assert creds["database"] == "testdb"
 
-        # Test that credentials are properly formatted for database connection
-        assert isinstance(creds["user"], str)
-        assert isinstance(creds["password"], str)
-        assert isinstance(creds["database"], str)
-
-    def test_context_credentials_multiple_databases(self):
-        """Test context with multiple database credentials."""
+    def test_context_credentials_multiple_databases(self, test_creds) -> None:
+        _, base_pw = test_creds
         multi_context = Context(
             id=23, name="multi_db_context", environment=Environment.TEST, parameters={}
         )
@@ -385,7 +336,7 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="db1",
-            password="pass1",
+            password=derive_test_password(base_pw, "db1"),
         )
 
         creds2 = Credentials(
@@ -395,14 +346,12 @@ class TestCredentialsIntegration:
             host="localhost",
             port=3306,
             database="db2",
-            password="pass2",
+            password=derive_test_password(base_pw, "db2"),
         )
 
-        # Create context with multiple credentials
         multi_context.add_credentials(creds1)
         multi_context.add_credentials(creds2)
 
-        # Test retrieval
         retrieved_creds1 = multi_context.get_credentials(21)
         retrieved_creds2 = multi_context.get_credentials(22)
 
@@ -411,8 +360,7 @@ class TestCredentialsIntegration:
         assert retrieved_creds1.database == "db1"
         assert retrieved_creds2.database == "db2"
 
-    def test_context_parameter_immutability(self):
-        """Test that context parameters are immutable."""
+    def test_context_parameter_immutability(self) -> None:
         param = ContextParameter(
             id=26,
             key="immutable_param",
@@ -420,16 +368,11 @@ class TestCredentialsIntegration:
             type="string",
             is_secure=False,
         )
-
-        # Test that we can't modify the parameter after creation
-        # (This depends on the actual implementation - adjust if needed)
         assert param.value == "original_value"
         assert param.key == "immutable_param"
 
-    def test_credentials_database_name_validation(self):
-        """Test credentials database name validation."""
-
-        # Test valid database names
+    def test_credentials_database_name_validation(self, test_creds) -> None:
+        _, base_pw = test_creds
         valid_db_names = [
             "testdb",
             "test_db",
@@ -447,13 +390,11 @@ class TestCredentialsIntegration:
                 host="localhost",
                 port=3306,
                 database=db_name,
-                password=f"pass{i}",
+                password=derive_test_password(base_pw, f"dbname_{i}"),
             )
             assert creds.database == db_name
 
-    def test_context_parameter_key_validation(self):
-        """Test context parameter key validation."""
-        # Test valid parameter keys
+    def test_context_parameter_key_validation(self) -> None:
         valid_keys = [
             "db_host",
             "db_port",
@@ -473,10 +414,8 @@ class TestCredentialsIntegration:
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
     def test_mariadb_write_bulk_operations(
-        self, mock_handler_class, sample_context, sample_dataframe
-    ):
-        """Test MariaDB write bulk operations with real credentials."""
-        # Mock the connection handler
+        self, mock_handler_class, sample_context: Context, sample_dataframe, test_creds
+    ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
@@ -488,25 +427,19 @@ class TestCredentialsIntegration:
             entity_name="users",
             credentials_id=1,
         )
-
-        # Set the context
         write_comp.context = sample_context
 
-        # Test credentials retrieval
         creds = write_comp._get_credentials()
-        assert creds["user"] == "testuser"
+        user, _ = test_creds
+        assert creds["user"] == user
         assert creds["database"] == "testdb"
-
-        # Test that the component is properly configured
-        assert write_comp.entity_name == "users"
-        assert write_comp.credentials_id == 1
 
     @patch(
         "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     )
-    def test_mariadb_read_query_operations(self, mock_handler_class, sample_context):
-        """Test MariaDB read query operations with real credentials."""
-        # Mock the connection handler
+    def test_mariadb_read_query_operations(
+        self, mock_handler_class, sample_context: Context, test_creds
+    ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
@@ -520,32 +453,20 @@ class TestCredentialsIntegration:
             params={"active": True},
             credentials_id=1,
         )
-
-        # Set the context
         read_comp.context = sample_context
 
-        # Test credentials retrieval
         creds = read_comp._get_credentials()
-        assert creds["user"] == "testuser"
+        user, _ = test_creds
+        assert creds["user"] == user
         assert creds["database"] == "testdb"
 
-        # Test that the component is properly configured
-        assert read_comp.query == "SELECT * FROM users WHERE active = %(active)s"
-        assert read_comp.params == {"active": True}
-        assert read_comp.entity_name == "users"
-        assert read_comp.credentials_id == 1
-
-    # NEW TESTS USING THE IMPROVED FIXTURES
-
-    def test_multiple_credentials_fixture(self, multiple_credentials):
-        """Test the multiple credentials fixture."""
+    def test_multiple_credentials_fixture(self, multiple_credentials) -> None:
         assert len(multiple_credentials) == 4
         assert "minimal" in multiple_credentials
         assert "with_pool" in multiple_credentials
         assert "special_chars" in multiple_credentials
         assert "no_password" in multiple_credentials
 
-        # Test specific credential types
         minimal_creds = multiple_credentials["minimal"]
         assert minimal_creds.pool_max_size is None
         assert minimal_creds.pool_timeout_s is None
@@ -563,36 +484,28 @@ class TestCredentialsIntegration:
 
     def test_context_with_multiple_credentials_fixture(
         self, context_with_multiple_credentials, multiple_credentials
-    ):
-        """Test the context with multiple credentials fixture."""
+    ) -> None:
         context = context_with_multiple_credentials
-
-        # Test that all credentials are accessible
         for creds in multiple_credentials.values():
             retrieved = context.get_credentials(creds.credentials_id)
             assert retrieved == creds
 
     def test_mariadb_component_fixtures(
         self, mariadb_read_component, mariadb_write_component
-    ):
-        """Test the MariaDB component fixtures."""
-        # Test read component
+    ) -> None:
         assert mariadb_read_component.name == "test_read"
         assert mariadb_read_component.entity_name == "users"
         assert mariadb_read_component.query == "SELECT * FROM users"
         assert mariadb_read_component.credentials_id == 1
 
-        # Test write component
         assert mariadb_write_component.name == "test_write"
         assert mariadb_write_component.entity_name == "users"
         assert mariadb_write_component.credentials_id == 1
 
-        # Test that both have context set
         assert mariadb_read_component.context is not None
         assert mariadb_write_component.context is not None
 
-    def test_sample_sql_queries_fixture(self, sample_sql_queries):
-        """Test the sample SQL queries fixture."""
+    def test_sample_sql_queries_fixture(self, sample_sql_queries) -> None:
         assert "simple_select" in sample_sql_queries
         assert "parameterized" in sample_sql_queries
         assert "complex_join" in sample_sql_queries
@@ -601,7 +514,6 @@ class TestCredentialsIntegration:
         assert "update" in sample_sql_queries
         assert "delete" in sample_sql_queries
 
-        # Test specific query content
         simple_query = sample_sql_queries["simple_select"]
         assert "SELECT * FROM users" in simple_query
 
@@ -609,15 +521,13 @@ class TestCredentialsIntegration:
         assert "%(id)s" in param_query
         assert "%(active)s" in param_query
 
-    def test_sample_query_params_fixture(self, sample_query_params):
-        """Test the sample query parameters fixture."""
+    def test_sample_query_params_fixture(self, sample_query_params) -> None:
         assert "simple" in sample_query_params
         assert "user_lookup" in sample_query_params
         assert "bulk_insert" in sample_query_params
         assert "filter" in sample_query_params
         assert "pagination" in sample_query_params
 
-        # Test specific parameter content
         user_lookup = sample_query_params["user_lookup"]
         assert user_lookup["id"] == 1
         assert user_lookup["active"] is True

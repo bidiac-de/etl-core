@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Generator, Callable, Iterable
+from typing import Generator, Callable, Iterable, Tuple, Dict
 from fastapi.requests import Request
 
 import pytest
 import os
 import importlib
+import secrets
 import sys
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
+from datetime import datetime, timedelta
 
 from etl_core.main import app
 from etl_core.api.dependencies import get_execution_handler, get_job_handler
@@ -19,6 +21,7 @@ from etl_core.persistance.table_definitions import (
     ComponentTable,
     LayoutTable,
 )
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
@@ -72,14 +75,24 @@ def client() -> Generator[TestClient, None, None]:
         yield c
 
 
+@pytest.fixture
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
-def enable_stub_components():
+def enable_stub_components() -> None:
     """
     Automatically run before any tests.
     Sets the registry mode to 'test' so stub components are visible.
     """
     os.environ["ETL_COMPONENT_MODE"] = "test"
-
     if "etl_core.main" in sys.modules:
         import etl_core.main
 
@@ -108,7 +121,7 @@ def clear_db() -> Generator[None, None, None]:
 
 @pytest.fixture()
 def shared_job_handler(client: TestClient):
-    req = Request({"type": "http", "app": client.app})  # method needs request
+    req = Request({"type": "http", "app": client.app})
     return get_job_handler(req)
 
 
@@ -151,3 +164,48 @@ def override_exec_handler() -> Generator[None, None, None]:
     finally:
         if get_execution_handler in app.dependency_overrides:
             del app.dependency_overrides[get_execution_handler]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _set_test_env() -> Tuple[str, str]:
+    """
+    Session-wide: ensure test creds exist in the environment exactly once,
+    without using the function-scoped 'monkeypatch'.
+    """
+    user = os.environ.get("APP_TEST_USER") or "test_user"
+    password = os.environ.get("APP_TEST_PASSWORD") or secrets.token_urlsafe(24)
+    os.environ["APP_TEST_USER"] = user
+    os.environ["APP_TEST_PASSWORD"] = password
+    return user, password
+
+
+@pytest.fixture()
+def test_creds(_set_test_env: Tuple[str, str]) -> Tuple[str, str]:
+    """
+    Function-scoped handle for tests that need the values.
+    Reads from env guaranteed by '_set_test_env'.
+    """
+    return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
+
+
+@pytest.fixture()
+def schema_row_min() -> Dict[str, object]:
+    """
+    Minimal row schema used by most tests.
+    Named to allow adding more schema variants later (e.g., schema_row_with_meta).
+    """
+    return {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
+
+
+@pytest.fixture()
+def schema_row_two_fields() -> Dict[str, object]:
+    """
+    Example extension for future tests: two-field integer schema.
+    Not used by current tests, but here to demonstrate the pattern.
+    """
+    return {
+        "fields": [
+            {"name": "id", "data_type": "integer", "nullable": False},
+            {"name": "value", "data_type": "integer", "nullable": True},
+        ]
+    }

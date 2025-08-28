@@ -13,7 +13,11 @@ from etl_core.persistance.db import engine
 from etl_core.persistance.errors import PersistNotFoundError
 from etl_core.persistance.handlers.components_handler import ComponentHandler
 from etl_core.persistance.handlers.dataclasses_handler import DataClassHandler
-from etl_core.persistance.table_definitions import ComponentTable, JobTable
+from etl_core.persistance.table_definitions import (
+    ComponentTable,
+    JobTable,
+    ComponentLinkTable,
+)
 
 
 class JobHandler:
@@ -40,8 +44,6 @@ class JobHandler:
             session.flush()
 
             self.dc.create_metadata_for_job(session, row, cfg.metadata_.model_dump())
-
-            # child components
             self.ch.create_all_from_configs(session, row, cfg.components)
 
             session.commit()
@@ -85,6 +87,9 @@ class JobHandler:
             return list(session.exec(select(JobTable)).all())
 
     def _build_runtime_from_record(self, rec: JobTable) -> RuntimeJob:
+        """
+        Build RuntimeJob and assign components. RuntimeJob wires via `routes`.
+        """
         job = RuntimeJob(
             name=rec.name,
             num_of_retries=rec.num_of_retries,
@@ -96,7 +101,7 @@ class JobHandler:
         object.__setattr__(job, "_id", rec.id)
 
         comps = self.ch.build_runtime_for_all(rec)
-        job.components = comps
+        job.components = comps  # validate_assignment triggers RuntimeJob wiring
         if rec.metadata_ is not None:
             job.metadata_ = self.dc.dump_metadata(rec.metadata_)
         return job
@@ -114,9 +119,10 @@ class JobHandler:
                     selectinload(JobTable.components).selectinload(
                         ComponentTable.metadata_
                     ),
-                    selectinload(JobTable.components).selectinload(
-                        ComponentTable.next_components
-                    ),
+                    # wiring
+                    selectinload(JobTable.components)
+                    .selectinload(ComponentTable.outgoing_links)
+                    .selectinload(ComponentLinkTable.dst_component),
                 )
             )
             rec = session.exec(stmt).first()
@@ -131,9 +137,6 @@ class JobHandler:
                 selectinload(JobTable.components).selectinload(ComponentTable.layout),
                 selectinload(JobTable.components).selectinload(
                     ComponentTable.metadata_
-                ),
-                selectinload(JobTable.components).selectinload(
-                    ComponentTable.next_components
                 ),
             )
             records = session.exec(stmt).all()
@@ -153,6 +156,3 @@ class JobHandler:
                 raise PersistNotFoundError(f"Job with id {job_id!r} not found")
             session.delete(job)
             session.commit()
-
-    def record_to_job(self, record: JobTable) -> RuntimeJob:
-        return self.load_runtime_job(record.id)

@@ -31,7 +31,7 @@ Key features include:
 
 ## Project Structure
 
-- **src/**
+- **src/etl_core**
   Contains the main interpreter logic, command implementations, component classes, and orchestration logic.
 
 - **tests/**
@@ -71,12 +71,30 @@ Key features include:
     pip install -r requirements.txt
     ```
 
-4. **Create .env**
+4. **Install Python Module:**
+
+    ```bash
+    Pip install -e.
+    ```
+
+5. **Create .env**
 
     ```plaintext
     Create a `.env` file in the root, filling in values for the placeholder values found in:
     etl-core/.env_example
+
+### Starting the Core
+- **Run the ETL Core Engine:**
+
+    The ETL Core Engine can be run using Uvicorn, which serves the FastAPI application.
+
+    ```bash
+    uvicorn src.etl_core.main:app --reload
     ```
+
+    This command starts the ETL Core Engine in development mode, allowing for hot-reloading of code changes.
+
+
 ## Contributions
 
 Contributions are welcome! Please review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests. Your input is highly appreciated as we continuously work to enhance the ETL Core Engine.

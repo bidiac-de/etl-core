@@ -49,9 +49,6 @@ def inline_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
     return inlined
 
 
-# ---------- small helpers (keep complexity low) ----------
-
-
 def _extract_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
     defs = schema.get(_DEFS)
     return defs if isinstance(defs, dict) else {}
