@@ -1,28 +1,13 @@
 import etl_core.components.file_components.excel.read_excel  # noqa: F401
 import etl_core.components.file_components.excel.write_excel  # noqa: F401
 
-import json
 from pathlib import Path
-
 import pandas as pd
 
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from etl_core.components.runtime_state import RuntimeState
 from tests.helpers import runtime_job_from_config
-
-
-def _load_cfg(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _make_job(cfg_path: Path, in_path: Path, out_path: Path):
-    cfg = _load_cfg(cfg_path)
-    for comp in cfg["components"]:
-        if comp["comp_type"] == "read_excel":
-            comp["filepath"] = str(in_path)
-        if comp["comp_type"] == "write_excel":
-            comp["filepath"] = str(out_path)
-    return runtime_job_from_config(cfg)
+from tests.config_helpers import render_job_cfg_with_filepaths
 
 
 def test_execute_excel_row_job(tmp_path: Path) -> None:
@@ -33,7 +18,11 @@ def test_execute_excel_row_job(tmp_path: Path) -> None:
     out_fp = tmp_path / "out.xlsx"
 
     cfg_path = Path(__file__).parent / "job_config_excel_row.json"
-    job = _make_job(cfg_path, in_fp, out_fp)
+    cfg = render_job_cfg_with_filepaths(
+        cfg_path,
+        {"read_excel": in_fp, "write_excel": out_fp},
+    )
+    job = runtime_job_from_config(cfg)
 
     handler = JobExecutionHandler()
     execution = handler.execute_job(job)
@@ -54,7 +43,11 @@ def test_execute_excel_bulk_job(tmp_path: Path) -> None:
     out_fp = tmp_path / "out_bulk.xlsx"
 
     cfg_path = Path(__file__).parent / "job_config_excel_bulk.json"
-    job = _make_job(cfg_path, in_fp, out_fp)
+    cfg = render_job_cfg_with_filepaths(
+        cfg_path,
+        {"read_excel": in_fp, "write_excel": out_fp},
+    )
+    job = runtime_job_from_config(cfg)
 
     handler = JobExecutionHandler()
     execution = handler.execute_job(job)
@@ -75,7 +68,11 @@ def test_execute_excel_bigdata_job(tmp_path: Path) -> None:
     out_fp = tmp_path / "out_big.xlsx"
 
     cfg_path = Path(__file__).parent / "job_config_excel_bigdata.json"
-    job = _make_job(cfg_path, in_fp, out_fp)
+    cfg = render_job_cfg_with_filepaths(
+        cfg_path,
+        {"read_excel": in_fp, "write_excel": out_fp},
+    )
+    job = runtime_job_from_config(cfg)
 
     handler = JobExecutionHandler()
     execution = handler.execute_job(job)

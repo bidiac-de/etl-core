@@ -38,7 +38,6 @@ def test_component_payload_persisted_in_db(client: TestClient) -> None:
                 "comp_type": "multi_source",
                 "name": "src",
                 "description": "",
-                "next": [],
                 "count": 7,
             }
         ],
@@ -65,7 +64,6 @@ def test_component_payload_hydrates_to_runtime(shared_job_handler) -> None:
                 "comp_type": "multi_source",
                 "name": "src",
                 "description": "",
-                "next": [],
                 "count": 3,
             }
         ],

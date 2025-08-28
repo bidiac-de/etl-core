@@ -129,7 +129,7 @@ class TestMariaDBComponents:
         # Test process_row
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 2
         assert results[0]["id"] == 1
@@ -155,10 +155,10 @@ class TestMariaDBComponents:
         mock_receiver.read_bulk.return_value = sample_dataframe
         read_comp._receiver = mock_receiver
 
-        # Test process_bulk - this returns a DataFrame directly, not an async iterator
-        result = await read_comp.process_bulk(sample_dataframe, mock_metrics)
+        gen = read_comp.process_bulk(sample_dataframe, mock_metrics)
+        result = await anext(gen)
 
-        assert len(result) == 2
+        assert len(result.payload) == 2
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_bigdata(
@@ -180,10 +180,10 @@ class TestMariaDBComponents:
         mock_receiver.read_bigdata.return_value = sample_dask_dataframe
         read_comp._receiver = mock_receiver
 
-        # Test process_bigdata - returns a Dask DataFrame directly
-        result = await read_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
+        gen = read_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
+        result = await anext(gen)
 
-        assert hasattr(result, "npartitions")
+        assert hasattr(result.payload, "npartitions")
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_row(self, mock_context, mock_metrics):
@@ -210,7 +210,7 @@ class TestMariaDBComponents:
         async for result in write_comp.process_row(
             {"name": "John", "email": "john@example.com"}, mock_metrics
         ):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         # The result now contains the receiver response
@@ -236,10 +236,10 @@ class TestMariaDBComponents:
         mock_receiver.write_bulk.return_value = sample_dataframe  # Return the DataFrame
         write_comp._receiver = mock_receiver
 
-        # Test process_bulk - this returns a DataFrame directly, not an async iterator
-        result = await write_comp.process_bulk(sample_dataframe, mock_metrics)
+        gen = write_comp.process_bulk(sample_dataframe, mock_metrics)
+        result = await anext(gen)
 
-        assert len(result) == 2
+        assert len(result.payload) == 2
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_bigdata(
@@ -262,10 +262,10 @@ class TestMariaDBComponents:
         )
         write_comp._receiver = mock_receiver
 
-        # Test process_bigdata - returns a Dask DataFrame directly
-        result = await write_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
+        gen = write_comp.process_bulk(sample_dask_dataframe, mock_metrics)
+        result = await anext(gen)
 
-        assert hasattr(result, "npartitions")
+        assert hasattr(result.payload, "npartitions")
 
     def test_mariadb_component_connection_setup(self, mock_context):
         """Test MariaDB component connection setup."""
@@ -315,7 +315,7 @@ class TestMariaDBComponents:
         # Test that error is handled gracefully - we need to actually call the method
         with pytest.raises(Exception):
             # This will trigger the error when we try to read
-            async for result in read_comp.process_row({"id": 1}, mock_metrics):
+            async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
 
     @pytest.mark.asyncio
@@ -356,7 +356,7 @@ class TestMariaDBComponents:
         payload = {"id": 1}
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert results[0]["id"] == 1
@@ -405,7 +405,7 @@ class TestMariaDBComponents:
         async for result in read_comp.process_row(
             {"min_age": 18, "cities": ["Berlin"]}, mock_metrics
         ):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert results[0]["city"] == "Berlin"
@@ -430,9 +430,10 @@ class TestMariaDBComponents:
         mock_receiver.write_bulk.return_value = empty_df  # Return the empty DataFrame
         write_comp._receiver = mock_receiver
 
-        result = await write_comp.process_bulk(empty_df, mock_metrics)
+        gen = write_comp.process_bulk(empty_df, mock_metrics)
+        result = await anext(gen)
 
-        assert len(result) == 0
+        assert len(result.payload) == 0
 
     @pytest.mark.asyncio
     async def test_mariadb_component_connection_failure(self, mock_context):
@@ -509,7 +510,7 @@ class TestMariaDBComponents:
         # Test metrics integration
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         # Verify metrics were called
         mock_metrics.set_started.assert_called_once()
@@ -576,7 +577,7 @@ class TestMariaDBComponents:
         async for result in read_comp.process_row(
             {"start_date": "2023-01-01", "limit": 1000}, mock_metrics
         ):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert "LEFT JOIN" in read_comp.query
@@ -603,7 +604,7 @@ class TestMariaDBComponents:
         # Test that special table names are handled
         results = []
         async for result in write_comp.process_row({"name": "John"}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert write_comp.entity_name == "user_profiles_2024"

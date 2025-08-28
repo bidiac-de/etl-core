@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Set, Tuple
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
+from sqlalchemy.orm import aliased
 
-from etl_core.persistance.table_definitions import (
-    ComponentNextLink,
-    ComponentTable,
-)
+from etl_core.persistance.table_definitions import ComponentLinkTable, ComponentTable
 
 
 def post_job(client: TestClient, config: Dict | None = None) -> str:
@@ -19,6 +17,10 @@ def post_job(client: TestClient, config: Dict | None = None) -> str:
 
 
 def cfg_two(a_to_b: bool = True) -> Dict:
+    """
+    Minimal 2-node graph config using routes only.
+    Our 'test' stub has ports: in='in', out='out'.
+    """
     return {
         "name": "two_nodes",
         "num_of_retries": 0,
@@ -30,29 +32,28 @@ def cfg_two(a_to_b: bool = True) -> Dict:
                 "comp_type": "test",
                 "name": "a",
                 "description": "",
-                "next": ["b"] if a_to_b else [],
+                "routes": {"out": ["b"]} if a_to_b else {"out": []},
             },
             {
                 "comp_type": "test",
                 "name": "b",
                 "description": "",
-                "next": [] if a_to_b else ["a"],
+                "routes": {"out": []} if a_to_b else {"out": ["a"]},
             },
         ],
     }
 
 
 def fetch_link_pairs(session: Session, job_id: str) -> Set[Tuple[str, str]]:
-    pairs: Set[Tuple[str, str]] = set()
-    rows: List[ComponentTable] = list(
-        session.exec(select(ComponentTable).where(ComponentTable.job_id == job_id))
+    src = aliased(ComponentTable)
+    dst = aliased(ComponentTable)
+
+    stmt = (
+        select(src.name, dst.name)
+        .select_from(ComponentLinkTable)
+        .join(ComponentLinkTable.src_component.of_type(src))
+        .join(ComponentLinkTable.dst_component.of_type(dst))
+        .where(ComponentLinkTable.job_id == job_id)
+        .order_by(src.name, dst.name)
     )
-    id_by_name = {r.name: r.id for r in rows}
-    link_rows = list(session.exec(select(ComponentNextLink)))
-    for lr in link_rows:
-        # keep only links that belong to this job
-        if lr.component_id in id_by_name.values() and lr.next_id in id_by_name.values():
-            src = next(n for n, _id in id_by_name.items() if _id == lr.component_id)
-            dst = next(n for n, _id in id_by_name.items() if _id == lr.next_id)
-            pairs.add((src, dst))
-    return pairs
+    return {(s, d) for s, d in session.exec(stmt).all()}
