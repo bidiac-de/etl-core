@@ -23,7 +23,8 @@ from etl_core.receivers.data_operations_receivers.schema_mapping.schema_mapping_
 )
 from etl_core.components.wiring.column_definition import DataType, FieldDef
 from etl_core.components.wiring.schema import Schema
-from etl_core.components.wiring.validation import get_leaf_field_map
+from etl_core.utils.common_helpers import get_leaf_field_map
+
 
 CompiledRule = Tuple[str, _Path, str, _Path]
 
@@ -110,8 +111,8 @@ class SchemaMappingComponent(DataOperationsComponent):
                     f"{self.name}: no schema for output port {r.dst_port!r}"
                 )
 
-            src_map = get_leaf_field_map(src_schema, path_separator=".")
-            dst_map = get_leaf_field_map(dst_schema, path_separator=".")
+            src_map = get_leaf_field_map(src_schema, self._schema_path_separator)
+            dst_map = get_leaf_field_map(dst_schema, self._schema_path_separator)
 
             src_fd = src_map.get(r.src_path)
             if src_fd is None:
