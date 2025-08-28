@@ -4,10 +4,17 @@ Shared test fixtures for MariaDB database tests.
 This file provides common test fixtures that can be used across all MariaDB tests.
 """
 
+from __future__ import annotations
+
+import hashlib
+import os
+from typing import Tuple, Dict
+
 import pytest
 import pandas as pd
 from unittest.mock import Mock, patch
 import dask.dataframe as dd
+from unittest.mock import Mock, patch
 
 from etl_core.context.credentials import Credentials
 from etl_core.context.context import Context
@@ -17,24 +24,36 @@ from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 
 
+def derive_test_password(base_pw: str, purpose: str) -> str:
+    """
+    Deterministically derive a test password variant without hard-coded secrets.
+    Keeps static analysis happy while remaining stable across a run.
+    """
+    digest = hashlib.blake2b(
+        f"{purpose}:{base_pw}".encode("utf-8"), digest_size=6
+    ).hexdigest()
+    return f"{base_pw}_{digest}"
+
+
 @pytest.fixture
-def sample_credentials():
-    """Create a real Credentials object for testing."""
+def sample_credentials(test_creds: Tuple[str, str]) -> Credentials:
+    """Create a real Credentials object for testing (password from env)."""
+    user, password = test_creds
     return Credentials(
         credentials_id=1,
         name="test_db_creds",
-        user="testuser",
+        user=user,
         host="localhost",
         port=3306,
         database="testdb",
-        password="testpass123",
+        password=password,
         pool_max_size=10,
         pool_timeout_s=30,
     )
 
 
 @pytest.fixture
-def sample_context(sample_credentials):
+def sample_context(sample_credentials: Credentials) -> Context:
     """Create a real Context object with credentials."""
     context = Context(
         id=1,
@@ -42,24 +61,19 @@ def sample_context(sample_credentials):
         environment=Environment.TEST,
         parameters={
             "db_host": ContextParameter(
-                id=1,
-                key="db_host",
-                value="localhost",
-                type="string",
-                is_secure=False,
+                id=1, key="db_host", value="localhost", type="string", is_secure=False
             ),
             "db_port": ContextParameter(
                 id=2, key="db_port", value="3306", type="string", is_secure=False
             ),
         },
     )
-    # Add credentials to context
     context.add_credentials(sample_credentials)
     return context
 
 
 @pytest.fixture
-def mock_connection_handler():
+def mock_connection_handler() -> Mock:
     """Create a mock connection handler for testing."""
     handler = Mock()
     handler.lease.return_value.__enter__.return_value = Mock()
@@ -68,7 +82,7 @@ def mock_connection_handler():
 
 
 @pytest.fixture
-def sample_dataframe():
+def sample_dataframe() -> pd.DataFrame:
     """Sample DataFrame for testing."""
     return pd.DataFrame(
         {
@@ -80,9 +94,8 @@ def sample_dataframe():
 
 
 @pytest.fixture
-def sample_dask_dataframe():
+def sample_dask_dataframe() -> dd.DataFrame:
     """Sample Dask DataFrame for testing."""
-
     df = pd.DataFrame(
         {
             "id": [1, 2, 3, 4],
@@ -99,7 +112,7 @@ def sample_dask_dataframe():
 
 
 @pytest.fixture
-def mock_metrics():
+def mock_metrics() -> Mock:
     """Create mock component metrics."""
     metrics = Mock()
     metrics.set_started = Mock()
@@ -109,7 +122,7 @@ def mock_metrics():
 
 
 @pytest.fixture
-def mariadb_read_component(sample_context):
+def mariadb_read_component(sample_context: Context) -> MariaDBRead:
     """Create a MariaDBRead component with context."""
     with patch(
         "etl_core.components.databases.sql_connection_handler."
@@ -128,7 +141,7 @@ def mariadb_read_component(sample_context):
 
 
 @pytest.fixture
-def mariadb_write_component(sample_context):
+def mariadb_write_component(sample_context: Context) -> MariaDBWrite:
     """Create a MariaDBWrite component with context."""
     with patch(
         "etl_core.components.databases.sql_connection_handler."
@@ -146,8 +159,11 @@ def mariadb_write_component(sample_context):
 
 
 @pytest.fixture
-def multiple_credentials():
-    """Create multiple credentials for testing different scenarios."""
+def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
+    """
+    Create multiple credentials for testing different scenarios (env for passwords).
+    """
+    _, base_pw = test_creds
     return {
         "minimal": Credentials(
             credentials_id=2,
@@ -156,7 +172,7 @@ def multiple_credentials():
             host="localhost",
             port=3306,
             database="mindb",
-            password="minpass",
+            password=base_pw,
         ),
         "with_pool": Credentials(
             credentials_id=3,
@@ -165,7 +181,7 @@ def multiple_credentials():
             host="localhost",
             port=3306,
             database="pooldb",
-            password="poolpass",
+            password=derive_test_password(base_pw, "pool"),
             pool_max_size=50,
             pool_timeout_s=60,
         ),
@@ -176,7 +192,7 @@ def multiple_credentials():
             host="localhost",
             port=3306,
             database="test-db_123",
-            password="pass@word#123",
+            password=derive_test_password(base_pw, "special"),
         ),
         "no_password": Credentials(
             credentials_id=5,
@@ -190,7 +206,9 @@ def multiple_credentials():
 
 
 @pytest.fixture
-def context_with_multiple_credentials(multiple_credentials):
+def context_with_multiple_credentials(
+    multiple_credentials: Dict[str, Credentials],
+) -> Context:
     """Create a context with multiple credentials."""
     context = Context(
         id=2,
@@ -198,30 +216,24 @@ def context_with_multiple_credentials(multiple_credentials):
         environment=Environment.TEST,
         parameters={},
     )
-
     for creds in multiple_credentials.values():
         context.add_credentials(creds)
-
     return context
 
 
 @pytest.fixture
-def sample_sql_queries():
+def sample_sql_queries() -> Dict[str, str]:
     """Sample SQL queries for testing."""
     return {
         "simple_select": "SELECT * FROM users",
-        "parameterized": """
-            SELECT *
-            FROM users
-            WHERE id = %(id)s
-            AND active = %(active)s
-        """,
-        "complex_join": """
-            SELECT u.id, u.name, p.title
-            FROM users u
-            JOIN posts p ON u.id = p.user_id
-            WHERE u.active = %(active)s
-        """,
+        "parameterized": (
+            "SELECT * FROM users WHERE id = %(id)s AND active = %(active)s"
+        ),
+        "complex_join": (
+            "SELECT u.id, u.name, p.title "
+            "FROM users u JOIN posts p ON u.id = p.user_id "
+            "WHERE u.active = %(active)s"
+        ),
         "aggregation": "SELECT COUNT(*) as count, active FROM users GROUP BY active",
         "insert": "INSERT INTO users (name, email) VALUES (%(name)s, %(email)s)",
         "update": "UPDATE users SET active = %(active)s WHERE id = %(id)s",
@@ -230,7 +242,7 @@ def sample_sql_queries():
 
 
 @pytest.fixture
-def sample_query_params():
+def sample_query_params() -> Dict[str, object]:
     """Sample query parameters for testing."""
     return {
         "simple": {},
@@ -246,8 +258,9 @@ def sample_query_params():
 
 
 @pytest.fixture
-def credentials_dict():
-    """Create a dictionary of credentials for testing."""
+def credentials_dict(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
+    """Create a dictionary of credentials for testing (env for passwords)."""
+    _, base_pw = test_creds
     return {
         "minimal": Credentials(
             credentials_id=2,
@@ -256,7 +269,7 @@ def credentials_dict():
             host="localhost",
             port=3306,
             database="mindb",
-            password="minpass",
+            password=base_pw,
         ),
         "with_pool": Credentials(
             credentials_id=3,
@@ -265,7 +278,7 @@ def credentials_dict():
             host="localhost",
             port=3306,
             database="pooldb",
-            password="poolpass",
+            password=derive_test_password(base_pw, "pool"),
             pool_max_size=50,
             pool_timeout_s=60,
         ),
@@ -276,7 +289,7 @@ def credentials_dict():
             host="localhost",
             port=3306,
             database="special_db_123",
-            password="pass@word!",
+            password=derive_test_password(base_pw, "special"),
         ),
         "no_password": Credentials(
             credentials_id=5,
@@ -290,21 +303,22 @@ def credentials_dict():
 
 
 @pytest.fixture
-def mock_credentials():
-    """Create a mock Credentials object for testing."""
+def mock_credentials(test_creds: Tuple[str, str]) -> Credentials:
+    """Create a mock Credentials object for testing (env for password)."""
+    user, password = test_creds
     return Credentials(
         credentials_id=1,
         name="test_creds",
-        user="testuser",
+        user=user,
         host="localhost",
         port=3306,
         database="testdb",
-        password="testpass",
+        password=password,
     )
 
 
 @pytest.fixture
-def mock_credentials_no_password():
+def mock_credentials_no_password() -> Credentials:
     """Create a mock Credentials object without password for testing."""
     return Credentials(
         credentials_id=2,
@@ -314,3 +328,19 @@ def mock_credentials_no_password():
         port=3306,
         database="testdb",
     )
+
+
+@pytest.fixture
+def mock_context(test_creds: Tuple[str, str]) -> Mock:
+    """Create a mock context with credentials (password from env)."""
+    _user, _pwd = test_creds
+    context = Mock()
+    mock_credentials_obj = Mock()
+    mock_credentials_obj.get_parameter.side_effect = lambda param: {
+        "user": os.environ["APP_TEST_USER"],
+        "password": os.environ["APP_TEST_PASSWORD"],
+        "database": "testdb",
+    }.get(param)
+    mock_credentials_obj.decrypted_password = os.environ["APP_TEST_PASSWORD"]
+    context.get_credentials.return_value = mock_credentials_obj
+    return context
