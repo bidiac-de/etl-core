@@ -7,12 +7,15 @@ from etl_core.components.databases.postgresql.postgresql import PostgreSQLCompon
 from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
+from etl_core.components.envelopes import Out
 
 
 @register_component("read_postgresql")
 class PostgreSQLRead(PostgreSQLComponent):
     """PostgreSQL reader supporting row, bulk, and bigdata modes."""
 
+    ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
+    
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 
     @model_validator(mode="after")
@@ -23,7 +26,7 @@ class PostgreSQLRead(PostgreSQLComponent):
 
     async def process_row(
         self, payload: Any, metrics: ComponentMetrics
-    ) -> AsyncIterator[Dict[str, Any]]:
+    ) -> AsyncIterator[Out]:
         """Read rows one-by-one (streaming)."""
         async for result in self._receiver.read_row(
             entity_name=self.entity_name,
@@ -32,32 +35,34 @@ class PostgreSQLRead(PostgreSQLComponent):
             params=self.params,
             connection_handler=self.connection_handler,
         ):
-            yield result
+            yield Out(port="out", payload=result)
 
     async def process_bulk(
         self,
         payload: Any,
         metrics: ComponentMetrics,
-    ) -> pd.DataFrame:
+    ) -> AsyncIterator[Out]:
         """Read query results as a pandas DataFrame."""
-        return await self._receiver.read_bulk(
+        frame: pd.DataFrame = await self._receiver.read_bulk(
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
             params=self.params,
             connection_handler=self.connection_handler,
         )
+        yield Out(port="out", payload=frame)
 
     async def process_bigdata(
         self,
         payload: Any,
         metrics: ComponentMetrics,
-    ) -> dd.DataFrame:
+    ) -> AsyncIterator[Out]:
         """Read large query results as a Dask DataFrame."""
-        return await self._receiver.read_bigdata(
+        ddf: dd.DataFrame = await self._receiver.read_bigdata(
             entity_name=self.entity_name,
             metrics=metrics,
             query=self.query,
             params=self.params,
             connection_handler=self.connection_handler,
         )
+        yield Out(port="out", payload=ddf)

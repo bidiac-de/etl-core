@@ -375,7 +375,7 @@ class TestMariaDBComponents:
         )
         write_comp.context = mock_context
 
-        assert write_comp.batch_size == 500
+        assert write_comp.row_batch_size == 1000
 
     @pytest.mark.asyncio
     async def test_mariadb_read_with_complex_params(self, mock_context, mock_metrics):

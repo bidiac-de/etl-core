@@ -28,10 +28,6 @@ class MariaDBWrite(MariaDBComponent):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    query: str = Field(default="", description="Custom INSERT/UPSERT query (optional)")
-    strategy_type: str = Field(default="bulk", description="Execution strategy type")
-    batch_size: int = Field(default=1000, description="Batch size for bulk operations")
-
     @model_validator(mode="after")
     def _build_objects(self) -> "MariaDBWrite":
         self._receiver = MariaDBReceiver()

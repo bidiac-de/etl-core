@@ -10,12 +10,15 @@ from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
+from etl_core.components.envelopes import Out
 
 
 @register_component("read_mariadb")
 class MariaDBRead(MariaDBComponent):
     """MariaDB reader supporting row, bulk, and bigdata modes."""
 
+    ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
+    
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 
     @model_validator(mode="after")

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict, Tuple
-from uuid import uuid4
-from uuid import uuid4
 
 import pandas as pd
 import dask.dataframe as dd
+from dask.dataframe.utils import make_meta
 
 from etl_core.receivers.base_receiver import Receiver
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
@@ -86,20 +85,27 @@ class FilterReceiver(Receiver):
         ddf: dd.DataFrame,
         rule: ComparisonRule,
         metrics: FilterMetrics,
-    ) -> AsyncGenerator[dd.DataFrame, None]:
+    ) -> AsyncGenerator[Tuple[str, dd.DataFrame], None]:
         # Use a partial function to bind the rule parameter to the instance method
         from functools import partial
         
+        # Create filtered and failed DataFrames
         filtered = ddf.map_partitions(
             partial(self._filter_partition, rule=rule),
+            meta=make_meta(ddf),
+        )
+        
+        # Create failed DataFrame (rows that don't match the rule)
+        failed = ddf.map_partitions(
+            partial(_apply_remainder_partition, rule=rule),
             meta=make_meta(ddf),
         )
 
         # Best-effort metrics (safe-guarded)
         try:
             total_received = int(ddf.map_partitions(len).sum().compute())
-            total_pass = int(passed.map_partitions(len).sum().compute())
-            total_fail = max(0, total_received - total_pass)
+            total_pass = int(filtered.map_partitions(len).sum().compute())
+            total_fail = int(failed.map_partitions(len).sum().compute())
 
             metrics.lines_received += total_received
             metrics.lines_forwarded += total_pass
@@ -107,5 +113,5 @@ class FilterReceiver(Receiver):
         except Exception:
             pass
 
-        yield "pass", passed
+        yield "pass", filtered
         yield "fail", failed

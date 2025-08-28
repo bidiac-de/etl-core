@@ -141,7 +141,7 @@ class TestPostgreSQLComponents:
         # Test process_row
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 2
         assert results[0]["id"] == 1
@@ -167,10 +167,13 @@ class TestPostgreSQLComponents:
         mock_receiver.read_bulk.return_value = sample_dataframe
         read_comp._receiver = mock_receiver
 
-        # Test process_bulk - this returns a DataFrame directly, not an async iterator
-        result = await read_comp.process_bulk(sample_dataframe, mock_metrics)
+        # Test process_bulk - this now returns an async iterator
+        results = []
+        async for result in read_comp.process_bulk(sample_dataframe, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result) == 2
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 2  # DataFrame has 2 rows
 
     @pytest.mark.asyncio
     async def test_postgresql_read_process_bigdata(
@@ -192,10 +195,13 @@ class TestPostgreSQLComponents:
         mock_receiver.read_bigdata.return_value = sample_dask_dataframe
         read_comp._receiver = mock_receiver
 
-        # Test process_bigdata - returns a Dask DataFrame directly
-        result = await read_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
+        # Test process_bigdata - now returns an async iterator
+        results = []
+        async for result in read_comp.process_bigdata(sample_dask_dataframe, mock_metrics):
+            results.append(result.payload)
 
-        assert hasattr(result, "npartitions")
+        assert len(results) == 1  # Only one Out object
+        assert hasattr(results[0], "npartitions")
 
     @pytest.mark.asyncio
     async def test_postgresql_write_process_row(self, mock_context, mock_metrics):
@@ -222,7 +228,7 @@ class TestPostgreSQLComponents:
         async for result in write_comp.process_row(
             {"name": "John", "email": "john@example.com"}, mock_metrics
         ):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         # The result now contains the receiver response
@@ -248,10 +254,13 @@ class TestPostgreSQLComponents:
         mock_receiver.write_bulk.return_value = sample_dataframe  # Return the DataFrame
         write_comp._receiver = mock_receiver
 
-        # Test process_bulk - this returns a DataFrame directly, not an async iterator
-        result = await write_comp.process_bulk(sample_dataframe, mock_metrics)
+        # Test process_bulk - this now returns an async iterator
+        results = []
+        async for result in write_comp.process_bulk(sample_dataframe, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result) == 2
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 2  # DataFrame has 2 rows
 
     @pytest.mark.asyncio
     async def test_postgresql_write_process_bigdata(
@@ -274,10 +283,13 @@ class TestPostgreSQLComponents:
         )
         write_comp._receiver = mock_receiver
 
-        # Test process_bigdata - returns a Dask DataFrame directly
-        result = await write_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
+        # Test process_bigdata - now returns an async iterator
+        results = []
+        async for result in write_comp.process_bigdata(sample_dask_dataframe, mock_metrics):
+            results.append(result.payload)
 
-        assert hasattr(result, "npartitions")
+        assert len(results) == 1  # Only one Out object
+        assert hasattr(results[0], "npartitions")
 
     def test_postgresql_component_connection_setup(self, mock_context):
         """Test PostgreSQL component connection setup."""
@@ -368,7 +380,7 @@ class TestPostgreSQLComponents:
         payload = {"id": 1}
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert results[0]["id"] == 1
@@ -383,11 +395,11 @@ class TestPostgreSQLComponents:
             comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
-            batch_size=500,
+            row_batch_size=500,
         )
         write_comp.context = mock_context
 
-        assert write_comp.batch_size == 500
+        assert write_comp.row_batch_size == 500
 
     @pytest.mark.asyncio
     async def test_postgresql_read_with_complex_params(self, mock_context, mock_metrics):
@@ -417,7 +429,7 @@ class TestPostgreSQLComponents:
         async for result in read_comp.process_row(
             {"min_age": 18, "cities": ["Berlin"]}, mock_metrics
         ):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert results[0]["city"] == "Berlin"
@@ -442,9 +454,12 @@ class TestPostgreSQLComponents:
         mock_receiver.write_bulk.return_value = empty_df  # Return the empty DataFrame
         write_comp._receiver = mock_receiver
 
-        result = await write_comp.process_bulk(empty_df, mock_metrics)
+        results = []
+        async for result in write_comp.process_bulk(empty_df, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result) == 0
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 0  # Empty DataFrame
 
     @pytest.mark.asyncio
     async def test_postgresql_component_connection_failure(self, mock_context):
@@ -521,7 +536,7 @@ class TestPostgreSQLComponents:
         # Test metrics integration
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         # Verify metrics were called
         mock_metrics.set_started.assert_called_once()
@@ -588,7 +603,7 @@ class TestPostgreSQLComponents:
         async for result in read_comp.process_row(
             {"start_date": "2023-01-01", "limit": 1000}, mock_metrics
         ):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert "LEFT JOIN" in read_comp.query
@@ -615,7 +630,7 @@ class TestPostgreSQLComponents:
         # Test that special table names are handled
         results = []
         async for result in write_comp.process_row({"name": "John"}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert write_comp.entity_name == "user_profiles_2024"

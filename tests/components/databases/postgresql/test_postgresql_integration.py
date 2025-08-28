@@ -128,14 +128,14 @@ class TestPostgreSQLIntegration:
         # Test read operation
         read_results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            read_results.append(result)
+            read_results.append(result.payload)
 
         assert len(read_results) == 2
 
         # Test write operation
         write_results = []
         async for result in write_comp.process_row(read_results[0], mock_metrics):
-            write_results.append(result)
+            write_results.append(result.payload)
 
         assert len(write_results) == 1
         # The result now contains the receiver response
@@ -183,7 +183,7 @@ class TestPostgreSQLIntegration:
         payload = {"id": 1}
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 2
         assert results[0]["id"] == 1
@@ -212,8 +212,8 @@ class TestPostgreSQLIntegration:
         mock_strategy = Mock(spec=ExecutionStrategy)
 
         async def mock_execute_generator(component, payload, metrics):
-            result = await read_comp.process_bigdata(payload, metrics)
-            yield result
+            async for result in read_comp.process_bigdata(payload, metrics):
+                yield result
 
         mock_strategy.execute = mock_execute_generator
         read_comp._strategy = mock_strategy
@@ -221,7 +221,7 @@ class TestPostgreSQLIntegration:
         # Test bigdata execution
         results = []
         async for result in read_comp.execute(sample_ddf, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert hasattr(results[0], "npartitions")
@@ -263,7 +263,7 @@ class TestPostgreSQLIntegration:
         payload = {"id": 1}
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert results[0]["id"] == 1
@@ -322,7 +322,7 @@ class TestPostgreSQLIntegration:
         payload = {"id": 1}
         results = []
         async for result in read_comp.process_row(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         # Verify metrics were called
         mock_metrics.set_started.assert_called_once()
@@ -384,8 +384,8 @@ class TestPostgreSQLIntegration:
         mock_strategy = Mock(spec=ExecutionStrategy)
 
         async def mock_execute_generator(component, payload, metrics):
-            result = await read_comp.process_bulk(payload, metrics)
-            yield result
+            async for result in read_comp.process_bulk(payload, metrics):
+                yield result.payload
 
         mock_strategy.execute = mock_execute_generator
         read_comp._strategy = mock_strategy
@@ -460,11 +460,14 @@ class TestPostgreSQLIntegration:
         read_comp._receiver = mock_receiver
 
         # Test large dataset processing
-        result = await read_comp.process_bulk(large_df, mock_metrics)
+        results = []
+        async for result in read_comp.process_bulk(large_df, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result) == 1000
-        assert result.iloc[0]["id"] == 0
-        assert result.iloc[999]["id"] == 999
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 1000
+        assert results[0].iloc[0]["id"] == 0
+        assert results[0].iloc[999]["id"] == 999
 
     @pytest.mark.asyncio
     async def test_concurrent_operations_integration(self, mock_context, mock_metrics):
@@ -493,7 +496,7 @@ class TestPostgreSQLIntegration:
         async def concurrent_operation():
             results = []
             async for result in read_comp.process_row({"id": 1}, mock_metrics):
-                results.append(result)
+                results.append(result.payload)
             return results
 
         # Run multiple concurrent operations
@@ -551,9 +554,9 @@ class TestPostgreSQLIntegration:
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
             # Transform: combine first_name and last_name
             transformed = {
-                "id": result["id"],
-                "full_name": f"{result['first_name']} {result['last_name']}",
-                "email": result["email"],
+                "id": result.payload["id"],
+                "full_name": f"{result.payload['first_name']} {result.payload['last_name']}",
+                "email": result.payload["email"],
             }
             transformed_data.append(transformed)
 
@@ -625,7 +628,7 @@ class TestPostgreSQLIntegration:
         # Test performance metrics
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
         end_time = asyncio.get_event_loop().time()
 
         # Verify metrics and timing

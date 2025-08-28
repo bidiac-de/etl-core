@@ -7,13 +7,23 @@ from etl_core.components.databases.postgresql.postgresql import PostgreSQLCompon
 from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
+from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
 
 @register_component("write_postgresql")
 class PostgreSQLWrite(PostgreSQLComponent):
-    """PostgreSQL writer supporting row, bulk, and bigdata modes."""
+    """
+    PostgreSQL writer with ports + schema.
 
-    batch_size: int = Field(default=1000, description="Batch size for bulk operations")
+    - INPUT_PORTS:
+        - 'in' (required): rows/frames to write
+    - OUTPUT_PORTS:
+        - 'out' (optional): passthrough of what was written (useful for chaining/tests)
+    """
+
+    INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
+    OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -24,8 +34,8 @@ class PostgreSQLWrite(PostgreSQLComponent):
 
     async def process_row(
         self, row: Dict[str, Any], metrics: ComponentMetrics
-    ) -> AsyncIterator[Dict[str, Any]]:
-        """Write a single row and yield the result."""
+    ) -> AsyncIterator[Out]:
+        """Write a single row and emit it (or receiver result) on 'out'."""
         result = await self._receiver.write_row(
             entity_name=self.entity_name,
             row=row,
@@ -34,12 +44,12 @@ class PostgreSQLWrite(PostgreSQLComponent):
             query=self.query,
             connection_handler=self.connection_handler,
         )
-        yield result
+        yield Out(port="out", payload=result)
 
     async def process_bulk(
         self, data: pd.DataFrame, metrics: ComponentMetrics
-    ) -> pd.DataFrame:
-        """Write full dataset and yield it as DataFrame."""
+    ) -> AsyncIterator[Out]:
+        """Write a pandas DataFrame and emit the same frame on 'out'."""
         result = await self._receiver.write_bulk(
             entity_name=self.entity_name,
             frame=data,
@@ -48,18 +58,18 @@ class PostgreSQLWrite(PostgreSQLComponent):
             query=self.query,
             connection_handler=self.connection_handler,
         )
-        return result
+        yield Out(port="out", payload=result)
 
     async def process_bigdata(
-        self, chunk_iterable: dd.DataFrame, metrics: ComponentMetrics
-    ) -> dd.DataFrame:
-        """Write Dask DataFrame and yield it."""
+        self, ddf: dd.DataFrame, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        """Write a Dask DataFrame and emit the same ddf on 'out'."""
         result = await self._receiver.write_bigdata(
             entity_name=self.entity_name,
-            frame=chunk_iterable,
+            frame=ddf,
             metrics=metrics,
             table=self.entity_name,
             query=self.query,
             connection_handler=self.connection_handler,
         )
-        return result
+        yield Out(port="out", payload=result)
