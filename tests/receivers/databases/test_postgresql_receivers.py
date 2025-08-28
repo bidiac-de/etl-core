@@ -181,11 +181,32 @@ class TestPostgreSQLReceiver:
         receiver = PostgreSQLReceiver()
         
         # Test that the method exists and can be called
-        # Note: pandas.to_sql requires real database connections, so we skip the actual execution
         assert hasattr(receiver, 'write_bulk')
         assert callable(receiver.write_bulk)
         
-        # Test with a simple assertion that the method signature is correct
+        # Mock pandas to_sql to avoid database connection issues
+        with patch('pandas.DataFrame.to_sql') as mock_to_sql:
+            mock_to_sql.return_value = None
+            
+            # Test with the new parameters
+            result = await receiver.write_bulk(
+                entity_name="users",
+                frame=sample_dataframe,
+                metrics=mock_metrics,
+                table="users",
+                if_exists="replace",  # Test the new if_exists parameter
+                bulk_chunk_size=25_000,  # Test the new bulk_chunk_size parameter
+                connection_handler=handler
+            )
+            
+            # Verify to_sql was called
+            mock_to_sql.assert_called_once()
+        
+        # Verify the result is returned correctly
+        assert result is not None
+        assert result.equals(sample_dataframe)
+        
+        # Verify the method signature is correct
         assert receiver.write_bulk.__name__ == 'write_bulk'
 
     @pytest.mark.asyncio
@@ -196,11 +217,32 @@ class TestPostgreSQLReceiver:
         receiver = PostgreSQLReceiver()
         
         # Test that the method exists and can be called
-        # Note: pandas.to_sql requires real database connections, so we skip the actual execution
         assert hasattr(receiver, 'write_bigdata')
         assert callable(receiver.write_bigdata)
         
-        # Test with a simple assertion that the method signature is correct
+        # Mock pandas to_sql to avoid database connection issues
+        with patch('pandas.DataFrame.to_sql') as mock_to_sql:
+            mock_to_sql.return_value = None
+            
+            # Test with the new parameters
+            result = await receiver.write_bigdata(
+                entity_name="users",
+                frame=sample_dask_dataframe,
+                metrics=mock_metrics,
+                table="users",
+                if_exists="replace",  # Test the new if_exists parameter
+                bigdata_partition_chunk_size=25_000,  # Test the new bigdata_partition_chunk_size parameter
+                connection_handler=handler
+            )
+            
+            # Verify to_sql was called (2 partitions = 2 calls)
+            assert mock_to_sql.call_count == 2
+            
+        # Verify the result is returned correctly
+        assert result is not None
+        assert hasattr(result, "npartitions")
+        
+        # Verify the method signature is correct
         assert receiver.write_bigdata.__name__ == 'write_bigdata'
 
     @pytest.mark.asyncio

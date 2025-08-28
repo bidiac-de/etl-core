@@ -475,7 +475,7 @@ class TestMariaDBReceivers:
         ddf = dd.from_pandas(df, npartitions=2)
 
         # Mock the partition processing
-        with patch.object(ddf, "compute") as mock_compute:
+        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
             mock_compute.return_value = df
 
             await receiver.write_bigdata(
@@ -483,11 +483,12 @@ class TestMariaDBReceivers:
                 frame=ddf,
                 metrics=mock_metrics,
                 table="users",
+                if_exists="append",  # Add the required if_exists parameter
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify that compute was called
-            mock_compute.assert_called_once()
+            # Verify that compute was called (2 partitions = 2 calls)
+            assert mock_compute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_write_bulk_with_empty_dataframe(
@@ -786,25 +787,25 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock compute to return a mock object
-        mock_compute_result = df
-        ddf.compute = Mock(return_value=mock_compute_result)
+        # Mock compute to return real pandas DataFrames
+        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+            mock_compute.return_value = df
 
-        # Test write_bigdata
-        result = await receiver.write_bigdata(
-            entity_name="test_table",
-            frame=ddf,
-            metrics=mock_metrics,
-            table="test_table",
-            connection_handler=mock_connection_handler,
-        )
+            # Test write_bigdata with new if_exists parameter
+            result = await receiver.write_bigdata(
+                entity_name="test_table",
+                frame=ddf,
+                metrics=mock_metrics,
+                table="test_table",
+                if_exists="append",  # Add the required if_exists parameter
+                connection_handler=mock_connection_handler,
+            )
 
-        # Verify compute was called
-        ddf.compute.assert_called_once()
-        # Verify return value
-        # result is now a DataFrame, not None
-        assert result is not None
-        assert hasattr(result, "npartitions")
+            # Verify compute was called (2 partitions = 2 calls)
+            assert mock_compute.call_count == 2
+            # Verify return value
+            assert result is not None
+            assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bigdata_empty_partition(
@@ -817,25 +818,25 @@ class TestMariaDBReceivers:
         df = pd.DataFrame()
         ddf = dd.from_pandas(df, npartitions=1)
 
-        # Mock compute to return a mock object
-        mock_compute_result = df
-        ddf.compute = Mock(return_value=mock_compute_result)
+        # Mock compute to return real pandas DataFrames
+        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+            mock_compute.return_value = df
 
-        # Test write_bigdata with empty data
-        result = await receiver.write_bigdata(
-            entity_name="test_table",
-            frame=ddf,
-            metrics=mock_metrics,
-            connection_handler=mock_connection_handler,
-            table="test_table",
-        )
+            # Test write_bigdata with empty data and new if_exists parameter
+            result = await receiver.write_bigdata(
+                entity_name="test_table",
+                frame=ddf,
+                metrics=mock_metrics,
+                connection_handler=mock_connection_handler,
+                table="test_table",
+                if_exists="append",
+            )
 
-        # Verify compute was called
-        ddf.compute.assert_called_once()
-        # Verify return value
-        # result is now a DataFrame, not None
-        assert result is not None
-        assert hasattr(result, "npartitions")
+            # Verify compute was called
+            mock_compute.assert_called_once()
+            # Verify return value
+            assert result is not None
+            assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bigdata_single_partition(
@@ -853,25 +854,25 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 1
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock compute to return a mock object
-        mock_compute_result = df
-        ddf.compute = Mock(return_value=mock_compute_result)
+        # Mock compute to return real pandas DataFrames
+        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+            mock_compute.return_value = df
 
-        # Test write_bigdata
-        result = await receiver.write_bigdata(
-            entity_name="test_table",
-            frame=ddf,
-            metrics=mock_metrics,
-            connection_handler=mock_connection_handler,
-            table="test_table",
-        )
+            # Test write_bigdata with new if_exists parameter
+            result = await receiver.write_bigdata(
+                entity_name="test_table",
+                frame=ddf,
+                metrics=mock_metrics,
+                connection_handler=mock_connection_handler,
+                table="test_table",
+                if_exists="append",
+            )
 
-        # Verify compute was called
-        ddf.compute.assert_called_once()
-        # Verify return value
-        # result is now a DataFrame, not None
-        assert result is not None
-        assert hasattr(result, "npartitions")
+            # Verify compute was called
+            mock_compute.assert_called_once()
+            # Verify return value
+            assert result is not None
+            assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bulk_empty_dataframe_early_return(

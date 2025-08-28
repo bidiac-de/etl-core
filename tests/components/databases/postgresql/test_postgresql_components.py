@@ -273,6 +273,8 @@ class TestPostgreSQLComponents:
             comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
+            if_exists="replace",  # Test the new if_exists parameter
+            bigdata_partition_chunk_size=25_000,  # Test the new bigdata_partition_chunk_size parameter
         )
         write_comp.context = mock_context
 
@@ -287,6 +289,12 @@ class TestPostgreSQLComponents:
         results = []
         async for result in write_comp.process_bigdata(sample_dask_dataframe, mock_metrics):
             results.append(result.payload)
+
+        # Verify the receiver was called with the new parameters
+        mock_receiver.write_bigdata.assert_called_once()
+        call_args = mock_receiver.write_bigdata.call_args
+        assert call_args.kwargs["if_exists"] == "replace"
+        assert call_args.kwargs["bigdata_partition_chunk_size"] == 25_000
 
         assert len(results) == 1  # Only one Out object
         assert hasattr(results[0], "npartitions")

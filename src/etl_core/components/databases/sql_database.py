@@ -26,6 +26,9 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
 
+    # ✅ NEU: if_exists Parameter für alle SQL-Datenbanken
+    if_exists: str = Field(default="append", description="How to behave if the table already exists")
+
     entity_name: str = Field(..., description="Name of the target entity (table/view)")
 
     _connection_handler: SQLConnectionHandler = None

@@ -25,6 +25,8 @@ class PostgreSQLWrite(PostgreSQLComponent):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
+
+
     @model_validator(mode="after")
     def _build_objects(self):
         """Build objects after validation."""
@@ -56,6 +58,8 @@ class PostgreSQLWrite(PostgreSQLComponent):
             metrics=metrics,
             table=self.entity_name,
             query=self.query,
+            if_exists=self.if_exists,
+            bulk_chunk_size=self.bulk_chunk_size,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
@@ -70,6 +74,8 @@ class PostgreSQLWrite(PostgreSQLComponent):
             metrics=metrics,
             table=self.entity_name,
             query=self.query,
+            if_exists=self.if_exists,
+            bigdata_partition_chunk_size=self.bigdata_partition_chunk_size,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
