@@ -18,7 +18,7 @@ from src.components import Schema
 
 
 DATA_DIR = Path(__file__).parent / "data" / "xml"
-VALID_XML = DATA_DIR / "testdata.xml"
+VALID_XML = DATA_DIR / "test_data.xml"
 EXTRA_MISSING_XML = DATA_DIR / "testdata_extra_missing.xml"
 MIXED_TYPES_XML = DATA_DIR / "testdata_mixed_types.xml"
 NESTED_LIKE_XML = DATA_DIR / "testdata_nested_like.xml"

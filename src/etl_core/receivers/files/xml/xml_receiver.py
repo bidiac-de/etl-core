@@ -1,199 +1,127 @@
-from __future__ import annotations
-import asyncio
-import contextlib
-import tempfile
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, TypeVar
-import dask.dataframe as dd
+from typing import Dict, Any, AsyncIterator
 import pandas as pd
+import dask.dataframe as dd
+import asyncio
 
-from etl_core.receivers.files.xml.xml_helper import Schema, iter_xml_records, validate_record, write_records_as_xml
+from etl_core.receivers.files.file_helper import ensure_file_exists, FileReceiverError
+from etl_core.receivers.files.read_file_receiver import ReadFileReceiver
+from etl_core.receivers.files.write_file_receiver import WriteFileReceiver
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.files.xml.xml_helper import (
+    iter_xml_records,
+    read_xml_bulk,
+    read_xml_bigdata,
+    write_xml_row,
+    write_xml_bulk,
+    write_xml_bigdata,
+)
+
+_SENTINEL: Any = object()
 
 
-class FileReceiverError(Exception):
-    pass
+class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
+    """Receiver for XML files (supports nested structures)."""
 
-_S = object()  # sentinel
-T = TypeVar("T")
-
-class XMLReceiver:
-    """Receiver for XML with streaming row/bulk/bigdata, nested dict support, and schema validation."""
-
-    def __init__(self, schema: Optional[Schema] = None) -> None:
-        self._schema = schema
-
-    # ----------------- READ -----------------
     async def read_row(
             self,
             filepath: Path,
+            metrics: ComponentMetrics,
             *,
-            metrics: Any,
+            root_tag: str,
             record_tag: str,
     ) -> AsyncIterator[Dict[str, Any]]:
-        def _on_error(_: Exception):
-            with contextlib.suppress(Exception):
-                metrics.error_count += 1
-
-        it = iter_xml_records(filepath, record_tag=record_tag, on_error=_on_error)
+        """Stream XML records sequentially in a worker thread."""
+        ensure_file_exists(filepath)
+        it = iter_xml_records(filepath, root_tag=root_tag, record_tag=record_tag)
         while True:
-            rec = await asyncio.to_thread(next, it, _S)
-            if rec is _S:
+            row = await asyncio.to_thread(next, it, _SENTINEL)
+            if row is _SENTINEL:
                 break
-            try:
-                rec = validate_record(rec, self._schema)
-            except Exception:
-                with contextlib.suppress(Exception):
-                    metrics.error_count += 1
-                raise
-            with contextlib.suppress(Exception):
-                metrics.lines_received += 1
-            yield rec
+            metrics.lines_received += 1
+            yield row
 
     async def read_bulk(
             self,
             filepath: Path,
+            metrics: ComponentMetrics,
             *,
-            metrics: Any,
             root_tag: str,
             record_tag: str,
     ) -> pd.DataFrame:
-        # stream -> list -> DataFrame (keeps memory moderate for medium files)
-        try:
-            records: List[Dict[str, Any]] = []
-            async for rec in self.read_row(filepath, metrics=metrics, root_tag=root_tag, record_tag=record_tag):
-                records.append(rec)
-            df = pd.DataFrame.from_records(records)
-        except Exception as exc:
-            raise FileReceiverError(f"Failed to read XML to Pandas: {exc}") from exc
-        with contextlib.suppress(Exception):
-            metrics.lines_received += len(df)
+        ensure_file_exists(filepath)
+        df = await asyncio.to_thread(read_xml_bulk, filepath, root_tag, record_tag)
+        metrics.lines_received += len(df)
         return df
 
     async def read_bigdata(
             self,
             filepath: Path,
+            metrics: ComponentMetrics,
             *,
-            metrics: Any,
             root_tag: str,
             record_tag: str,
-            chunk_size: int = 100_000,
     ) -> dd.DataFrame:
-        """Convert XML to temporary partitioned NDJSON under the hood, then read with Dask.
-        This avoids holding the entire XML in memory and provides parallelism.
-        """
-        tmpdir = Path(tempfile.mkdtemp(prefix="xml2jsonl_"))
-        part_index = 0
-        buf: List[Dict[str, Any]] = []
-
+        ddf = await asyncio.to_thread(read_xml_bigdata, filepath, root_tag, record_tag)
+        # counting rows safely (compute once)
         try:
-            async for rec in self.read_row(filepath, metrics=metrics, root_tag=root_tag, record_tag=record_tag):
-                buf.append(rec)
-                if len(buf) >= chunk_size:
-                    part = tmpdir / f"part-{part_index:05d}.jsonl"
-                    await asyncio.to_thread(_write_jsonl, part, buf)
-                    buf.clear()
-                    part_index += 1
-            # tail
-            if buf:
-                part = tmpdir / f"part-{part_index:05d}.jsonl"
-                await asyncio.to_thread(_write_jsonl, part, buf)
-                buf.clear()
-
-            ddf = dd.read_json(str(tmpdir / "part-*.jsonl"), lines=True, blocksize=None)
-        except Exception as exc:
-            raise FileReceiverError(f"Failed to read XML to Dask: {exc}") from exc
-
+            row_count = int(ddf.map_partitions(len).sum().compute())
+        except Exception:
+            row_count = 0
+        metrics.lines_received += row_count
         return ddf
 
-    # ----------------- WRITE -----------------
     async def write_row(
             self,
             filepath: Path,
+            metrics: ComponentMetrics,
             *,
-            metrics: Any,
             row: Dict[str, Any],
             root_tag: str,
             record_tag: str,
-    ) -> None:
-        try:
-            row = validate_record(row, self._schema)
-            # read existing -> append -> atomic overwrite
-            existing: List[Dict[str, Any]] = []
-            if filepath.exists():
-                # stream existing file for memory efficiency
-                for rec in iter_xml_records(filepath, record_tag=record_tag):
-                    existing.append(rec)
-            existing.append(row)
-            await asyncio.to_thread(write_records_as_xml, filepath, existing, root_tag=root_tag, record_tag=record_tag)
-        except Exception as exc:
-            raise FileReceiverError(f"Failed to write XML row: {exc}") from exc
-        with contextlib.suppress(Exception):
-            metrics.lines_received += 1
+    ):
+        metrics.lines_received += 1
+        await asyncio.to_thread(write_xml_row, filepath, row, root_tag, record_tag)
+        metrics.lines_forwarded += 1
 
     async def write_bulk(
             self,
             filepath: Path,
+            metrics: ComponentMetrics,
             *,
-            metrics: Any,
-            data: pd.DataFrame | List[Dict[str, Any]],
+            data: pd.DataFrame,
             root_tag: str,
             record_tag: str,
-    ) -> None:
-        try:
-            if isinstance(data, pd.DataFrame):
-                records = data.to_dict(orient="records")
-            else:
-                records = data
-            # validate
-            if self._schema:
-                records = [validate_record(r, self._schema) for r in records]
-            await asyncio.to_thread(write_records_as_xml, filepath, records, root_tag=root_tag, record_tag=record_tag)
-        except Exception as exc:
-            raise FileReceiverError(f"Failed to write XML bulk: {exc}") from exc
-        with contextlib.suppress(Exception):
-            metrics.lines_received += len(records)  # type: ignore[name-defined]
+    ):
+        metrics.lines_received += len(data)
+        await asyncio.to_thread(write_xml_bulk, filepath, data, root_tag, record_tag)
+        metrics.lines_forwarded += len(data)
 
     async def write_bigdata(
             self,
             filepath: Path,
+            metrics: ComponentMetrics,
             *,
-            metrics: Any,
             data: dd.DataFrame,
+            root_tag: str,
             record_tag: str,
-            root_tag: str = "rows",
-    ) -> None:
-        """Write a Dask DataFrame partition-wise to part-*.xml in a directory."""
-        # count rows first
+    ):
         try:
-            nrows = await asyncio.to_thread(lambda: int(data.map_partitions(len).sum().compute()))
-        except Exception as exc:
-            raise FileReceiverError(f"Failed to count Dask rows: {exc}") from exc
-
-        def _write_partitions():
-            Path(filepath).mkdir(parents=True, exist_ok=True)
-            nparts = data.npartitions
-            for i in range(nparts):
-                pdf = data.get_partition(i).compute()
-                records = pdf.to_dict(orient="records")
-                if self._schema:
-                    records[:] = [validate_record(r, self._schema) for r in records]
-                out_file = Path(filepath) / f"part-{i:05d}.xml"
-                write_records_as_xml(out_file, records, root_tag=root_tag, record_tag=record_tag)
+            data = await asyncio.to_thread(data.persist)
+        except Exception as e:
+            raise FileReceiverError(f"Failed to persist dataframe before write: {e}") from e
 
         try:
-            await asyncio.to_thread(_write_partitions)
-        except Exception as exc:
-            raise FileReceiverError(f"Failed to write XML bigdata: {exc}") from exc
+            row_count = await asyncio.to_thread(
+                lambda: int(data.map_partitions(len).sum().compute())
+            )
+        except Exception as e:
+            raise FileReceiverError(f"Failed to count rows; aborting write: {e}") from e
 
-        with contextlib.suppress(Exception):
-            metrics.lines_received += nrows
+        try:
+            await asyncio.to_thread(write_xml_bigdata, filepath, data, root_tag, record_tag)
+        except Exception as e:
+            raise FileReceiverError(f"Failed to write XML: {e}") from e
 
-# helpers for read_bigdata
-import json as _json
+        metrics.lines_forwarded += row_count
 
-def _write_jsonl(path: Path, records: List[Dict[str, Any]]):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        for r in records:
-            f.write(_json.dumps(r, ensure_ascii=False))
-            f.write("\n")
