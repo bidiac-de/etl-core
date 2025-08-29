@@ -85,26 +85,14 @@ class MariaDBReceiver(SQLReceiver):
         """Write a single row and return the result."""
         query = driver_kwargs.get("query")
 
-        if query:
-            # Use custom query if provided
-            def _execute_query():
-                with connection_handler.lease() as conn:
-                    result = conn.execute(text(query), row)
-                    conn.commit()
-                    return {"affected_rows": result.rowcount, "row": row}
+        if not query:
+            raise ValueError("Query must be provided for write operations")
 
-        else:
-            # Fall back to auto-generated INSERT query
-            columns = list(row.keys())
-            columns_str = ", ".join(columns)
-            placeholders = ", ".join([f":{col}" for col in columns])
-            query = f"INSERT INTO {entity_name} ({columns_str}) VALUES ({placeholders})"
-
-            def _execute_query():
-                with connection_handler.lease() as conn:
-                    result = conn.execute(text(query), row)
-                    conn.commit()
-                    return {"affected_rows": result.rowcount, "row": row}
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                result = conn.execute(text(query), row)
+                conn.commit()
+                return {"affected_rows": result.rowcount, "row": row}
 
         return await asyncio.to_thread(_execute_query)
 
@@ -122,31 +110,16 @@ class MariaDBReceiver(SQLReceiver):
             return frame
 
         query = driver_kwargs.get("query")
-        table = driver_kwargs.get("table", entity_name)
+        if not query:
+            raise ValueError("Query must be provided for write operations")
 
-        if query:
-            # Use custom query if provided
-            def _execute_query():
-                with connection_handler.lease() as conn:
-                    # Execute custom query for each row
-                    for _, row in frame.iterrows():
-                        conn.execute(text(query), row.to_dict())
-                    conn.commit()
-                    return frame
-
-        else:
-            # Fall back to pandas.to_sql()
-            def _execute_query():
-                with connection_handler.lease() as conn:
-                    frame.to_sql(
-                        table,
-                        conn,
-                        if_exists="append",
-                        index=False,
-                        method="multi",
-                    )
-                    conn.commit()
-                    return frame
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                # Execute custom query for each row
+                for _, row in frame.iterrows():
+                    conn.execute(text(query), row.to_dict())
+                conn.commit()
+                return frame
 
         return await asyncio.to_thread(_execute_query)
 
@@ -160,38 +133,18 @@ class MariaDBReceiver(SQLReceiver):
         **driver_kwargs: Any,
     ) -> dd.DataFrame:
         """Write a Dask DataFrame and return it."""
-        # Don't check frame.empty for Dask DataFrames as it's expensive
-        # Empty partitions will be handled within the processing logic
-
         query = driver_kwargs.get("query")
-        table = driver_kwargs.get("table", entity_name)
-        if_exists = driver_kwargs.get("if_exists", "append")
-        chunk_size = driver_kwargs.get("bigdata_partition_chunk_size", 50_000)
+        if not query:
+            raise ValueError("Query must be provided for write operations")
 
         def _execute_query():
             with connection_handler.lease() as conn:
-                if query:
-                    # Use custom query if provided
-                    for partition in frame.map_partitions(lambda pdf: pdf).partitions:
-                        pdf = partition.compute()
-                        if not pdf.empty:  # Check individual partition instead
-                            for _, row in pdf.iterrows():
-                                conn.execute(text(query), row.to_dict())
-                else:
-                    # Fall back to pandas.to_sql() for each partition
-                    total_rows = 0
-                    for partition in frame.map_partitions(lambda pdf: pdf).partitions:
-                        pdf = partition.compute()
-                        if not pdf.empty:  # Check individual partition instead
-                            pdf.to_sql(
-                                table,
-                                conn,
-                                if_exists=if_exists if total_rows == 0 else "append",
-                                index=False,
-                                method="multi",
-                                chunksize=chunk_size,
-                            )
-                            total_rows += len(pdf)
+                # Execute custom query for each partition
+                for partition in frame.map_partitions(lambda pdf: pdf).partitions:
+                    pdf = partition.compute()
+                    if not pdf.empty:
+                        for _, row in pdf.iterrows():
+                            conn.execute(text(query), row.to_dict())
                 conn.commit()
                 return frame
 

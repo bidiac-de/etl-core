@@ -39,12 +39,15 @@ class MariaDBWrite(MariaDBComponent):
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a single row and emit it (or receiver result) on 'out'."""
+        # Build query based on if_exists strategy
+        columns = list(row.keys())
+        query = self._build_upsert_query(self.entity_name, columns, self.if_exists)
+
         result = await self._receiver.write_row(
             entity_name=self.entity_name,
             row=row,
             metrics=metrics,
-            table=self.entity_name,
-            query=self.query,
+            query=query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
@@ -53,14 +56,15 @@ class MariaDBWrite(MariaDBComponent):
         self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a pandas DataFrame and emit the same frame on 'out'."""
+        # Build query based on if_exists strategy
+        columns = list(data.columns)
+        query = self._build_upsert_query(self.entity_name, columns, self.if_exists)
+
         result = await self._receiver.write_bulk(
             entity_name=self.entity_name,
             frame=data,
             metrics=metrics,
-            table=self.entity_name,
-            query=self.query,
-            if_exists=self.if_exists,
-            bulk_chunk_size=self.bulk_chunk_size,
+            query=query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
@@ -69,14 +73,17 @@ class MariaDBWrite(MariaDBComponent):
         self, ddf: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a Dask DataFrame and emit the same ddf on 'out'."""
+        # Build query based on if_exists strategy
+        # Get columns from first partition
+        first_partition = ddf.map_partitions(lambda pdf: pdf).partitions[0].compute()
+        columns = list(first_partition.columns)
+        query = self._build_upsert_query(self.entity_name, columns, self.if_exists)
+
         result = await self._receiver.write_bigdata(
             entity_name=self.entity_name,
             frame=ddf,
             metrics=metrics,
-            table=self.entity_name,
-            query=self.query,
-            if_exists=self.if_exists,
-            bigdata_partition_chunk_size=self.bigdata_partition_chunk_size,
+            query=query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)

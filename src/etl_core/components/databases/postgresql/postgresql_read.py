@@ -19,6 +19,7 @@ class PostgreSQLRead(PostgreSQLComponent):
     
     ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
     
+    query: str = Field(default="", description="SQL query for read operations")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 
     @model_validator(mode="after")
