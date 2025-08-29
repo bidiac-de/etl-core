@@ -13,7 +13,7 @@ class SQLServerComponent(SQLDatabaseComponent):
 
     def _setup_session_variables(self):
         """Setup SQL Server-specific session variables."""
-        if not self._connection_handler:
+        if not self._connection_handler or not self.charset:
             return
 
         try:

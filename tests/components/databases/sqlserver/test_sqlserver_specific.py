@@ -166,8 +166,9 @@ class TestSQLServerSpecificFeatures:
             comp_type="read_sqlserver"
         )
         
-        # Mock the parent _build_objects method and session setup
+        # Mock the _setup_session_variables method to avoid connection issues
         with patch.object(component, '_setup_session_variables') as mock_setup:
+            # Call _build_objects directly
             result = component._build_objects()
             
             # Verify session setup was called
@@ -293,18 +294,33 @@ class TestSQLServerSpecificFeatures:
 
     def test_sqlserver_component_zero_chunk_sizes(self):
         """Test SQL Server component with zero chunk sizes."""
+        # Test with minimum allowed chunk sizes (1) instead of 0
         component = SQLServerWrite(
             credentials_id=1,
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
             comp_type="write_sqlserver",
-            bulk_chunk_size=0,
-            bigdata_partition_chunk_size=0
+            bulk_chunk_size=1,
+            bigdata_partition_chunk_size=1
         )
         
-        assert component.bulk_chunk_size == 0
-        assert component.bigdata_partition_chunk_size == 0
+        assert component.bulk_chunk_size == 1
+        assert component.bigdata_partition_chunk_size == 1
+
+    def test_sqlserver_component_zero_chunk_sizes_validation(self):
+        """Test SQL Server component validation prevents zero chunk sizes."""
+        # Test that validation prevents zero chunk sizes
+        with pytest.raises(Exception):  # Should raise validation error
+            SQLServerWrite(
+                credentials_id=1,
+                entity_name="test_table",
+                name="test_component",
+                description="Test SQL Server component",
+                comp_type="write_sqlserver",
+                bulk_chunk_size=0,
+                bigdata_partition_chunk_size=0
+            )
 
     def test_sqlserver_component_large_chunk_sizes(self):
         """Test SQL Server component with large chunk sizes."""

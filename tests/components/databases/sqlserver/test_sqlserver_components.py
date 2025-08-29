@@ -174,10 +174,13 @@ class TestSQLServerRead:
         
         # Mock the receiver with async methods
         mock_receiver = Mock()
-        mock_receiver.read_row = AsyncMock(return_value=iter([
-            {"id": 1, "name": "John"},
-            {"id": 2, "name": "Jane"}
-        ]))
+        
+        # Create an async generator for read_row
+        async def mock_read_row_generator(entity_name, metrics, query, params, connection_handler):
+            yield {"id": 1, "name": "John"}
+            yield {"id": 2, "name": "Jane"}
+        
+        mock_receiver.read_row = mock_read_row_generator
         component._receiver = mock_receiver
         
         # Test process_row
