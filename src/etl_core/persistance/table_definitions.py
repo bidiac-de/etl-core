@@ -1,7 +1,7 @@
-from typing import Any, Optional
+from typing import Any, Optional, List
 from uuid import uuid4
 
-from sqlalchemy import Column, ForeignKey
+from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer, String
 from sqlalchemy.types import JSON
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -10,30 +10,14 @@ from etl_core.persistance.base_models.dataclasses_base import LayoutBase, MetaDa
 from etl_core.persistance.base_models.job_base import JobBase
 
 _FOREIGN_KEY_COMPONENT_TABLE = "componenttable.id"
+_FOREIGN_KEY_JOB_TABLE = "jobtable.id"
 _CASCADE_ALL = "all, delete-orphan"
-
-
-class ComponentNextLink(SQLModel, table=True):
-    component_id: str = Field(
-        sa_column=Column(
-            ForeignKey(_FOREIGN_KEY_COMPONENT_TABLE, ondelete="CASCADE"),
-            primary_key=True,
-            nullable=False,
-        )
-    )
-    next_id: str = Field(
-        sa_column=Column(
-            ForeignKey(_FOREIGN_KEY_COMPONENT_TABLE, ondelete="CASCADE"),
-            primary_key=True,
-            nullable=False,
-        )
-    )
 
 
 class JobTable(JobBase, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
 
-    components: list["ComponentTable"] = Relationship(
+    components: List["ComponentTable"] = Relationship(
         back_populates="job",
         sa_relationship_kwargs={
             "cascade": _CASCADE_ALL,
@@ -54,11 +38,15 @@ class JobTable(JobBase, table=True):
 
 
 class ComponentTable(ComponentBase, table=True):
+    __table_args__ = (
+        UniqueConstraint("job_id", "name", name="uq_components_job_name"),
+    )
+
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
 
     job_id: str = Field(
         sa_column=Column(
-            ForeignKey("jobtable.id", ondelete="CASCADE"),
+            ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"),
             nullable=False,
         )
     )
@@ -70,6 +58,24 @@ class ComponentTable(ComponentBase, table=True):
     payload: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),
+    )
+
+    # wiring (edges)
+    outgoing_links: List["ComponentLinkTable"] = Relationship(
+        back_populates="src_component",
+        sa_relationship_kwargs={
+            "cascade": _CASCADE_ALL,
+            "passive_deletes": True,
+            "primaryjoin": "ComponentTable.id==ComponentLinkTable.src_component_id",
+        },
+    )
+    incoming_links: List["ComponentLinkTable"] = Relationship(
+        back_populates="dst_component",
+        sa_relationship_kwargs={
+            "cascade": _CASCADE_ALL,
+            "passive_deletes": True,
+            "primaryjoin": "ComponentTable.id==ComponentLinkTable.dst_component_id",
+        },
     )
 
     layout: Optional["LayoutTable"] = Relationship(
@@ -91,22 +97,59 @@ class ComponentTable(ComponentBase, table=True):
         },
     )
 
-    next_components: list["ComponentTable"] = Relationship(
-        back_populates="prev_components",
-        link_model=ComponentNextLink,
+
+class ComponentLinkTable(SQLModel, table=True):
+    """
+    Port-to-port wiring edge. Ordering is tracked by 'position' to keep
+    targets stable per out_port when needed by the runtime/UI.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+
+    job_id: str = Field(
+        sa_column=Column(
+            ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"), nullable=False
+        )
+    )
+
+    src_component_id: str = Field(
+        sa_column=Column(
+            ForeignKey(_FOREIGN_KEY_COMPONENT_TABLE, ondelete="CASCADE"), nullable=False
+        )
+    )
+    src_out_port: str = Field(sa_column=Column(String, nullable=False))
+
+    dst_component_id: str = Field(
+        sa_column=Column(
+            ForeignKey(_FOREIGN_KEY_COMPONENT_TABLE, ondelete="CASCADE"), nullable=False
+        )
+    )
+    dst_in_port: str = Field(sa_column=Column(String, nullable=False))
+
+    # preserve order among multiple edges from the same out port
+    position: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, default=0)
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "src_component_id",
+            "src_out_port",
+            "position",
+            name="uq_links_src_port_position",
+        ),
+    )
+
+    src_component: "ComponentTable" = Relationship(
+        back_populates="outgoing_links",
         sa_relationship_kwargs={
-            "primaryjoin": "ComponentTable.id==ComponentNextLink.component_id",
-            "secondaryjoin": "ComponentTable.id==ComponentNextLink.next_id",
-            "passive_deletes": True,
+            "primaryjoin": "ComponentLinkTable.src_component_id==ComponentTable.id",
         },
     )
-    prev_components: list["ComponentTable"] = Relationship(
-        back_populates="next_components",
-        link_model=ComponentNextLink,
+    dst_component: "ComponentTable" = Relationship(
+        back_populates="incoming_links",
         sa_relationship_kwargs={
-            "primaryjoin": "ComponentTable.id==ComponentNextLink.next_id",
-            "secondaryjoin": "ComponentTable.id==ComponentNextLink.component_id",
-            "passive_deletes": True,
+            "primaryjoin": "ComponentLinkTable.dst_component_id==ComponentTable.id",
         },
     )
 
@@ -114,11 +157,10 @@ class ComponentTable(ComponentBase, table=True):
 class MetaDataTable(MetaDataBase, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
 
-    # Exactly one of these should be set, enforced by the handler
     job_id: Optional[str] = Field(
         default=None,
         sa_column=Column(
-            ForeignKey("jobtable.id", ondelete="CASCADE"),
+            ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"),
             unique=True,
             nullable=True,
         ),

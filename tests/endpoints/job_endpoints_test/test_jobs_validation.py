@@ -4,11 +4,7 @@ from fastapi.testclient import TestClient
 
 
 def test_create_job_invalid_component_type(client: TestClient) -> None:
-    config = {
-        "components": [
-            {"comp_type": "unknown", "name": "a", "description": "d", "next": []}
-        ]
-    }
+    config = {"components": [{"comp_type": "unknown", "name": "a", "description": "d"}]}
     response = client.post("/jobs/", json=config)
     assert response.status_code == 422
     detail = response.json().get("detail")
@@ -28,8 +24,8 @@ def test_create_job_invalid_retries(client: TestClient) -> None:
 def test_create_job_duplicate_component_names(client: TestClient) -> None:
     config = {
         "components": [
-            {"comp_type": "test", "name": "dup", "description": "d", "next": []},
-            {"comp_type": "test", "name": "dup", "description": "d", "next": []},
+            {"comp_type": "test", "name": "dup", "description": "d"},
+            {"comp_type": "test", "name": "dup", "description": "d"},
         ]
     }
     response = client.post("/jobs/", json=config)

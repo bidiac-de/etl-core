@@ -40,3 +40,5 @@ xlrd
 # Type Checking
 mypy
 types-requests
+httpx
+openpyxl

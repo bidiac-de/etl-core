@@ -24,21 +24,6 @@ class TestMariaDBIntegration:
     """Integration tests for MariaDB components and receivers."""
 
     @pytest.fixture
-    def mock_context(self):
-        """Create a mock context with credentials."""
-        context = Mock()
-        # Create mock credentials with get_parameter method
-        mock_credentials = Mock()
-        mock_credentials.get_parameter.side_effect = lambda param: {
-            "user": "testuser",
-            "password": "testpass",
-            "database": "testdb",
-        }.get(param)
-        mock_credentials.decrypted_password = "testpass"
-        context.get_credentials.return_value = mock_credentials
-        return context
-
-    @pytest.fixture
     def mock_metrics(self):
         """Create mock component metrics."""
         metrics = Mock(spec=ComponentMetrics)
@@ -130,14 +115,14 @@ class TestMariaDBIntegration:
         # Test read operation
         read_results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            read_results.append(result)
+            read_results.append(result.payload)
 
         assert len(read_results) == 2
 
         # Test write operation
         write_results = []
         async for result in write_comp.process_row(read_results[0], mock_metrics):
-            write_results.append(result)
+            write_results.append(result.payload)
 
         assert len(write_results) == 1
         # The result now contains the receiver response
@@ -185,7 +170,7 @@ class TestMariaDBIntegration:
         payload = {"id": 1}
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 2
         assert results[0]["id"] == 1
@@ -214,8 +199,9 @@ class TestMariaDBIntegration:
         mock_strategy = Mock(spec=ExecutionStrategy)
 
         async def mock_execute_generator(component, payload, metrics):
-            result = await read_comp.process_bigdata(payload, metrics)
-            yield result
+            gen = read_comp.process_bigdata(payload, metrics)
+            out = await anext(gen)
+            yield out
 
         mock_strategy.execute = mock_execute_generator
         read_comp._strategy = mock_strategy
@@ -223,7 +209,7 @@ class TestMariaDBIntegration:
         # Test bigdata execution
         results = []
         async for result in read_comp.execute(sample_ddf, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert hasattr(results[0], "npartitions")
@@ -265,7 +251,7 @@ class TestMariaDBIntegration:
         payload = {"id": 1}
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert results[0]["id"] == 1
@@ -324,7 +310,7 @@ class TestMariaDBIntegration:
         payload = {"id": 1}
         results = []
         async for result in read_comp.process_row(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         # Verify metrics were called
         mock_metrics.set_started.assert_called_once()
@@ -388,8 +374,9 @@ class TestMariaDBIntegration:
         mock_strategy = Mock(spec=ExecutionStrategy)
 
         async def mock_execute_generator(component, payload, metrics):
-            result = await read_comp.process_bulk(payload, metrics)
-            yield result
+            gen = read_comp.process_bulk(payload, metrics)
+            out = await anext(gen)
+            yield out
 
         mock_strategy.execute = mock_execute_generator
         read_comp._strategy = mock_strategy
@@ -398,7 +385,7 @@ class TestMariaDBIntegration:
         payload = sample_dataframe
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
 
         assert len(results) == 1
         assert len(results[0]) == 2
@@ -464,11 +451,12 @@ class TestMariaDBIntegration:
         read_comp._receiver = mock_receiver
 
         # Test large dataset processing
-        result = await read_comp.process_bulk(large_df, mock_metrics)
+        gen = read_comp.process_bulk(large_df, mock_metrics)
+        result = await anext(gen)
 
-        assert len(result) == 1000
-        assert result.iloc[0]["id"] == 0
-        assert result.iloc[999]["id"] == 999
+        assert len(result.payload) == 1000
+        assert result.payload.iloc[0]["id"] == 0
+        assert result.payload.iloc[999]["id"] == 999
 
     @pytest.mark.asyncio
     async def test_concurrent_operations_integration(self, mock_context, mock_metrics):
@@ -497,7 +485,7 @@ class TestMariaDBIntegration:
         async def concurrent_operation():
             results = []
             async for result in read_comp.process_row({"id": 1}, mock_metrics):
-                results.append(result)
+                results.append(result.payload)
             return results
 
         # Run multiple concurrent operations
@@ -553,11 +541,12 @@ class TestMariaDBIntegration:
         # Transform data (simulate ETL transformation)
         transformed_data = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
+            res = result.payload
             # Transform: combine first_name and last_name
             transformed = {
-                "id": result["id"],
-                "full_name": f"{result['first_name']} {result['last_name']}",
-                "email": result["email"],
+                "id": res["id"],
+                "full_name": f"{res['first_name']} {res['last_name']}",
+                "email": res["email"],
             }
             transformed_data.append(transformed)
 
@@ -631,7 +620,7 @@ class TestMariaDBIntegration:
         # Test performance metrics
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            results.append(result)
+            results.append(result.payload)
         end_time = asyncio.get_event_loop().time()
 
         # Verify metrics and timing
