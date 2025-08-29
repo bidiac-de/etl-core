@@ -11,7 +11,7 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 from etl_core.receivers.base_receiver import Receiver
 
 
-class _Path:
+class schema_path:
     """Parsed dotted path for nested dict access like 'user.address.city'."""
 
     __slots__ = ("parts",)
@@ -20,14 +20,14 @@ class _Path:
         self.parts = parts
 
     @classmethod
-    def parse(cls, text: str) -> "_Path":
+    def parse(cls, text: str) -> "schema_path":
         parts = [p for p in text.split(".") if p]
         return cls(parts=parts)
 
 
 # Rules can be string-based (bulk/bigdata) or compiled (row)
 _StrRule = Tuple[str, str, str, str]
-_CompiledRule = Tuple[str, _Path, str, _Path]
+_CompiledRule = Tuple[str, schema_path, str, schema_path]
 _Rule = Union[_StrRule, _CompiledRule]
 
 
@@ -51,7 +51,9 @@ class SchemaMappingReceiver(Receiver):
         metrics.lines_received += 1
 
         # Group rules by dst_port, for fan out and collecting multiple inputs
-        rules_by_dst: Dict[str, List[Tuple[Union[str, _Path], Union[str, _Path]]]] = {}
+        rules_by_dst: Dict[
+            str, List[Tuple[Union[str, schema_path], Union[str, schema_path]]]
+        ] = {}
         for _src_port, src_path, dst_port, dst_path in rules:
             rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
 
@@ -60,10 +62,14 @@ class SchemaMappingReceiver(Receiver):
             out: Dict[str, Any] = {}
             for src_path, dst_path in pairs:
                 src_p = (
-                    src_path if isinstance(src_path, _Path) else _Path.parse(src_path)
+                    src_path
+                    if isinstance(src_path, schema_path)
+                    else schema_path.parse(src_path)
                 )  # cached for compiled
                 dst_p = (
-                    dst_path if isinstance(dst_path, _Path) else _Path.parse(dst_path)
+                    dst_path
+                    if isinstance(dst_path, schema_path)
+                    else schema_path.parse(dst_path)
                 )
                 val = _read_path(row, src_p)
                 _write_path(out, dst_p, val)
@@ -84,8 +90,8 @@ class SchemaMappingReceiver(Receiver):
         # Group rules by dst_port, string column names
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _src_port, src_path, dst_port, dst_path in rules:
-            src = src_path.parts[-1] if isinstance(src_path, _Path) else src_path
-            dst = dst_path.parts[-1] if isinstance(dst_path, _Path) else dst_path
+            src = src_path.parts[-1] if isinstance(src_path, schema_path) else src_path
+            dst = dst_path.parts[-1] if isinstance(dst_path, schema_path) else dst_path
             rules_by_dst.setdefault(dst_port, []).append((src, dst))
 
         # apply mapping rules
@@ -112,8 +118,8 @@ class SchemaMappingReceiver(Receiver):
         # Group rules by dst_port
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _src_port, src_path, dst_port, dst_path in rules:
-            src = src_path.parts[-1] if isinstance(src_path, _Path) else src_path
-            dst = dst_path.parts[-1] if isinstance(dst_path, _Path) else dst_path
+            src = src_path.parts[-1] if isinstance(src_path, schema_path) else src_path
+            dst = dst_path.parts[-1] if isinstance(dst_path, schema_path) else dst_path
             rules_by_dst.setdefault(dst_port, []).append((src, dst))
 
         # apply mapping rules
@@ -136,7 +142,7 @@ class SchemaMappingReceiver(Receiver):
 # helpers
 
 
-def _read_path(src: Dict[str, Any], path: _Path) -> Any:
+def _read_path(src: Dict[str, Any], path: schema_path) -> Any:
     cur: Any = src
     for key in path.parts:
         if not isinstance(cur, dict) or key not in cur:
@@ -145,7 +151,7 @@ def _read_path(src: Dict[str, Any], path: _Path) -> Any:
     return cur
 
 
-def _write_path(dst: Dict[str, Any], path: _Path, value: Any) -> None:
+def _write_path(dst: Dict[str, Any], path: schema_path, value: Any) -> None:
     cur = dst
     for key in path.parts[:-1]:
         nxt = cur.get(key)

@@ -10,6 +10,10 @@ from etl_core.components.data_operations.schema_mapping.mapping_rule import (
 from etl_core.components.data_operations.schema_mapping.schema_mapping_component import (  # noqa: E501
     SchemaMappingComponent,
 )
+from etl_core.components.data_operations.schema_mapping.join_rules import (
+    JoinPlan,
+    JoinStep,
+)
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
@@ -168,3 +172,114 @@ def test_leaf_type_mismatch_raises() -> None:
                 )
             ],
         )
+
+
+# ----------------------- NEW: join plan validation ----------------------- #
+
+
+def test_join_plan_unknown_ports_raise() -> None:
+    with pytest.raises(ValueError, match="unknown left_port"):
+        SchemaMappingComponent(
+            name="BadJoinPort",
+            description="",
+            comp_type="schema_mapping",
+            extra_input_ports=["in1", "in2"],
+            in_port_schemas={
+                "in1": Schema(fields=[FieldDef(name="id", data_type="integer")]),
+                "in2": Schema(fields=[FieldDef(name="x", data_type="integer")]),
+            },
+            extra_output_ports=["J"],
+            out_port_schemas={
+                "J": Schema(fields=[FieldDef(name="id", data_type="integer")])
+            },  # noqa: E501
+            join_plan=JoinPlan(
+                steps=[
+                    JoinStep(
+                        left_port="nope",
+                        right_port="in2",
+                        left_on="id",
+                        right_on="x",
+                        how="inner",
+                        output_port="J",
+                    )
+                ]
+            ),
+        )
+
+
+def test_join_plan_key_not_in_schema_raises() -> None:
+    with pytest.raises(ValueError, match="join key .* not in schema"):
+        SchemaMappingComponent(
+            name="BadJoinKey",
+            description="",
+            comp_type="schema_mapping",
+            extra_input_ports=["in1", "in2"],
+            in_port_schemas={
+                "in1": Schema(fields=[FieldDef(name="id", data_type="integer")]),
+                "in2": Schema(fields=[FieldDef(name="x", data_type="integer")]),
+            },
+            extra_output_ports=["J"],
+            out_port_schemas={
+                "J": Schema(fields=[FieldDef(name="id", data_type="integer")])
+            },  # noqa: E501
+            join_plan=JoinPlan(
+                steps=[
+                    JoinStep(
+                        left_port="in1",
+                        right_port="in2",
+                        left_on="nope",
+                        right_on="x",
+                        how="inner",
+                        output_port="J",
+                    )
+                ]
+            ),
+        )
+
+
+def test_requires_tagged_input_flag() -> None:
+    # multiple inputs + join plan -> True
+    comp_multi = SchemaMappingComponent(
+        name="FlagTrue",
+        description="",
+        comp_type="schema_mapping",
+        extra_input_ports=["A", "B"],
+        in_port_schemas={
+            "A": Schema(fields=[FieldDef(name="id", data_type="integer")]),
+            "B": Schema(fields=[FieldDef(name="bid", data_type="integer")]),
+        },
+        extra_output_ports=["J"],
+        out_port_schemas={
+            "J": Schema(fields=[FieldDef(name="id", data_type="integer")])
+        },  # noqa: E501
+        join_plan=JoinPlan(
+            steps=[
+                JoinStep(
+                    left_port="A",
+                    right_port="B",
+                    left_on="id",
+                    right_on="bid",
+                    how="inner",
+                    output_port="J",
+                )
+            ]
+        ),
+    )
+    assert comp_multi.requires_tagged_input() is True
+
+    # single input or no join plan -> False
+    comp_single = SchemaMappingComponent(
+        name="FlagFalse",
+        description="",
+        comp_type="schema_mapping",
+        extra_input_ports=["A"],
+        in_port_schemas={
+            "A": Schema(fields=[FieldDef(name="id", data_type="integer")]),
+        },
+        extra_output_ports=["J"],
+        out_port_schemas={
+            "J": Schema(fields=[FieldDef(name="id", data_type="integer")])
+        },  # noqa: E501
+        join_plan=JoinPlan(steps=[]),
+    )
+    assert comp_single.requires_tagged_input() is False

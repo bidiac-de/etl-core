@@ -13,7 +13,7 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 )
 from etl_core.receivers.data_operations_receivers.schema_mapping.schema_mapping_receiver import (  # noqa: E501
     SchemaMappingReceiver,
-    _Path,
+    schema_path,
     _read_path,
     _write_path,
     _map_dataframe,
@@ -243,11 +243,11 @@ async def test_receiver_bigdata_flat_in_to_nested_out(
 
 def test_path_helpers_read_write_nested() -> None:
     src = {"a": {"b": {"c": 42}}}
-    assert _read_path(src, _Path.parse("a.b.c")) == 42
-    assert _read_path(src, _Path.parse("a.b.nope")) is None
+    assert _read_path(src, schema_path.parse("a.b.c")) == 42
+    assert _read_path(src, schema_path.parse("a.b.nope")) is None
 
     dst: Dict[str, Any] = {}
-    _write_path(dst, _Path.parse("x.y.z"), "val")
+    _write_path(dst, schema_path.parse("x.y.z"), "val")
     assert dst == {"x": {"y": {"z": "val"}}}
 
 
