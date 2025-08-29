@@ -32,11 +32,11 @@ StrRule = Tuple[str, str, str, str]
 
 class SchemaMappingComponent(DataOperationsComponent):
     """
-    Orchestrates mapping and joins.
+    Orchestrates mapping and joins
 
-    - This class owns buffering for row/bulk/bigdata.
-    - Receiver is stateless; we pass everything it needs per call.
-    - External contracts (envelopes, metrics) stay the same.
+    - Owns buffering for row/bulk/bigdata
+    - Receiver is stateless; we pass everything it needs per call
+    - Metrics are updated exclusively inside the receiver
     """
 
     rules: List[FieldMapping] = Field(default_factory=list)
@@ -80,7 +80,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         return self
 
     def requires_tagged_input(self) -> bool:
-        # needed when join is defined and more than one input port is active
+        # Needed when join is defined and more than one input port is active
         return bool(self.join_plan.steps) and len(self.expected_in_port_names()) > 1
 
     async def process_row(
@@ -105,13 +105,11 @@ class SchemaMappingComponent(DataOperationsComponent):
         row: InTagged,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Buffer rows per-port: Ellipsis signals that port is closed
-        # Ellipsis are coming from exec-handler
+        # Buffer rows per-port; Ellipsis signals that a port is closed
         if row.payload is Ellipsis:
             self._closed_ports.add(row.in_port)
         else:
             self._row_buf.setdefault(row.in_port, []).append(row.payload)
-            metrics.lines_received += 1
 
         # Join once all required ports have been closed
         if not self._ready_to_join():
@@ -120,11 +118,10 @@ class SchemaMappingComponent(DataOperationsComponent):
         results = self._receiver.run_row_joins(
             buffers=self._row_buf,
             join_plan=self.join_plan,
+            metrics=metrics,
         )
         for port, rows in results.items():
             for payload in rows:
-                metrics.lines_processed += 1
-                metrics.lines_forwarded += 1
                 yield Out(port=port, payload=payload)
         self._reset_buffers()
 
@@ -133,11 +130,12 @@ class SchemaMappingComponent(DataOperationsComponent):
         row: Dict[str, Any],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        metrics.lines_received += 1
         srules = self._rules_as_tuples()
-        for port, payload in self._receiver.map_row(row=row, rules=srules):
-            metrics.lines_processed += 1
-            metrics.lines_forwarded += 1
+        for port, payload in self._receiver.map_row(
+            row=row,
+            rules=srules,
+            metrics=metrics,
+        ):
             yield Out(port=port, payload=payload)
 
     async def process_bulk(
@@ -146,7 +144,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Tagged envelopes for bulk joins, plain frames for mapping
+        # Tagged envelopes for bulk joins; plain frames for mapping
         if self._is_tagged_join(dataframe):
             async for out in self._process_bulk_tagged_join(dataframe, metrics):
                 yield out
@@ -161,12 +159,11 @@ class SchemaMappingComponent(DataOperationsComponent):
         dataframe: InTagged,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Buffer frames per port, concatenate chunks until closed
+        # Buffer frames per port; concatenate chunks until closed
         if dataframe.payload is Ellipsis:
             self._closed_ports.add(dataframe.in_port)
         else:
             df = dataframe.payload
-            metrics.lines_received += int(df.shape[0])
             cur = self._bulk_buf.get(dataframe.in_port)
             if cur is None:
                 self._bulk_buf[dataframe.in_port] = df
@@ -183,11 +180,9 @@ class SchemaMappingComponent(DataOperationsComponent):
             join_plan=self.join_plan,
             out_port_schemas=self.out_port_schemas,
             path_separator=self._schema_path_separator,
+            metrics=metrics,
         )
         for port, out_df in results.items():
-            lines = int(out_df.shape[0])
-            metrics.lines_processed += lines
-            metrics.lines_forwarded += lines
             yield Out(port=port, payload=out_df)
         self._reset_buffers()
 
@@ -196,18 +191,14 @@ class SchemaMappingComponent(DataOperationsComponent):
         dataframe: pd.DataFrame,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Map columns, then trim by output schema, pd join keeps both fields
-        metrics.lines_received += int(dataframe.shape[0])
         srules = self._rules_as_tuples()
         for port, out_df in self._receiver.map_bulk(
             dataframe=dataframe,
             rules=srules,
             out_port_schemas=self.out_port_schemas,
             path_separator=self._schema_path_separator,
+            metrics=metrics,
         ):
-            lines = int(out_df.shape[0])
-            metrics.lines_processed += lines
-            metrics.lines_forwarded += lines
             yield Out(port=port, payload=out_df)
 
     async def process_bigdata(
@@ -216,7 +207,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Dask joins also use tagged envelopes, plain DDF for mapping.
+        # Dask joins also use tagged envelopes; plain DDF for mapping
         if self._is_tagged_join(ddf):
             async for out in self._process_bigdata_tagged_join(ddf, metrics):
                 yield out
@@ -231,7 +222,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         ddf: InTagged,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Concatenate DDFs per port, Ellipsis closes ports
+        # Concatenate DDFs per port; Ellipsis closes the port
         if ddf.payload is Ellipsis:
             self._closed_ports.add(ddf.in_port)
         else:
@@ -241,8 +232,6 @@ class SchemaMappingComponent(DataOperationsComponent):
             else:
                 self._big_buf[ddf.in_port] = dd.concat([cur, ddf.payload])
 
-            metrics.lines_received += self._safe_ddf_len(ddf.payload)
-
         if not self._ready_to_join():
             return
 
@@ -251,11 +240,9 @@ class SchemaMappingComponent(DataOperationsComponent):
             join_plan=self.join_plan,
             out_port_schemas=self.out_port_schemas,
             path_separator=self._schema_path_separator,
+            metrics=metrics,
         )
         for port, out_ddf in results.items():
-            lines = self._safe_ddf_len(out_ddf)
-            metrics.lines_processed += lines
-            metrics.lines_forwarded += lines
             yield Out(port=port, payload=out_ddf)
         self._reset_buffers()
 
@@ -264,18 +251,14 @@ class SchemaMappingComponent(DataOperationsComponent):
         ddf: dd.DataFrame,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        metrics.lines_received += self._safe_ddf_len(ddf)
-
         srules = self._rules_as_tuples()
         for port, out_ddf in self._receiver.map_bigdata(
             ddf=ddf,
             rules=srules,
             out_port_schemas=self.out_port_schemas,
             path_separator=self._schema_path_separator,
+            metrics=metrics,
         ):
-            lines = self._safe_ddf_len(out_ddf)
-            metrics.lines_processed += lines
-            metrics.lines_forwarded += lines
             yield Out(port=port, payload=out_ddf)
 
     def _is_tagged_join(self, obj: Any) -> bool:
@@ -287,19 +270,11 @@ class SchemaMappingComponent(DataOperationsComponent):
         return [(r.src_port, r.src_path, r.dst_port, r.dst_path) for r in self.rules]
 
     @staticmethod
-    def _safe_ddf_len(ddf: dd.DataFrame) -> int:
-        # Compute row count defensively, as some Dask graphs can fail here
-        try:
-            return int(ddf.map_partitions(len).sum().compute())
-        except Exception:
-            return 0
-
-    @staticmethod
     def _compute_required_ports(
         join_plan: JoinPlan,
         in_port_schemas: Dict[str, Schema],
     ) -> set[str]:
-        # Required ports are original inputs referenced by steps
+        # Required ports are those original inputs referenced by steps
         if not join_plan.steps:
             return set()
         ports: set[str] = set()
@@ -312,7 +287,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         return ports
 
     def _ready_to_join(self) -> bool:
-        # All required inputs must signal closure before join
+        # All required inputs must signal closure before we join
         return self._required_ports.issubset(self._closed_ports)
 
     def _reset_buffers(self) -> None:

@@ -16,6 +16,9 @@ from etl_core.receivers.data_operations_receivers.schema_mapping.schema_mapping_
 )
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
+    DataOperationsMetrics,
+)
 
 
 def _schema_from_fields(fields: List[FieldDef]) -> Schema:
@@ -35,7 +38,7 @@ def _flat_schema(*cols: str) -> Schema:
 
 
 def _nested_user_schema() -> Schema:
-    # Nested user object with id/name/address.city for row-path tests
+    # Nested user object with id/name/address.city for row-path tests.
     return _schema_from_fields(
         [
             _fd(
@@ -54,10 +57,13 @@ def _nested_user_schema() -> Schema:
 def _map_rules(
     *items: Tuple[str, str, str, str],
 ) -> List[Tuple[str, str, str, str]]:
+    # (src_port, src_path, dst_port, dst_path)
     return [tuple(x) for x in items]  # type: ignore[return-value]
 
 
-def test_receiver_row_nested_in_to_flat_out() -> None:
+def test_receiver_row_nested_in_to_flat_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Nested input → flat outputs on two ports (fan-out)."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(
@@ -73,16 +79,21 @@ def test_receiver_row_nested_in_to_flat_out() -> None:
         }
     }
 
-    outs = list(recv.map_row(row=row, rules=rules))
+    outs = list(recv.map_row(row=row, rules=rules, metrics=data_ops_metrics))
     by_port: Dict[str, Dict[str, Any]] = {}
     for p, payload in outs:
         by_port[p] = payload
 
     assert by_port["flatA"] == {"uid": 7}
     assert by_port["flatB"] == {"city": "Berlin"}
+    assert data_ops_metrics.lines_received == 1
+    assert data_ops_metrics.lines_processed == 2
+    assert data_ops_metrics.lines_forwarded == 2
 
 
-def test_receiver_row_flat_in_to_nested_out() -> None:
+def test_receiver_row_flat_in_to_nested_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Flat input → nested output on a single port."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(
@@ -91,23 +102,33 @@ def test_receiver_row_flat_in_to_nested_out() -> None:
     )
 
     row = {"id": 1, "name": "Max"}
-    outs = list(recv.map_row(row=row, rules=rules))
+    outs = list(recv.map_row(row=row, rules=rules, metrics=data_ops_metrics))
     assert len(outs) == 1 and outs[0][0] == "dst"
     assert outs[0][1] == {"user": {"id": 1, "profile": {"name": "Max"}}}
+    assert data_ops_metrics.lines_received == 1
+    assert data_ops_metrics.lines_processed == 1
+    assert data_ops_metrics.lines_forwarded == 1
 
 
-def test_receiver_row_multiple_in_to_one_out() -> None:
+def test_receiver_row_multiple_in_to_one_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Rules reference different logical src ports; merged into one dest."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(("A", "id", "out", "uid"), ("B", "name", "out", "uname"))
 
     row = {"id": 11, "name": "Luca"}
-    outs = list(recv.map_row(row=row, rules=rules))
+    outs = list(recv.map_row(row=row, rules=rules, metrics=data_ops_metrics))
     assert len(outs) == 1 and outs[0][0] == "out"
     assert outs[0][1] == {"uid": 11, "uname": "Luca"}
+    assert data_ops_metrics.lines_received == 1
+    assert data_ops_metrics.lines_processed == 1
+    assert data_ops_metrics.lines_forwarded == 1
 
 
-def test_receiver_bulk_nested_in_to_flat_out() -> None:
+def test_receiver_bulk_nested_in_to_flat_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Nested-in expressed by flattened columns → flat out."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(
@@ -128,15 +149,21 @@ def test_receiver_bulk_nested_in_to_flat_out() -> None:
             rules=rules,
             out_port_schemas={"dst": _flat_schema("uid", "city")},
             path_separator=".",
+            metrics=data_ops_metrics,
         )
     )
     assert len(outs) == 1 and outs[0][0] == "dst"
     got = outs[0][1].reset_index(drop=True)
     expected = pd.DataFrame({"uid": [1, 2], "city": ["Berlin", "Hamburg"]})
     assert_frame_equal(got, expected, check_dtype=False)
+    assert data_ops_metrics.lines_received == 2
+    assert data_ops_metrics.lines_processed == 2
+    assert data_ops_metrics.lines_forwarded == 2
 
 
-def test_receiver_bulk_flat_in_to_nested_out() -> None:
+def test_receiver_bulk_flat_in_to_nested_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Flat input → nested destination names (column dots)."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(
@@ -151,6 +178,7 @@ def test_receiver_bulk_flat_in_to_nested_out() -> None:
             rules=rules,
             out_port_schemas={"dst": _flat_schema("user.id", "user.profile.name")},
             path_separator=".",
+            metrics=data_ops_metrics,
         )
     )
     assert len(outs) == 1 and outs[0][0] == "dst"
@@ -158,9 +186,14 @@ def test_receiver_bulk_flat_in_to_nested_out() -> None:
     got = outs[0][1].reset_index(drop=True)
     expected = pd.DataFrame({"user.id": [1, 2], "user.profile.name": ["A", "B"]})
     assert_frame_equal(got, expected, check_dtype=False)
+    assert data_ops_metrics.lines_received == 2
+    assert data_ops_metrics.lines_processed == 2
+    assert data_ops_metrics.lines_forwarded == 2
 
 
-def test_receiver_bulk_multiple_in_to_one_out() -> None:
+def test_receiver_bulk_multiple_in_to_one_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Mix src_port labels; all fields land in one destination port."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(("A", "id", "both", "uid"), ("B", "name", "both", "uname"))
@@ -172,15 +205,21 @@ def test_receiver_bulk_multiple_in_to_one_out() -> None:
             rules=rules,
             out_port_schemas={"both": _flat_schema("uid", "uname")},
             path_separator=".",
+            metrics=data_ops_metrics,
         )
     )
     assert len(outs) == 1 and outs[0][0] == "both"
     got = outs[0][1].reset_index(drop=True)
     expected = pd.DataFrame({"uid": [9, 10], "uname": ["X", "Y"]})
     assert_frame_equal(got, expected, check_dtype=False)
+    assert data_ops_metrics.lines_received == 2
+    assert data_ops_metrics.lines_processed == 2
+    assert data_ops_metrics.lines_forwarded == 2
 
 
-def test_receiver_bigdata_flat_in_to_nested_out() -> None:
+def test_receiver_bigdata_flat_in_to_nested_out(
+    data_ops_metrics: DataOperationsMetrics,
+) -> None:
     """Dask DataFrame mapping with dotted destination names."""
     recv = SchemaMappingReceiver()
     rules = _map_rules(
@@ -197,6 +236,7 @@ def test_receiver_bigdata_flat_in_to_nested_out() -> None:
             rules=rules,
             out_port_schemas={"dst": _flat_schema("user.id", "user.name")},
             path_separator=".",
+            metrics=data_ops_metrics,
         )
     )
     port, out_ddf = outs_bd[0]
@@ -205,6 +245,9 @@ def test_receiver_bigdata_flat_in_to_nested_out() -> None:
     got = out_ddf.compute().sort_values(["user.id"]).reset_index(drop=True)
     expected = pd.DataFrame({"user.id": [1, 2], "user.name": ["A", "B"]})
     assert_frame_equal(got, expected, check_dtype=False)
+    assert data_ops_metrics.lines_received == 2
+    assert data_ops_metrics.lines_processed == 2
+    assert data_ops_metrics.lines_forwarded == 2
 
 
 def test_path_helpers_read_write_nested() -> None:

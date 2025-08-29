@@ -7,10 +7,13 @@ import pandas as pd
 from etl_core.utils.common_helpers import get_leaf_field_map
 from etl_core.components.data_operations.schema_mapping.join_rules import JoinPlan
 from etl_core.components.wiring.schema import Schema
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
+    DataOperationsMetrics,
+)
 
 
 class SchemaPath:
-    """Parsed dotted path for nested dict access like 'user.address.city'."""
+    """Parsed dotted path for nested dict access like 'user.address.city'"""
 
     __slots__ = ("parts",)
 
@@ -28,11 +31,10 @@ StrRule = Tuple[str, str, str, str]
 
 class SchemaMappingReceiver:
     """
-    Stateless worker for mapping and joining.
+    Stateless worker for mapping and joining
 
-    All required data (rules, join_plan, schemas, path_separator, buffers)
-    must be passed with each call. The receiver performs only pure
-    transformations and projections; no metrics or buffering here.
+    The caller passes all context (rules, join_plan, schemas, buffers, metrics)
+    on each call. This class performs pure transforms and updates metrics
     """
 
     def map_row(
@@ -40,25 +42,31 @@ class SchemaMappingReceiver:
         *,
         row: Dict[str, Any],
         rules: Iterable[StrRule],
+        metrics: DataOperationsMetrics,
     ) -> Iterable[Tuple[str, Dict[str, Any]]]:
-        # Parse rule paths once per call to avoid repeated splitting
+        # Count one incoming row for this mapping call
+        metrics.lines_received += 1
+
+        # Parse rule paths once to avoid repeated splitting
         compiled: List[Tuple[str, SchemaPath, str, SchemaPath]] = [
             (sp, SchemaPath.parse(ss), dp, SchemaPath.parse(ds))
             for sp, ss, dp, ds in rules
         ]
 
-        # Group by destination port to emit one payload per port
+        # Group by destination port so one payload per port is emitted
         rules_by_dst: Dict[str, List[Tuple[SchemaPath, SchemaPath]]] = {}
         for _sp, src_p, dst_port, dst_p in compiled:
             rules_by_dst.setdefault(dst_port, []).append((src_p, dst_p))
 
-        # Copy selected values into  fresh dict for each destination port.
+        # Build outputs and account for processed and forwarded rows
         for dst_port, pairs in rules_by_dst.items():
             out: Dict[str, Any] = {}
             for src_p, dst_p in pairs:
                 val = _read_path(row, src_p)
                 _write_path(out, dst_p, val)
             if out:
+                metrics.lines_processed += 1
+                metrics.lines_forwarded += 1
                 yield dst_port, out
 
     def map_bulk(
@@ -68,19 +76,24 @@ class SchemaMappingReceiver:
         rules: Iterable[StrRule],
         out_port_schemas: Dict[str, Schema],
         path_separator: str,
+        metrics: DataOperationsMetrics,
     ) -> Iterable[Tuple[str, pd.DataFrame]]:
+        # Count incoming rows from this batch
+        metrics.lines_received += int(dataframe.shape[0])
+
         # Rules can target different output ports, handle each separately
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _sp, src_path, dst_port, dst_path in rules:
             rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
 
         for dst_port, pairs in rules_by_dst.items():
-            # Build new dataframe with mapped columns
             out_df = _map_dataframe(dataframe, pairs)
-            # Trim to schema to avoid leaking extra columns
             out_df = self._select_bulk_columns(
                 out_df, dst_port, out_port_schemas, path_separator
             )
+            lines = int(out_df.shape[0])
+            metrics.lines_processed += lines
+            metrics.lines_forwarded += lines
             yield dst_port, out_df
 
     def map_bigdata(
@@ -90,19 +103,26 @@ class SchemaMappingReceiver:
         rules: Iterable[StrRule],
         out_port_schemas: Dict[str, Schema],
         path_separator: str,
+        metrics: DataOperationsMetrics,
     ) -> Iterable[Tuple[str, "dd.DataFrame"]]:
-        # Same grouping as bulk, apply per partition.
+        # Count rows defensively, graph may not be immediately evaluable
+        in_len = self._safe_ddf_len(ddf)
+        metrics.lines_received += in_len
+
+        # Same grouping as bulk, apply per partition
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _sp, src_path, dst_port, dst_path in rules:
             rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
 
         for dst_port, pairs in rules_by_dst.items():
-            # Construct meta so Dask knows the output schema up front
             meta = _infer_meta_from_pairs(ddf, pairs)
             out_ddf = ddf.map_partitions(_map_dataframe, pairs, meta=meta)
             out_ddf = self._select_big_columns(
                 out_ddf, dst_port, out_port_schemas, path_separator
             )
+            out_len = self._safe_ddf_len(out_ddf)
+            metrics.lines_processed += out_len
+            metrics.lines_forwarded += out_len
             yield dst_port, out_ddf
 
     def run_row_joins(
@@ -110,13 +130,16 @@ class SchemaMappingReceiver:
         *,
         buffers: Dict[str, List[Dict[str, Any]]],
         join_plan: JoinPlan,
+        metrics: DataOperationsMetrics,
     ) -> Dict[str, List[Dict[str, Any]]]:
-        # Work on a copy, each step can feed into later steps via its ports
+        # Count all buffered inputs that participate in this join
+        metrics.lines_received += sum(len(v) for v in buffers.values())
+
+        # Work on a copy, each step can feed later steps via its port
         working: Dict[str, List[Dict[str, Any]]] = {
             k: list(v) for k, v in buffers.items()
         }
         for step in join_plan.steps:
-            # Merge two ports into the step's output port
             joined = self._join_rows_for_step(
                 working=working,
                 left_port=step.left_port,
@@ -127,8 +150,15 @@ class SchemaMappingReceiver:
             )
             working[step.output_port] = joined
 
-        # Return only requested output ports
-        return {s.output_port: working.get(s.output_port, []) for s in join_plan.steps}
+        results = {
+            s.output_port: working.get(s.output_port, []) for s in join_plan.steps
+        }  # noqa: E501
+
+        # Account for emitted rows across all output ports
+        out_count = sum(len(rows) for rows in results.values())
+        metrics.lines_processed += out_count
+        metrics.lines_forwarded += out_count
+        return results
 
     def run_bulk_joins(
         self,
@@ -137,8 +167,11 @@ class SchemaMappingReceiver:
         join_plan: JoinPlan,
         out_port_schemas: Dict[str, Schema],
         path_separator: str,
+        metrics: DataOperationsMetrics,
     ) -> Dict[str, pd.DataFrame]:
-        # Dataframes are joined via pandas using column names
+        # Count buffered rows for all inputs
+        metrics.lines_received += sum(int(df.shape[0]) for df in buffers.values())
+
         dfs: Dict[str, pd.DataFrame] = dict(buffers)
         for step in join_plan.steps:
             left = dfs.get(step.left_port, pd.DataFrame())
@@ -154,10 +187,15 @@ class SchemaMappingReceiver:
             )
             dfs[step.output_port] = out
 
-        return {
+        results: Dict[str, pd.DataFrame] = {
             s.output_port: dfs.get(s.output_port, pd.DataFrame())
             for s in join_plan.steps
         }
+
+        out_count = sum(int(df.shape[0]) for df in results.values())
+        metrics.lines_processed += out_count
+        metrics.lines_forwarded += out_count
+        return results
 
     def run_bigdata_joins(
         self,
@@ -166,15 +204,18 @@ class SchemaMappingReceiver:
         join_plan: JoinPlan,
         out_port_schemas: Dict[str, Schema],
         path_separator: str,
+        metrics: DataOperationsMetrics,
     ) -> Dict[str, dd.DataFrame]:
-        # Same as bulk, but dask
+        # Count buffered DDF rows defensively
+        metrics.lines_received += sum(self._safe_ddf_len(v) for v in buffers.values())
+
         dfs: Dict[str, dd.DataFrame] = dict(buffers)
 
         for step in join_plan.steps:
             left = dfs.get(step.left_port)
             right = dfs.get(step.right_port)
 
-            # Make sure both sides exist so merge is safe
+            # Ensure both sides exist so merge is safe
             if left is None and right is None:
                 dfs[step.output_port] = dd.from_pandas(pd.DataFrame(), npartitions=1)
                 continue
@@ -198,7 +239,13 @@ class SchemaMappingReceiver:
             )
             dfs[step.output_port] = out
 
-        return {s.output_port: dfs.get(s.output_port) for s in join_plan.steps}
+        results = {s.output_port: dfs.get(s.output_port) for s in join_plan.steps}
+        out_count = sum(
+            self._safe_ddf_len(v) for v in results.values() if v is not None
+        )  # noqa: E501
+        metrics.lines_processed += out_count
+        metrics.lines_forwarded += out_count
+        return results
 
     @staticmethod
     def _select_bulk_columns(
@@ -207,7 +254,7 @@ class SchemaMappingReceiver:
         out_port_schemas: Dict[str, Schema],
         path_separator: str,
     ) -> pd.DataFrame:
-        """Trim to schema-defined leaf fields (full dotted names preserved)."""
+        """Trim to schema-defined leaf fields (full dotted names preserved)"""
         schema = out_port_schemas.get(out_port)
         if not isinstance(schema, Schema):
             return df
@@ -223,7 +270,7 @@ class SchemaMappingReceiver:
         out_port_schemas: Dict[str, Schema],
         path_separator: str,
     ) -> "dd.DataFrame":
-        """Trim to schema-defined leaf fields (full dotted names preserved)."""
+        """Trim to schema-defined leaf fields (full dotted names preserved)"""
         schema = out_port_schemas.get(out_port)
         if not isinstance(schema, Schema):
             return ddf
@@ -260,7 +307,7 @@ class SchemaMappingReceiver:
         a: Dict[str, Any],
         b: Dict[str, Any],
     ) -> Dict[str, Any]:
-        # Shallow merge, dicts are combined at first level.
+        # Shallow merge, dicts are combined at the first level
         merged = dict(a)
         for k, v in b.items():
             if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
@@ -282,7 +329,7 @@ class SchemaMappingReceiver:
         left_rows = working.get(left_port, [])
         right_rows = working.get(right_port, [])
 
-        # Index both sides by the join key
+        # Index both sides by the join key (dotted lookup)
         il = self._index_rows_by_key(left_rows, left_on)
         ir = self._index_rows_by_key(right_rows, right_on)
 
@@ -294,7 +341,7 @@ class SchemaMappingReceiver:
 
         result: List[Dict[str, Any]] = []
 
-        # For common keys, produce cross-product and merge dicts
+        # For common keys, produce the cross-product and merge dicts
         for k in common:
             for lrow in il[k]:
                 for rrow in ir[k]:
@@ -308,6 +355,14 @@ class SchemaMappingReceiver:
             for k in right_only:
                 result.extend(ir[k])
         return result
+
+    @staticmethod
+    def _safe_ddf_len(ddf: dd.DataFrame) -> int:
+        # Compute row count defensively; some Dask graphs can fail here
+        try:
+            return int(ddf.map_partitions(len).sum().compute())
+        except Exception:
+            return 0
 
 
 def _read_path(src: Dict[str, Any], path: SchemaPath) -> Any:
