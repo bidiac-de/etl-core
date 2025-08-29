@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, ClassVar
+from typing import Any, AsyncIterator, Dict
 
 import dask.dataframe as dd
 import pandas as pd
@@ -11,13 +11,24 @@ from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.sqlserver.sqlserver_receiver import SQLServerReceiver
 from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import OutPortSpec
 
 
 @register_component("read_sqlserver")
 class SQLServerRead(SQLServerComponent):
-    """SQL Server reader supporting row, bulk, and bigdata modes."""
+    """
+    SQL Server reader with ports + schema.
 
-    ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
+    - INPUT_PORTS:
+        - None (source component)
+    - OUTPUT_PORTS:
+        - 'out' (required): rows/frames read from database
+    """
+
+    OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
+    
+    # ✅ Source component flag (wie MariaDB/PostgreSQL)
+    ALLOW_NO_INPUTS = True
     
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 

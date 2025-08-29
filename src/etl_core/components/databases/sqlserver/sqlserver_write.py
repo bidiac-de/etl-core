@@ -11,14 +11,22 @@ from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.sqlserver.sqlserver_receiver import SQLServerReceiver
 from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
 
 @register_component("write_sqlserver")
 class SQLServerWrite(SQLServerComponent):
-    """SQL Server writer supporting row, bulk, and bigdata modes."""
+    """
+    SQL Server writer with ports + schema.
 
-    params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
-    if_exists: str = Field(default="append", description="How to behave if the table already exists")
+    - INPUT_PORTS:
+        - 'in' (required): rows/frames to write
+    - OUTPUT_PORTS:
+        - 'out' (optional): passthrough of what was written (useful for chaining/tests)
+    """
+
+    INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
+    OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
     @model_validator(mode="after")
     def _build_objects(self) -> "SQLServerWrite":
@@ -26,48 +34,47 @@ class SQLServerWrite(SQLServerComponent):
         return self
 
     async def process_row(
-        self, payload: Any, metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
-        """Write rows one-by-one to SQL Server."""
+        """Write a single row and emit it (or receiver result) on 'out'."""
         result = await self._receiver.write_row(
             entity_name=self.entity_name,
+            row=row,
             metrics=metrics,
-            data=payload,
-            params=self.params,
+            table=self.entity_name,
+            query=self.query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
 
     async def process_bulk(
-        self, payload: Any, metrics: ComponentMetrics
+        self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
-        """Write pandas DataFrame to SQL Server."""
-        if not isinstance(payload, pd.DataFrame):
-            raise ValueError("Bulk mode requires pandas DataFrame input")
-            
+        """Write a pandas DataFrame and emit the same frame on 'out'."""
         result = await self._receiver.write_bulk(
             entity_name=self.entity_name,
+            frame=data,
             metrics=metrics,
-            data=payload,
-            params=self.params,
+            table=self.entity_name,
+            query=self.query,
             if_exists=self.if_exists,
+            bulk_chunk_size=self.bulk_chunk_size,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
 
     async def process_bigdata(
-        self, payload: Any, metrics: ComponentMetrics
+        self, ddf: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
-        """Write Dask DataFrame to SQL Server in chunks."""
-        if not isinstance(payload, dd.DataFrame):
-            raise ValueError("Bigdata mode requires Dask DataFrame input")
-            
+        """Write a Dask DataFrame and emit the same ddf on 'out'."""
         result = await self._receiver.write_bigdata(
             entity_name=self.entity_name,
+            frame=ddf,
             metrics=metrics,
-            data=payload,
-            params=self.params,
+            table=self.entity_name,
+            query=self.query,
             if_exists=self.if_exists,
+            bigdata_partition_chunk_size=self.bigdata_partition_chunk_size,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)

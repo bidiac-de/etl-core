@@ -74,74 +74,103 @@ class SQLServerReceiver:
     async def write_row(
         self,
         entity_name: str,
+        row: Dict[str, Any],
         metrics: ComponentMetrics,
-        data: Any,
-        params: Dict[str, Any],
-        connection_handler: SQLConnectionHandler,
+        table: str,
+        query: str = "",
+        connection_handler: SQLConnectionHandler = None,
+        **driver_kwargs: Any,
     ) -> Dict[str, Any]:
         """Write a single row to SQL Server."""
         with connection_handler.lease() as conn:
-            # Build INSERT statement
-            if isinstance(data, dict):
-                columns = list(data.keys())
-                values = list(data.values())
-                placeholders = ", ".join([f":{col}" for col in columns])
-                query = f"INSERT INTO {entity_name} ({', '.join(columns)}) VALUES ({placeholders})"
-                
-                result = conn.execute(text(query), data)
-                conn.commit()
-                return {"rows_affected": result.rowcount, "status": "success"}
+            if query:
+                # Execute custom query
+                result = conn.execute(text(query), row)
             else:
-                raise ValueError("Row data must be a dictionary")
+                # Build INSERT statement
+                columns = list(row.keys())
+                placeholders = ", ".join([f":{col}" for col in columns])
+                query = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
+                
+                result = conn.execute(text(query), row)
+            
+            conn.commit()
+            return {"affected_rows": result.rowcount, "row": row}
 
     async def write_bulk(
         self,
         entity_name: str,
+        frame: pd.DataFrame,
         metrics: ComponentMetrics,
-        data: pd.DataFrame,
-        params: Dict[str, Any],
-        if_exists: str,
-        connection_handler: SQLConnectionHandler,
-    ) -> Dict[str, Any]:
+        table: str,
+        query: str = "",
+        if_exists: str = "append",
+        bulk_chunk_size: int = 50_000,
+        connection_handler: SQLConnectionHandler = None,
+        **driver_kwargs: Any,
+    ) -> pd.DataFrame:
         """Write pandas DataFrame to SQL Server."""
+        if frame.empty:
+            return frame
+
+        def _execute_query(conn, df):
+            if query:
+                # Execute custom query for each row
+                for _, row in df.iterrows():
+                    conn.execute(text(query), row.to_dict())
+            else:
+                # Use pandas to_sql for efficient bulk writing
+                df.to_sql(
+                    name=table,
+                    con=conn,
+                    if_exists=if_exists,
+                    index=False,
+                    method="multi",
+                    chunksize=bulk_chunk_size
+                )
+
         with connection_handler.lease() as conn:
-            # Use pandas to_sql for efficient bulk writing
-            data.to_sql(
-                name=entity_name,
-                con=conn,
-                if_exists=if_exists,
-                index=False,
-                method="multi",
-                chunksize=1000
-            )
+            _execute_query(conn, frame)
             conn.commit()
-            return {"rows_written": len(data), "status": "success"}
+        
+        return frame
 
     async def write_bigdata(
         self,
         entity_name: str,
+        frame: dd.DataFrame,
         metrics: ComponentMetrics,
-        data: dd.DataFrame,
-        params: Dict[str, Any],
-        if_exists: str,
-        connection_handler: SQLConnectionHandler,
-    ) -> Dict[str, Any]:
+        table: str,
+        query: str = "",
+        if_exists: str = "append",
+        bigdata_partition_chunk_size: int = 50_000,
+        connection_handler: SQLConnectionHandler = None,
+        **driver_kwargs: Any,
+    ) -> dd.DataFrame:
         """Write Dask DataFrame to SQL Server in chunks."""
-        total_rows = 0
-        
-        # Process partitions one by one to avoid memory issues
-        for partition in data.map_partitions(lambda pdf: pdf).partitions:
-            pdf = partition.compute()
-            with connection_handler.lease() as conn:
-                pdf.to_sql(
-                    name=entity_name,
+        def _execute_query(conn, df):
+            if query:
+                # Execute custom query for each row
+                for _, row in df.iterrows():
+                    conn.execute(text(query), row.to_dict())
+            else:
+                # Use pandas to_sql for efficient bulk writing
+                df.to_sql(
+                    name=table,
                     con=conn,
-                    if_exists=if_exists if total_rows == 0 else "append",
+                    if_exists=if_exists,
                     index=False,
                     method="multi",
-                    chunksize=1000
+                    chunksize=bigdata_partition_chunk_size
                 )
-                conn.commit()
-                total_rows += len(pdf)
+
+        # Process partitions one by one to avoid memory issues
+        for partition in frame.map_partitions(lambda pdf: pdf).partitions:
+            pdf = partition.compute()
+            
+            if not pdf.empty:
+                with connection_handler.lease() as conn:
+                    _execute_query(conn, pdf)
+                    conn.commit()
         
-        return {"rows_written": total_rows, "status": "success"}
+        return frame
