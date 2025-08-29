@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, ClassVar
+from typing import Any, AsyncIterator, Dict
 
 import dask.dataframe as dd
 import pandas as pd
@@ -11,12 +11,15 @@ from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
 from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import OutPortSpec
 
 
 @register_component("read_mariadb")
 class MariaDBRead(MariaDBComponent):
     """MariaDB reader supporting row, bulk, and bigdata modes."""
 
+    OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
+    
     ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
     
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
