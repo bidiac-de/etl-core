@@ -11,9 +11,11 @@ from etl_core.components.data_operations.data_operations import (
 )
 from etl_core.components.data_operations.schema_mapping.mapping_rule import (
     FieldMapping,
+    validate_field_mappings,
 )
 from etl_core.components.data_operations.schema_mapping.join_rules import (
     JoinPlan,
+    validate_join_plan,
 )
 from etl_core.components.envelopes import InTagged, Out
 from etl_core.components.component_registry import register_component
@@ -24,7 +26,6 @@ from etl_core.receivers.data_operations_receivers.schema_mapping.schema_mapping_
     SchemaMappingReceiver,
     schema_path,
 )
-from etl_core.components.wiring.column_definition import DataType, FieldDef
 from etl_core.components.wiring.schema import Schema
 from etl_core.utils.common_helpers import get_leaf_field_map
 
@@ -62,8 +63,27 @@ class SchemaMappingComponent(DataOperationsComponent):
     @model_validator(mode="after")
     def _build_objects(self) -> "SchemaMappingComponent":
         self._receiver = SchemaMappingReceiver()
-        self._validate_and_prepare_rules()
-        self._validate_join_plan()
+
+        # 1) validate rules and plan in their own modules
+        validate_field_mappings(
+            self.rules,
+            in_port_schemas=self.in_port_schemas,
+            out_port_schemas=self.out_port_schemas,
+            component_name=self.name,
+            path_separator=self._schema_path_separator,
+        )
+        validate_join_plan(
+            self.join_plan,
+            in_port_schemas=self.in_port_schemas,
+            out_port_names={p.name for p in self.expected_ports()},
+            component_name=self.name,
+            path_separator=self._schema_path_separator,
+        )
+
+        # 2) pre-compile rules for fast execution
+        self._compile_rules()
+
+        # 3) compute required ports for joining
         self._required_ports = self._compute_required_ports()
         return self
 
@@ -146,12 +166,31 @@ class SchemaMappingComponent(DataOperationsComponent):
         ):
             yield Out(port=port, payload=payload)
 
+    def _compile_rules(self) -> None:
+        # keep compilation local so receiver can work with fast paths
+        if not self.rules:
+            self._compiled_row_rules = []
+            self._string_rules = []
+            return
+
+        self._compiled_row_rules = [
+            (
+                r.src_port,
+                schema_path.parse(r.src_path),
+                r.dst_port,
+                schema_path.parse(r.dst_path),
+            )
+            for r in self.rules
+        ]
+        self._string_rules = [
+            (r.src_port, r.src_path, r.dst_port, r.dst_path) for r in self.rules
+        ]
+
     def _select_bulk_columns(self, df: pd.DataFrame, out_port: str) -> pd.DataFrame:
         """Project a pandas DF to the columns defined by the out port schema."""
         schema = self.out_port_schemas.get(out_port)
         if not isinstance(schema, Schema):
             return df
-        # flatten schema leaf paths and keep last segment as column name
         leaf_map = get_leaf_field_map(schema, path_separator=".")
         desired = [p.split(".")[-1] for p in leaf_map.keys()]
         keep = [c for c in desired if c in df.columns]
@@ -181,79 +220,91 @@ class SchemaMappingComponent(DataOperationsComponent):
                 ports.add(st.right_port)
         return ports
 
-    async def _run_row_joins(
+    @staticmethod
+    def _dict_key_by_path(data: Dict[str, Any], dotted: str) -> Any:
+        """Extract nested value by dotted path; None if any segment is missing."""
+        path = schema_path.parse(dotted)
+        cur: Any = data
+        for part in path.parts:
+            if not isinstance(cur, dict) or part not in cur:
+                return None
+            cur = cur[part]
+        return cur
+
+    def _index_rows_by_key(
+        self, rows: List[Dict[str, Any]], dotted: str
+    ) -> Dict[Any, List[Dict[str, Any]]]:
+        """Build an index: key -> list of rows sharing that key."""
+        ix: Dict[Any, List[Dict[str, Any]]] = {}
+        for r in rows:
+            k = self._dict_key_by_path(r, dotted)
+            ix.setdefault(k, []).append(r)
+        return ix
+
+    @staticmethod
+    def _merge_nested_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Shallow merge with one-level nested dict coalescing.
+        Values in `b` override/extend those in `a`.
+        """
+        merged = dict(a)
+        for k, v in b.items():
+            if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
+                merged[k] = {**merged[k], **v}
+            else:
+                merged[k] = v
+        return merged
+
+    def _join_rows_for_step(
         self,
+        working: Dict[str, List[Dict[str, Any]]],
+        *,
+        left_port: str,
+        right_port: str,
+        left_on: str,
+        right_on: str,
+        how: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Perform one join step between two lists of dict rows.
+        """
+        left_rows = working.get(left_port, [])
+        right_rows = working.get(right_port, [])
+
+        il = self._index_rows_by_key(left_rows, left_on)
+        ir = self._index_rows_by_key(right_rows, right_on)
+
+        left_keys = set(il.keys())
+        right_keys = set(ir.keys())
+        common_keys = left_keys & right_keys
+        left_only = left_keys - right_keys
+        right_only = right_keys - left_keys
+
+        result: List[Dict[str, Any]] = []
+
+        for k in common_keys:
+            ls = il[k]
+            rs = ir[k]
+            for left in ls:
+                for r in rs:
+                    result.append(self._merge_nested_dicts(left, r))
+
+        if how in ("left", "outer"):
+            for k in left_only:
+                result.extend(il[k])
+
+        if how in ("right", "outer"):
+            for k in right_only:
+                result.extend(ir[k])
+
+        return result
+
+    async def _emit_join_results(
+        self,
+        working: Dict[str, List[Dict[str, Any]]],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        working: Dict[str, List[Dict[str, Any]]] = {
-            k: list(v) for k, v in self._row_buf.items()
-        }
-
-        def key_of(d: Dict[str, Any], dotted: str) -> Any:
-            p = schema_path.parse(dotted)
-            cur: Any = d
-            for part in p.parts:
-                if not isinstance(cur, dict) or part not in cur:
-                    return None
-                cur = cur[part]
-            return cur
-
-        def index(
-            rows: List[Dict[str, Any]], dotted: str
-        ) -> Dict[Any, List[Dict[str, Any]]]:
-            ix: Dict[Any, List[Dict[str, Any]]] = {}
-            for r in rows:
-                k = key_of(r, dotted)
-                ix.setdefault(k, []).append(r)
-            return ix
-
-        for step in self.join_plan.steps:
-            left_rows = working.get(step.left_port, [])
-            right_rows = working.get(step.right_port, [])
-            il = index(left_rows, step.left_on)
-            ir = index(right_rows, step.right_on)
-
-            result: List[Dict[str, Any]] = []
-            left_keys = set(il.keys())
-            right_keys = set(ir.keys())
-            keys_inner = left_keys & right_keys
-
-            def merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
-                merged = dict(a)
-                for k, v in b.items():
-                    if (
-                        k in merged
-                        and isinstance(merged[k], dict)
-                        and isinstance(v, dict)
-                    ):
-                        merged[k] = {**merged[k], **v}
-                    else:
-                        merged[k] = v
-                return merged
-
-            if step.how in ("inner", "left", "outer"):
-                keys = (
-                    keys_inner
-                    if step.how == "inner"
-                    else left_keys if step.how == "left" else left_keys | right_keys
-                )
-                for k in keys:
-                    ls = il.get(k, [])
-                    rs = ir.get(k, [])
-                    if ls and rs:
-                        for left in ls:
-                            for r in rs:
-                                result.append(merge(left, r))
-                    elif step.how in ("left", "outer") and ls and not rs:
-                        result.extend(ls)
-
-            if step.how in ("right", "outer"):
-                only_right = right_keys - left_keys
-                for k in only_right:
-                    result.extend(ir.get(k, []))
-
-            working[step.output_port] = result
-
+        """Emit results for each output port exactly once, update metrics."""
         emitted: set[str] = set()
         for st in self.join_plan.steps:
             if st.output_port in emitted:
@@ -265,13 +316,41 @@ class SchemaMappingComponent(DataOperationsComponent):
                 metrics.lines_forwarded += 1
                 yield Out(port=st.output_port, payload=r)
 
+    async def _run_row_joins(
+        self,
+        metrics: DataOperationsMetrics,
+    ) -> AsyncIterator[Out]:
+        """
+        Execute multi-step joins in row mode using buffered per-port rows.
+        """
+        working: Dict[str, List[Dict[str, Any]]] = {
+            k: list(v) for k, v in self._row_buf.items()
+        }
+
+        for step in self.join_plan.steps:
+            joined = self._join_rows_for_step(
+                working,
+                left_port=step.left_port,
+                right_port=step.right_port,
+                left_on=step.left_on,
+                right_on=step.right_on,
+                how=step.how,
+            )
+            working[step.output_port] = joined
+
+        async for out in self._emit_join_results(working, metrics):
+            yield out
+
         self._reset_buffers()
 
     async def _run_bulk_joins(
         self,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        dfs: Dict[str, pd.DataFrame] = {k: v for k, v in self._bulk_buf.items()}
+        dfs: Dict[str, pd.DataFrame] = {}
+        for k, v in self._bulk_buf.items():
+            dfs[k] = v
+
         for step in self.join_plan.steps:
             left = dfs.get(step.left_port, pd.DataFrame())
             right = dfs.get(step.right_port, pd.DataFrame())
@@ -301,7 +380,10 @@ class SchemaMappingComponent(DataOperationsComponent):
         self,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        dfs: Dict[str, dd.DataFrame] = {k: v for k, v in self._big_buf.items()}
+        dfs: Dict[str, dd.DataFrame] = {}
+        for k, v in self._big_buf.items():
+            dfs[k] = v
+
         for step in self.join_plan.steps:
             left = dfs.get(step.left_port)
             right = dfs.get(step.right_port)
@@ -350,103 +432,3 @@ class SchemaMappingComponent(DataOperationsComponent):
         self._bulk_buf.clear()
         self._big_buf.clear()
         self._closed_ports.clear()
-
-    def _validate_and_prepare_rules(self) -> None:
-        if not self.rules:
-            self._compiled_row_rules = []
-            self._string_rules = []
-            return
-
-        seen: set[tuple[str, str]] = set()
-        for r in self.rules:
-            key = (r.dst_port, r.dst_path)
-            if key in seen:
-                raise ValueError(
-                    f"{self.name}: duplicate mapping to destination {key!r}"
-                )
-            seen.add(key)
-
-        for r in self.rules:
-            src_schema = self.schema_for_in_port(r.src_port)
-            if not isinstance(src_schema, Schema):
-                raise ValueError(
-                    f"{self.name}: no schema for input port {r.src_port!r}"
-                )
-            dst_schema = self.schema_for_out_port(r.dst_port)
-            if not isinstance(dst_schema, Schema):
-                raise ValueError(
-                    f"{self.name}: no schema for output port {r.dst_port!r}"
-                )
-
-            src_map = get_leaf_field_map(src_schema, self._schema_path_separator)
-            dst_map = get_leaf_field_map(dst_schema, self._schema_path_separator)
-
-            src_fd = src_map.get(r.src_path)
-            if src_fd is None:
-                raise ValueError(
-                    f"{self.name}: unknown source path "
-                    f"{r.src_port!r}:{r.src_path!r}"
-                )
-            dst_fd = dst_map.get(r.dst_path)
-            if dst_fd is None:
-                raise ValueError(
-                    f"{self.name}: unknown destination path "
-                    f"{r.dst_port!r}:{r.dst_path!r}"
-                )
-            if not self._types_compatible(src_fd, dst_fd):
-                raise ValueError(
-                    f"{self.name}: type mismatch {r.src_port}:{r.src_path} "
-                    f"({src_fd.data_type}) -> {r.dst_port}:{r.dst_path} "
-                    f"({dst_fd.data_type})"
-                )
-
-        self._compiled_row_rules = [
-            (
-                r.src_port,
-                schema_path.parse(r.src_path),
-                r.dst_port,
-                schema_path.parse(r.dst_path),
-            )
-            for r in self.rules
-        ]
-        self._string_rules = [
-            (r.src_port, r.src_path, r.dst_port, r.dst_path) for r in self.rules
-        ]
-
-    def _validate_join_plan(self) -> None:
-        if not self.join_plan.steps:
-            return
-
-        in_ports = set(self.expected_in_port_names())
-        out_ports = {p.name for p in self.expected_ports()}
-
-        for step in self.join_plan.steps:
-            if step.left_port not in in_ports and step.left_port not in out_ports:
-                raise ValueError(f"{self.name}: unknown left_port {step.left_port!r}")
-            if step.right_port not in in_ports and step.right_port not in out_ports:
-                raise ValueError(f"{self.name}: unknown right_port {step.right_port!r}")
-            if step.output_port not in out_ports:
-                raise ValueError(
-                    f"{self.name}: unknown output_port {step.output_port!r}"
-                )
-
-            def _check_key(port_name: str, key: str) -> None:
-                schema = self.in_port_schemas.get(port_name)
-                if schema is None:
-                    return
-                leafs = get_leaf_field_map(schema, self._schema_path_separator)
-                if key not in leafs:
-                    raise ValueError(
-                        f"{self.name}: join key {key!r} not in schema for "
-                        f"port {port_name!r}"
-                    )
-
-            _check_key(step.left_port, step.left_on)
-            _check_key(step.right_port, step.right_on)
-
-    @staticmethod
-    def _types_compatible(src: FieldDef, dst: FieldDef) -> bool:
-        def norm(dt: DataType) -> DataType:
-            return DataType.STRING if dt == DataType.PATH else dt
-
-        return norm(src.data_type) == norm(dst.data_type)
