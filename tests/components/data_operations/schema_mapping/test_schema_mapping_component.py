@@ -705,7 +705,7 @@ async def test_row_join_flat_to_nested_large(
                 pass  # noqa: E701
 
     async def flush_port(comp: SchemaMappingComponent, port: str) -> List[Out]:
-        # Signal closure and collect outüuts
+        # Signal closure and collect outputs
         outs: List[Out] = []
         async for out in comp.process_row(
             InTagged(port, Ellipsis), metrics=data_ops_metrics

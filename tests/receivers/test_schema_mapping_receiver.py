@@ -19,10 +19,7 @@ from etl_core.components.wiring.column_definition import FieldDef
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
-
-
-def _schema_from_fields(fields: List[FieldDef]) -> Schema:
-    return Schema(fields=fields)
+from tests.schema_helpers import schema_from_fields, fd
 
 
 def _fd(
@@ -34,20 +31,20 @@ def _fd(
 
 
 def _flat_schema(*cols: str) -> Schema:
-    return _schema_from_fields([_fd(c, "string") for c in cols])
+    return schema_from_fields([fd(c, "string") for c in cols])
 
 
 def _nested_user_schema() -> Schema:
     # Nested user object with id/name/address.city for row-path tests.
-    return _schema_from_fields(
+    return schema_from_fields(
         [
-            _fd(
+            fd(
                 "user",
                 "object",
                 children=[
-                    _fd("id", "integer"),
-                    _fd("name", "string"),
-                    _fd("address", "object", children=[_fd("city", "string")]),
+                    fd("id", "integer"),
+                    fd("name", "string"),
+                    fd("address", "object", children=[_fd("city", "string")]),
                 ],
             )
         ]
