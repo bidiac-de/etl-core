@@ -161,9 +161,16 @@ class TestSQLServerRead:
         assert component.params == custom_params
         assert component.query == "SELECT * FROM test_table WHERE user_id = :user_id"
 
+    @pytest.mark.parametrize("process_type,expected_results,expected_payload_type", [
+        ("row", 2, dict),           # process_row: 2 results, dict payload
+        ("bulk", 1, pd.DataFrame),  # process_bulk: 1 result, DataFrame payload
+        ("bigdata", 1, dd.DataFrame), # process_bigdata: 1 result, Dask DataFrame payload
+    ])
     @pytest.mark.asyncio
-    async def test_sqlserver_read_process_row(self, mock_connection_handler, mock_metrics):
-        """Test SQL Server read component process_row method."""
+    async def test_sqlserver_read_process_methods(
+        self, mock_connection_handler, mock_metrics, process_type, expected_results, expected_payload_type
+    ):
+        """Test SQL Server read component process methods."""
         component = SQLServerRead(
             credentials_id=1,
             entity_name="test_table",
@@ -175,78 +182,55 @@ class TestSQLServerRead:
         # Mock the receiver with async methods
         mock_receiver = Mock()
         
-        # Create an async generator for read_row
-        async def mock_read_row_generator(entity_name, metrics, query, params, connection_handler):
-            yield {"id": 1, "name": "John"}
-            yield {"id": 2, "name": "Jane"}
-        
-        mock_receiver.read_row = mock_read_row_generator
-        component._receiver = mock_receiver
-        
-        # Test process_row
-        results = []
-        async for result in component.process_row(None, mock_metrics):
-            results.append(result)
-        
-        # Verify results
-        assert len(results) == 2
-        assert results[0].payload["id"] == 1
-        assert results[1].payload["id"] == 2
-
-    @pytest.mark.asyncio
-    async def test_sqlserver_read_process_bulk(self, mock_connection_handler, mock_metrics):
-        """Test SQL Server read component process_bulk method."""
-        component = SQLServerRead(
-            credentials_id=1,
-            entity_name="test_table",
-            name="test_read_component",
-            description="Test SQL Server read component",
-            comp_type="read_sqlserver"
-        )
-        
-        # Mock the receiver with async methods
-        mock_receiver = Mock()
-        mock_dataframe = pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]})
-        mock_receiver.read_bulk = AsyncMock(return_value=mock_dataframe)
-        component._receiver = mock_receiver
-        
-        # Test process_bulk
-        results = []
-        async for result in component.process_bulk(None, mock_metrics):
-            results.append(result)
-        
-        # Verify results
-        assert len(results) == 1
-        assert results[0].payload.equals(mock_dataframe)
-
-    @pytest.mark.asyncio
-    async def test_sqlserver_read_process_bigdata(self, mock_connection_handler, mock_metrics):
-        """Test SQL Server read component process_bigdata method."""
-        component = SQLServerRead(
-            credentials_id=1,
-            entity_name="test_table",
-            name="test_read_component",
-            description="Test SQL Server read component",
-            comp_type="read_sqlserver"
-        )
-        
-        # Mock the receiver with async methods
-        mock_receiver = Mock()
-        mock_dask_dataframe = dd.from_pandas(
-            pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]}),
-            npartitions=1
-        )
-        mock_receiver.read_bigdata = AsyncMock(return_value=mock_dask_dataframe)
-        component._receiver = mock_receiver
-        
-        # Test process_bigdata
-        results = []
-        async for result in component.process_bigdata(None, mock_metrics):
-            results.append(result)
-        
-        # Verify results
-        assert len(results) == 1
-        assert results[0].payload.npartitions == 1
+        if process_type == "row":
+            # Create an async generator for read_row
+            async def mock_read_row_generator(entity_name, metrics, query, params, connection_handler):
+                yield {"id": 1, "name": "John"}
+                yield {"id": 2, "name": "Jane"}
+            
+            mock_receiver.read_row = mock_read_row_generator
+            component._receiver = mock_receiver
+            
+            # Test process_row
+            results = []
+            async for result in component.process_row(None, mock_metrics):
+                results.append(result)
+            
+            # Verify results
+            assert len(results) == expected_results
+            assert results[0].payload["id"] == 1
+            assert results[1].payload["id"] == 2
+            
+        elif process_type == "bulk":
+            mock_dataframe = pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]})
+            mock_receiver.read_bulk = AsyncMock(return_value=mock_dataframe)
+            component._receiver = mock_receiver
+            
+            # Test process_bulk
+            results = []
+            async for result in component.process_bulk(None, mock_metrics):
+                results.append(result)
+            
+            # Verify results
+            assert len(results) == expected_results
+            assert results[0].payload.equals(mock_dataframe)
+            
+        elif process_type == "bigdata":
+            mock_dask_dataframe = dd.from_pandas(
+                pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]}),
+                npartitions=1
+            )
+            mock_receiver.read_bigdata = AsyncMock(return_value=mock_dask_dataframe)
+            component._receiver = mock_receiver
+            
+            # Test process_bigdata
+            results = []
+            async for result in component.process_bigdata(None, mock_metrics):
+                results.append(result)
+            
+            # Verify results
+            assert len(results) == expected_results
+            assert results[0].payload.npartitions == 1
 
 
 class TestSQLServerWrite:
@@ -326,9 +310,16 @@ class TestSQLServerWrite:
         assert component.bulk_chunk_size == 25_000
         assert component.bigdata_partition_chunk_size == 100_000
 
+    @pytest.mark.parametrize("process_type,test_data,expected_payload_type", [
+        ("row", {"name": "John", "email": "john@example.com"}, dict),
+        ("bulk", pd.DataFrame({"name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]}), pd.DataFrame),
+        ("bigdata", dd.from_pandas(pd.DataFrame({"name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]}), npartitions=1), dd.DataFrame),
+    ])
     @pytest.mark.asyncio
-    async def test_sqlserver_write_process_row(self, mock_connection_handler, mock_metrics):
-        """Test SQL Server write component process_row method."""
+    async def test_sqlserver_write_process_methods(
+        self, mock_connection_handler, mock_metrics, process_type, test_data, expected_payload_type
+    ):
+        """Test SQL Server write component process methods."""
         component = SQLServerWrite(
             credentials_id=1,
             entity_name="test_table",
@@ -339,74 +330,46 @@ class TestSQLServerWrite:
         
         # Mock the receiver with async methods
         mock_receiver = Mock()
-        mock_receiver.write_row = AsyncMock(return_value={"affected_rows": 1, "row": {"name": "John"}})
-        component._receiver = mock_receiver
         
-        # Test process_row
-        test_row = {"name": "John", "email": "john@example.com"}
-        results = []
-        async for result in component.process_row(test_row, mock_metrics):
-            results.append(result)
-        
-        # Verify results
-        assert len(results) == 1
-        assert results[0].payload["affected_rows"] == 1
-        assert results[0].payload["row"]["name"] == "John"
-
-    @pytest.mark.asyncio
-    async def test_sqlserver_write_process_bulk(self, mock_connection_handler, mock_metrics):
-        """Test SQL Server write component process_bulk method."""
-        component = SQLServerWrite(
-            credentials_id=1,
-            entity_name="test_table",
-            name="test_write_component",
-            description="Test SQL Server write component",
-            comp_type="write_sqlserver"
-        )
-        
-        # Mock the receiver with async methods
-        mock_receiver = Mock()
-        test_dataframe = pd.DataFrame({"name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]})
-        mock_receiver.write_bulk = AsyncMock(return_value=test_dataframe)
-        component._receiver = mock_receiver
-        
-        # Test process_bulk
-        results = []
-        async for result in component.process_bulk(test_dataframe, mock_metrics):
-            results.append(result)
-        
-        # Verify results
-        assert len(results) == 1
-        assert results[0].payload.equals(test_dataframe)
-
-    @pytest.mark.asyncio
-    async def test_sqlserver_write_process_bigdata(self, mock_connection_handler, mock_metrics):
-        """Test SQL Server write component process_bigdata method."""
-        component = SQLServerWrite(
-            credentials_id=1,
-            entity_name="test_table",
-            name="test_write_component",
-            description="Test SQL Server write component",
-            comp_type="write_sqlserver"
-        )
-        
-        # Mock the receiver with async methods
-        mock_receiver = Mock()
-        test_dask_dataframe = dd.from_pandas(
-            pd.DataFrame({"name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]}),
-            npartitions=1
-        )
-        mock_receiver.write_bigdata = AsyncMock(return_value=test_dask_dataframe)
-        component._receiver = mock_receiver
-        
-        # Test process_bigdata
-        results = []
-        async for result in component.process_bigdata(test_dask_dataframe, mock_metrics):
-            results.append(result)
-        
-        # Verify results
-        assert len(results) == 1
-        assert results[0].payload.npartitions == 1
+        if process_type == "row":
+            mock_receiver.write_row = AsyncMock(return_value={"affected_rows": 1, "row": {"name": "John"}})
+            component._receiver = mock_receiver
+            
+            # Test process_row
+            results = []
+            async for result in component.process_row(test_data, mock_metrics):
+                results.append(result)
+            
+            # Verify results
+            assert len(results) == 1
+            assert results[0].payload["affected_rows"] == 1
+            assert results[0].payload["row"]["name"] == "John"
+            
+        elif process_type == "bulk":
+            mock_receiver.write_bulk = AsyncMock(return_value=test_data)
+            component._receiver = mock_receiver
+            
+            # Test process_bulk
+            results = []
+            async for result in component.process_bulk(test_data, mock_metrics):
+                results.append(result)
+            
+            # Verify results
+            assert len(results) == 1
+            assert results[0].payload.equals(test_data)
+            
+        elif process_type == "bigdata":
+            mock_receiver.write_bigdata = AsyncMock(return_value=test_data)
+            component._receiver = mock_receiver
+            
+            # Test process_bigdata
+            results = []
+            async for result in component.process_bigdata(test_data, mock_metrics):
+                results.append(result)
+            
+            # Verify results
+            assert len(results) == 1
+            assert results[0].payload.npartitions == 1
 
     def test_sqlserver_write_port_configuration(self):
         """Test SQL Server write component port configuration."""

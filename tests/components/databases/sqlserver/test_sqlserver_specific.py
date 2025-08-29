@@ -166,13 +166,13 @@ class TestSQLServerSpecificFeatures:
             comp_type="read_sqlserver"
         )
         
-        # Mock the _setup_session_variables method to avoid connection issues
-        with patch.object(component, '_setup_session_variables') as mock_setup:
+        # Mock the receiver creation to avoid connection issues
+        with patch.object(component, '_receiver', None):
             # Call _build_objects directly
             result = component._build_objects()
             
-            # Verify session setup was called
-            mock_setup.assert_called_once()
+            # Verify receiver was created
+            assert component._receiver is not None
             # Verify self was returned
             assert result == component
 
@@ -193,104 +193,51 @@ class TestSQLServerSpecificFeatures:
         assert component.charset == "utf8"
         assert component.collation == "SQL_Latin1_General_CP1_CI_AS"
 
-    def test_sqlserver_component_entity_name_validation(self):
-        """Test SQL Server component entity name validation."""
-        # Test with valid entity names
-        valid_names = [
-            "users",
-            "dbo.users",
-            "[Users]",
-            "MyTable",
-            "table_123",
-            "user_profiles"
-        ]
+    @pytest.mark.parametrize("test_type,test_values,component_class,expected_attr", [
+        ("entity_names", ["users", "dbo.users", "[Users]", "MyTable", "table_123", "user_profiles"], SQLServerRead, "entity_name"),
+        ("credential_ids", [1, 100, 999, 1000], SQLServerRead, "credentials_id"),
+        ("queries", ["", "SELECT * FROM users", "INSERT INTO users (name, email) VALUES (:name, :email)", "UPDATE users SET name = :name WHERE id = :id", "DELETE FROM users WHERE id = :id", "SELECT u.id, u.name, u.email, p.phone FROM users u LEFT JOIN profiles p ON u.id = p.user_id WHERE u.active = :active_status"], SQLServerRead, "query"),
+        ("if_exists_values", ["append", "replace", "fail"], SQLServerWrite, "if_exists"),
+        ("chunk_sizes", [1000, 5000, 10000, 50000, 100000], SQLServerWrite, "bulk_chunk_size"),
+    ])
+    def test_sqlserver_component_validation_scenarios(
+        self, test_type, test_values, component_class, expected_attr
+    ):
+        """Test SQL Server component validation scenarios."""
         
-        for name in valid_names:
-            component = SQLServerRead(
-                credentials_id=1,
-                entity_name=name,
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver"
-            )
-            assert component.entity_name == name
-
-    def test_sqlserver_component_credentials_validation(self):
-        """Test SQL Server component credentials validation."""
-        # Test with different credential IDs
-        credential_ids = [1, 100, 999, 1000]
-        
-        for cred_id in credential_ids:
-            component = SQLServerRead(
-                credentials_id=cred_id,
-                entity_name="test_table",
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver"
-            )
-            assert component.credentials_id == cred_id
-
-    def test_sqlserver_component_query_handling(self):
-        """Test SQL Server component query handling."""
-        # Test with different query types
-        queries = [
-            "",  # Empty query
-            "SELECT * FROM users",  # Simple SELECT
-            "INSERT INTO users (name, email) VALUES (:name, :email)",  # INSERT
-            "UPDATE users SET name = :name WHERE id = :id",  # UPDATE
-            "DELETE FROM users WHERE id = :id",  # DELETE
-            """
-            SELECT u.id, u.name, u.email, p.phone
-            FROM users u
-            LEFT JOIN profiles p ON u.id = p.user_id
-            WHERE u.active = :active_status
-            """  # Complex query
-        ]
-        
-        for query in queries:
-            component = SQLServerRead(
-                credentials_id=1,
-                entity_name="test_table",
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                query=query
-            )
-            assert component.query == query
-
-    def test_sqlserver_component_if_exists_values(self):
-        """Test SQL Server component if_exists values."""
-        # Test with different if_exists values
-        if_exists_values = ["append", "replace", "fail"]
-        
-        for value in if_exists_values:
-            component = SQLServerWrite(
-                credentials_id=1,
-                entity_name="test_table",
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="write_sqlserver",
-                if_exists=value
-            )
-            assert component.if_exists == value
-
-    def test_sqlserver_component_chunk_size_handling(self):
-        """Test SQL Server component chunk size handling."""
-        # Test with different chunk sizes
-        chunk_sizes = [1000, 5000, 10000, 50000, 100000]
-        
-        for size in chunk_sizes:
-            component = SQLServerWrite(
-                credentials_id=1,
-                entity_name="test_table",
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="write_sqlserver",
-                bulk_chunk_size=size,
-                bigdata_partition_chunk_size=size * 2
-            )
-            assert component.bulk_chunk_size == size
-            assert component.bigdata_partition_chunk_size == size * 2
+        for value in test_values:
+            if component_class == SQLServerRead:
+                component = component_class(
+                    credentials_id=value if test_type == "credential_ids" else 1,
+                    entity_name="test_table" if test_type != "entity_names" else value,
+                    name="test_component",
+                    description="Test SQL Server component",
+                    comp_type="read_sqlserver",
+                    query=value if test_type == "queries" else ""
+                )
+            else:  # SQLServerWrite
+                component = component_class(
+                    credentials_id=1,
+                    entity_name="test_table",
+                    name="test_component",
+                    description="Test SQL Server component",
+                    comp_type="write_sqlserver",
+                    if_exists=value if test_type == "if_exists_values" else "append",
+                    bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
+                    bigdata_partition_chunk_size=value * 2 if test_type == "chunk_sizes" else 50000
+                )
+            
+            if test_type == "entity_names":
+                assert getattr(component, expected_attr) == value
+            elif test_type == "credential_ids":
+                assert getattr(component, expected_attr) == value
+            elif test_type == "queries":
+                assert getattr(component, expected_attr) == value
+            elif test_type == "if_exists_values":
+                assert getattr(component, expected_attr) == value
+            elif test_type == "chunk_sizes":
+                assert getattr(component, expected_attr) == value
+                assert component.bigdata_partition_chunk_size == value * 2
 
     def test_sqlserver_component_zero_chunk_sizes(self):
         """Test SQL Server component with zero chunk sizes."""
