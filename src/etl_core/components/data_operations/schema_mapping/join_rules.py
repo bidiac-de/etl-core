@@ -28,6 +28,7 @@ class JoinStep(BaseModel):
     @field_validator("left_on", "right_on")
     @classmethod
     def _no_empty_segments(cls, v: str) -> str:
+        # Dotted paths must not contain empty parts
         parts = v.split(".")
         if any(not p.strip() for p in parts):
             raise ValueError("join key paths must not contain empty segments")
@@ -47,8 +48,11 @@ def validate_join_plan(
     path_separator: str = ".",
 ) -> None:
     """
-    Ensure that every join step references known ports and that join keys exist
-    in the referenced input schemas.
+    Validate a join plan:
+
+    - referenced ports must exist (inputs or prior outputs)
+    - output ports must be declared
+    - join keys must exist in their input schemas (for original inputs)
     """
     if not plan.steps:
         return
@@ -59,13 +63,13 @@ def validate_join_plan(
         if name not in in_ports and name not in out_port_names:
             raise ValueError(f"{component_name}: unknown {role} {name!r}")
 
-    # cache leaf maps per input port to avoid repeated work
+    # Cache leaf maps per input to avoid repeated schema walks
     leaf_cache: Dict[str, Dict[str, FieldDef]] = {}
 
     def _ensure_key_in_schema(port_name: str, key: str) -> None:
+        # Skip lookup for intermediate results
         schema = in_port_schemas.get(port_name)
         if schema is None:
-            # When joining an intermediate output to another port, skip lookup.
             return
         if port_name not in leaf_cache:
             leaf_cache[port_name] = get_leaf_field_map(schema, path_separator)

@@ -33,6 +33,7 @@ def _metrics() -> DataOperationsMetrics:
 
 
 def _in_schema_user() -> Schema:
+    # Nested user schema used for rule path validation
     return Schema(
         fields=[
             FieldDef(
@@ -62,6 +63,7 @@ def _out_schema_a() -> Schema:
 
 
 def test_collision_detection_raises() -> None:
+    # Two rules writing the same destination must fail
     with pytest.raises(ValueError, match="duplicate mapping"):
         SchemaMappingComponent(
             name="Collide",
@@ -82,7 +84,7 @@ def test_collision_detection_raises() -> None:
                     src_port="in",
                     src_path="user.name",
                     dst_port="A",
-                    dst_path="uid",  # same destination -> collision
+                    dst_path="uid",
                 ),
             ],
         )
@@ -101,7 +103,7 @@ def test_unknown_source_path_raises() -> None:
             rules=[
                 FieldMapping(
                     src_port="in",
-                    src_path="user.nope",  # not in schema
+                    src_path="user.nope",
                     dst_port="A",
                     dst_path="uid",
                 )
@@ -124,7 +126,7 @@ def test_unknown_destination_path_raises() -> None:
                     src_port="in",
                     src_path="user.id",
                     dst_port="A",
-                    dst_path="does.not.exist",  # not in schema
+                    dst_path="does.not.exist",
                 )
             ],
         )
@@ -172,9 +174,6 @@ def test_leaf_type_mismatch_raises() -> None:
                 )
             ],
         )
-
-
-# ----------------------- NEW: join plan validation ----------------------- #
 
 
 def test_join_plan_unknown_ports_raise() -> None:
@@ -238,7 +237,7 @@ def test_join_plan_key_not_in_schema_raises() -> None:
 
 
 def test_requires_tagged_input_flag() -> None:
-    # multiple inputs + join plan -> True
+    # Multiple inputs + join plan -> True
     comp_multi = SchemaMappingComponent(
         name="FlagTrue",
         description="",
@@ -267,7 +266,7 @@ def test_requires_tagged_input_flag() -> None:
     )
     assert comp_multi.requires_tagged_input() is True
 
-    # single input or no join plan -> False
+    # Single input or no join plan -> False
     comp_single = SchemaMappingComponent(
         name="FlagFalse",
         description="",

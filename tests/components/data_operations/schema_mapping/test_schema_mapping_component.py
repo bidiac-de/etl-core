@@ -36,7 +36,7 @@ def make_join_component(
     steps: List[JoinStep],
     description: str = "",
 ) -> SchemaMappingComponent:
-    """Factory for join components with minimal boilerplate."""
+    """Factory to reduce boilerplate in join tests."""
     extra_out_names = [p for p, _ in out_ports]
     out_port_schemas: Dict[str, Schema] = {}
     for p, s in out_ports:
@@ -51,9 +51,6 @@ def make_join_component(
         out_port_schemas=out_port_schemas,
         join_plan=JoinPlan(steps=steps),
     )
-
-
-# schema definitions for tests
 
 
 def _schema_row_fanout_in() -> Schema:
@@ -96,6 +93,7 @@ def _schema_userid_username_out() -> Schema:
 async def test_component_process_row_fanout(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Rules map nested values to two ports, receiver groups outputs by port
     comp = SchemaMappingComponent(
         name="MapRow",
         description="row",
@@ -145,6 +143,7 @@ async def test_component_process_row_fanout(
 async def test_component_process_bulk_dataframe(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Bulk mapping: two input columns → two renamed columns on port X
     comp = SchemaMappingComponent(
         name="MapBulk",
         description="bulk",
@@ -181,6 +180,7 @@ async def test_component_process_bulk_dataframe(
 async def test_component_process_bigdata(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Bigdata mapping: dask dataframe in, mapped per partition
     comp = SchemaMappingComponent(
         name="MapBig",
         description="big",
@@ -217,6 +217,7 @@ async def test_component_process_bigdata(
 async def test_component_multi_input_row_inner_join(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Row joins use tagged envelopes and buffers
     users_schema = schema_from_fields(
         [
             fd(
@@ -298,6 +299,7 @@ async def test_component_multi_input_row_inner_join(
 async def test_component_multi_input_bulk_left_join(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Bulk join: concat per-port chunks, then merge on id/user_id
     left_schema = _schema_id_name_in()
     right_schema = schema_from_fields([fd("user_id", "integer"), fd("city", "string")])
     out_schema = schema_from_fields(
@@ -327,7 +329,7 @@ async def test_component_multi_input_bulk_left_join(
         comp.process_bulk(
             InTagged(
                 "L", pd.DataFrame([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
-            ),  # noqa: E501
+            ),
             metrics=data_ops_metrics,
         )
     )
@@ -348,7 +350,7 @@ async def test_component_multi_input_bulk_left_join(
     got = outs[0].payload.reset_index(drop=True)
     expected = pd.DataFrame(
         {"id": [1, 2], "name": ["A", "B"], "city": ["Berlin", None]}
-    )  # noqa: E501
+    )
     assert_frame_equal(got, expected, check_dtype=False)
 
 
@@ -356,6 +358,7 @@ async def test_component_multi_input_bulk_left_join(
 async def test_component_multi_input_bigdata_outer_join(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Bigdata outer join: unmatched rows remain with NaNs on the other side
     left_pdf = pd.DataFrame([{"id": 1}, {"id": 2}])
     right_pdf = pd.DataFrame([{"user_id": 2}, {"user_id": 3}])
     l_ddf = dd.from_pandas(left_pdf, npartitions=2)
@@ -409,6 +412,7 @@ async def test_component_multi_input_bigdata_outer_join(
 async def test_component_multi_step_chained_joins_row(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Two-step chain: step1 -> AB, then AB joins C -> ABC
     schema_a = schema_from_fields([fd("id", "integer"), fd("name", "string")])
     schema_b = schema_from_fields([fd("bid", "integer"), fd("group", "string")])
     schema_c = schema_from_fields([fd("cid", "integer"), fd("city", "string")])
@@ -446,17 +450,17 @@ async def test_component_multi_step_chained_joins_row(
     outs += await collect_async(
         comp.process_row(
             InTagged("A", {"id": 1, "name": "A1"}), metrics=data_ops_metrics
-        )  # noqa: E501
+        )
     )
     outs += await collect_async(
         comp.process_row(
             InTagged("B", {"bid": 1, "group": "G"}), metrics=data_ops_metrics
-        )  # noqa: E501
+        )
     )
     outs += await collect_async(
         comp.process_row(
             InTagged("C", {"cid": 1, "city": "BE"}), metrics=data_ops_metrics
-        )  # noqa: E501
+        )
     )
     outs += await collect_async(
         comp.process_row(InTagged("A", Ellipsis), metrics=data_ops_metrics)
@@ -479,6 +483,7 @@ async def test_component_multi_step_chained_joins_row(
 async def test_bulk_left_join_large_dataset(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Large left join
     n = 1000
     left_pdf = pd.DataFrame([{"id": i, "name": f"U{i}"} for i in range(1, n + 1)])
     right_pdf = pd.DataFrame(
@@ -537,6 +542,7 @@ async def test_bulk_left_join_large_dataset(
 async def test_bigdata_outer_join_large_dataset(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
+    # Bigdata outer join over disjoint ranges to validate non-matches
     n_left = 1500
     n_right = 1500
     left_pdf = pd.DataFrame([{"id": i} for i in range(1, n_left + 1)])
@@ -691,6 +697,7 @@ async def test_row_join_flat_to_nested_large(
     async def feed_rows(
         comp: SchemaMappingComponent, port: str, rows: List[Dict[str, Any]]
     ) -> None:
+        # Push rows into a port, no outputs expected until ports close
         for row in rows:
             async for _ in comp.process_row(
                 InTagged(port, row), metrics=data_ops_metrics
@@ -698,6 +705,7 @@ async def test_row_join_flat_to_nested_large(
                 pass  # noqa: E701
 
     async def flush_port(comp: SchemaMappingComponent, port: str) -> List[Out]:
+        # Signal closure and collect outüuts
         outs: List[Out] = []
         async for out in comp.process_row(
             InTagged(port, Ellipsis), metrics=data_ops_metrics
@@ -712,6 +720,7 @@ async def test_row_join_flat_to_nested_large(
         return [{"user_id": i, "addr": {"city": f"City-{i}"}} for i in range(n)]
 
     def assert_outputs(outs: List[Out], n: int) -> None:
+        # Basic structure checks across
         assert outs, "no output received from row join"
         assert all(isinstance(o, Out) for o in outs)
         assert all(o.port == "OUT" for o in outs)
