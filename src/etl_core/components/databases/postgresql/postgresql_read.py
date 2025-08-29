@@ -8,18 +8,21 @@ from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
 from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import OutPortSpec
 
 
 @register_component("read_postgresql")
 class PostgreSQLRead(PostgreSQLComponent):
     """PostgreSQL reader supporting row, bulk, and bigdata modes."""
 
+    OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
+    
     ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
     
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
 
     @model_validator(mode="after")
-    def _build_objects(self):
+    def _build_objects(self) -> "PostgreSQLRead":
         """Build objects after validation."""
         self._receiver = PostgreSQLReceiver()
         return self
