@@ -11,6 +11,7 @@ from etl_core.components.data_operations.data_operations import (
 )
 from etl_core.components.data_operations.schema_mapping.mapping_rule import (
     FieldMapping,
+    Key,
     validate_field_mappings,
 )
 from etl_core.components.data_operations.schema_mapping.join_rules import (
@@ -32,15 +33,19 @@ StrRule = Tuple[str, str, str, str]
 
 class SchemaMappingComponent(DataOperationsComponent):
     """
-    Component that orchestrates schema mapping and joining
-    according to determined rules. Allows for nested and flat schemas,
-    as well as nested joins across multiple input ports.
+    Component that orchestrates schema mapping and joining according to rules.
+    Supports nested/flat schemas and multi-port joins.
+
+    Public field `rules` now accepts only a dictionary keyed by (dst_port, dst_path).
+    The validated dictionary is stored in `_rules_map`.
     """
 
-    rules: List[FieldMapping] = Field(default_factory=list)
+    # Dict-only rules input; duplication becomes structurally impossible
+    rules: Dict[Key, FieldMapping] = Field(default_factory=dict)
     join_plan: JoinPlan = Field(default_factory=JoinPlan)
 
     _receiver: SchemaMappingReceiver = PrivateAttr()
+    _rules_map: Dict[Key, FieldMapping] = PrivateAttr(default_factory=dict)
 
     _row_buf: Dict[str, List[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
     _bulk_buf: Dict[str, pd.DataFrame] = PrivateAttr(default_factory=dict)
@@ -48,19 +53,25 @@ class SchemaMappingComponent(DataOperationsComponent):
     _closed_ports: set[str] = PrivateAttr(default_factory=set)
     _required_ports: set[str] = PrivateAttr(default_factory=set)
 
+    @property
+    def rules_effective(self) -> Dict[Key, FieldMapping]:
+        """Read-only access to the validated rules dict."""
+        return self._rules_map
+
     @model_validator(mode="after")
     def _build_objects(self) -> "SchemaMappingComponent":
-        # Set up a fresh receiver instance for pure operations
+        # Fresh receiver instance
         self._receiver = SchemaMappingReceiver()
 
-        # Validate mapping rules against port schemas
-        validate_field_mappings(
+        # Validate mapping rules into a dict; do not mutate self.rules
+        self._rules_map = validate_field_mappings(
             self.rules,
             in_port_schemas=self.in_port_schemas,
             out_port_schemas=self.out_port_schemas,
             component_name=self.name,
             path_separator=self._schema_path_separator,
         )
+
         # Validate join plan (ports exist, keys exist)
         validate_join_plan(
             self.join_plan,
@@ -264,8 +275,11 @@ class SchemaMappingComponent(DataOperationsComponent):
         return bool(self.join_plan.steps) and isinstance(obj, InTagged)
 
     def _rules_as_tuples(self) -> List[StrRule]:
-        # Convert validated rules to the tuple form used by the receiver
-        return [(r.src_port, r.src_path, r.dst_port, r.dst_path) for r in self.rules]
+        # Convert validated dict rules to the tuple form used by the receiver
+        rules_map = self._rules_map
+        return [
+            (r.src_port, r.src_path, r.dst_port, r.dst_path) for r in rules_map.values()
+        ]
 
     @staticmethod
     def _compute_required_ports(

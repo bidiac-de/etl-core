@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Dict
 
 import pytest
 
 from etl_core.components.data_operations.schema_mapping.mapping_rule import (
     FieldMapping,
+    Key,
 )
 from etl_core.components.data_operations.schema_mapping.schema_mapping_component import (  # noqa: E501
     SchemaMappingComponent,
@@ -62,35 +64,50 @@ def _out_schema_a() -> Schema:
     )
 
 
-def test_collision_detection_raises() -> None:
-    # Two rules writing the same destination must fail
-    with pytest.raises(ValueError, match="duplicate mapping"):
-        SchemaMappingComponent(
-            name="Collide",
-            description="",
-            comp_type="schema_mapping",
-            extra_input_ports=["in"],
-            in_port_schemas={"in": _in_schema_user()},
-            extra_output_ports=["A"],
-            out_port_schemas={"A": _out_schema_a()},
-            rules=[
-                FieldMapping(
-                    src_port="in",
-                    src_path="user.id",
-                    dst_port="A",
-                    dst_path="uid",
-                ),
-                FieldMapping(
-                    src_port="in",
-                    src_path="user.name",
-                    dst_port="A",
-                    dst_path="uid",
-                ),
-            ],
-        )
+def test_collision_last_inserted_wins() -> None:
+    # Build the rules dict in two assignments; final value should win.
+    # Use string->string so schema validation succeeds.
+    rules: Dict[Key, FieldMapping] = {}
+    rules[("A", "uname")] = FieldMapping(
+        src_port="in",
+        src_path="user.name",
+        dst_port="A",
+        dst_path="uname",
+    )
+    rules[("A", "uname")] = FieldMapping(
+        src_port="in",
+        src_path="user.address.city",
+        dst_port="A",
+        dst_path="uname",
+    )
+
+    comp = SchemaMappingComponent(
+        name="Collide",
+        description="",
+        comp_type="schema_mapping",
+        extra_input_ports=["in"],
+        in_port_schemas={"in": _in_schema_user()},
+        extra_output_ports=["A"],
+        out_port_schemas={"A": _out_schema_a()},
+        rules=rules,
+    )
+
+    eff = comp.rules_effective
+    assert ("A", "uname") in eff
+    fm = eff[("A", "uname")]
+    # Last assignment must win
+    assert fm.src_path == "user.address.city"
 
 
 def test_unknown_source_path_raises() -> None:
+    rules: Dict[Key, FieldMapping] = {
+        ("A", "uid"): FieldMapping(
+            src_port="in",
+            src_path="user.nope",
+            dst_port="A",
+            dst_path="uid",
+        )
+    }
     with pytest.raises(ValueError, match="unknown source path"):
         SchemaMappingComponent(
             name="BadSrc",
@@ -100,18 +117,19 @@ def test_unknown_source_path_raises() -> None:
             in_port_schemas={"in": _in_schema_user()},
             extra_output_ports=["A"],
             out_port_schemas={"A": _out_schema_a()},
-            rules=[
-                FieldMapping(
-                    src_port="in",
-                    src_path="user.nope",
-                    dst_port="A",
-                    dst_path="uid",
-                )
-            ],
+            rules=rules,
         )
 
 
 def test_unknown_destination_path_raises() -> None:
+    rules: Dict[Key, FieldMapping] = {
+        ("A", "does.not.exist"): FieldMapping(
+            src_port="in",
+            src_path="user.id",
+            dst_port="A",
+            dst_path="does.not.exist",
+        )
+    }
     with pytest.raises(ValueError, match="unknown destination path"):
         SchemaMappingComponent(
             name="BadDst",
@@ -121,18 +139,19 @@ def test_unknown_destination_path_raises() -> None:
             in_port_schemas={"in": _in_schema_user()},
             extra_output_ports=["A"],
             out_port_schemas={"A": _out_schema_a()},
-            rules=[
-                FieldMapping(
-                    src_port="in",
-                    src_path="user.id",
-                    dst_port="A",
-                    dst_path="does.not.exist",
-                )
-            ],
+            rules=rules,
         )
 
 
 def test_traversal_into_non_object_is_reported_as_unknown_destination() -> None:
+    rules: Dict[Key, FieldMapping] = {
+        ("A", "uid.child"): FieldMapping(
+            src_port="in",
+            src_path="user.id",
+            dst_port="A",
+            dst_path="uid.child",
+        )
+    }
     with pytest.raises(ValueError, match="unknown destination path"):
         SchemaMappingComponent(
             name="Traverse",
@@ -142,18 +161,19 @@ def test_traversal_into_non_object_is_reported_as_unknown_destination() -> None:
             in_port_schemas={"in": _in_schema_user()},
             extra_output_ports=["A"],
             out_port_schemas={"A": _out_schema_a()},
-            rules=[
-                FieldMapping(
-                    src_port="in",
-                    src_path="user.id",
-                    dst_port="A",
-                    dst_path="uid.child",
-                )
-            ],
+            rules=rules,
         )
 
 
 def test_leaf_type_mismatch_raises() -> None:
+    rules: Dict[Key, FieldMapping] = {
+        ("A", "uid"): FieldMapping(
+            src_port="in",
+            src_path="user.name",
+            dst_port="A",
+            dst_path="uid",
+        )
+    }
     with pytest.raises(ValueError, match="type mismatch"):
         SchemaMappingComponent(
             name="TypeMismatch",
@@ -165,14 +185,7 @@ def test_leaf_type_mismatch_raises() -> None:
             out_port_schemas={
                 "A": Schema(fields=[FieldDef(name="uid", data_type="integer")])
             },
-            rules=[
-                FieldMapping(
-                    src_port="in",
-                    src_path="user.name",
-                    dst_port="A",
-                    dst_path="uid",
-                )
-            ],
+            rules=rules,
         )
 
 

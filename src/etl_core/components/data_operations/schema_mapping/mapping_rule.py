@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -10,6 +10,9 @@ from etl_core.components.data_operations.rule_helper import (
     ensure_no_empty_path_segments,
 )
 from etl_core.utils.common_helpers import get_leaf_field_map
+
+
+Key = Tuple[str, str]  # (dst_port, dst_path)
 
 
 class FieldMapping(BaseModel):
@@ -33,7 +36,7 @@ class FieldMapping(BaseModel):
 
 
 def _types_compatible(src: FieldDef, dst: FieldDef) -> bool:
-    # Treat PATH as STRING to allow path-like text to map to string fields.
+    # Treat PATH as STRING to allow path-like text to map to string fields
     def norm(dt: DataType) -> DataType:
         return DataType.STRING if dt == DataType.PATH else dt
 
@@ -58,42 +61,38 @@ def _ensure_leaf_map(
     return cache[port]
 
 
-def _ensure_no_collisions(rules: List["FieldMapping"], *, component_name: str) -> None:
-    # Destination (port, path) must be unique across rules
-    seen: set[Tuple[str, str]] = set()
-    for r in rules:
-        key = (r.dst_port, r.dst_path)
-        if key in seen:
-            raise ValueError(
-                f"{component_name}: duplicate mapping to destination {key!r}"
-            )
-        seen.add(key)
-
-
 def validate_field_mappings(
-    rules: List["FieldMapping"],
+    rules: Dict[Key, FieldMapping],
     *,
     in_port_schemas: Dict[str, Schema],
     out_port_schemas: Dict[str, Schema],
     component_name: str,
     path_separator: str = ".",
-) -> None:
+) -> Dict[Key, FieldMapping]:
     """
-    Validate mapping rules:
-      - no duplicate destinations
+    Validate mapping rules provided strictly as a dictionary keyed by
+    (dst_port, dst_path). Dicts enforce uniqueness structurally.
+
+    Validations:
       - ports exist and paths exist in their schemas
-      - compatible leaf types
+      - compatible leaf types (PATH ~ STRING)
     """
     if not rules:
-        return
+        return {}
 
-    _ensure_no_collisions(rules, component_name=component_name)
-
-    # Cache leaf maps per port to avoid repeated schema traversal
+    validated: Dict[Key, FieldMapping] = {}
     in_leaf_cache: Dict[str, Dict[str, FieldDef]] = {}
     out_leaf_cache: Dict[str, Dict[str, FieldDef]] = {}
 
-    for r in rules:
+    for key, r in rules.items():
+        # Key must match the rule's destination address
+        expected_key = (r.dst_port, r.dst_path)
+        if key != expected_key:
+            raise ValueError(
+                f"{component_name}: rules key {key!r} does not match rule "
+                f"destination {(r.dst_port, r.dst_path)!r}"
+            )
+
         # Get leaf maps for both sides (ensures port schemas are present)
         src_leaves = _ensure_leaf_map(
             in_leaf_cache,
@@ -134,3 +133,8 @@ def validate_field_mappings(
                 f"({src_fd.data_type}) -> {r.dst_port}:{r.dst_path} "
                 f"({dst_fd.data_type})"
             )
+
+        # Dict input already guarantees uniqueness
+        validated[key] = r
+
+    return validated
