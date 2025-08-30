@@ -20,7 +20,7 @@ class MariaDBRead(MariaDBComponent):
 
     OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
 
-    ALLOW_NO_INPUTS = True  # This is a source component that doesn't need input ports
+    ALLOW_NO_INPUTS = True
 
     query: str = Field(default="", description="SQL query for read operations")
     params: Dict[str, Any] = Field(default_factory=dict, description="Query parameters")
