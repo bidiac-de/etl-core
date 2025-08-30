@@ -71,20 +71,13 @@ class TestCLIErrorHandling:
 
     def test_update_job_invalid_json(self, runner):
         """Test update_job with invalid JSON file."""
-        temp_file = Path("invalid_update.json")
-        temp_file.write_text("invalid json content")
+        json_file = Path("tests/components/data/json/testdata_bad.json")
 
-        try:
-            result = runner.invoke(app, ["update-job", "job-id", str(temp_file)])
-            assert result.exit_code != 0
-            assert result.exception is not None
-            # Check for the actual error message content
-            assert "Expecting value" in str(result.exception)
-        finally:
-            # Use the helper function for cleanup to avoid permission issues
-            from tests.helpers import cleanup_temp_file
-
-            cleanup_temp_file(temp_file)
+        result = runner.invoke(app, ["update-job", "job-id", str(json_file)])
+        assert result.exit_code != 0
+        assert result.exception is not None
+        # Check for the actual error message content
+        assert "Expecting property name" in str(result.exception)
 
     def test_http_client_connection_error(self, runner):
         """Test HTTP client with connection error."""
