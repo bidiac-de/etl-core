@@ -11,10 +11,6 @@ from etl_core.components.envelopes import InTagged, Out
 from etl_core.components.data_operations.schema_mapping.schema_mapping_component import (  # noqa: E501
     SchemaMappingComponent,
 )
-from etl_core.components.data_operations.schema_mapping.mapping_rule import (
-    FieldMapping,
-    Key,
-)
 from etl_core.components.data_operations.schema_mapping.join_rules import (
     JoinPlan,
     JoinStep,
@@ -95,19 +91,12 @@ async def test_component_process_row_fanout(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
     # Rules map nested values to two ports, receiver groups outputs by port
-    rules: Dict[Key, FieldMapping] = {
-        ("A", "uid"): FieldMapping(
-            src_port="in", src_path="user.id", dst_port="A", dst_path="uid"
-        ),
-        ("A", "uname"): FieldMapping(
-            src_port="in", src_path="user.name", dst_port="A", dst_path="uname"
-        ),
-        ("B", "city"): FieldMapping(
-            src_port="in",
-            src_path="user.address.city",
-            dst_port="B",
-            dst_path="city",
-        ),
+    rules_by_dest: Dict[str, Dict[str, Dict[str, str]]] = {
+        "A": {
+            "uid": {"src_port": "in", "src_path": "user.id"},
+            "uname": {"src_port": "in", "src_path": "user.name"},
+        },
+        "B": {"city": {"src_port": "in", "src_path": "user.address.city"}},
     }
     comp = SchemaMappingComponent(
         name="MapRow",
@@ -120,7 +109,7 @@ async def test_component_process_row_fanout(
             "A": _schema_row_fanout_out_a(),
             "B": _schema_row_fanout_out_b(),
         },
-        rules=rules,
+        rules_by_dest=rules_by_dest,
     )
 
     row: Dict[str, Any] = {
@@ -146,13 +135,11 @@ async def test_component_process_bulk_dataframe(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
     # Bulk mapping: two input columns → two renamed columns on port X
-    rules: Dict[Key, FieldMapping] = {
-        ("X", "user_id"): FieldMapping(
-            src_port="in", src_path="id", dst_port="X", dst_path="user_id"
-        ),
-        ("X", "user_name"): FieldMapping(
-            src_port="in", src_path="name", dst_port="X", dst_path="user_name"
-        ),
+    rules_by_dest: Dict[str, Dict[str, Dict[str, str]]] = {
+        "X": {
+            "user_id": {"src_port": "in", "src_path": "id"},
+            "user_name": {"src_port": "in", "src_path": "name"},
+        }
     }
     comp = SchemaMappingComponent(
         name="MapBulk",
@@ -162,7 +149,7 @@ async def test_component_process_bulk_dataframe(
         in_port_schemas={"in": _schema_id_name_in()},
         extra_output_ports=["X"],
         out_port_schemas={"X": _schema_userid_username_out()},
-        rules=rules,
+        rules_by_dest=rules_by_dest,
     )
 
     df = pd.DataFrame([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
@@ -184,13 +171,11 @@ async def test_component_process_bigdata(
     data_ops_metrics: DataOperationsMetrics,
 ) -> None:
     # Bigdata mapping: dask dataframe in, mapped per partition
-    rules: Dict[Key, FieldMapping] = {
-        ("out", "uid"): FieldMapping(
-            src_port="in", src_path="id", dst_port="out", dst_path="uid"
-        ),
-        ("out", "uname"): FieldMapping(
-            src_port="in", src_path="name", dst_port="out", dst_path="uname"
-        ),
+    rules_by_dest: Dict[str, Dict[str, Dict[str, str]]] = {
+        "out": {
+            "uid": {"src_port": "in", "src_path": "id"},
+            "uname": {"src_port": "in", "src_path": "name"},
+        }
     }
     comp = SchemaMappingComponent(
         name="MapBig",
@@ -200,7 +185,7 @@ async def test_component_process_bigdata(
         in_port_schemas={"in": _schema_id_name_in()},
         extra_output_ports=["out"],
         out_port_schemas={"out": _schema_uid_uname_out()},
-        rules=rules,
+        rules_by_dest=rules_by_dest,
     )
 
     pdf = pd.DataFrame([{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])

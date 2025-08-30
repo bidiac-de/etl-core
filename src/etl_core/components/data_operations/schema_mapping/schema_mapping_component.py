@@ -11,6 +11,7 @@ from etl_core.components.data_operations.data_operations import (
 )
 from etl_core.components.data_operations.schema_mapping.mapping_rule import (
     FieldMapping,
+    FieldMappingSrc,
     Key,
     validate_field_mappings,
 )
@@ -33,15 +34,12 @@ StrRule = Tuple[str, str, str, str]
 
 class SchemaMappingComponent(DataOperationsComponent):
     """
-    Component that orchestrates schema mapping and joining according to rules.
-    Supports nested/flat schemas and multi-port joins.
-
-    Public field `rules` now accepts only a dictionary keyed by (dst_port, dst_path).
-    The validated dictionary is stored in `_rules_map`.
+    Orchestrates schema mapping and joining according to defined rules.
+    Config uses a nested dict for rules (rules_by_dest) which
+    provides inherent uniqueness per destination field.
     """
 
-    # Dict-only rules input; duplication becomes structurally impossible
-    rules: Dict[Key, FieldMapping] = Field(default_factory=dict)
+    rules_by_dest: Dict[str, Dict[str, FieldMappingSrc]] = Field(default_factory=dict)
     join_plan: JoinPlan = Field(default_factory=JoinPlan)
 
     _receiver: SchemaMappingReceiver = PrivateAttr()
@@ -55,7 +53,7 @@ class SchemaMappingComponent(DataOperationsComponent):
 
     @property
     def rules_effective(self) -> Dict[Key, FieldMapping]:
-        """Read-only access to the validated rules dict."""
+        """Read-only access to the validated canonical rules dict."""
         return self._rules_map
 
     @model_validator(mode="after")
@@ -63,16 +61,16 @@ class SchemaMappingComponent(DataOperationsComponent):
         # Fresh receiver instance
         self._receiver = SchemaMappingReceiver()
 
-        # Validate mapping rules into a dict; do not mutate self.rules
+        # Validate mapping rules from nested JSON into canonical dict
         self._rules_map = validate_field_mappings(
-            self.rules,
+            self.rules_by_dest,
             in_port_schemas=self.in_port_schemas,
             out_port_schemas=self.out_port_schemas,
             component_name=self.name,
             path_separator=self._schema_path_separator,
         )
 
-        # Validate join plan (ports exist, keys exist)
+        # Validate join plan
         validate_join_plan(
             self.join_plan,
             in_port_schemas=self.in_port_schemas,
@@ -114,7 +112,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         row: InTagged,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Buffer rows per-port; Ellipsis signals that a port is closed
+        # Buffer rows per-port, Ellipsis signals that a port is closed
         if row.payload is Ellipsis:
             self._closed_ports.add(row.in_port)
         else:
@@ -153,7 +151,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Tagged envelopes for bulk joins; plain frames for mapping
+        # Tagged envelopes for bulk joins: plain frames for mapping
         if self._is_tagged_join(dataframe):
             async for out in self._process_bulk_tagged_join(dataframe, metrics):
                 yield out
@@ -168,7 +166,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         dataframe: InTagged,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Buffer frames per port; concatenate chunks until closed
+        # Buffer frames per port: concatenate chunks until closed
         if dataframe.payload is Ellipsis:
             self._closed_ports.add(dataframe.in_port)
         else:
@@ -216,7 +214,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Dask joins also use tagged envelopes; plain DDF for mapping
+        # Dask joins also use tagged envelopes: plain DDF for mapping
         if self._is_tagged_join(ddf):
             async for out in self._process_bigdata_tagged_join(ddf, metrics):
                 yield out
@@ -231,7 +229,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         ddf: InTagged,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Concatenate DDFs per port; Ellipsis closes the port
+        # Concatenate DDFs per port: Ellipsis closes the port
         if ddf.payload is Ellipsis:
             self._closed_ports.add(ddf.in_port)
         else:
@@ -299,7 +297,7 @@ class SchemaMappingComponent(DataOperationsComponent):
         return ports
 
     def _ready_to_join(self) -> bool:
-        # All required inputs must signal closure before we join
+        # All required inputs must signal closure before join
         return self._required_ports.issubset(self._closed_ports)
 
     def _reset_buffers(self) -> None:

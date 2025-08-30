@@ -17,11 +17,7 @@ Key = Tuple[str, str]  # (dst_port, dst_path)
 
 class FieldMapping(BaseModel):
     """
-    A single mapping rule:
-      - src_port: logical source port (fan-in)
-      - src_path: dotted-path or column name for source
-      - dst_port: target port (fan-out)
-      - dst_path: dotted-path or column name for destination
+    A single mapping rule with explicit destination.
     """
 
     src_port: str = Field(..., min_length=1)
@@ -30,6 +26,26 @@ class FieldMapping(BaseModel):
     dst_path: str = Field(..., min_length=1)
 
     @field_validator("src_path", "dst_path")
+    @classmethod
+    def _no_empty_segments(cls, v: str) -> str:
+        return ensure_no_empty_path_segments(v)
+
+
+class FieldMappingSrc(BaseModel):
+    """
+    A rule that omits destination. Used for nested JSON:
+
+    rules_by_dest = {
+        "<dst_port>": {
+            "<dst_path>": { "src_port": "...", "src_path": "..." }
+        }
+    }
+    """
+
+    src_port: str = Field(..., min_length=1)
+    src_path: str = Field(..., min_length=1)
+
+    @field_validator("src_path")
     @classmethod
     def _no_empty_segments(cls, v: str) -> str:
         return ensure_no_empty_path_segments(v)
@@ -61,8 +77,69 @@ def _ensure_leaf_map(
     return cache[port]
 
 
+def _build_mapping_for_dest(
+    *,
+    dst_port: str,
+    dst_path: str,
+    src_rule: FieldMappingSrc,
+    in_leaf_cache: Dict[str, Dict[str, FieldDef]],
+    out_leaf_cache: Dict[str, Dict[str, FieldDef]],
+    in_port_schemas: Dict[str, Schema],
+    out_port_schemas: Dict[str, Schema],
+    component_name: str,
+    path_separator: str,
+) -> FieldMapping:
+    """
+    Validate a single destination mapping and return a concrete FieldMapping.
+    Raises ValueError with clear messages on any validation issue.
+    """
+    src_leaves = _ensure_leaf_map(
+        in_leaf_cache,
+        port=src_rule.src_port,
+        schemas=in_port_schemas,
+        component_name=component_name,
+        path_separator=path_separator,
+        role="input",
+    )
+    dst_leaves = _ensure_leaf_map(
+        out_leaf_cache,
+        port=dst_port,
+        schemas=out_port_schemas,
+        component_name=component_name,
+        path_separator=path_separator,
+        role="output",
+    )
+
+    src_fd = src_leaves.get(src_rule.src_path)
+    if src_fd is None:
+        raise ValueError(
+            f"{component_name}: unknown source path "
+            f"{src_rule.src_port!r}:{src_rule.src_path!r}"
+        )
+
+    dst_fd = dst_leaves.get(dst_path)
+    if dst_fd is None:
+        raise ValueError(
+            f"{component_name}: unknown destination path {dst_port!r}:{dst_path!r}"
+        )
+
+    if not _types_compatible(src_fd, dst_fd):
+        raise ValueError(
+            f"{component_name}: type mismatch "
+            f"{src_rule.src_port}:{src_rule.src_path} ({src_fd.data_type}) "
+            f"-> {dst_port}:{dst_path} ({dst_fd.data_type})"
+        )
+
+    return FieldMapping(
+        src_port=src_rule.src_port,
+        src_path=src_rule.src_path,
+        dst_port=dst_port,
+        dst_path=dst_path,
+    )
+
+
 def validate_field_mappings(
-    rules: Dict[Key, FieldMapping],
+    rules_by_dest: Dict[str, Dict[str, FieldMappingSrc]],
     *,
     in_port_schemas: Dict[str, Schema],
     out_port_schemas: Dict[str, Schema],
@@ -70,71 +147,44 @@ def validate_field_mappings(
     path_separator: str = ".",
 ) -> Dict[Key, FieldMapping]:
     """
-    Validate mapping rules provided strictly as a dictionary keyed by
-    (dst_port, dst_path). Dicts enforce uniqueness structurally.
-
-    Validations:
-      - ports exist and paths exist in their schemas
-      - compatible leaf types (PATH ~ STRING)
+    Validate nested JSON rules and return canonical dict keyed by
+    (dst_port, dst_path). The nested dict shape gives inherent uniqueness.
     """
-    if not rules:
+    if not rules_by_dest:
         return {}
 
     validated: Dict[Key, FieldMapping] = {}
     in_leaf_cache: Dict[str, Dict[str, FieldDef]] = {}
     out_leaf_cache: Dict[str, Dict[str, FieldDef]] = {}
 
-    for key, r in rules.items():
-        # Key must match the rule's destination address
-        expected_key = (r.dst_port, r.dst_path)
-        if key != expected_key:
-            raise ValueError(
-                f"{component_name}: rules key {key!r} does not match rule "
-                f"destination {(r.dst_port, r.dst_path)!r}"
-            )
-
-        # Get leaf maps for both sides (ensures port schemas are present)
-        src_leaves = _ensure_leaf_map(
-            in_leaf_cache,
-            port=r.src_port,
-            schemas=in_port_schemas,
-            component_name=component_name,
-            path_separator=path_separator,
-            role="input",
-        )
-        dst_leaves = _ensure_leaf_map(
+    for dst_port, fields in rules_by_dest.items():
+        # Ensure destination port exists (and cache its leaves once)
+        _ensure_leaf_map(
             out_leaf_cache,
-            port=r.dst_port,
+            port=dst_port,
             schemas=out_port_schemas,
             component_name=component_name,
             path_separator=path_separator,
             role="output",
         )
 
-        # Look up leaf fields by dotted path
-        src_fd = src_leaves.get(r.src_path)
-        if src_fd is None:
-            raise ValueError(
-                f"{component_name}: unknown source path "
-                f"{r.src_port!r}:{r.src_path!r}"
-            )
+        for dst_path, src_rule in fields.items():
+            key = (dst_port, dst_path)
+            if key in validated:
+                # Nested dict already enforces uniqueness, keep this guard
+                raise ValueError(f"{component_name}: duplicate mapping for {key!r}")
 
-        dst_fd = dst_leaves.get(r.dst_path)
-        if dst_fd is None:
-            raise ValueError(
-                f"{component_name}: unknown destination path "
-                f"{r.dst_port!r}:{r.dst_path!r}"
+            fm = _build_mapping_for_dest(
+                dst_port=dst_port,
+                dst_path=dst_path,
+                src_rule=src_rule,
+                in_leaf_cache=in_leaf_cache,
+                out_leaf_cache=out_leaf_cache,
+                in_port_schemas=in_port_schemas,
+                out_port_schemas=out_port_schemas,
+                component_name=component_name,
+                path_separator=path_separator,
             )
-
-        # Enforce compatible leaf types
-        if not _types_compatible(src_fd, dst_fd):
-            raise ValueError(
-                f"{component_name}: type mismatch {r.src_port}:{r.src_path} "
-                f"({src_fd.data_type}) -> {r.dst_port}:{r.dst_path} "
-                f"({dst_fd.data_type})"
-            )
-
-        # Dict input already guarantees uniqueness
-        validated[key] = r
+            validated[key] = fm
 
     return validated
