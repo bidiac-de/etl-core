@@ -12,16 +12,8 @@ class MariaDBComponent(SQLDatabaseComponent):
         default="utf8mb4_unicode_ci", description="Collation for MariaDB"
     )
 
-    # Database operation type
-    operation: str = Field(
-        default=DatabaseOperation.INSERT.value,
-        description=(
-            "Database operation type: insert, upsert, truncate, or update"
-        ),
-    )
-
     def _build_query(
-        self, table: str, columns: list, operation: str, **kwargs
+        self, table: str, columns: list, operation: DatabaseOperation, **kwargs
     ) -> str:
         """
         Build MariaDB-specific query based on operation type.
@@ -38,11 +30,11 @@ class MariaDBComponent(SQLDatabaseComponent):
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
 
-        if operation == DatabaseOperation.TRUNCATE.value:
+        if operation == DatabaseOperation.TRUNCATE:
             # Clear table first, then insert
             return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
         
-        elif operation == DatabaseOperation.UPSERT.value:
+        elif operation == DatabaseOperation.UPSERT:
             # Insert or update on duplicate key
             update_columns = kwargs.get("update_columns", columns)
             update_clause = ", ".join(
@@ -50,12 +42,12 @@ class MariaDBComponent(SQLDatabaseComponent):
             )
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders}) ON DUPLICATE KEY UPDATE {update_clause}"
         
-        elif operation == DatabaseOperation.UPDATE.value:
+        elif operation == DatabaseOperation.UPDATE:
             # Pure update operation
             where_conditions = kwargs.get("where_conditions", [])
             if not where_conditions:
                 raise ValueError("UPDATE operation requires where_conditions")
-            
+        
             set_clause = ", ".join([f"{col} = :{col}" for col in columns])
             where_clause = " AND ".join(where_conditions)
             return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"

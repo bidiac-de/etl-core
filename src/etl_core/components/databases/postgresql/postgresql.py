@@ -12,16 +12,8 @@ class PostgreSQLComponent(SQLDatabaseComponent):
         default="en_US.UTF-8", description="Collation for PostgreSQL"
     )
 
-    # Database operation type
-    operation: str = Field(
-        default=DatabaseOperation.INSERT.value,
-        description=(
-            "Database operation type: insert, upsert, truncate, or update"
-        ),
-    )
-
     def _build_query(
-        self, table: str, columns: list, operation: str, **kwargs
+        self, table: str, columns: list, operation: DatabaseOperation, **kwargs
     ) -> str:
         """
         Build PostgreSQL-specific query based on operation type.
@@ -39,11 +31,11 @@ class PostgreSQLComponent(SQLDatabaseComponent):
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
 
-        if operation == DatabaseOperation.TRUNCATE.value:
+        if operation == DatabaseOperation.TRUNCATE:
             # Clear table first, then insert
             return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
         
-        elif operation == DatabaseOperation.UPSERT.value:
+        elif operation == DatabaseOperation.UPSERT:
             # Insert or update on conflict
             conflict_columns = kwargs.get("conflict_columns", ["id"])
             update_columns = kwargs.get("update_columns", columns)
@@ -56,7 +48,7 @@ class PostgreSQLComponent(SQLDatabaseComponent):
                 f"ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
             )
         
-        elif operation == DatabaseOperation.UPDATE.value:
+        elif operation == DatabaseOperation.UPDATE:
             # Pure update operation
             where_conditions = kwargs.get("where_conditions", [])
             if not where_conditions:

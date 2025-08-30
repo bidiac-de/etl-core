@@ -27,8 +27,8 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     collation: str = Field(default="", description="Collation for SQL database")
 
     # Database operation type
-    operation: str = Field(
-        default=DatabaseOperation.INSERT.value,
+    operation: DatabaseOperation = Field(
+        default=DatabaseOperation.INSERT,
         description="Database operation type: insert, upsert, truncate, or update",
     )
 
@@ -100,7 +100,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
             self._connection_handler.close_pool(force=True)
 
     def _build_query(
-        self, table: str, columns: list, operation: str, **kwargs
+        self, table: str, columns: list, operation: DatabaseOperation, **kwargs
     ) -> str:
         """
         Build query based on operation type.
@@ -117,15 +117,15 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
 
-        if operation == DatabaseOperation.TRUNCATE.value:
+        if operation == DatabaseOperation.TRUNCATE:
             # Clear table first, then insert
             return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
         
-        elif operation == DatabaseOperation.UPSERT.value:
+        elif operation == DatabaseOperation.UPSERT:
             # Default upsert behavior - subclasses should override
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
         
-        elif operation == DatabaseOperation.UPDATE.value:
+        elif operation == DatabaseOperation.UPDATE:
             # Pure update operation
             where_conditions = kwargs.get("where_conditions", [])
             if not where_conditions:

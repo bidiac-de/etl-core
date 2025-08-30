@@ -17,6 +17,7 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from etl_core.components.databases.database import DatabaseComponent
+from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
 
@@ -761,10 +762,10 @@ class TestMariaDBComponents:
         write_comp_truncate.context = mock_context
 
         # Verify operation types are set correctly
-        assert write_comp_insert.operation == "insert"
-        assert write_comp_upsert.operation == "upsert"
-        assert write_comp_update.operation == "update"
-        assert write_comp_truncate.operation == "truncate"
+        assert write_comp_insert.operation == DatabaseOperation.INSERT
+        assert write_comp_upsert.operation == DatabaseOperation.UPSERT
+        assert write_comp_update.operation == DatabaseOperation.UPDATE
+        assert write_comp_truncate.operation == DatabaseOperation.TRUNCATE
 
     @pytest.mark.asyncio
     async def test_mariadb_component_batch_size_configuration(self, mock_context):
@@ -803,23 +804,23 @@ class TestMariaDBComponents:
         columns = ["id", "name", "email"]
         
         # Test INSERT query
-        insert_query = write_comp._build_query("users", columns, "insert")
+        insert_query = write_comp._build_query("users", columns, DatabaseOperation.INSERT)
         assert "INSERT INTO users" in insert_query
         assert "id, name, email" in insert_query
         
         # Test UPSERT query
-        upsert_query = write_comp._build_query("users", columns, "upsert", conflict_columns=["id"])
+        upsert_query = write_comp._build_query("users", columns, DatabaseOperation.UPSERT, conflict_columns=["id"])
         assert "INSERT INTO users" in upsert_query
         assert "ON DUPLICATE KEY UPDATE" in upsert_query
         
         # Test UPDATE query
-        update_query = write_comp._build_query("users", columns, "update", where_conditions=["id = :id"])
+        update_query = write_comp._build_query("users", columns, DatabaseOperation.UPDATE, where_conditions=["id = :id"])
         assert "UPDATE users" in update_query
         assert "SET" in update_query
         assert "WHERE" in update_query
         
         # Test TRUNCATE query
-        truncate_query = write_comp._build_query("users", columns, "truncate")
+        truncate_query = write_comp._build_query("users", columns, DatabaseOperation.TRUNCATE)
         assert "TRUNCATE TABLE users" in truncate_query
         assert "INSERT INTO users" in truncate_query
 
