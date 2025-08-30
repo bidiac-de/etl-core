@@ -32,12 +32,22 @@ class SQLConnectionHandler:
         port: Optional[int] = None,
         database: Optional[str] = None,
     ) -> str:
-        # Direct usage of db_type (comp_type) - no mapping needed!
+        # Map database types to SQLAlchemy driver prefixes
+        driver_map = {
+            "postgresql": "postgresql+psycopg2",
+            "mariadb": "mysql+mysqlconnector",
+            "mysql": "mysql+mysqlconnector",
+            "sqlite": "sqlite",
+        }
+        
+        # Use the mapped driver or fall back to the original db_type
+        driver = driver_map.get(db_type, db_type)
+        
         if not all([user, password, host, port, database]):
             raise ValueError(
                 f"{db_type} requires user, password, host, port, and database."
             )
-        return f"{db_type}://{user}:{password}@{host}:{port}/{database}"
+        return f"{driver}://{user}:{password}@{host}:{port}/{database}"
 
     def connect(
         self, *, url: str, engine_kwargs: Optional[Dict[str, Any]] = None

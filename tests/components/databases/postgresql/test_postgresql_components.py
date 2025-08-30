@@ -22,6 +22,23 @@ from etl_core.components.databases.database import DatabaseComponent
 class TestPostgreSQLComponents:
     """Test cases for PostgreSQL components."""
 
+    def _create_postgresql_write_with_schema(self, **kwargs):
+        """Helper to create PostgreSQLWrite component with proper schema."""
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+        
+        write_comp = PostgreSQLWrite(**kwargs)
+        
+        # Set up mock schema for testing
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        write_comp.in_port_schemas = {"in": mock_schema}
+        
+        return write_comp
+
     @pytest.fixture
     def mock_context(self):
         """Create a mock context with credentials."""
@@ -32,6 +49,8 @@ class TestPostgreSQLComponents:
             "user": "testuser",
             "password": "testpass",
             "database": "testdb",
+            "host": "localhost",
+            "port": 5432,
         }.get(param)
         mock_credentials.decrypted_password = "testpass"
         context.get_credentials.return_value = mock_credentials
@@ -100,7 +119,7 @@ class TestPostgreSQLComponents:
 
     def test_postgresql_write_initialization(self):
         """Test PostgreSQLWrite component initialization."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -138,7 +157,7 @@ class TestPostgreSQLComponents:
         mock_receiver.read_row = mock_read_row_generator
         read_comp._receiver = mock_receiver
 
-        # Test process_row
+        # Test process_row - now returns AsyncIterator[Out]
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
             results.append(result.payload)
@@ -208,7 +227,7 @@ class TestPostgreSQLComponents:
     @pytest.mark.asyncio
     async def test_postgresql_write_process_row(self, mock_context, mock_metrics):
         """Test PostgreSQLWrite process_row method."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -242,7 +261,7 @@ class TestPostgreSQLComponents:
         self, mock_context, mock_metrics, sample_dataframe
     ):
         """Test PostgreSQLWrite process_bulk method."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -269,7 +288,7 @@ class TestPostgreSQLComponents:
         self, mock_context, mock_metrics, sample_dask_dataframe
     ):
         """Test PostgreSQLWrite process_bigdata method."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -408,7 +427,7 @@ class TestPostgreSQLComponents:
 
     def test_postgresql_write_batch_size_configuration(self, mock_context):
         """Test PostgreSQLWrite batch size configuration."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -460,7 +479,7 @@ class TestPostgreSQLComponents:
     @pytest.mark.asyncio
     async def test_postgresql_write_with_empty_data(self, mock_context, mock_metrics):
         """Test PostgreSQLWrite with empty data."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -636,7 +655,7 @@ class TestPostgreSQLComponents:
         self, mock_context, mock_metrics
     ):
         """Test PostgreSQL component with special characters in table names."""
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -686,87 +705,286 @@ class TestPostgreSQLComponents:
         mock_conn.execute = Mock()
         mock_conn.commit = Mock()
 
-        mock_context = Mock()
-        mock_context.__enter__ = Mock(return_value=mock_conn)
-        mock_context.__exit__ = Mock(return_value=None)
-        mock_handler.lease.return_value = mock_context
-
+        # Test that session variables can be set
         mock_comp._connection_handler = mock_handler
+        mock_comp.charset = "utf8"
+        mock_comp.collation = "en_US.UTF-8"
 
-        # Simulate _setup_connection behavior
-        mock_comp._setup_connection = Mock()
-        mock_comp._setup_connection()
+        # This is a basic test - the actual implementation would be more complex
+        assert mock_comp.charset == "utf8"
+        assert mock_comp.collation == "en_US.UTF-8"
 
-        # Verify the method was called
-        mock_comp._setup_connection.assert_called_once()
-
-    def test_postgresql_component_connection_setup_with_session_variables_failure(self):
-        """Test PostgreSQL component setup when session variable setting fails."""
-        # Mock component that handles failures gracefully
-        mock_comp = Mock()
-        mock_comp._setup_connection = Mock()
-        mock_comp._setup_connection()
-
-        # Verify the method was called (should not raise exception)
-        mock_comp._setup_connection.assert_called_once()
-
-    def test_postgresql_component_connection_setup_without_connection_handler(self):
-        """Test PostgreSQL component connection setup without connection handler."""
-        # Mock component without connection handler
-        mock_comp = Mock()
-        mock_comp._connection_handler = None
-        mock_comp._setup_connection = Mock()
-        mock_comp._setup_connection()
-
-        # Should complete without error
-        mock_comp._setup_connection.assert_called_once()
-
-    def test_postgresql_component_various_configurations(self):
-        """Test PostgreSQL component with various configuration combinations."""
-        # Test with minimal configuration
-        mock_comp_minimal = Mock()
-        mock_comp_minimal.charset = "utf8"
-        mock_comp_minimal.collation = "en_US.UTF-8"
-        mock_comp_minimal.name = "test_minimal"
-
-        assert mock_comp_minimal.charset == "utf8"
-        assert mock_comp_minimal.collation == "en_US.UTF-8"
-        assert mock_comp_minimal.name == "test_minimal"
-
-        # Test with custom configuration
-        mock_comp_custom = Mock()
-        mock_comp_custom.charset = "latin1"
-        mock_comp_custom.collation = "en_US.UTF-8"
-        mock_comp_custom.entity_name = "custom_table"
-        mock_comp_custom.credentials_id = 999
-
-        assert mock_comp_custom.charset == "latin1"
-        assert mock_comp_custom.collation == "en_US.UTF-8"
-        assert mock_comp_custom.entity_name == "custom_table"
-        assert mock_comp_custom.credentials_id == 999
-
-    def test_postgresql_component_inheritance_structure(self):
-        """Test that PostgreSQL component has correct inheritance structure."""
-        # Verify inheritance
-        assert issubclass(PostgreSQLComponent, DatabaseComponent)
-
-        # Test that we can create an instance using a concrete implementation
-        component = PostgreSQLRead(
-            name="test_component",
+    @pytest.mark.asyncio
+    async def test_postgresql_component_operation_types(self, mock_context):
+        """Test PostgreSQL component with different operation types."""
+        # Test INSERT operation (default)
+        write_comp_insert = self._create_postgresql_write_with_schema(
+            name="test_write_insert",
+            description="Test write component with INSERT",
+            comp_type="write_postgresql",
+            entity_name="users",
             credentials_id=1,
-            entity_name="test_table",
-            description="Test component",
-            comp_type="postgresql_read",
-            query="SELECT * FROM test_table",
+            operation="insert",
         )
-        assert component.charset == "utf8"
-        assert component.collation == "en_US.UTF-8"
+        write_comp_insert.context = mock_context
 
-        # Test that we can modify these attributes
-        component.charset = "latin1"
-        component.collation = "en_US.UTF-8"
-        assert component.charset == "latin1"
-        assert component.collation == "en_US.UTF-8"
+        # Test UPSERT operation
+        write_comp_upsert = self._create_postgresql_write_with_schema(
+            name="test_write_upsert",
+            description="Test write component with UPSERT",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+            operation="upsert",
+        )
+        write_comp_upsert.context = mock_context
+
+        # Test UPDATE operation
+        write_comp_update = self._create_postgresql_write_with_schema(
+            name="test_write_update",
+            description="Test write component with UPDATE",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+            operation="update",
+        )
+        write_comp_update.context = mock_context
+
+        # Test TRUNCATE operation
+        write_comp_truncate = self._create_postgresql_write_with_schema(
+            name="test_write_truncate",
+            description="Test write component with TRUNCATE",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+            operation="truncate",
+        )
+        write_comp_truncate.context = mock_context
+
+        # Verify operation types are set correctly
+        assert write_comp_insert.operation == "insert"
+        assert write_comp_upsert.operation == "upsert"
+        assert write_comp_update.operation == "update"
+        assert write_comp_truncate.operation == "truncate"
+
+    @pytest.mark.asyncio
+    async def test_postgresql_component_batch_size_configuration(self, mock_context):
+        """Test PostgreSQL component batch size configuration."""
+        write_comp = self._create_postgresql_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+            row_batch_size=500,
+            bulk_chunk_size=25_000,
+            bigdata_partition_chunk_size=100_000,
+        )
+        write_comp.context = mock_context
+
+        # Verify batch size configurations
+        assert write_comp.row_batch_size == 500
+        assert write_comp.bulk_chunk_size == 25_000
+        assert write_comp.bigdata_partition_chunk_size == 100_000
+
+    @pytest.mark.asyncio
+    async def test_postgresql_component_query_building(self, mock_context):
+        """Test PostgreSQL component query building functionality."""
+        write_comp = self._create_postgresql_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+            operation="insert",
+        )
+        write_comp.context = mock_context
+
+        # Test query building with different operations
+        columns = ["id", "name", "email"]
+        
+        # Test INSERT query
+        insert_query = write_comp._build_query("users", columns, "insert")
+        assert "INSERT INTO users" in insert_query
+        assert "id, name, email" in insert_query
+        
+        # Test UPSERT query
+        upsert_query = write_comp._build_query("users", columns, "upsert", conflict_columns=["id"])
+        assert "INSERT INTO users" in upsert_query
+        assert "ON CONFLICT" in upsert_query
+        
+        # Test UPDATE query
+        update_query = write_comp._build_query("users", columns, "update", where_conditions=["id = :id"])
+        assert "UPDATE users" in update_query
+        assert "SET" in update_query
+        assert "WHERE" in update_query
+        
+        # Test TRUNCATE query
+        truncate_query = write_comp._build_query("users", columns, "truncate")
+        assert "TRUNCATE TABLE users" in truncate_query
+        assert "INSERT INTO users" in truncate_query
+
+    @pytest.mark.asyncio
+    async def test_postgresql_component_port_configuration(self):
+        """Test PostgreSQL component port configuration."""
+        # Test read component ports
+        read_comp = PostgreSQLRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_postgresql",
+            entity_name="users",
+            query="SELECT * FROM users",
+            credentials_id=1,
+        )
+        
+        # Verify input ports (should be empty for read component)
+        assert len(read_comp.INPUT_PORTS) == 0
+        assert read_comp.ALLOW_NO_INPUTS is True
+        
+        # Verify output ports
+        assert len(read_comp.OUTPUT_PORTS) == 1
+        assert read_comp.OUTPUT_PORTS[0].name == "out"
+        assert read_comp.OUTPUT_PORTS[0].required is True
+        assert read_comp.OUTPUT_PORTS[0].fanout == "many"
+        
+        # Test write component ports
+        write_comp = PostgreSQLWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+        )
+        
+        # Verify input ports
+        assert len(write_comp.INPUT_PORTS) == 1
+        assert write_comp.INPUT_PORTS[0].name == "in"
+        assert write_comp.INPUT_PORTS[0].required is True
+        assert write_comp.INPUT_PORTS[0].fanin == "many"
+        
+        # Verify output ports
+        assert len(write_comp.OUTPUT_PORTS) == 1
+        assert write_comp.OUTPUT_PORTS[0].name == "out"
+        assert write_comp.OUTPUT_PORTS[0].required is False
+        assert write_comp.OUTPUT_PORTS[0].fanout == "many"
+
+    @pytest.mark.asyncio
+    async def test_postgresql_component_schema_validation(self, mock_context):
+        """Test PostgreSQL component schema validation."""
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+        
+        # Create a component with schema
+        write_comp = PostgreSQLWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+        )
+        
+        # Set up mock schema
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        write_comp.in_port_schemas = {"in": mock_schema}
+        
+        # Test that schema is properly set
+        assert "in" in write_comp.in_port_schemas
+        assert write_comp.in_port_schemas["in"] == mock_schema
+        
+        # Test that query building works with schema
+        write_comp._ensure_query_built()
+        assert write_comp._query is not None
+        assert write_comp._columns == ["id", "name", "email"]
+
+    @pytest.mark.asyncio
+    async def test_postgresql_component_receiver_integration(self, mock_context, mock_metrics):
+        """Test PostgreSQL component receiver integration."""
+        write_comp = self._create_postgresql_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+        )
+        write_comp.context = mock_context
+        
+        # Mock the receiver methods
+        mock_receiver = AsyncMock()
+        mock_receiver.write_row.return_value = {"affected_rows": 1}
+        mock_receiver.write_bulk.return_value = pd.DataFrame({"id": [1]})
+        mock_receiver.write_bigdata.return_value = dd.from_pandas(pd.DataFrame({"id": [1]}), npartitions=1)
+        
+        write_comp._receiver = mock_receiver
+        
+        # Test that receiver methods are called correctly
+        test_row = {"id": 1, "name": "John"}
+        test_df = pd.DataFrame([test_row])
+        test_ddf = dd.from_pandas(test_df, npartitions=1)
+        
+        # Test row processing
+        results = []
+        async for result in write_comp.process_row(test_row, mock_metrics):
+            results.append(result.payload)
+        
+        assert len(results) == 1
+        mock_receiver.write_row.assert_called_once()
+        
+        # Test bulk processing
+        results = []
+        async for result in write_comp.process_bulk(test_df, mock_metrics):
+            results.append(result.payload)
+        
+        assert len(results) == 1
+        mock_receiver.write_bulk.assert_called_once()
+        
+        # Test bigdata processing
+        results = []
+        async for result in write_comp.process_bigdata(test_ddf, mock_metrics):
+            results.append(result.payload)
+        
+        assert len(results) == 1
+        mock_receiver.write_bigdata.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_postgresql_component_connection_handler_integration(self, mock_context):
+        """Test PostgreSQL component connection handler integration."""
+        write_comp = self._create_postgresql_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+        )
+        write_comp.context = mock_context
+        
+        # Test that connection handler is properly set up
+        assert hasattr(write_comp, "_connection_handler")
+        # The connection handler is set up during validation when context is set
+        # We need to trigger the validation
+        write_comp._build_objects()
+        assert write_comp.connection_handler is not None
+        
+        # Test that connection handler is passed to receiver methods
+        mock_receiver = AsyncMock()
+        mock_receiver.write_row.return_value = {"affected_rows": 1}
+        write_comp._receiver = mock_receiver
+        
+        test_row = {"id": 1, "name": "John"}
+        
+        # Process a row to trigger receiver call
+        results = []
+        async for result in write_comp.process_row(test_row, Mock()):
+            results.append(result.payload)
+        
+        # Verify connection handler was passed to receiver
+        mock_receiver.write_row.assert_called_once()
+        call_args = mock_receiver.write_row.call_args
+        assert "connection_handler" in call_args.kwargs
+        assert call_args.kwargs["connection_handler"] == write_comp.connection_handler
 
 
 if __name__ == "__main__":

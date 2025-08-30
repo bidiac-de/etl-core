@@ -21,7 +21,24 @@ from etl_core.strategies.base_strategy import ExecutionStrategy
 
 
 class TestMariaDBIntegration:
-    """Integration tests for MariaDB components and receivers."""
+    """Test MariaDB integration scenarios."""
+
+    def _create_mariadb_write_with_schema(self, **kwargs):
+        """Helper to create MariaDBWrite component with proper schema."""
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+        
+        write_comp = MariaDBWrite(**kwargs)
+        
+        # Set up mock schema for testing
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        write_comp.in_port_schemas = {"in": mock_schema}
+        
+        return write_comp
 
     @pytest.fixture
     def mock_metrics(self):
@@ -86,7 +103,7 @@ class TestMariaDBIntegration:
         read_comp.context = mock_context
 
         # Create write component
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",

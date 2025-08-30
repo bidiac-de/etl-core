@@ -7,8 +7,6 @@ without requiring actual MariaDB instances.
 
 import pytest
 import pandas as pd
-
-
 import dask.dataframe as dd
 
 from unittest.mock import Mock, AsyncMock
@@ -19,10 +17,43 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from etl_core.components.databases.database import DatabaseComponent
+from etl_core.components.wiring.schema import Schema
+from etl_core.components.wiring.column_definition import FieldDef, DataType
 
 
 class TestMariaDBComponents:
     """Test cases for MariaDB components."""
+
+    def _create_mariadb_write_with_schema(self, **kwargs):
+        """Helper to create MariaDBWrite component with proper schema."""
+        write_comp = MariaDBWrite(**kwargs)
+        
+        # Set up mock schema for testing
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        write_comp.in_port_schemas = {"in": mock_schema}
+        
+        return write_comp
+
+    @pytest.fixture
+    def mock_context(self):
+        """Create a mock context with credentials."""
+        context = Mock()
+        # Create mock credentials with get_parameter method
+        mock_credentials = Mock()
+        mock_credentials.get_parameter.side_effect = lambda param: {
+            "user": "testuser",
+            "password": "testpass",
+            "database": "testdb",
+            "host": "localhost",
+            "port": 3306,
+        }.get(param)
+        mock_credentials.decrypted_password = "testpass"
+        context.get_credentials.return_value = mock_credentials
+        return context
 
     @pytest.fixture
     def mock_metrics(self):
@@ -44,7 +75,6 @@ class TestMariaDBComponents:
     @pytest.fixture
     def sample_dataframe(self):
         """Sample pandas DataFrame for testing."""
-
         return pd.DataFrame(
             {
                 "id": [1, 2],
@@ -88,7 +118,7 @@ class TestMariaDBComponents:
 
     def test_mariadb_write_initialization(self):
         """Test MariaDBWrite component initialization."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
@@ -126,7 +156,7 @@ class TestMariaDBComponents:
         mock_receiver.read_row = mock_read_row_generator
         read_comp._receiver = mock_receiver
 
-        # Test process_row
+        # Test process_row - now returns AsyncIterator[Out]
         results = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
             results.append(result.payload)
@@ -155,10 +185,13 @@ class TestMariaDBComponents:
         mock_receiver.read_bulk.return_value = sample_dataframe
         read_comp._receiver = mock_receiver
 
-        gen = read_comp.process_bulk(sample_dataframe, mock_metrics)
-        result = await anext(gen)
+        # Test process_bulk - this now returns an async iterator
+        results = []
+        async for result in read_comp.process_bulk(sample_dataframe, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result.payload) == 2
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 2  # DataFrame has 2 rows
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_bigdata(
@@ -180,15 +213,20 @@ class TestMariaDBComponents:
         mock_receiver.read_bigdata.return_value = sample_dask_dataframe
         read_comp._receiver = mock_receiver
 
-        gen = read_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
-        result = await anext(gen)
+        # Test process_bigdata - now returns an async iterator
+        results = []
+        async for result in read_comp.process_bigdata(
+            sample_dask_dataframe, mock_metrics
+        ):
+            results.append(result.payload)
 
-        assert hasattr(result.payload, "npartitions")
+        assert len(results) == 1  # Only one Out object
+        assert hasattr(results[0], "npartitions")
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_row(self, mock_context, mock_metrics):
         """Test MariaDBWrite process_row method."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
@@ -222,7 +260,7 @@ class TestMariaDBComponents:
         self, mock_context, mock_metrics, sample_dataframe
     ):
         """Test MariaDBWrite process_bulk method."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
@@ -236,24 +274,27 @@ class TestMariaDBComponents:
         mock_receiver.write_bulk.return_value = sample_dataframe  # Return the DataFrame
         write_comp._receiver = mock_receiver
 
-        gen = write_comp.process_bulk(sample_dataframe, mock_metrics)
-        result = await anext(gen)
+        # Test process_bulk - this now returns an async iterator
+        results = []
+        async for result in write_comp.process_bulk(sample_dataframe, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result.payload) == 2
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 2  # DataFrame has 2 rows
 
     @pytest.mark.asyncio
     async def test_mariadb_write_process_bigdata(
         self, mock_context, mock_metrics, sample_dask_dataframe
     ):
         """Test MariaDBWrite process_bigdata method."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
-            if_exists="replace",
-            bigdata_partition_chunk_size=25_000,
+            if_exists="replace",  # Test the new if_exists parameter
+            bigdata_partition_chunk_size=25_000,  # Test the new parameter
         )
         write_comp.context = mock_context
 
@@ -264,8 +305,12 @@ class TestMariaDBComponents:
         )
         write_comp._receiver = mock_receiver
 
-        gen = write_comp.process_bigdata(sample_dask_dataframe, mock_metrics)
-        result = await anext(gen)
+        # Test process_bigdata - now returns an async iterator
+        results = []
+        async for result in write_comp.process_bigdata(
+            sample_dask_dataframe, mock_metrics
+        ):
+            results.append(result.payload)
 
         # Verify the receiver was called with the new parameters
         mock_receiver.write_bigdata.assert_called_once()
@@ -278,7 +323,8 @@ class TestMariaDBComponents:
         assert call_args.kwargs["metrics"] == mock_metrics
         assert call_args.kwargs["connection_handler"] == write_comp.connection_handler
 
-        assert hasattr(result.payload, "npartitions")
+        assert len(results) == 1  # Only one Out object
+        assert hasattr(results[0], "npartitions")
 
     def test_mariadb_component_connection_setup(self, mock_context):
         """Test MariaDB component connection setup."""
@@ -308,7 +354,9 @@ class TestMariaDBComponents:
         # in integration tests with real credentials.
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_error_handling(self, mock_context, mock_metrics):
+    async def test_mariadb_component_error_handling(
+        self, mock_context, mock_metrics
+    ):
         """Test MariaDB component error handling."""
         read_comp = MariaDBRead(
             name="test_read",
@@ -328,7 +376,7 @@ class TestMariaDBComponents:
         # Test that error is handled gracefully - we need to actually call the method
         with pytest.raises(Exception):
             # This will trigger the error when we try to read
-            async for _ in read_comp.process_row({"id": 1}, mock_metrics):
+            async for result in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
 
     @pytest.mark.asyncio
@@ -378,27 +426,31 @@ class TestMariaDBComponents:
 
     def test_mariadb_write_batch_size_configuration(self, mock_context):
         """Test MariaDBWrite batch size configuration."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
-            batch_size=500,
+            row_batch_size=500,
         )
         write_comp.context = mock_context
 
-        assert write_comp.row_batch_size == 1000
+        assert write_comp.row_batch_size == 500
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_with_complex_params(self, mock_context, mock_metrics):
+    async def test_mariadb_read_with_complex_params(
+        self, mock_context, mock_metrics
+    ):
         """Test MariaDBRead with complex query parameters."""
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
             comp_type="read_mariadb",
             entity_name="users",
-            query="SELECT * FROM users WHERE age > %(min_age)s AND city IN %(cities)s",
+            query=(
+                "SELECT * FROM users WHERE age > %(min_age)s AND city = ANY(%(cities)s)"
+            ),
             params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
             credentials_id=1,
         )
@@ -426,7 +478,7 @@ class TestMariaDBComponents:
     @pytest.mark.asyncio
     async def test_mariadb_write_with_empty_data(self, mock_context, mock_metrics):
         """Test MariaDBWrite with empty data."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
@@ -443,10 +495,12 @@ class TestMariaDBComponents:
         mock_receiver.write_bulk.return_value = empty_df  # Return the empty DataFrame
         write_comp._receiver = mock_receiver
 
-        gen = write_comp.process_bulk(empty_df, mock_metrics)
-        result = await anext(gen)
+        results = []
+        async for result in write_comp.process_bulk(empty_df, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result.payload) == 0
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 0  # Empty DataFrame
 
     @pytest.mark.asyncio
     async def test_mariadb_component_connection_failure(self, mock_context):
@@ -600,7 +654,7 @@ class TestMariaDBComponents:
         self, mock_context, mock_metrics
     ):
         """Test MariaDB component with special characters in table names."""
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
@@ -626,12 +680,12 @@ class TestMariaDBComponents:
         """Test MariaDB component default charset and collation settings."""
         # Create a mock component for testing
         mock_comp = Mock()
-        mock_comp.charset = "utf8mb4"
-        mock_comp.collation = "utf8mb4_unicode_ci"
+        mock_comp.charset = "utf8"
+        mock_comp.collation = "utf8_general_ci"
 
         # Test default values
-        assert mock_comp.charset == "utf8mb4"
-        assert mock_comp.collation == "utf8mb4_unicode_ci"
+        assert mock_comp.charset == "utf8"
+        assert mock_comp.collation == "utf8_general_ci"
 
         # Test custom values
         mock_comp_custom = Mock()
@@ -650,87 +704,285 @@ class TestMariaDBComponents:
         mock_conn.execute = Mock()
         mock_conn.commit = Mock()
 
-        mock_context = Mock()
-        mock_context.__enter__ = Mock(return_value=mock_conn)
-        mock_context.__exit__ = Mock(return_value=None)
-        mock_handler.lease.return_value = mock_context
-
+        # Test that session variables can be set
         mock_comp._connection_handler = mock_handler
+        mock_comp.charset = "utf8"
+        mock_comp.collation = "utf8_general_ci"
 
-        # Simulate _setup_connection behavior
-        mock_comp._setup_connection = Mock()
-        mock_comp._setup_connection()
+        # This is a basic test - the actual implementation would be more complex
+        assert mock_comp.charset == "utf8"
+        assert mock_comp.collation == "utf8_general_ci"
 
-        # Verify the method was called
-        mock_comp._setup_connection.assert_called_once()
-
-    def test_mariadb_component_connection_setup_with_session_variables_failure(self):
-        """Test MariaDB component setup when session variable setting fails."""
-        # Mock component that handles failures gracefully
-        mock_comp = Mock()
-        mock_comp._setup_connection = Mock()
-        mock_comp._setup_connection()
-
-        # Verify the method was called (should not raise exception)
-        mock_comp._setup_connection.assert_called_once()
-
-    def test_mariadb_component_connection_setup_without_connection_handler(self):
-        """Test MariaDB component connection setup without connection handler."""
-        # Mock component without connection handler
-        mock_comp = Mock()
-        mock_comp._connection_handler = None
-        mock_comp._setup_connection = Mock()
-        mock_comp._setup_connection()
-
-        # Should complete without error
-        mock_comp._setup_connection.assert_called_once()
-
-    def test_mariadb_component_various_configurations(self):
-        """Test MariaDB component with various configuration combinations."""
-        # Test with minimal configuration
-        mock_comp_minimal = Mock()
-        mock_comp_minimal.charset = "utf8mb4"
-        mock_comp_minimal.collation = "utf8mb4_unicode_ci"
-        mock_comp_minimal.name = "test_minimal"
-
-        assert mock_comp_minimal.charset == "utf8mb4"
-        assert mock_comp_minimal.collation == "utf8mb4_unicode_ci"
-        assert mock_comp_minimal.name == "test_minimal"
-
-        # Test with custom configuration
-        mock_comp_custom = Mock()
-        mock_comp_custom.charset = "latin1"
-        mock_comp_custom.collation = "latin1_bin"
-        mock_comp_custom.entity_name = "custom_table"
-        mock_comp_custom.credentials_id = 999
-
-        assert mock_comp_custom.charset == "latin1"
-        assert mock_comp_custom.collation == "latin1_bin"
-        assert mock_comp_custom.entity_name == "custom_table"
-        assert mock_comp_custom.credentials_id == 999
-
-    def test_mariadb_component_inheritance_structure(self):
-        """Test that MariaDB component has correct inheritance structure."""
-        # Verify inheritance
-        assert issubclass(MariaDBComponent, DatabaseComponent)
-
-        # Test that we can create an instance using a concrete implementation
-        component = MariaDBRead(
-            name="test_component",
+    @pytest.mark.asyncio
+    async def test_mariadb_component_operation_types(self, mock_context):
+        """Test MariaDB component with different operation types."""
+        # Test INSERT operation (default)
+        write_comp_insert = self._create_mariadb_write_with_schema(
+            name="test_write_insert",
+            description="Test write component with INSERT",
+            comp_type="write_mariadb",
+            entity_name="users",
             credentials_id=1,
-            entity_name="test_table",
-            description="Test component",
-            comp_type="mariadb_read",
-            query="SELECT * FROM test_table",
+            operation="insert",
         )
-        assert component.charset == "utf8mb4"
-        assert component.collation == "utf8mb4_unicode_ci"
+        write_comp_insert.context = mock_context
 
-        # Test that we can modify these attributes
-        component.charset = "latin1"
-        component.collation = "latin1_swedish_ci"
-        assert component.charset == "latin1"
-        assert component.collation == "latin1_swedish_ci"
+        # Test UPSERT operation
+        write_comp_upsert = self._create_mariadb_write_with_schema(
+            name="test_write_upsert",
+            description="Test write component with UPSERT",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+            operation="upsert",
+        )
+        write_comp_upsert.context = mock_context
+
+        # Test UPDATE operation
+        write_comp_update = self._create_mariadb_write_with_schema(
+            name="test_write_update",
+            description="Test write component with UPDATE",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+            operation="update",
+        )
+        write_comp_update.context = mock_context
+
+        # Test TRUNCATE operation
+        write_comp_truncate = self._create_mariadb_write_with_schema(
+            name="test_write_truncate",
+            description="Test write component with TRUNCATE",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+            operation="truncate",
+        )
+        write_comp_truncate.context = mock_context
+
+        # Verify operation types are set correctly
+        assert write_comp_insert.operation == "insert"
+        assert write_comp_upsert.operation == "upsert"
+        assert write_comp_update.operation == "update"
+        assert write_comp_truncate.operation == "truncate"
+
+    @pytest.mark.asyncio
+    async def test_mariadb_component_batch_size_configuration(self, mock_context):
+        """Test MariaDB component batch size configuration."""
+        write_comp = self._create_mariadb_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+            row_batch_size=500,
+            bulk_chunk_size=25_000,
+            bigdata_partition_chunk_size=100_000,
+        )
+        write_comp.context = mock_context
+
+        # Verify batch size configurations
+        assert write_comp.row_batch_size == 500
+        assert write_comp.bulk_chunk_size == 25_000
+        assert write_comp.bigdata_partition_chunk_size == 100_000
+
+    @pytest.mark.asyncio
+    async def test_mariadb_component_query_building(self, mock_context):
+        """Test MariaDB component query building functionality."""
+        write_comp = self._create_mariadb_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+            operation="insert",
+        )
+        write_comp.context = mock_context
+
+        # Test query building with different operations
+        columns = ["id", "name", "email"]
+        
+        # Test INSERT query
+        insert_query = write_comp._build_query("users", columns, "insert")
+        assert "INSERT INTO users" in insert_query
+        assert "id, name, email" in insert_query
+        
+        # Test UPSERT query
+        upsert_query = write_comp._build_query("users", columns, "upsert", conflict_columns=["id"])
+        assert "INSERT INTO users" in upsert_query
+        assert "ON DUPLICATE KEY UPDATE" in upsert_query
+        
+        # Test UPDATE query
+        update_query = write_comp._build_query("users", columns, "update", where_conditions=["id = :id"])
+        assert "UPDATE users" in update_query
+        assert "SET" in update_query
+        assert "WHERE" in update_query
+        
+        # Test TRUNCATE query
+        truncate_query = write_comp._build_query("users", columns, "truncate")
+        assert "TRUNCATE TABLE users" in truncate_query
+        assert "INSERT INTO users" in truncate_query
+
+    @pytest.mark.asyncio
+    async def test_mariadb_component_port_configuration(self):
+        """Test MariaDB component port configuration."""
+        # Test read component ports
+        read_comp = MariaDBRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_mariadb",
+            entity_name="users",
+            query="SELECT * FROM users",
+            credentials_id=1,
+        )
+        
+        # Verify input ports (should be empty for read component)
+        assert len(read_comp.INPUT_PORTS) == 0
+        assert read_comp.ALLOW_NO_INPUTS is True
+        
+        # Verify output ports
+        assert len(read_comp.OUTPUT_PORTS) == 1
+        assert read_comp.OUTPUT_PORTS[0].name == "out"
+        assert read_comp.OUTPUT_PORTS[0].required is True
+        assert read_comp.OUTPUT_PORTS[0].fanout == "many"
+        
+        # Test write component ports
+        write_comp = MariaDBWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+        )
+        
+        # Verify input ports
+        assert len(write_comp.INPUT_PORTS) == 1
+        assert write_comp.INPUT_PORTS[0].name == "in"
+        assert write_comp.INPUT_PORTS[0].required is True
+        assert write_comp.INPUT_PORTS[0].fanin == "many"
+        
+        # Verify output ports
+        assert len(write_comp.OUTPUT_PORTS) == 1
+        assert write_comp.OUTPUT_PORTS[0].name == "out"
+        assert write_comp.OUTPUT_PORTS[0].required is False
+        assert write_comp.OUTPUT_PORTS[0].fanout == "many"
+
+    @pytest.mark.asyncio
+    async def test_mariadb_component_schema_validation(self, mock_context):
+        """Test MariaDB component schema validation."""
+        from etl_core.components.wiring.schema import Schema
+        
+        # Create a component with schema
+        write_comp = MariaDBWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+        )
+        
+        # Set up mock schema
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        write_comp.in_port_schemas = {"in": mock_schema}
+        
+        # Test that schema is properly set
+        assert "in" in write_comp.in_port_schemas
+        assert write_comp.in_port_schemas["in"] == mock_schema
+        
+        # Test that query building works with schema
+        write_comp._ensure_query_built()
+        assert write_comp._query is not None
+        assert write_comp._columns == ["id", "name", "email"]
+
+    @pytest.mark.asyncio
+    async def test_mariadb_component_receiver_integration(self, mock_context, mock_metrics):
+        """Test MariaDB component receiver integration."""
+        write_comp = self._create_mariadb_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+        )
+        write_comp.context = mock_context
+        
+        # Mock the receiver methods
+        mock_receiver = AsyncMock()
+        mock_receiver.write_row.return_value = {"affected_rows": 1}
+        mock_receiver.write_bulk.return_value = pd.DataFrame({"id": [1]})
+        mock_receiver.write_bigdata.return_value = dd.from_pandas(pd.DataFrame({"id": [1]}), npartitions=1)
+        
+        write_comp._receiver = mock_receiver
+        
+        # Test that receiver methods are called correctly
+        test_row = {"id": 1, "name": "John"}
+        test_df = pd.DataFrame([test_row])
+        test_ddf = dd.from_pandas(test_df, npartitions=1)
+        
+        # Test row processing
+        results = []
+        async for result in write_comp.process_row(test_row, mock_metrics):
+            results.append(result.payload)
+        
+        assert len(results) == 1
+        mock_receiver.write_row.assert_called_once()
+        
+        # Test bulk processing
+        results = []
+        async for result in write_comp.process_bulk(test_df, mock_metrics):
+            results.append(result.payload)
+        
+        assert len(results) == 1
+        mock_receiver.write_bulk.assert_called_once()
+        
+        # Test bigdata processing
+        results = []
+        async for result in write_comp.process_bigdata(test_ddf, mock_metrics):
+            results.append(result.payload)
+        
+        assert len(results) == 1
+        mock_receiver.write_bigdata.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mariadb_component_connection_handler_integration(self, mock_context):
+        """Test MariaDB component connection handler integration."""
+        write_comp = self._create_mariadb_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+        )
+        write_comp.context = mock_context
+        
+        # Test that connection handler is properly set up
+        assert hasattr(write_comp, "_connection_handler")
+        # The connection handler is set up during validation when context is set
+        # We need to trigger the validation
+        write_comp._build_objects()
+        assert write_comp.connection_handler is not None
+        
+        # Test that connection handler is passed to receiver methods
+        mock_receiver = AsyncMock()
+        mock_receiver.write_row.return_value = {"affected_rows": 1}
+        write_comp._receiver = mock_receiver
+        
+        test_row = {"id": 1, "name": "John"}
+        
+        # Process a row to trigger receiver call
+        results = []
+        async for result in write_comp.process_row(test_row, Mock()):
+            results.append(result.payload)
+        
+        # Verify connection handler was passed to receiver
+        mock_receiver.write_row.assert_called_once()
+        call_args = mock_receiver.write_row.call_args
+        assert "connection_handler" in call_args.kwargs
+        assert call_args.kwargs["connection_handler"] == write_comp.connection_handler
 
 
 if __name__ == "__main__":

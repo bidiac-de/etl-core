@@ -1,7 +1,6 @@
 from typing import Any, Dict, AsyncIterator
 import pandas as pd
 import dask.dataframe as dd
-from pydantic import model_validator
 
 from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
 from etl_core.components.component_registry import register_component
@@ -27,29 +26,25 @@ class PostgreSQLWrite(PostgreSQLComponent):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    @model_validator(mode="after")
-    def _build_objects(self):
-        """Build objects after validation."""
+    def __init__(self, **data):
+        super().__init__(**data)
         self._receiver = PostgreSQLReceiver()
         self._query = None
         self._columns = None
-        
-        return self
 
-    def _ensure_query_built(self, columns: list):
-        """Ensure query is built for the given columns."""
-        if self._query is None or self._columns != columns:
-            self._columns = columns
+    def _ensure_query_built(self):
+        """Ensure query is built when needed."""
+        if self._query is None and "in" in self.in_port_schemas:
+            schema = self.in_port_schemas["in"]
+            columns = [field.name for field in schema.fields]
             self._query = self._build_query(self.entity_name, columns, self.operation)
+            self._columns = columns
 
     async def process_row(
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a single row and emit it (or receiver result) on 'out'."""
-        # Ensure query is built once for these columns
-        columns = list(row.keys())
-        self._ensure_query_built(columns)
-
+        self._ensure_query_built()
         result = await self._receiver.write_row(
             entity_name=self.entity_name,
             row=row,
@@ -63,10 +58,7 @@ class PostgreSQLWrite(PostgreSQLComponent):
         self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a pandas DataFrame and emit the same frame on 'out'."""
-        # Ensure query is built once for these columns
-        columns = list(data.columns)
-        self._ensure_query_built(columns)
-
+        self._ensure_query_built()
         result = await self._receiver.write_bulk(
             entity_name=self.entity_name,
             frame=data,
@@ -80,11 +72,7 @@ class PostgreSQLWrite(PostgreSQLComponent):
         self, ddf: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a Dask DataFrame and emit the same ddf on 'out'."""
-        
-        first_partition = ddf.map_partitions(lambda pdf: pdf).partitions[0].compute()
-        columns = list(first_partition.columns)
-        self._ensure_query_built(columns)
-
+        self._ensure_query_built()
         result = await self._receiver.write_bigdata(
             entity_name=self.entity_name,
             frame=ddf,

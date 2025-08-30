@@ -55,9 +55,10 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         self._connection_handler = SQLConnectionHandler()
 
-        # Direct usage of comp_type - no mapping logic needed!
+        # Map comp_type to actual database type
+        db_type = self._get_db_type_from_comp_type()
         url = SQLConnectionHandler.build_url(
-            db_type=self.comp_type,
+            db_type=db_type,
             user=creds["user"],
             password=creds["password"],
             host=creds["host"],
@@ -72,6 +73,18 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         # Force subclasses to set their own session variables
         self._setup_session_variables()
+
+    def _get_db_type_from_comp_type(self) -> str:
+        """Map component type to actual database type."""
+        if self.comp_type.startswith("read_postgresql") or self.comp_type.startswith("write_postgresql"):
+            return "postgresql"
+        elif self.comp_type.startswith("read_mariadb") or self.comp_type.startswith("write_mariadb"):
+            return "mariadb"
+        elif self.comp_type.startswith("read_mysql") or self.comp_type.startswith("write_mysql"):
+            return "mysql"
+        else:
+            # Default to the comp_type if no mapping found
+            return self.comp_type
 
     @abstractmethod
     def _setup_session_variables(self):
