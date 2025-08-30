@@ -6,6 +6,7 @@ import dask.dataframe as dd
 import pandas as pd
 from pydantic import Field, PrivateAttr, model_validator
 
+from etl_core.components.component_registry import register_component
 from etl_core.components.data_operations.data_operations import (
     DataOperationsComponent,
 )
@@ -32,6 +33,7 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 StrRule = Tuple[str, str, str, str]
 
 
+@register_component("schema_mapping")
 class SchemaMappingComponent(DataOperationsComponent):
     """
     Orchestrates schema mapping and joining according to defined rules.
@@ -93,7 +95,6 @@ class SchemaMappingComponent(DataOperationsComponent):
     async def process_row(
         self,
         row: Union[Dict[str, Any], InTagged],
-        *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         # Join-mode row processing uses tagged envelopes
@@ -148,7 +149,6 @@ class SchemaMappingComponent(DataOperationsComponent):
     async def process_bulk(
         self,
         dataframe: Union[pd.DataFrame, InTagged],
-        *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         # Tagged envelopes for bulk joins: plain frames for mapping
@@ -211,7 +211,6 @@ class SchemaMappingComponent(DataOperationsComponent):
     async def process_bigdata(
         self,
         ddf: Union[dd.DataFrame, InTagged],
-        *,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         # Dask joins also use tagged envelopes: plain DDF for mapping
