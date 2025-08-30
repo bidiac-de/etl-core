@@ -39,16 +39,18 @@ class TestCredentialsIntegration:
     def _create_mariadb_write_with_schema(self, **kwargs):
         """Helper to create MariaDBWrite component with proper schema."""
         
-        write_comp = MariaDBWrite(**kwargs)
-        
         # Set up mock schema for testing
         mock_schema = Schema(fields=[
             FieldDef(name="id", data_type=DataType.INTEGER),
             FieldDef(name="name", data_type=DataType.STRING),
             FieldDef(name="email", data_type=DataType.STRING),
         ])
-        write_comp.in_port_schemas = {"in": mock_schema}
         
+        # Merge the schema into kwargs
+        if "in_port_schemas" not in kwargs:
+            kwargs["in_port_schemas"] = {"in": mock_schema}
+        
+        write_comp = MariaDBWrite(**kwargs)
         return write_comp
 
     @pytest.fixture

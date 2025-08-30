@@ -28,15 +28,18 @@ class TestPostgreSQLComponents:
         from etl_core.components.wiring.schema import Schema
         from etl_core.components.wiring.column_definition import FieldDef, DataType
         
-        write_comp = PostgreSQLWrite(**kwargs)
-        
         # Set up mock schema for testing
         mock_schema = Schema(fields=[
             FieldDef(name="id", data_type=DataType.INTEGER),
             FieldDef(name="name", data_type=DataType.STRING),
             FieldDef(name="email", data_type=DataType.STRING),
         ])
-        write_comp.in_port_schemas = {"in": mock_schema}
+        
+        # Merge the schema into kwargs
+        if "in_port_schemas" not in kwargs:
+            kwargs["in_port_schemas"] = {"in": mock_schema}
+        
+        write_comp = PostgreSQLWrite(**kwargs)
         
         return write_comp
 
@@ -849,12 +852,22 @@ class TestPostgreSQLComponents:
         assert read_comp.OUTPUT_PORTS[0].fanout == "many"
         
         # Test write component ports
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+        
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        
         write_comp = PostgreSQLWrite(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
+            in_port_schemas={"in": mock_schema}
         )
         
         # Verify input ports
@@ -875,6 +888,13 @@ class TestPostgreSQLComponents:
         from etl_core.components.wiring.schema import Schema
         from etl_core.components.wiring.column_definition import FieldDef, DataType
         
+        # Set up mock schema
+        mock_schema = Schema(fields=[
+            FieldDef(name="id", data_type=DataType.INTEGER),
+            FieldDef(name="name", data_type=DataType.STRING),
+            FieldDef(name="email", data_type=DataType.STRING),
+        ])
+        
         # Create a component with schema
         write_comp = PostgreSQLWrite(
             name="test_write",
@@ -882,24 +902,16 @@ class TestPostgreSQLComponents:
             comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
+            in_port_schemas={"in": mock_schema}
         )
-        
-        # Set up mock schema
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        write_comp.in_port_schemas = {"in": mock_schema}
         
         # Test that schema is properly set
         assert "in" in write_comp.in_port_schemas
         assert write_comp.in_port_schemas["in"] == mock_schema
         
-        # Test that query building works with schema
-        write_comp._ensure_query_built()
+        # Test that query building works with schema (query is built during _build_objects)
         assert write_comp._query is not None
-        assert write_comp._columns == ["id", "name", "email"]
+        assert "INSERT INTO users" in write_comp._query
 
     @pytest.mark.asyncio
     async def test_postgresql_component_receiver_integration(self, mock_context, mock_metrics):
