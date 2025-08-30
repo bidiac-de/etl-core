@@ -27,7 +27,10 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     collation: str = Field(default="", description="Collation for SQL database")
 
     # ✅ NEU: if_exists Parameter für alle SQL-Datenbanken
-    if_exists: IfExistsStrategy = Field(default=IfExistsStrategy.APPEND, description="How to behave if the table already exists")
+    if_exists: IfExistsStrategy = Field(
+        default=IfExistsStrategy.APPEND,
+        description="How to behave if the table already exists",
+    )
 
     entity_name: str = Field(..., description="Name of the target entity (table/view)")
 
@@ -51,7 +54,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         creds = self._get_credentials()
 
         self._connection_handler = SQLConnectionHandler()
-        
+
         # Direct usage of comp_type - no mapping logic needed!
         url = SQLConnectionHandler.build_url(
             db_type=self.comp_type,
@@ -66,7 +69,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         engine_kwargs = build_sql_engine_kwargs(credentials_obj)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
-        
+
         # Force subclasses to set their own session variables
         self._setup_session_variables()
 
@@ -83,23 +86,24 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         if hasattr(self, "_connection_handler") and self._connection_handler:
             self._connection_handler.close_pool(force=True)
 
-
-    def _build_insert_query(self, table: str, columns: list, if_exists: IfExistsStrategy) -> str:
+    def _build_insert_query(
+        self, table: str, columns: list, if_exists: IfExistsStrategy
+    ) -> str:
         """
         Build INSERT query based on if_exists strategy.
-        
+
         Args:
             table: Target table name
             columns: List of column names
             if_exists: Strategy for handling existing data
-            
+
         Returns:
             SQL query string
         """
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
         base_query = f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
-        
+
         if if_exists == IfExistsStrategy.TRUNCATE:
             # For truncate, we'll handle this separately in the receiver
             return base_query
@@ -112,17 +116,19 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         else:  # APPEND and others
             return base_query
 
-    def _build_upsert_query(self, table: str, columns: list, if_exists: IfExistsStrategy, **kwargs) -> str:
+    def _build_upsert_query(
+        self, table: str, columns: list, if_exists: IfExistsStrategy, **kwargs
+    ) -> str:
         """
         Build UPSERT query based on database-specific if_exists strategy.
         Must be implemented by subclasses for database-specific syntax.
-        
+
         Args:
             table: Target table name
             columns: List of column names
             if_exists: Strategy for handling existing data
             **kwargs: Additional database-specific parameters
-            
+
         Returns:
             SQL query string
         """

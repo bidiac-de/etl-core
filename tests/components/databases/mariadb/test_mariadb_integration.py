@@ -12,7 +12,7 @@ import asyncio
 import dask.dataframe as dd
 import pandas as pd
 
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
@@ -337,11 +337,11 @@ class TestMariaDBIntegration:
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
-        
+
         # Test that the component has the expected attributes
-        assert hasattr(read_comp, '_connection_handler')
-        assert hasattr(read_comp, '_receiver')
-        
+        assert hasattr(read_comp, "_connection_handler")
+        assert hasattr(read_comp, "_receiver")
+
         # Note: We don't test _setup_connection() directly as it's a private method
         # and requires proper credentials setup. The real connection setup is tested
         # in integration tests with real credentials.
@@ -573,11 +573,11 @@ class TestMariaDBIntegration:
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
-        
+
         # Test that the component has the expected attributes
-        assert hasattr(read_comp, '_connection_handler')
-        assert hasattr(read_comp, '_receiver')
-        
+        assert hasattr(read_comp, "_connection_handler")
+        assert hasattr(read_comp, "_receiver")
+
         # Note: We don't test _setup_connection() directly as it's a private method
         # and requires proper credentials setup. The real connection setup is tested
         # in integration tests with real credentials.

@@ -6,11 +6,11 @@ from typing import Any, Dict, AsyncIterator
 import pandas as pd
 import dask.dataframe as dd
 
-from src.etl_core.receivers.databases.read_database_receiver import ReadDatabaseReceiver
-from src.etl_core.receivers.databases.write_database_receiver import (
+from etl_core.receivers.databases.read_database_receiver import ReadDatabaseReceiver
+from etl_core.receivers.databases.write_database_receiver import (
     WriteDatabaseReceiver,
 )
-from src.etl_core.components.databases.sql_connection_handler import (
+from etl_core.components.databases.sql_connection_handler import (
     SQLConnectionHandler,
 )
 

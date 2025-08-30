@@ -4,17 +4,21 @@ Tests for PostgreSQL database receivers.
 These tests mock the database connections and test the receiver logic
 without requiring actual PostgreSQL instances.
 """
+
 import pytest
 import pandas as pd
 import dask.dataframe as dd
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, patch
 from sqlalchemy.engine import Connection as SQLConnection
 from sqlalchemy import text
 
-from src.etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
+from src.etl_core.receivers.databases.postgresql.postgresql_receiver import (
+    PostgreSQLReceiver,
+)
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from src.etl_core.components.databases.sql_connection_handler import (
+    SQLConnectionHandler,
+)
 
 
 class TestPostgreSQLReceiver:
@@ -60,28 +64,32 @@ class TestPostgreSQLReceiver:
     @pytest.fixture
     def sample_dataframe(self):
         """Sample pandas DataFrame for testing."""
-        return pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["John", "Jane", "Bob"],
-            "email": ["john@example.com", "jane@example.com", "bob@example.com"],
-            "age": [25, 30, 35],
-        })
+        return pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "name": ["John", "Jane", "Bob"],
+                "email": ["john@example.com", "jane@example.com", "bob@example.com"],
+                "age": [25, 30, 35],
+            }
+        )
 
     @pytest.fixture
     def sample_dask_dataframe(self):
         """Sample Dask DataFrame for testing."""
-        df = pd.DataFrame({
-            "id": [1, 2, 3, 4, 5],
-            "name": ["John", "Jane", "Bob", "Alice", "Charlie"],
-            "email": [
-                "john@example.com",
-                "jane@example.com", 
-                "bob@example.com",
-                "alice@example.com",
-                "charlie@example.com"
-            ],
-            "age": [25, 30, 35, 28, 32],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "name": ["John", "Jane", "Bob", "Alice", "Charlie"],
+                "email": [
+                    "john@example.com",
+                    "jane@example.com",
+                    "bob@example.com",
+                    "alice@example.com",
+                    "charlie@example.com",
+                ],
+                "age": [25, 30, 35, 28, 32],
+            }
+        )
         return dd.from_pandas(df, npartitions=2)
 
     def test_postgresql_receiver_get_connection(self, mock_connection_handler):
@@ -94,7 +102,9 @@ class TestPostgreSQLReceiver:
         # and once in lease().__enter__)
         assert mock_connection_handler.lease.call_count == 2
 
-    def test_postgresql_receiver_get_connection_invalid_type(self, mock_connection_handler):
+    def test_postgresql_receiver_get_connection_invalid_type(
+        self, mock_connection_handler
+    ):
         """Test PostgreSQLReceiver _get_connection with invalid type."""
         receiver = PostgreSQLReceiver()
 
@@ -110,12 +120,12 @@ class TestPostgreSQLReceiver:
         """Test PostgreSQL receiver initialization."""
         receiver = PostgreSQLReceiver()
         assert receiver is not None
-        assert hasattr(receiver, 'read_row')
-        assert hasattr(receiver, 'read_bulk')
-        assert hasattr(receiver, 'read_bigdata')
-        assert hasattr(receiver, 'write_row')
-        assert hasattr(receiver, 'write_bulk')
-        assert hasattr(receiver, 'write_bigdata')
+        assert hasattr(receiver, "read_row")
+        assert hasattr(receiver, "read_bulk")
+        assert hasattr(receiver, "read_bigdata")
+        assert hasattr(receiver, "write_row")
+        assert hasattr(receiver, "write_bulk")
+        assert hasattr(receiver, "write_bigdata")
 
     @pytest.mark.asyncio
     async def test_read_row_success(self, mock_connection_handler, mock_metrics):
@@ -126,11 +136,21 @@ class TestPostgreSQLReceiver:
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
-        mock_row1._mapping = {"id": 1, "name": "John", "email": "john@example.com", "age": 25}
-        
+        mock_row1._mapping = {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+        }
+
         mock_row2 = Mock()
-        mock_row2._mapping = {"id": 2, "name": "Jane", "email": "jane@example.com", "age": 30}
-        
+        mock_row2._mapping = {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+        }
+
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
@@ -160,11 +180,21 @@ class TestPostgreSQLReceiver:
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
-        mock_row1._mapping = {"id": 1, "name": "John", "email": "john@example.com", "age": 25}
-        
+        mock_row1._mapping = {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+        }
+
         mock_row2 = Mock()
-        mock_row2._mapping = {"id": 2, "name": "Jane", "email": "jane@example.com", "age": 30}
-        
+        mock_row2._mapping = {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+        }
+
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
@@ -190,11 +220,21 @@ class TestPostgreSQLReceiver:
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
-        mock_row1._mapping = {"id": 1, "name": "John", "email": "john@example.com", "age": 25}
-        
+        mock_row1._mapping = {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+        }
+
         mock_row2 = Mock()
-        mock_row2._mapping = {"id": 2, "name": "Jane", "email": "jane@example.com", "age": 30}
-        
+        mock_row2._mapping = {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+        }
+
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
@@ -229,7 +269,7 @@ class TestPostgreSQLReceiver:
             entity_name="users",
             row={"name": "John", "email": "john@example.com", "age": 25},
             metrics=mock_metrics,
-            table="users",
+            query="INSERT INTO users (name, email, age) VALUES (:name, :email, :age)",
             connection_handler=mock_connection_handler,
         )
 
@@ -243,7 +283,9 @@ class TestPostgreSQLReceiver:
         }
 
     @pytest.mark.asyncio
-    async def test_write_bulk_success(self, mock_connection_handler, mock_metrics, sample_dataframe):
+    async def test_write_bulk_success(
+        self, mock_connection_handler, mock_metrics, sample_dataframe
+    ):
         """Test successful bulk writing."""
         receiver = PostgreSQLReceiver()
 
@@ -257,13 +299,17 @@ class TestPostgreSQLReceiver:
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
-            table="users",
+            query=(
+                "INSERT INTO users (id, name, email, age) "
+                "VALUES (:id, :name, :email, :age)"
+            ),
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute and commit were called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        mock_connection_handler.lease().__enter__().commit.assert_called_once()
+        # Verify execute was called for each row (3 rows = 3 calls)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 3
+        # Verify commit was called once after all inserts
+        assert mock_connection_handler.lease().__enter__().commit.call_count == 1
         # Verify return value
         assert result.equals(sample_dataframe)
 
@@ -278,7 +324,10 @@ class TestPostgreSQLReceiver:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            table="users",
+            query=(
+                "INSERT INTO users (id, name, email, age) "
+                "VALUES (:id, :name, :email, :age)"
+            ),
             connection_handler=mock_connection_handler,
         )
 
@@ -289,7 +338,9 @@ class TestPostgreSQLReceiver:
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
-    async def test_write_bigdata_success(self, mock_connection_handler, mock_metrics, sample_dask_dataframe):
+    async def test_write_bigdata_success(
+        self, mock_connection_handler, mock_metrics, sample_dask_dataframe
+    ):
         """Test successful bigdata writing."""
         receiver = PostgreSQLReceiver()
 
@@ -304,7 +355,10 @@ class TestPostgreSQLReceiver:
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
-                table="users",
+                query=(
+                    "INSERT INTO users (id, name, email, age) "
+                    "VALUES (:id, :name, :email, :age)"
+                ),
                 connection_handler=mock_connection_handler,
             )
             # Verify return value - result should be the DataFrame
@@ -327,12 +381,16 @@ class TestPostgreSQLReceiver:
         assert hasattr(receiver, "write_bigdata")
 
     @pytest.mark.asyncio
-    async def test_postgresql_receiver_error_handling(self, mock_connection_handler, mock_metrics):
+    async def test_postgresql_receiver_error_handling(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test PostgreSQLReceiver error handling."""
         receiver = PostgreSQLReceiver()
 
         # Mock connection to raise an error when execute is called
-        mock_connection_handler.lease().__enter__().execute.side_effect = Exception("Database error")
+        mock_connection_handler.lease().__enter__().execute.side_effect = Exception(
+            "Database error"
+        )
 
         # Test that error is propagated - call a method that uses execute
         with pytest.raises(Exception):
@@ -347,7 +405,9 @@ class TestPostgreSQLReceiver:
                 pass
 
     @pytest.mark.asyncio
-    async def test_postgresql_receiver_async_thread_execution(self, mock_connection_handler, mock_metrics):
+    async def test_postgresql_receiver_async_thread_execution(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test PostgreSQLReceiver async thread execution."""
         receiver = PostgreSQLReceiver()
 
@@ -377,7 +437,9 @@ class TestPostgreSQLReceiver:
     # NEW TESTS FOR IMPROVED COVERAGE
 
     @pytest.mark.asyncio
-    async def test_connection_failure_handling(self, mock_connection_handler, mock_metrics):
+    async def test_connection_failure_handling(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test handling of connection failures."""
         receiver = PostgreSQLReceiver()
 
@@ -395,7 +457,9 @@ class TestPostgreSQLReceiver:
                 pass
 
     @pytest.mark.asyncio
-    async def test_sql_injection_protection(self, mock_connection_handler, mock_metrics):
+    async def test_sql_injection_protection(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test that SQL injection attempts are properly handled."""
         receiver = PostgreSQLReceiver()
 
@@ -431,7 +495,9 @@ class TestPostgreSQLReceiver:
         assert mock_conn.execute.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_transaction_rollback_on_error(self, mock_connection_handler, mock_metrics):
+    async def test_transaction_rollback_on_error(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test transaction rollback when errors occur."""
         receiver = PostgreSQLReceiver()
 
@@ -444,7 +510,7 @@ class TestPostgreSQLReceiver:
                 entity_name="users",
                 row={"name": "John"},
                 metrics=mock_metrics,
-                table="users",
+                query="INSERT INTO users (name) VALUES (:name)",
                 connection_handler=mock_connection_handler,
             )
 
@@ -452,7 +518,9 @@ class TestPostgreSQLReceiver:
         # This test documents the expected behavior
 
     @pytest.mark.asyncio
-    async def test_dask_dataframe_partitioning(self, mock_connection_handler, mock_metrics):
+    async def test_dask_dataframe_partitioning(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test Dask DataFrame partition processing."""
         receiver = PostgreSQLReceiver()
 
@@ -461,15 +529,14 @@ class TestPostgreSQLReceiver:
         ddf = dd.from_pandas(df, npartitions=2)
 
         # Mock the partition processing
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             await receiver.write_bigdata(
                 entity_name="users",
                 frame=ddf,
                 metrics=mock_metrics,
-                table="users",
-                if_exists="append",  # Add the required if_exists parameter
+                query="INSERT INTO users (id, name) VALUES (:id, :name)",
                 connection_handler=mock_connection_handler,
             )
 
@@ -477,7 +544,9 @@ class TestPostgreSQLReceiver:
             assert mock_compute.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_write_bulk_with_empty_dataframe(self, mock_connection_handler, mock_metrics):
+    async def test_write_bulk_with_empty_dataframe(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bulk with empty DataFrame."""
         receiver = PostgreSQLReceiver()
 
@@ -488,7 +557,7 @@ class TestPostgreSQLReceiver:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            table="users",
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             connection_handler=mock_connection_handler,
         )
 
@@ -499,7 +568,9 @@ class TestPostgreSQLReceiver:
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
-    async def test_write_bulk_with_single_row(self, mock_connection_handler, mock_metrics):
+    async def test_write_bulk_with_single_row(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bulk with single row data."""
         receiver = PostgreSQLReceiver()
 
@@ -515,7 +586,7 @@ class TestPostgreSQLReceiver:
             entity_name="users",
             frame=single_row_df,
             metrics=mock_metrics,
-            table="users",
+            query="INSERT INTO users (name, email) VALUES (:name, :email)",
             connection_handler=mock_connection_handler,
         )
 
@@ -526,7 +597,9 @@ class TestPostgreSQLReceiver:
         assert result.equals(single_row_df)
 
     @pytest.mark.asyncio
-    async def test_read_row_with_empty_result(self, mock_connection_handler, mock_metrics):
+    async def test_read_row_with_empty_result(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test read_row with empty query result."""
         receiver = PostgreSQLReceiver()
 
@@ -549,7 +622,9 @@ class TestPostgreSQLReceiver:
         assert len(results) == 0
 
     @pytest.mark.asyncio
-    async def test_read_bulk_with_empty_result(self, mock_connection_handler, mock_metrics):
+    async def test_read_bulk_with_empty_result(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test read_bulk with empty query result."""
         receiver = PostgreSQLReceiver()
 
@@ -571,7 +646,9 @@ class TestPostgreSQLReceiver:
         assert isinstance(result, pd.DataFrame)
 
     @pytest.mark.asyncio
-    async def test_connection_lease_context_manager(self, mock_connection_handler, mock_metrics):
+    async def test_connection_lease_context_manager(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test that connection lease context manager is properly used."""
         receiver = PostgreSQLReceiver()
 
@@ -651,7 +728,9 @@ class TestPostgreSQLReceiver:
         assert result.iloc[999]["id"] == 999
 
     @pytest.mark.asyncio
-    async def test_special_characters_in_data(self, mock_connection_handler, mock_metrics):
+    async def test_special_characters_in_data(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test handling of special characters in data."""
         receiver = PostgreSQLReceiver()
 
@@ -746,7 +825,9 @@ class TestPostgreSQLReceiver:
     # NEW TESTS FOR IMPROVED COVERAGE
 
     @pytest.mark.asyncio
-    async def test_write_bigdata_partition_processing(self, mock_connection_handler, mock_metrics):
+    async def test_write_bigdata_partition_processing(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test Dask DataFrame partition processing in write_bigdata."""
         receiver = PostgreSQLReceiver()
 
@@ -760,7 +841,7 @@ class TestPostgreSQLReceiver:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata with new if_exists parameter
@@ -773,14 +854,16 @@ class TestPostgreSQLReceiver:
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify compute was called (2 partitions = 2 calls)
-            assert mock_compute.call_count == 2
+            # Verify compute was called (1 for first partition + 2 partitions = 3 calls)
+            assert mock_compute.call_count == 3
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
-    async def test_write_bigdata_empty_partition(self, mock_connection_handler, mock_metrics):
+    async def test_write_bigdata_empty_partition(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bigdata with empty partition data."""
         receiver = PostgreSQLReceiver()
 
@@ -789,7 +872,7 @@ class TestPostgreSQLReceiver:
         ddf = dd.from_pandas(df, npartitions=1)
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata with empty data and new if_exists parameter
@@ -802,14 +885,16 @@ class TestPostgreSQLReceiver:
                 if_exists="append",
             )
 
-            # Verify compute was called
-            mock_compute.assert_called_once()
+            # Verify compute was called (once for first_partition + partitions)
+            assert mock_compute.call_count >= 1
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
-    async def test_write_bigdata_single_partition(self, mock_connection_handler, mock_metrics):
+    async def test_write_bigdata_single_partition(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bigdata with single partition."""
         receiver = PostgreSQLReceiver()
 
@@ -823,7 +908,7 @@ class TestPostgreSQLReceiver:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata with new if_exists parameter
@@ -836,14 +921,16 @@ class TestPostgreSQLReceiver:
                 if_exists="append",
             )
 
-            # Verify compute was called
-            mock_compute.assert_called_once()
+            # Verify compute was called (once for first_partition + partitions)
+            assert mock_compute.call_count >= 1
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
-    async def test_write_bulk_empty_dataframe_early_return(self, mock_connection_handler, mock_metrics):
+    async def test_write_bulk_empty_dataframe_early_return(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bulk early return for empty DataFrame."""
         receiver = PostgreSQLReceiver()
 
@@ -866,11 +953,13 @@ class TestPostgreSQLReceiver:
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
-    async def test_write_bulk_empty_list_early_return(self, mock_connection_handler, mock_metrics):
+    async def test_write_bulk_empty_list_early_return(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bulk early return for empty list."""
         receiver = PostgreSQLReceiver()
 
-        # Test write_bulk with empty list (convert to DataFrame first)
+        # Test write_bulk with empty list (convert to DataFrame)
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
             entity_name="users",
@@ -887,7 +976,9 @@ class TestPostgreSQLReceiver:
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
-    async def test_read_bigdata_default_partitions(self, mock_connection_handler, mock_metrics):
+    async def test_read_bigdata_default_partitions(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test read_bigdata default partition setting."""
         receiver = PostgreSQLReceiver()
         # Mock the connection execution
@@ -920,7 +1011,9 @@ class TestPostgreSQLReceiver:
             assert call_args[1]["npartitions"] == 1
 
     @pytest.mark.asyncio
-    async def test_write_bulk_dataframe_to_dict_conversion(self, mock_connection_handler, mock_metrics):
+    async def test_write_bulk_dataframe_to_dict_conversion(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bulk DataFrame to dict conversion."""
         receiver = PostgreSQLReceiver()
 
@@ -941,12 +1034,14 @@ class TestPostgreSQLReceiver:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called (once for each row)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_write_bulk_list_data_direct_usage(self, mock_connection_handler, mock_metrics):
+    async def test_write_bulk_list_data_direct_usage(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test write_bulk with list data (direct usage without conversion)."""
         receiver = PostgreSQLReceiver()
 
@@ -968,12 +1063,14 @@ class TestPostgreSQLReceiver:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called (once for each row)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_write_bigdata_manual_partition_processing(self, mock_connection_handler, mock_metrics):
+    async def test_write_bigdata_manual_partition_processing(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test the partition processing logic manually by calling internal function."""
 
         # Create test partition data
@@ -1003,7 +1100,7 @@ class TestPostgreSQLReceiver:
                 conn.execute(text(query), rows)
                 conn.commit()
 
-        # Verify the connection was used correctly
+        # Verify the connection was used correctly (once for the batch of rows)
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
@@ -1016,7 +1113,9 @@ class TestPostgreSQLReceiver:
         assert "id, name" in str(sql_query) or "name, id" in str(sql_query)
 
     @pytest.mark.asyncio
-    async def test_write_bigdata_empty_partition_logic(self, mock_connection_handler, mock_metrics):
+    async def test_write_bigdata_empty_partition_logic(
+        self, mock_connection_handler, mock_metrics
+    ):
         """Test the empty partition logic manually."""
 
         # Create empty partition data

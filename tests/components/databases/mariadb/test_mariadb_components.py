@@ -11,7 +11,7 @@ import pandas as pd
 
 import dask.dataframe as dd
 
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
@@ -252,8 +252,8 @@ class TestMariaDBComponents:
             comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
-            if_exists="replace",  # Test the new if_exists parameter
-            bigdata_partition_chunk_size=25_000,  # Test the new bigdata_partition_chunk_size parameter
+            if_exists="replace",
+            bigdata_partition_chunk_size=25_000,
         )
         write_comp.context = mock_context
 
@@ -270,8 +270,13 @@ class TestMariaDBComponents:
         # Verify the receiver was called with the new parameters
         mock_receiver.write_bigdata.assert_called_once()
         call_args = mock_receiver.write_bigdata.call_args
-        assert call_args.kwargs["if_exists"] == "replace"
-        assert call_args.kwargs["bigdata_partition_chunk_size"] == 25_000
+        assert "query" in call_args.kwargs  # Check that query is passed
+        assert call_args.kwargs["entity_name"] == "users"
+        assert (
+            call_args.kwargs["frame"] is sample_dask_dataframe
+        )  # Use is for identity comparison
+        assert call_args.kwargs["metrics"] == mock_metrics
+        assert call_args.kwargs["connection_handler"] == write_comp.connection_handler
 
         assert hasattr(result.payload, "npartitions")
 
@@ -293,11 +298,11 @@ class TestMariaDBComponents:
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
-        
+
         # Test that the component has the expected attributes
-        assert hasattr(read_comp, '_connection_handler')
-        assert hasattr(read_comp, '_receiver')
-        
+        assert hasattr(read_comp, "_connection_handler")
+        assert hasattr(read_comp, "_receiver")
+
         # Note: We don't test _setup_connection() directly as it's a private method
         # and requires proper credentials setup. The real connection setup is tested
         # in integration tests with real credentials.
@@ -617,7 +622,6 @@ class TestMariaDBComponents:
         assert len(results) == 1
         assert write_comp.entity_name == "user_profiles_2024"
 
-
     def test_mariadb_component_charset_collation_defaults(self):
         """Test MariaDB component default charset and collation settings."""
         # Create a mock component for testing
@@ -717,11 +721,11 @@ class TestMariaDBComponents:
             entity_name="test_table",
             description="Test component",
             comp_type="mariadb_read",
-            query="SELECT * FROM test_table"
+            query="SELECT * FROM test_table",
         )
         assert component.charset == "utf8mb4"
         assert component.collation == "utf8mb4_unicode_ci"
-        
+
         # Test that we can modify these attributes
         component.charset = "latin1"
         component.collation = "latin1_swedish_ci"

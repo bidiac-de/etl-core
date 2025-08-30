@@ -76,7 +76,9 @@ class FilterReceiver(Receiver):
         if total_fail:
             yield "fail", dataframe[~mask].reset_index(drop=True)
 
-    def _filter_partition(self, pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
+    def _filter_partition(
+        self, pdf: pd.DataFrame, rule: ComparisonRule
+    ) -> pd.DataFrame:
         """Apply filter rule to a pandas DataFrame partition."""
         return self._apply_filter(pdf, rule)
 
@@ -88,13 +90,13 @@ class FilterReceiver(Receiver):
     ) -> AsyncGenerator[Tuple[str, dd.DataFrame], None]:
         # Use a partial function to bind the rule parameter to the instance method
         from functools import partial
-        
+
         # Create filtered and failed DataFrames
         filtered = ddf.map_partitions(
             partial(self._filter_partition, rule=rule),
             meta=make_meta(ddf),
         )
-        
+
         # Create failed DataFrame (rows that don't match the rule)
         failed = ddf.map_partitions(
             partial(_apply_remainder_partition, rule=rule),

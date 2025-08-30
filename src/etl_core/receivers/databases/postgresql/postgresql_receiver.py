@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from typing import Any, Dict, AsyncIterator
 
@@ -6,11 +8,78 @@ import dask.dataframe as dd
 from sqlalchemy import text
 
 from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
-from src.etl_core.receivers.databases.sql_receiver import SQLReceiver
+from etl_core.receivers.databases.sql_receiver import SQLReceiver
+
+from etl_core.components.databases.if_exists_strategy import (
+    IfExistsStrategy,
+    PostgreSQLIfExistsStrategy,
+)
 
 
 class PostgreSQLReceiver(SQLReceiver):
-    """Receiver for PostgreSQL operations supporting row, bulk, and bigdata modes."""
+    """PostgreSQL receiver for database operations."""
+
+    def _build_upsert_query(
+        self, table: str, columns: list, if_exists: str, **kwargs
+    ) -> str:
+        """
+        Build PostgreSQL-specific UPSERT query based on if_exists strategy.
+
+        Args:
+            table: Target table name
+            columns: List of column names
+            if_exists: PostgreSQL-specific strategy for handling existing data
+            **kwargs: Additional parameters (e.g., conflict_columns for ON CONFLICT)
+
+        Returns:
+            SQL query string
+        """
+        columns_str = ", ".join(columns)
+        placeholders = ", ".join([f":{col}" for col in columns])
+        base_query = f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
+
+        if if_exists == PostgreSQLIfExistsStrategy.ON_CONFLICT_DO_NOTHING:
+            # PostgreSQL: ON CONFLICT DO NOTHING
+            conflict_columns = kwargs.get(
+                "conflict_columns", ["id"]
+            )  # Default to 'id' column
+            conflict_str = ", ".join(conflict_columns)
+            return f"{base_query} ON CONFLICT ({conflict_str}) DO NOTHING"
+        elif if_exists == PostgreSQLIfExistsStrategy.ON_CONFLICT_UPDATE:
+            # PostgreSQL: ON CONFLICT DO UPDATE
+            conflict_columns = kwargs.get("conflict_columns", ["id"])
+            update_columns = kwargs.get("update_columns", columns)
+            conflict_str = ", ".join(conflict_columns)
+            update_clause = ", ".join(
+                [f"{col} = EXCLUDED.{col}" for col in update_columns]
+            )
+            return (
+                f"{base_query} ON CONFLICT ({conflict_str}) "
+                f"DO UPDATE SET {update_clause}"
+            )
+        else:
+            # Fall back to base implementation for standard strategies
+            if_exists_enum = IfExistsStrategy(if_exists)
+            if if_exists_enum == IfExistsStrategy.TRUNCATE:
+                # For truncate, we'll handle this separately
+                return base_query
+            elif if_exists_enum == IfExistsStrategy.REPLACE:
+                # PostgreSQL doesn't have REPLACE, use ON CONFLICT DO UPDATE instead
+                conflict_columns = kwargs.get("conflict_columns", ["id"])
+                conflict_str = ", ".join(conflict_columns)
+                update_columns = kwargs.get("update_columns", columns)
+                update_clause = ", ".join(
+                    [f"{col} = EXCLUDED.{col}" for col in update_columns]
+                )
+                return (
+                    f"{base_query} ON CONFLICT ({conflict_str}) "
+                    f"DO UPDATE SET {update_clause}"
+                )
+            elif if_exists_enum == IfExistsStrategy.FAIL:
+                # Simple INSERT that will fail on conflicts
+                return base_query
+            else:  # APPEND and others
+                return base_query
 
     async def read_row(
         self,
@@ -84,9 +153,13 @@ class PostgreSQLReceiver(SQLReceiver):
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
         query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
+        if_exists = driver_kwargs.get("if_exists", "append")
 
         if not query:
-            raise ValueError("Query must be provided for write operations")
+            # Auto-generate query if none provided
+            columns = list(row.keys())
+            query = self._build_upsert_query(table, columns, if_exists)
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -110,8 +183,13 @@ class PostgreSQLReceiver(SQLReceiver):
             return frame
 
         query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
+        if_exists = driver_kwargs.get("if_exists", "append")
+
         if not query:
-            raise ValueError("Query must be provided for write operations")
+            # Auto-generate query if none provided
+            columns = list(frame.columns)
+            query = self._build_upsert_query(table, columns, if_exists)
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -130,12 +208,21 @@ class PostgreSQLReceiver(SQLReceiver):
         frame: dd.DataFrame,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        **driver_kwargs: Any,
+        **kwargs: Any,
     ) -> dd.DataFrame:
         """Write a Dask DataFrame and return it."""
-        query = driver_kwargs.get("query")
+        query = kwargs.get("query")
+        table = kwargs.get("table", entity_name)
+        if_exists = kwargs.get("if_exists", "append")
+
         if not query:
-            raise ValueError("Query must be provided for write operations")
+            # Auto-generate query if none provided
+            # Get columns from first partition
+            first_partition = (
+                frame.map_partitions(lambda pdf: pdf).partitions[0].compute()
+            )
+            columns = list(first_partition.columns)
+            query = self._build_upsert_query(table, columns, if_exists)
 
         def _execute_query():
             with connection_handler.lease() as conn:

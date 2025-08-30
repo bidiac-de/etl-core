@@ -4,7 +4,7 @@ from typing import Any, AsyncIterator, Dict
 
 import dask.dataframe as dd
 import pandas as pd
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from etl_core.components.component_registry import register_component
 from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
@@ -27,8 +27,6 @@ class MariaDBWrite(MariaDBComponent):
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
-
-
 
     @model_validator(mode="after")
     def _build_objects(self) -> "MariaDBWrite":

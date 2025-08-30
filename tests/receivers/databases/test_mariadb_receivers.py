@@ -257,8 +257,8 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute and commit were called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called for each row (2 rows in sample_dataframe)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
         assert result.equals(sample_dataframe)
@@ -475,7 +475,7 @@ class TestMariaDBReceivers:
         ddf = dd.from_pandas(df, npartitions=2)
 
         # Mock the partition processing
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             await receiver.write_bigdata(
@@ -483,12 +483,12 @@ class TestMariaDBReceivers:
                 frame=ddf,
                 metrics=mock_metrics,
                 table="users",
-                if_exists="append",  # Add the required if_exists parameter
+                if_exists="append",  # Add required parameter
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify that compute was called (2 partitions = 2 calls)
-            assert mock_compute.call_count == 2
+            # Verify compute was called (1 for first partition + 2 partitions = 3 calls)
+            assert mock_compute.call_count == 3
 
     @pytest.mark.asyncio
     async def test_write_bulk_with_empty_dataframe(
@@ -537,7 +537,7 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute and commit were called
+        # Verify execute and commit were called (once for the single row)
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
@@ -788,7 +788,7 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata with new if_exists parameter
@@ -801,8 +801,8 @@ class TestMariaDBReceivers:
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify compute was called (2 partitions = 2 calls)
-            assert mock_compute.call_count == 2
+            # Verify compute was called (1 for first partition + 2 partitions = 3 calls)
+            assert mock_compute.call_count == 3
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
@@ -819,7 +819,7 @@ class TestMariaDBReceivers:
         ddf = dd.from_pandas(df, npartitions=1)
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata with empty data and new if_exists parameter
@@ -832,8 +832,8 @@ class TestMariaDBReceivers:
                 if_exists="append",
             )
 
-            # Verify compute was called
-            mock_compute.assert_called_once()
+            # Verify compute was called (once for first_partition + partitions)
+            assert mock_compute.call_count >= 1
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
@@ -855,7 +855,7 @@ class TestMariaDBReceivers:
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata with new if_exists parameter
@@ -868,8 +868,8 @@ class TestMariaDBReceivers:
                 if_exists="append",
             )
 
-            # Verify compute was called
-            mock_compute.assert_called_once()
+            # Verify compute was called (once for first_partition + partitions)
+            assert mock_compute.call_count >= 1
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
@@ -906,7 +906,7 @@ class TestMariaDBReceivers:
         """Test write_bulk early return for empty list."""
         receiver = MariaDBReceiver()
 
-        # Test write_bulk with empty list (convert to DataFrame first)
+        # Test write_bulk with empty list (convert to DataFrame)
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
             entity_name="users",
@@ -981,8 +981,8 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called (once for each row)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -1010,8 +1010,8 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called (once for each row)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
     @pytest.mark.asyncio

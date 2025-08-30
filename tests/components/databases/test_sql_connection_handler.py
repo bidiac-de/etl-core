@@ -65,8 +65,6 @@ class TestSQLConnectionHandler:
         expected = "mariadb://testuser:testpass@localhost:3306/testdb"
         assert url == expected
 
-
-
     def test_build_url_missing_required_params(self):
         """Test building URL with missing required parameters."""
         with pytest.raises(

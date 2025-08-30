@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from typing import Any, Dict, AsyncIterator
 
@@ -6,11 +8,66 @@ import dask.dataframe as dd
 from sqlalchemy import text
 
 from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
-from src.etl_core.receivers.databases.sql_receiver import SQLReceiver
+from etl_core.receivers.databases.sql_receiver import SQLReceiver
+
+from etl_core.components.databases.if_exists_strategy import (
+    IfExistsStrategy,
+    MariaDBIfExistsStrategy,
+)
 
 
 class MariaDBReceiver(SQLReceiver):
-    """Receiver for MariaDB operations supporting row, bulk, and bigdata modes."""
+    """MariaDB receiver for database operations."""
+
+    def _build_upsert_query(
+        self, table: str, columns: list, if_exists: str, **kwargs
+    ) -> str:
+        """
+        Build MariaDB-specific UPSERT query based on if_exists strategy.
+
+        Args:
+            table: Target table name
+            columns: List of column names
+            if_exists: MariaDB-specific strategy for handling existing data
+            **kwargs: Additional parameters
+            (e.g., update_columns for ON DUPLICATE KEY UPDATE)
+
+        Returns:
+            SQL query string
+        """
+        columns_str = ", ".join(columns)
+        placeholders = ", ".join([f":{col}" for col in columns])
+        base_query = f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
+
+        if if_exists == MariaDBIfExistsStrategy.IGNORE:
+            # MariaDB: INSERT IGNORE
+            return (
+                f"INSERT IGNORE INTO {table} ({columns_str}) "
+                f"VALUES ({placeholders})"
+            )
+        elif if_exists == MariaDBIfExistsStrategy.ON_DUPLICATE_UPDATE:
+            # MariaDB: ON DUPLICATE KEY UPDATE
+            update_columns = kwargs.get("update_columns", columns)
+            update_clause = ", ".join(
+                [f"{col} = VALUES({col})" for col in update_columns]
+            )
+            return f"{base_query} ON DUPLICATE KEY UPDATE {update_clause}"
+        else:
+            # Fall back to base implementation for standard strategies
+            if_exists_enum = IfExistsStrategy(if_exists)
+            if if_exists_enum == IfExistsStrategy.TRUNCATE:
+                # For truncate, we'll handle this separately
+                return base_query
+            elif if_exists_enum == IfExistsStrategy.REPLACE:
+                # Use REPLACE instead of INSERT
+                return (
+                    f"REPLACE INTO {table} ({columns_str}) " f"VALUES ({placeholders})"
+                )
+            elif if_exists_enum == IfExistsStrategy.FAIL:
+                # Simple INSERT that will fail on conflicts
+                return base_query
+            else:  # APPEND and others
+                return base_query
 
     async def read_row(
         self,
@@ -84,9 +141,13 @@ class MariaDBReceiver(SQLReceiver):
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
         query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
+        if_exists = driver_kwargs.get("if_exists", "append")
 
         if not query:
-            raise ValueError("Query must be provided for write operations")
+            # Auto-generate query if none provided
+            columns = list(row.keys())
+            query = self._build_upsert_query(table, columns, if_exists)
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -110,8 +171,13 @@ class MariaDBReceiver(SQLReceiver):
             return frame
 
         query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
+        if_exists = driver_kwargs.get("if_exists", "append")
+
         if not query:
-            raise ValueError("Query must be provided for write operations")
+            # Auto-generate query if none provided
+            columns = list(frame.columns)
+            query = self._build_upsert_query(table, columns, if_exists)
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -134,8 +200,17 @@ class MariaDBReceiver(SQLReceiver):
     ) -> dd.DataFrame:
         """Write a Dask DataFrame and return it."""
         query = driver_kwargs.get("query")
+        table = driver_kwargs.get("table", entity_name)
+        if_exists = driver_kwargs.get("if_exists", "append")
+
         if not query:
-            raise ValueError("Query must be provided for write operations")
+            # Auto-generate query if none provided
+            # Get columns from first partition
+            first_partition = (
+                frame.map_partitions(lambda pdf: pdf).partitions[0].compute()
+            )
+            columns = list(first_partition.columns)
+            query = self._build_upsert_query(table, columns, if_exists)
 
         def _execute_query():
             with connection_handler.lease() as conn:

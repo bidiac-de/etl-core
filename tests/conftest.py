@@ -7,7 +7,6 @@ import pytest
 import os
 import importlib
 import secrets
-import secrets
 import sys
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete

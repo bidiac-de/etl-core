@@ -80,9 +80,7 @@ class TestCredentialsIntegration:
         assert retrieved.name == "new_creds"
         assert retrieved.user == "newuser"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_read_component_with_real_credentials(
         self, mock_handler_class, sample_context: Context, test_creds
     ) -> None:
@@ -102,9 +100,7 @@ class TestCredentialsIntegration:
         assert creds["password"] == os.environ["APP_TEST_PASSWORD"]
         assert creds["database"] == "testdb"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_write_component_with_real_credentials(
         self, mock_handler_class, sample_context: Context
     ) -> None:
@@ -295,9 +291,7 @@ class TestCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_credentials_in_mariadb_component_integration(
         self, mock_handler_class, sample_context: Context, test_creds: Tuple[str, str]
     ) -> None:
@@ -408,9 +402,7 @@ class TestCredentialsIntegration:
             )
             assert param.key == key
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_write_bulk_operations(
         self, mock_handler_class, sample_context: Context, sample_dataframe, test_creds
     ) -> None:
@@ -431,9 +423,7 @@ class TestCredentialsIntegration:
         assert creds["user"] == user
         assert creds["database"] == "testdb"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_read_query_operations(
         self, mock_handler_class, sample_context: Context, test_creds
     ) -> None:

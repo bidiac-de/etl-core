@@ -34,7 +34,9 @@ class SQLConnectionHandler:
     ) -> str:
         # Direct usage of db_type (comp_type) - no mapping needed!
         if not all([user, password, host, port, database]):
-            raise ValueError(f"{db_type} requires user, password, host, port, and database.")
+            raise ValueError(
+                f"{db_type} requires user, password, host, port, and database."
+            )
         return f"{db_type}://{user}:{password}@{host}:{port}/{database}"
 
     def connect(

@@ -1,12 +1,14 @@
 from typing import Any, Dict, AsyncIterator
 import pandas as pd
 import dask.dataframe as dd
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
 from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
+from etl_core.receivers.databases.postgresql.postgresql_receiver import (
+    PostgreSQLReceiver,
+)
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
@@ -24,8 +26,6 @@ class PostgreSQLWrite(PostgreSQLComponent):
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
-
-
 
     @model_validator(mode="after")
     def _build_objects(self):

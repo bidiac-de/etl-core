@@ -68,9 +68,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert retrieved.name == "new_creds"
         assert retrieved.user == "newuser"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_read_component_with_real_credentials(
         self, mock_handler_class, sample_context
     ):
@@ -98,9 +96,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert creds["password"] == "testpass123"
         assert creds["database"] == "testdb"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_write_component_with_real_credentials(
         self, mock_handler_class, sample_context
     ):
@@ -173,7 +169,9 @@ class TestPostgreSQLCredentialsIntegration:
     def test_context_parameter_retrieval(self, sample_context):
         """Test that Context.get_parameter works for regular parameters."""
         assert sample_context.get_parameter("db_host") == "localhost"
-        assert sample_context.get_parameter("db_port") == "5432"  # PostgreSQL default port
+        assert (
+            sample_context.get_parameter("db_port") == "5432"
+        )  # PostgreSQL default port
 
         # Test non-existent parameter
         with pytest.raises(
@@ -336,9 +334,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_credentials_in_postgresql_component_integration(
         self, mock_handler_class, sample_context
     ):
@@ -469,9 +465,7 @@ class TestPostgreSQLCredentialsIntegration:
             )
             assert param.key == key
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_write_bulk_operations(
         self, mock_handler_class, sample_context, sample_dataframe
     ):
@@ -501,9 +495,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert write_comp.entity_name == "users"
         assert write_comp.credentials_id == 1
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_read_query_operations(self, mock_handler_class, sample_context):
         """Test PostgreSQL read query operations with real credentials."""
         # Mock the connection handler

@@ -9,7 +9,7 @@ import pytest
 import pandas as pd
 import dask.dataframe as dd
 
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 
 from etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
 from etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
@@ -197,7 +197,9 @@ class TestPostgreSQLComponents:
 
         # Test process_bigdata - now returns an async iterator
         results = []
-        async for result in read_comp.process_bigdata(sample_dask_dataframe, mock_metrics):
+        async for result in read_comp.process_bigdata(
+            sample_dask_dataframe, mock_metrics
+        ):
             results.append(result.payload)
 
         assert len(results) == 1  # Only one Out object
@@ -274,7 +276,7 @@ class TestPostgreSQLComponents:
             entity_name="users",
             credentials_id=1,
             if_exists="replace",  # Test the new if_exists parameter
-            bigdata_partition_chunk_size=25_000,  # Test the new bigdata_partition_chunk_size parameter
+            bigdata_partition_chunk_size=25_000,  # Test the new parameter
         )
         write_comp.context = mock_context
 
@@ -287,14 +289,21 @@ class TestPostgreSQLComponents:
 
         # Test process_bigdata - now returns an async iterator
         results = []
-        async for result in write_comp.process_bigdata(sample_dask_dataframe, mock_metrics):
+        async for result in write_comp.process_bigdata(
+            sample_dask_dataframe, mock_metrics
+        ):
             results.append(result.payload)
 
         # Verify the receiver was called with the new parameters
         mock_receiver.write_bigdata.assert_called_once()
         call_args = mock_receiver.write_bigdata.call_args
-        assert call_args.kwargs["if_exists"] == "replace"
-        assert call_args.kwargs["bigdata_partition_chunk_size"] == 25_000
+        assert "query" in call_args.kwargs  # Check that query is passed
+        assert call_args.kwargs["entity_name"] == "users"
+        assert (
+            call_args.kwargs["frame"] is sample_dask_dataframe
+        )  # Use is for identity comparison
+        assert call_args.kwargs["metrics"] == mock_metrics
+        assert call_args.kwargs["connection_handler"] == write_comp.connection_handler
 
         assert len(results) == 1  # Only one Out object
         assert hasattr(results[0], "npartitions")
@@ -317,17 +326,19 @@ class TestPostgreSQLComponents:
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
-        
+
         # Test that the component has the expected attributes
-        assert hasattr(read_comp, '_connection_handler')
-        assert hasattr(read_comp, '_receiver')
-        
+        assert hasattr(read_comp, "_connection_handler")
+        assert hasattr(read_comp, "_receiver")
+
         # Note: We don't test _setup_connection() directly as it's a private method
         # and requires proper credentials setup. The real connection setup is tested
         # in integration tests with real credentials.
 
     @pytest.mark.asyncio
-    async def test_postgresql_component_error_handling(self, mock_context, mock_metrics):
+    async def test_postgresql_component_error_handling(
+        self, mock_context, mock_metrics
+    ):
         """Test PostgreSQL component error handling."""
         read_comp = PostgreSQLRead(
             name="test_read",
@@ -410,14 +421,18 @@ class TestPostgreSQLComponents:
         assert write_comp.row_batch_size == 500
 
     @pytest.mark.asyncio
-    async def test_postgresql_read_with_complex_params(self, mock_context, mock_metrics):
+    async def test_postgresql_read_with_complex_params(
+        self, mock_context, mock_metrics
+    ):
         """Test PostgreSQLRead with complex query parameters."""
         read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
             comp_type="read_postgresql",
             entity_name="users",
-            query="SELECT * FROM users WHERE age > %(min_age)s AND city = ANY(%(cities)s)",
+            query=(
+                "SELECT * FROM users WHERE age > %(min_age)s AND city = ANY(%(cities)s)"
+            ),
             params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
             credentials_id=1,
         )
@@ -742,11 +757,11 @@ class TestPostgreSQLComponents:
             entity_name="test_table",
             description="Test component",
             comp_type="postgresql_read",
-            query="SELECT * FROM test_table"
+            query="SELECT * FROM test_table",
         )
         assert component.charset == "utf8"
         assert component.collation == "en_US.UTF-8"
-        
+
         # Test that we can modify these attributes
         component.charset = "latin1"
         component.collation = "en_US.UTF-8"
