@@ -76,11 +76,12 @@ class MariaDBReceiver(SQLReceiver):
         metrics: Any,
         connection_handler: SQLConnectionHandler,
         batch_size: int = 1000,
-        **driver_kwargs: Any,
+        query: str | None = None,
+        params: Dict[str, Any] | None = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """Yield MariaDB rows as dictionaries from a query."""
-        query = driver_kwargs.get("query", f"SELECT * FROM {entity_name}")
-        params = driver_kwargs.get("params", {})
+        query = query or f"SELECT * FROM {entity_name}"
+        params = params or {}
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -97,11 +98,12 @@ class MariaDBReceiver(SQLReceiver):
         entity_name: str,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        **driver_kwargs: Any,
+        query: str | None = None,
+        params: Dict[str, Any] | None = None,
     ) -> pd.DataFrame:
         """Read query results as a pandas DataFrame."""
-        query = driver_kwargs.get("query", f"SELECT * FROM {entity_name}")
-        params = driver_kwargs.get("params", {})
+        query = query or f"SELECT * FROM {entity_name}"
+        params = params or {}
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -116,11 +118,12 @@ class MariaDBReceiver(SQLReceiver):
         entity_name: str,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        **driver_kwargs: Any,
+        query: str | None = None,
+        params: Dict[str, Any] | None = None,
     ) -> dd.DataFrame:
         """Read large query results as a Dask DataFrame."""
-        query = driver_kwargs.get("query", f"SELECT * FROM {entity_name}")
-        params = driver_kwargs.get("params", {})
+        query = query or f"SELECT * FROM {entity_name}"
+        params = params or {}
 
         def _execute_query():
             with connection_handler.lease() as conn:
@@ -137,12 +140,12 @@ class MariaDBReceiver(SQLReceiver):
         row: Dict[str, Any],
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        **driver_kwargs: Any,
+        query: str | None = None,
+        table: str | None = None,
+        if_exists: str = "append",
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
-        query = driver_kwargs.get("query")
-        table = driver_kwargs.get("table", entity_name)
-        if_exists = driver_kwargs.get("if_exists", "append")
+        table = table or entity_name
 
         if not query:
             # Auto-generate query if none provided
@@ -164,15 +167,15 @@ class MariaDBReceiver(SQLReceiver):
         frame: pd.DataFrame,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        **driver_kwargs: Any,
+        query: str | None = None,
+        table: str | None = None,
+        if_exists: str = "append",
     ) -> pd.DataFrame:
         """Write a pandas DataFrame and return it."""
         if frame.empty:
             return frame
 
-        query = driver_kwargs.get("query")
-        table = driver_kwargs.get("table", entity_name)
-        if_exists = driver_kwargs.get("if_exists", "append")
+        table = table or entity_name
 
         if not query:
             # Auto-generate query if none provided
@@ -196,12 +199,12 @@ class MariaDBReceiver(SQLReceiver):
         frame: dd.DataFrame,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        **driver_kwargs: Any,
+        query: str | None = None,
+        table: str | None = None,
+        if_exists: str = "append",
     ) -> dd.DataFrame:
         """Write a Dask DataFrame and return it."""
-        query = driver_kwargs.get("query")
-        table = driver_kwargs.get("table", entity_name)
-        if_exists = driver_kwargs.get("if_exists", "append")
+        table = table or entity_name
 
         if not query:
             # Auto-generate query if none provided
