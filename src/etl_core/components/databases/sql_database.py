@@ -12,7 +12,7 @@ from etl_core.components.databases.sql_connection_handler import (
     SQLConnectionHandler,
 )
 from etl_core.components.databases.pool_args import build_sql_engine_kwargs
-from etl_core.components.databases.if_exists_strategy import IfExistsStrategy
+from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 
 
 class SQLDatabaseComponent(DatabaseComponent, ABC):
@@ -26,10 +26,10 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
 
-    # ✅ NEU: if_exists Parameter für alle SQL-Datenbanken
-    if_exists: IfExistsStrategy = Field(
-        default=IfExistsStrategy.APPEND,
-        description="How to behave if the table already exists",
+    # Database operation type
+    operation: str = Field(
+        default=DatabaseOperation.INSERT.value,
+        description="Database operation type: insert, upsert, truncate, or update",
     )
 
     entity_name: str = Field(..., description="Name of the target entity (table/view)")
@@ -86,54 +86,44 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         if hasattr(self, "_connection_handler") and self._connection_handler:
             self._connection_handler.close_pool(force=True)
 
-    def _build_insert_query(
-        self, table: str, columns: list, if_exists: IfExistsStrategy
+    def _build_query(
+        self, table: str, columns: list, operation: str, **kwargs
     ) -> str:
         """
-        Build INSERT query based on if_exists strategy.
+        Build query based on operation type.
 
         Args:
             table: Target table name
             columns: List of column names
-            if_exists: Strategy for handling existing data
+            operation: Database operation type
+            **kwargs: Additional parameters
 
         Returns:
             SQL query string
         """
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
-        base_query = f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
-        if if_exists == IfExistsStrategy.TRUNCATE:
-            # For truncate, we'll handle this separately in the receiver
-            return base_query
-        elif if_exists == IfExistsStrategy.REPLACE:
-            # Use REPLACE instead of INSERT
-            return f"REPLACE INTO {table} ({columns_str}) VALUES ({placeholders})"
-        elif if_exists == IfExistsStrategy.FAIL:
-            # Simple INSERT that will fail on conflicts
-            return base_query
-        else:  # APPEND and others
-            return base_query
-
-    def _build_upsert_query(
-        self, table: str, columns: list, if_exists: IfExistsStrategy, **kwargs
-    ) -> str:
-        """
-        Build UPSERT query based on database-specific if_exists strategy.
-        Must be implemented by subclasses for database-specific syntax.
-
-        Args:
-            table: Target table name
-            columns: List of column names
-            if_exists: Strategy for handling existing data
-            **kwargs: Additional database-specific parameters
-
-        Returns:
-            SQL query string
-        """
-        # Base implementation - subclasses should override
-        return self._build_insert_query(table, columns, if_exists)
+        if operation == DatabaseOperation.TRUNCATE.value:
+            # Clear table first, then insert
+            return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
+        
+        elif operation == DatabaseOperation.UPSERT.value:
+            # Default upsert behavior - subclasses should override
+            return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
+        
+        elif operation == DatabaseOperation.UPDATE.value:
+            # Pure update operation
+            where_conditions = kwargs.get("where_conditions", [])
+            if not where_conditions:
+                raise ValueError("UPDATE operation requires where_conditions")
+            
+            set_clause = ", ".join([f"{col} = :{col}" for col in columns])
+            where_clause = " AND ".join(where_conditions)
+            return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
+        
+        else:  # INSERT (default)
+            return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:

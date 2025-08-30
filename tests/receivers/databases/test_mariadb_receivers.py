@@ -223,6 +223,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             row={"name": "John", "email": "john@example.com"},
             metrics=mock_metrics,
+            query="INSERT INTO users (name, email) VALUES (:name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -253,6 +254,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -276,6 +278,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -304,6 +307,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
+                query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
                 table="users",
                 connection_handler=mock_connection_handler,
             )
@@ -482,13 +486,13 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 frame=ddf,
                 metrics=mock_metrics,
+                query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
                 table="users",
-                if_exists="append",  # Add required parameter
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify compute was called (1 for first partition + 2 partitions = 3 calls)
-            assert mock_compute.call_count == 3
+            # Verify compute was called (2 partitions = 2 calls)
+            assert mock_compute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_write_bulk_with_empty_dataframe(
@@ -504,6 +508,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -533,6 +538,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=single_row_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (name, email) VALUES (:name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -699,6 +705,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             row=special_data,
             metrics=mock_metrics,
+            query="INSERT INTO users (name, email, description) VALUES (:name, :email, :description)",
             connection_handler=mock_connection_handler,
             table="users",
         )
@@ -732,6 +739,7 @@ class TestMariaDBReceivers:
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
+            query="INSERT INTO numeric_table (integer, float, decimal, negative) VALUES (:integer, :float, :decimal, :negative)",
             connection_handler=mock_connection_handler,
             table="numeric_table",
         )
@@ -760,6 +768,7 @@ class TestMariaDBReceivers:
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
+            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) VALUES (:is_active, :is_deleted, :has_permission)",
             connection_handler=mock_connection_handler,
             table="boolean_table",
         )
@@ -791,18 +800,18 @@ class TestMariaDBReceivers:
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
-            # Test write_bigdata with new if_exists parameter
+            # Test write_bigdata with new signature
             result = await receiver.write_bigdata(
                 entity_name="test_table",
                 frame=ddf,
                 metrics=mock_metrics,
+                query="INSERT INTO test_table (id, name) VALUES (:id, :name)",
                 table="test_table",
-                if_exists="append",  # Add the required if_exists parameter
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify compute was called (1 for first partition + 2 partitions = 3 calls)
-            assert mock_compute.call_count == 3
+            # Verify compute was called (2 partitions = 2 calls)
+            assert mock_compute.call_count == 2
             # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
@@ -822,14 +831,14 @@ class TestMariaDBReceivers:
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
-            # Test write_bigdata with empty data and new if_exists parameter
+            # Test write_bigdata with empty data and new signature
             result = await receiver.write_bigdata(
                 entity_name="test_table",
                 frame=ddf,
                 metrics=mock_metrics,
+                query="INSERT INTO test_table (id, name) VALUES (:id, :name)",
                 connection_handler=mock_connection_handler,
                 table="test_table",
-                if_exists="append",
             )
 
             # Verify compute was called (once for first_partition + partitions)
@@ -858,14 +867,14 @@ class TestMariaDBReceivers:
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
-            # Test write_bigdata with new if_exists parameter
+            # Test write_bigdata with new signature
             result = await receiver.write_bigdata(
                 entity_name="test_table",
                 frame=ddf,
                 metrics=mock_metrics,
+                query="INSERT INTO test_table (id, name) VALUES (:id, :name)",
                 connection_handler=mock_connection_handler,
                 table="test_table",
-                if_exists="append",
             )
 
             # Verify compute was called (once for first_partition + partitions)
@@ -889,6 +898,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -912,6 +922,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             connection_handler=mock_connection_handler,
             table="users",
         )
@@ -977,6 +988,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name) VALUES (:id, :name)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -1006,6 +1018,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name) VALUES (:id, :name)",
             table="users",
             connection_handler=mock_connection_handler,
         )

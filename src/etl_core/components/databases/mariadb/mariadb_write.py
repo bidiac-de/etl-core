@@ -31,21 +31,30 @@ class MariaDBWrite(MariaDBComponent):
     @model_validator(mode="after")
     def _build_objects(self) -> "MariaDBWrite":
         self._receiver = MariaDBReceiver()
+        self._query = None
+        self._columns = None
+        
         return self
+
+    def _ensure_query_built(self, columns: list):
+        """Ensure query is built for the given columns."""
+        if self._query is None or self._columns != columns:
+            self._columns = columns
+            self._query = self._build_query(self.entity_name, columns, self.operation)
 
     async def process_row(
         self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a single row and emit it (or receiver result) on 'out'."""
-        # Build query based on if_exists strategy
+        # Ensure query is built once for these columns
         columns = list(row.keys())
-        query = self._build_upsert_query(self.entity_name, columns, self.if_exists)
+        self._ensure_query_built(columns)
 
         result = await self._receiver.write_row(
             entity_name=self.entity_name,
             row=row,
             metrics=metrics,
-            query=query,
+            query=self._query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
@@ -54,15 +63,15 @@ class MariaDBWrite(MariaDBComponent):
         self, data: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a pandas DataFrame and emit the same frame on 'out'."""
-        # Build query based on if_exists strategy
+        # Ensure query is built once for these columns
         columns = list(data.columns)
-        query = self._build_upsert_query(self.entity_name, columns, self.if_exists)
+        self._ensure_query_built(columns)
 
         result = await self._receiver.write_bulk(
             entity_name=self.entity_name,
             frame=data,
             metrics=metrics,
-            query=query,
+            query=self._query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
@@ -71,17 +80,16 @@ class MariaDBWrite(MariaDBComponent):
         self, ddf: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
         """Write a Dask DataFrame and emit the same ddf on 'out'."""
-        # Build query based on if_exists strategy
-        # Get columns from first partition
+
         first_partition = ddf.map_partitions(lambda pdf: pdf).partitions[0].compute()
         columns = list(first_partition.columns)
-        query = self._build_upsert_query(self.entity_name, columns, self.if_exists)
+        self._ensure_query_built(columns)
 
         result = await self._receiver.write_bigdata(
             entity_name=self.entity_name,
             frame=ddf,
             metrics=metrics,
-            query=query,
+            query=self._query,
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)

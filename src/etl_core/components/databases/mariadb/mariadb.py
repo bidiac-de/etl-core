@@ -1,10 +1,7 @@
 from pydantic import Field
 
-from etl_core.components.databases.sql_database import (
-    SQLDatabaseComponent,
-    IfExistsStrategy,
-)
-from etl_core.components.databases.if_exists_strategy import MariaDBIfExistsStrategy
+from etl_core.components.databases.sql_database import SQLDatabaseComponent
+from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 
 
 class MariaDBComponent(SQLDatabaseComponent):
@@ -15,50 +12,56 @@ class MariaDBComponent(SQLDatabaseComponent):
         default="utf8mb4_unicode_ci", description="Collation for MariaDB"
     )
 
-    # MariaDB-spezifische if_exists Strategie mit intelligentem Standard
-    if_exists: str = Field(
-        default=IfExistsStrategy.APPEND.value,
+    # Database operation type
+    operation: str = Field(
+        default=DatabaseOperation.INSERT.value,
         description=(
-            "MariaDB-specific behavior for existing tables "
-            "(APPEND by default, but IGNORE and ON_DUPLICATE_UPDATE available)"
+            "Database operation type: insert, upsert, truncate, or update"
         ),
     )
 
-    def _build_upsert_query(
-        self, table: str, columns: list, if_exists: str, **kwargs
+    def _build_query(
+        self, table: str, columns: list, operation: str, **kwargs
     ) -> str:
         """
-        Build MariaDB-specific UPSERT query based on if_exists strategy.
+        Build MariaDB-specific query based on operation type.
 
         Args:
             table: Target table name
             columns: List of column names
-            if_exists: MariaDB-specific strategy for handling existing data
-            **kwargs: Additional parameters
-            (e.g., update_columns for ON DUPLICATE KEY UPDATE)
+            operation: Database operation type
+            **kwargs: Additional parameters (e.g., update_columns for upsert)
 
         Returns:
             SQL query string
         """
         columns_str = ", ".join(columns)
         placeholders = ", ".join([f":{col}" for col in columns])
-        base_query = f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
-        if if_exists == MariaDBIfExistsStrategy.IGNORE:
-            # MariaDB: INSERT IGNORE
-            return f"INSERT IGNORE INTO {table} ({columns_str}) VALUES ({placeholders})"
-        elif if_exists == MariaDBIfExistsStrategy.ON_DUPLICATE_UPDATE:
-            # MariaDB: ON DUPLICATE KEY UPDATE
+        if operation == DatabaseOperation.TRUNCATE.value:
+            # Clear table first, then insert
+            return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
+        
+        elif operation == DatabaseOperation.UPSERT.value:
+            # Insert or update on duplicate key
             update_columns = kwargs.get("update_columns", columns)
             update_clause = ", ".join(
                 [f"{col} = VALUES({col})" for col in update_columns]
             )
-            return f"{base_query} ON DUPLICATE KEY UPDATE {update_clause}"
-        else:
-            # Fall back to base implementation for standard strategies
-            return super()._build_upsert_query(
-                table, columns, IfExistsStrategy(if_exists), **kwargs
-            )
+            return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders}) ON DUPLICATE KEY UPDATE {update_clause}"
+        
+        elif operation == DatabaseOperation.UPDATE.value:
+            # Pure update operation
+            where_conditions = kwargs.get("where_conditions", [])
+            if not where_conditions:
+                raise ValueError("UPDATE operation requires where_conditions")
+            
+            set_clause = ", ".join([f"{col} = :{col}" for col in columns])
+            where_clause = " AND ".join(where_conditions)
+            return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
+        
+        else:  # INSERT (default)
+            return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
     def _setup_session_variables(self):
         """Setup MariaDB-specific session variables."""
