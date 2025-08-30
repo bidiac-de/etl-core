@@ -32,11 +32,9 @@ StrRule = Tuple[str, str, str, str]
 
 class SchemaMappingComponent(DataOperationsComponent):
     """
-    Orchestrates mapping and joins
-
-    - Owns buffering for row/bulk/bigdata
-    - Receiver is stateless; we pass everything it needs per call
-    - Metrics are updated exclusively inside the receiver
+    Component that orchestrates schema mapping and joining
+    according to determined rules. Allows for nested and flat schemas,
+    as well as nested joins across multiple input ports.
     """
 
     rules: List[FieldMapping] = Field(default_factory=list)

@@ -31,10 +31,8 @@ StrRule = Tuple[str, str, str, str]
 
 class SchemaMappingReceiver:
     """
-    Stateless worker for mapping and joining
-
-    The caller passes all context (rules, join_plan, schemas, buffers, metrics)
-    on each call. This class performs pure transforms and updates metrics
+    Worker class to implement schema mapping and join operations, called
+    from the SchemaMapping Component.
     """
 
     def map_row(

@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
+from etl_core.components.data_operations.rule_helper import (
+    ensure_no_empty_path_segments,
+)
 from etl_core.utils.common_helpers import get_leaf_field_map
 
 
@@ -26,11 +29,7 @@ class FieldMapping(BaseModel):
     @field_validator("src_path", "dst_path")
     @classmethod
     def _no_empty_segments(cls, v: str) -> str:
-        # Keep paths well-formed to avoid accidental "a..b" cases.
-        if any(part.strip() == "" for part in v.split(".")):
-            msg = "paths must not contain empty segments (e.g., 'a..b')"
-            raise ValueError(msg)
-        return v
+        return ensure_no_empty_path_segments(v)
 
 
 def _types_compatible(src: FieldDef, dst: FieldDef) -> bool:

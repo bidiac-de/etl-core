@@ -6,9 +6,12 @@ from pydantic import BaseModel, Field, field_validator
 
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef
+from etl_core.components.data_operations.rule_helper import (
+    ensure_no_empty_path_segments,
+)
 from etl_core.utils.common_helpers import get_leaf_field_map
 
-JoinHow = Literal["inner", "left", "right", "outer"]
+JoinType = Literal["inner", "left", "right", "outer"]
 
 
 class JoinStep(BaseModel):
@@ -22,17 +25,13 @@ class JoinStep(BaseModel):
     right_port: str = Field(..., min_length=1)
     left_on: str = Field(..., min_length=1)
     right_on: str = Field(..., min_length=1)
-    how: JoinHow = "inner"
+    how: JoinType = "inner"
     output_port: str = Field(..., min_length=1)
 
     @field_validator("left_on", "right_on")
     @classmethod
     def _no_empty_segments(cls, v: str) -> str:
-        # Dotted paths must not contain empty parts
-        parts = v.split(".")
-        if any(not p.strip() for p in parts):
-            raise ValueError("join key paths must not contain empty segments")
-        return v
+        return ensure_no_empty_path_segments(v)
 
 
 class JoinPlan(BaseModel):
