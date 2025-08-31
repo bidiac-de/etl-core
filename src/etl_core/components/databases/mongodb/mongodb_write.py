@@ -13,6 +13,7 @@ from etl_core.components.databases.mongodb.mongodb import MongoDBComponent
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.databases.mongodb.mongodb_receiver import MongoDBReceiver
 
 
 @register_component("write_mongodb")
@@ -41,6 +42,12 @@ class MongoDBWrite(MongoDBComponent, DatabaseOperationMixin):
     ordered: bool = Field(default=True, description="Ordered bulk writes")
 
     _write_options: Dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _build_objects(self) -> "MongoDBComponent":
+        self._receiver = MongoDBReceiver()
+        self._setup_connection()
+        return self
 
     @model_validator(mode="after")
     def _post_init(self) -> "MongoDBWrite":

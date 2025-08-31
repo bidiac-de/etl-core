@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from etl_core.components.component_registry import register_component
 from etl_core.components.databases.mongodb.mongodb import MongoDBComponent
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.databases.mongodb.mongodb_receiver import MongoDBReceiver
 
 
 @register_component("read_mongodb")
@@ -28,6 +29,12 @@ class MongoDBRead(MongoDBComponent):
     )
     limit: Optional[int] = Field(default=None, description="Max documents to read")
     skip: int = Field(default=0, ge=0, description="Documents to skip")
+
+    @model_validator(mode="after")
+    def _build_objects(self) -> "MongoDBComponent":
+        self._receiver = MongoDBReceiver()
+        self._setup_connection()
+        return self
 
     async def process_row(self, metrics: ComponentMetrics) -> AsyncIterator[Out]:
         async for doc in self._receiver.read_row(

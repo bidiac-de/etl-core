@@ -1,64 +1,86 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 
 import dask.dataframe as dd
 import pandas as pd
-from pydantic import Field, model_validator, PrivateAttr
+from pydantic import Field, PrivateAttr
 
 from etl_core.components.databases.database import DatabaseComponent
 from etl_core.components.databases.mongodb.mongodb_connection_handler import (
     MongoConnectionHandler,
 )
 from etl_core.components.databases.pool_args import build_mongo_client_kwargs
-from etl_core.receivers.databases.mongodb.mongodb_receiver import MongoDBReceiver
 
 
 class MongoDBComponent(DatabaseComponent, ABC):
     """
     Base class for MongoDB components.
 
-    Mirrors SQLDatabaseComponent responsibilities:
-    - resolves credentials from context
-    - builds a URI and client kwargs
-    - connects via a family-specific connection handler
-    - exposes 'entity_name' and 'database_name'
+    Responsibilities:
+    - resolve credentials from context
+    - build a URI and client kwargs
+    - connect via a MongoConnectionHandler
+    - expose 'entity_name' and 'database_name'
     """
 
-    auth_db_name: str = Field(default=None,
+    auth_db_name: Optional[str] = Field(
+        default=None,
         description=(
             "Authentication database name. If not set, defaults to the database "
             "specified in the credentials."
         ),
     )
 
-    _connection_handler: MongoConnectionHandler
-    _mongo_uri: str = PrivateAttr()
-    _database_name: str = PrivateAttr()
-
-    @model_validator(mode="after")
-    def _build_objects(self) -> "MongoDBComponent":
-        self._receiver = MongoDBReceiver()
-        self._setup_connection()
-        return self
+    # Lazily-initialized connection bits
+    _connection_handler: Optional[MongoConnectionHandler] = PrivateAttr(default=None)
+    _mongo_uri: Optional[str] = PrivateAttr(default=None)
+    _database_name: Optional[str] = PrivateAttr(default=None)
 
     @property
     def connection_handler(self) -> MongoConnectionHandler:
+        """
+        Lazily initialize the connection when first accessed, so tests (and user code)
+        can assign `context` after construction without tripping a None handler.
+        """
+        if self._connection_handler is None:
+            self._setup_connection()
+            if self._connection_handler is None:
+                raise RuntimeError(
+                    "Mongo connection is not initialized; context may be missing."
+                )
         return self._connection_handler
+
     @property
     def database_name(self) -> str:
+        """
+        Ensure database name is available once context/credentials are known.
+        """
+        if not self._database_name:
+            # Build once if a caller asks for it early
+            self._setup_connection()
+        if not self._database_name:
+            raise RuntimeError(
+                "Database name is not resolved; make sure context/credentials are set."
+            )
         return self._database_name
 
     def _setup_connection(self) -> None:
-        if not self._context:
+        """
+        Idempotent: builds and connects the Mongo handler once `context` is present.
+        Safe to call multiple times; subsequent calls return early.
+        """
+        if self._connection_handler is not None:
+            return
+        if not getattr(self, "_context", None):
+            # Context not set yet; defer initialization.
             return
 
         creds = self._get_credentials()
-
         self._database_name = creds["database"]
 
-        self._connection_handler = MongoConnectionHandler()
+        handler = MongoConnectionHandler()
         uri = MongoConnectionHandler.build_uri(
             user=creds["user"],
             password=creds["password"],
@@ -71,11 +93,16 @@ class MongoDBComponent(DatabaseComponent, ABC):
 
         credentials_obj = self._context.get_credentials(self.credentials_id)
         client_kwargs = build_mongo_client_kwargs(credentials_obj)
-        self._connection_handler.connect(uri=uri, client_kwargs=client_kwargs)
+        handler.connect(uri=uri, client_kwargs=client_kwargs)
+        self._connection_handler = handler
 
     def __del__(self) -> None:
-        if hasattr(self, "_connection_handler") and self._connection_handler:
-            self._connection_handler.close_pool(force=True)
+        # Best-effort pool cleanup
+        if getattr(self, "_connection_handler", None):
+            try:
+                self._connection_handler.close_pool(force=True)  # type: ignore[union-attr]
+            except Exception:
+                pass
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> dict:
