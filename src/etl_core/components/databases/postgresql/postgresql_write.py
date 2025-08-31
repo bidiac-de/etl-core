@@ -1,7 +1,7 @@
-from typing import Any, Dict, AsyncIterator
+from typing import Any, Dict, AsyncIterator, Optional  # noqa: F401
 import pandas as pd
 import dask.dataframe as dd
-from pydantic import model_validator, Field
+from pydantic import model_validator
 
 from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
 from etl_core.components.databases.database_operation_mixin import (
@@ -128,3 +128,6 @@ class PostgreSQLWrite(PostgreSQLComponent, DatabaseOperationMixin):
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
+
+
+PostgreSQLWrite.model_rebuild()

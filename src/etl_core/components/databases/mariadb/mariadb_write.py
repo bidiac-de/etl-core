@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict
+from typing import Any, AsyncIterator, Dict, Optional  # noqa: F401
 
 import dask.dataframe as dd
 import pandas as pd
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from etl_core.components.component_registry import register_component
 from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
@@ -124,3 +124,6 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
             connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=result)
+
+
+MariaDBWrite.model_rebuild()
