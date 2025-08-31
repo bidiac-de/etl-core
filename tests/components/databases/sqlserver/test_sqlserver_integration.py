@@ -23,6 +23,23 @@ class TestSQLServerIntegration:
     """Integration tests for SQL Server components and receivers."""
 
     @pytest.fixture
+    def mock_context(self):
+        """Create a mock context with credentials."""
+        context = Mock()
+        # Create mock credentials with get_parameter method
+        mock_credentials = Mock()
+        mock_credentials.get_parameter.side_effect = lambda param: {
+            "user": "testuser",
+            "password": "testpass",
+            "database": "testdb",
+            "host": "localhost",
+            "port": 1433,
+        }.get(param)
+        mock_credentials.decrypted_password = "testpass"
+        context.get_credentials.return_value = mock_credentials
+        return context
+
+    @pytest.fixture
     def mock_metrics(self):
         """Create mock component metrics."""
         metrics = Mock(spec=ComponentMetrics)
@@ -83,13 +100,25 @@ class TestSQLServerIntegration:
         )
         read_comp.context = mock_context
 
-        # Create write component
+        # Create write component with schema
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         write_comp = SQLServerWrite(
             name="test_write",
             description="Test write component",
             comp_type="write_sqlserver",
             entity_name="users",
             credentials_id=1,
+            in_port_schemas={"in": mock_schema}
         )
         write_comp.context = mock_context
 
@@ -97,13 +126,18 @@ class TestSQLServerIntegration:
         mock_read_receiver = AsyncMock()
         mock_write_receiver = AsyncMock()
 
-        # Mock read_row to return sample data
-        async def mock_read_row_generator(*args, **kwargs):
+        # Mock read_row to return sample data with new signature
+        async def mock_read_row_generator(*, entity_name, metrics, connection_handler, batch_size=1000, query=None, params=None):
             for row in sample_data:
                 yield row
 
         mock_read_receiver.read_row = mock_read_row_generator
-        mock_write_receiver.write_row = AsyncMock(return_value={"affected_rows": 1})
+
+        # Mock write_row with new signature
+        async def mock_write_row(*, entity_name, row, metrics, connection_handler, query, table=None):
+            return {"affected_rows": 1, "row": row}
+
+        mock_write_receiver.write_row = mock_write_row
 
         read_comp._receiver = mock_read_receiver
         write_comp._receiver = mock_write_receiver
@@ -278,12 +312,25 @@ class TestSQLServerIntegration:
     @pytest.mark.asyncio
     async def test_bulk_strategy_integration(self, mock_context, mock_metrics, sample_dataframe):
         """Test bulk strategy integration."""
+        # Create write component with schema
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         write_comp = SQLServerWrite(
             name="test_write",
             description="Test write component",
             comp_type="write_sqlserver",
             entity_name="users",
             credentials_id=1,
+            in_port_schemas={"in": mock_schema}
         )
         write_comp.context = mock_context
 
@@ -303,12 +350,25 @@ class TestSQLServerIntegration:
     @pytest.mark.asyncio
     async def test_error_recovery_integration(self, mock_context, mock_metrics):
         """Test error recovery integration."""
+        # Create write component with schema
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         write_comp = SQLServerWrite(
             name="test_write",
             description="Test write component",
             comp_type="write_sqlserver",
             entity_name="users",
             credentials_id=1,
+            in_port_schemas={"in": mock_schema}
         )
         write_comp.context = mock_context
 
@@ -341,13 +401,26 @@ class TestSQLServerIntegration:
                 "email": [f"user{i}@example.com" for i in range(data_size)]
             })
 
+            # Create write component with schema
+            from etl_core.components.wiring.schema import Schema
+            from etl_core.components.wiring.column_definition import FieldDef, DataType
+
+            mock_schema = Schema(
+                fields=[
+                    FieldDef(name="id", data_type=DataType.INTEGER),
+                    FieldDef(name="name", data_type=DataType.STRING),
+                    FieldDef(name="email", data_type=DataType.STRING),
+                ]
+            )
+
             write_comp = SQLServerWrite(
                 name="test_write",
                 description="Test write component",
                 comp_type="write_sqlserver",
                 entity_name="users",
                 credentials_id=1,
-                bulk_chunk_size=100
+                bulk_chunk_size=100,
+                in_port_schemas={"in": mock_schema}
             )
             write_comp.context = mock_context
 
@@ -476,12 +549,25 @@ class TestSQLServerIntegration:
     @pytest.mark.asyncio
     async def test_error_handling_strategy_integration(self, mock_context, mock_metrics):
         """Test error handling strategy integration."""
+        # Create write component with schema
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         write_comp = SQLServerWrite(
             name="test_write",
             description="Test write component",
             comp_type="write_sqlserver",
             entity_name="users",
             credentials_id=1,
+            in_port_schemas={"in": mock_schema}
         )
         write_comp.context = mock_context
 
@@ -503,6 +589,79 @@ class TestSQLServerIntegration:
         with pytest.raises(Exception, match="Test error"):
             async for _ in write_comp.process_row({"name": "John"}, mock_metrics):
                 pass
+
+    @pytest.mark.asyncio
+    async def test_sqlserver_component_numeric_data_types(
+        self, mock_context, mock_metrics
+    ):
+        """Test SQL Server component with numeric data types."""
+        numeric_data = [
+            {"id": 1, "age": 25, "salary": 50000.50, "is_active": True},
+            {"id": 2, "age": 30, "salary": 75000.75, "is_active": False},
+        ]
+
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            credentials_id=1,
+        )
+        read_comp.context = mock_context
+
+        # Mock the receiver
+        mock_receiver = AsyncMock()
+        mock_receiver.read_bulk.return_value = pd.DataFrame(numeric_data)
+        read_comp._receiver = mock_receiver
+
+        # Test that numeric data types are handled correctly
+        results = []
+        async for result in read_comp.process_bulk(None, mock_metrics):
+            results.append(result.payload)
+
+        assert len(results) == 1
+        assert len(results[0]) == 2
+        assert results[0].iloc[0]["age"] == 25
+        assert results[0].iloc[0]["salary"] == 50000.50
+        assert results[0].iloc[0]["is_active"] == True  # Use == instead of is for pandas boolean
+
+    @pytest.mark.asyncio
+    async def test_sqlserver_component_boolean_data_types(
+        self, mock_context, mock_metrics
+    ):
+        """Test SQL Server component with boolean data types."""
+        boolean_data = [
+            {"id": 1, "is_active": True, "is_admin": False},
+            {"id": 2, "is_active": False, "is_admin": True},
+        ]
+
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            credentials_id=1,
+        )
+        read_comp.context = mock_context
+
+        # Mock the receiver
+        mock_receiver = AsyncMock()
+        mock_receiver.read_bulk.return_value = pd.DataFrame(boolean_data)
+        read_comp._receiver = mock_receiver
+
+        # Test that boolean data types are handled correctly
+        results = []
+        async for result in read_comp.process_bulk(None, mock_metrics):
+            results.append(result.payload)
+
+        assert len(results) == 1
+        assert len(results[0]) == 2
+        assert results[0].iloc[0]["is_active"] == True  # Use == instead of is for pandas boolean
+        assert results[0].iloc[0]["is_admin"] == False
+        assert results[0].iloc[1]["is_active"] == False
+        assert results[0].iloc[1]["is_admin"] == True
 
 
 if __name__ == "__main__":

@@ -1,176 +1,152 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict
+import asyncio
+from typing import Any, Dict, AsyncIterator
 
-import dask.dataframe as dd
 import pandas as pd
+import dask.dataframe as dd
 from sqlalchemy import text
 
 from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
-from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.databases.sql_receiver import SQLReceiver
 
 
-class SQLServerReceiver:
+class SQLServerReceiver(SQLReceiver):
     """SQL Server receiver for database operations."""
 
     async def read_row(
         self,
+        *,
         entity_name: str,
-        metrics: ComponentMetrics,
-        query: str,
-        params: Dict[str, Any],
+        metrics: Any,
         connection_handler: SQLConnectionHandler,
+        batch_size: int = 1000,
+        query: str | None = None,
+        params: Dict[str, Any] | None = None,
     ) -> AsyncIterator[Dict[str, Any]]:
-        """Read rows one-by-one from SQL Server."""
-        with connection_handler.lease() as conn:
-            # Use the provided query or build a default one
-            if not query:
-                query = f"SELECT * FROM {entity_name}"
-            
-            result = conn.execute(text(query), params)
-            
-            for row in result:
-                # Convert row to dict for easier handling
-                row_dict = dict(row._mapping)
-                yield row_dict
+        """Yield SQL Server rows as dictionaries from a query."""
+        query = query or f"SELECT * FROM {entity_name}"
+        params = params or {}
+
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                result = conn.execute(text(query), params)
+                return [dict(row._mapping) for row in result]
+
+        rows = await asyncio.to_thread(_execute_query)
+        for row in rows:
+            yield row
 
     async def read_bulk(
         self,
+        *,
         entity_name: str,
-        metrics: ComponentMetrics,
-        query: str,
-        params: Dict[str, Any],
+        metrics: Any,
         connection_handler: SQLConnectionHandler,
+        query: str | None = None,
+        params: Dict[str, Any] | None = None,
     ) -> pd.DataFrame:
-        """Read full result as a pandas DataFrame from SQL Server."""
-        with connection_handler.lease() as conn:
-            # Use the provided query or build a default one
-            if not query:
-                query = f"SELECT * FROM {entity_name}"
-            
-            # Use pandas read_sql for efficient DataFrame creation
-            df = pd.read_sql(query, conn, params=params)
-            return df
+        """Read query results as a pandas DataFrame."""
+        query = query or f"SELECT * FROM {entity_name}"
+        params = params or {}
+
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                result = conn.execute(text(query), params)
+                return pd.DataFrame([dict(row._mapping) for row in result])
+
+        return await asyncio.to_thread(_execute_query)
 
     async def read_bigdata(
         self,
+        *,
         entity_name: str,
-        metrics: ComponentMetrics,
-        query: str,
-        params: Dict[str, Any],
+        metrics: Any,
         connection_handler: SQLConnectionHandler,
+        query: str | None = None,
+        params: Dict[str, Any] | None = None,
     ) -> dd.DataFrame:
-        """Read result as a Dask DataFrame from SQL Server."""
-        with connection_handler.lease() as conn:
-            # Use the provided query or build a default one
-            if not query:
-                query = f"SELECT * FROM {entity_name}"
-            
-            # First read as pandas, then convert to Dask
-            df = pd.read_sql(query, conn, params=params)
-            ddf = dd.from_pandas(df, npartitions=1)
-            return ddf
+        """Read large query results as a Dask DataFrame."""
+        query = query or f"SELECT * FROM {entity_name}"
+        params = params or {}
+
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                result = conn.execute(text(query), params)
+                df = pd.DataFrame([dict(row._mapping) for row in result])
+                return dd.from_pandas(df, npartitions=1)
+
+        return await asyncio.to_thread(_execute_query)
 
     async def write_row(
         self,
+        *,
         entity_name: str,
         row: Dict[str, Any],
-        metrics: ComponentMetrics,
-        table: str,
-        query: str = "",
-        connection_handler: SQLConnectionHandler = None,
-        **driver_kwargs: Any,
+        metrics: Any,
+        connection_handler: SQLConnectionHandler,
+        query: str,  # Query is always required now
+        table: str | None = None,
     ) -> Dict[str, Any]:
-        """Write a single row to SQL Server."""
-        with connection_handler.lease() as conn:
-            if query:
-                # Execute custom query
+        """Write a single row and return the result."""
+        table = table or entity_name
+
+        def _execute_query():
+            with connection_handler.lease() as conn:
                 result = conn.execute(text(query), row)
-            else:
-                # Build INSERT statement
-                columns = list(row.keys())
-                placeholders = ", ".join([f":{col}" for col in columns])
-                query = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-                
-                result = conn.execute(text(query), row)
-            
-            conn.commit()
-            return {"affected_rows": result.rowcount, "row": row}
+                conn.commit()
+                return {"affected_rows": result.rowcount, "row": row}
+
+        return await asyncio.to_thread(_execute_query)
 
     async def write_bulk(
         self,
+        *,
         entity_name: str,
         frame: pd.DataFrame,
-        metrics: ComponentMetrics,
-        table: str,
-        query: str = "",
-        if_exists: str = "append",
-        bulk_chunk_size: int = 50_000,
-        connection_handler: SQLConnectionHandler = None,
-        **driver_kwargs: Any,
+        metrics: Any,
+        connection_handler: SQLConnectionHandler,
+        query: str,  # Query is always required now
+        table: str | None = None,
     ) -> pd.DataFrame:
-        """Write pandas DataFrame to SQL Server."""
+        """Write a pandas DataFrame and return it."""
         if frame.empty:
             return frame
 
-        def _execute_query(conn, df):
-            if query:
-                # Execute custom query for each row
-                for _, row in df.iterrows():
-                    conn.execute(text(query), row.to_dict())
-            else:
-                # Use pandas to_sql for efficient bulk writing
-                df.to_sql(
-                    name=table,
-                    con=conn,
-                    if_exists=if_exists,
-                    index=False,
-                    method="multi",
-                    chunksize=bulk_chunk_size
-                )
+        table = table or entity_name
 
-        with connection_handler.lease() as conn:
-            _execute_query(conn, frame)
-            conn.commit()
-        
-        return frame
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                # Execute custom query for each row
+                for _, row in frame.iterrows():
+                    conn.execute(text(query), row.to_dict())
+                conn.commit()
+                return frame
+
+        return await asyncio.to_thread(_execute_query)
 
     async def write_bigdata(
         self,
+        *,
         entity_name: str,
         frame: dd.DataFrame,
-        metrics: ComponentMetrics,
-        table: str,
-        query: str = "",
-        if_exists: str = "append",
-        bigdata_partition_chunk_size: int = 50_000,
-        connection_handler: SQLConnectionHandler = None,
-        **driver_kwargs: Any,
+        metrics: Any,
+        connection_handler: SQLConnectionHandler,
+        query: str,  # Query is always required now
+        table: str | None = None,
     ) -> dd.DataFrame:
-        """Write Dask DataFrame to SQL Server in chunks."""
-        def _execute_query(conn, df):
-            if query:
-                # Execute custom query for each row
-                for _, row in df.iterrows():
-                    conn.execute(text(query), row.to_dict())
-            else:
-                # Use pandas to_sql for efficient bulk writing
-                df.to_sql(
-                    name=table,
-                    con=conn,
-                    if_exists=if_exists,
-                    index=False,
-                    method="multi",
-                    chunksize=bigdata_partition_chunk_size
-                )
+        """Write a Dask DataFrame and return it."""
+        table = table or entity_name
 
-        # Process partitions one by one to avoid memory issues
-        for partition in frame.map_partitions(lambda pdf: pdf).partitions:
-            pdf = partition.compute()
-            
-            if not pdf.empty:
-                with connection_handler.lease() as conn:
-                    _execute_query(conn, pdf)
-                    conn.commit()
-        
-        return frame
+        def _execute_query():
+            with connection_handler.lease() as conn:
+                # Execute custom query for each partition
+                for partition in frame.map_partitions(lambda pdf: pdf).partitions:
+                    pdf = partition.compute()
+                    if not pdf.empty:
+                        for _, row in pdf.iterrows():
+                            conn.execute(text(query), row.to_dict())
+                conn.commit()
+                return frame
+
+        return await asyncio.to_thread(_execute_query)

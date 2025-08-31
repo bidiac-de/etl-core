@@ -5,15 +5,41 @@ These tests focus on SQL Server-specific features like session variables,
 collation handling, and SQL Server-specific SQL syntax.
 """
 
+from __future__ import annotations
+
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, AsyncMock, patch
+import pandas as pd
+import dask.dataframe as dd
 
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
+from etl_core.components.databases.if_exists_strategy import DatabaseOperation
+from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from etl_core.components.wiring.schema import Schema
+from etl_core.components.wiring.column_definition import FieldDef, DataType
 
 
 class TestSQLServerSpecificFeatures:
     """Test cases for SQL Server specific features."""
+
+    def _create_sqlserver_write_with_schema(self, **kwargs):
+        """Helper to create SQLServerWrite component with proper schema."""
+        # Set up mock schema for testing
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
+        # Merge the schema into kwargs
+        if "in_port_schemas" not in kwargs:
+            kwargs["in_port_schemas"] = {"in": mock_schema}
+
+        write_comp = SQLServerWrite(**kwargs)
+        return write_comp
 
     def test_sqlserver_session_variables_default(self):
         """Test SQL Server default session variables."""
@@ -197,7 +223,7 @@ class TestSQLServerSpecificFeatures:
         ("entity_names", ["users", "dbo.users", "[Users]", "MyTable", "table_123", "user_profiles"], SQLServerRead, "entity_name"),
         ("credential_ids", [1, 100, 999, 1000], SQLServerRead, "credentials_id"),
         ("queries", ["", "SELECT * FROM users", "INSERT INTO users (name, email) VALUES (:name, :email)", "UPDATE users SET name = :name WHERE id = :id", "DELETE FROM users WHERE id = :id", "SELECT u.id, u.name, u.email, p.phone FROM users u LEFT JOIN profiles p ON u.id = p.user_id WHERE u.active = :active_status"], SQLServerRead, "query"),
-        ("if_exists_values", ["append", "replace", "fail"], SQLServerWrite, "if_exists"),
+        ("if_exists_values", [DatabaseOperation.INSERT, DatabaseOperation.UPSERT, DatabaseOperation.TRUNCATE], SQLServerWrite, "operation"),
         ("chunk_sizes", [1000, 5000, 10000, 50000, 100000], SQLServerWrite, "bulk_chunk_size"),
     ])
     def test_sqlserver_component_validation_scenarios(
@@ -216,13 +242,13 @@ class TestSQLServerSpecificFeatures:
                     query=value if test_type == "queries" else ""
                 )
             else:  # SQLServerWrite
-                component = component_class(
+                component = self._create_sqlserver_write_with_schema(
                     credentials_id=1,
                     entity_name="test_table",
                     name="test_component",
                     description="Test SQL Server component",
                     comp_type="write_sqlserver",
-                    if_exists=value if test_type == "if_exists_values" else "append",
+                    operation=value if test_type == "if_exists_values" else DatabaseOperation.INSERT,
                     bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
                     bigdata_partition_chunk_size=value * 2 if test_type == "chunk_sizes" else 50000
                 )
@@ -242,7 +268,7 @@ class TestSQLServerSpecificFeatures:
     def test_sqlserver_component_zero_chunk_sizes(self):
         """Test SQL Server component with zero chunk sizes."""
         # Test with minimum allowed chunk sizes (1) instead of 0
-        component = SQLServerWrite(
+        component = self._create_sqlserver_write_with_schema(
             credentials_id=1,
             entity_name="test_table",
             name="test_component",
@@ -259,7 +285,7 @@ class TestSQLServerSpecificFeatures:
         """Test SQL Server component validation prevents zero chunk sizes."""
         # Test that validation prevents zero chunk sizes
         with pytest.raises(Exception):  # Should raise validation error
-            SQLServerWrite(
+            self._create_sqlserver_write_with_schema(
                 credentials_id=1,
                 entity_name="test_table",
                 name="test_component",
@@ -271,7 +297,7 @@ class TestSQLServerSpecificFeatures:
 
     def test_sqlserver_component_large_chunk_sizes(self):
         """Test SQL Server component with large chunk sizes."""
-        component = SQLServerWrite(
+        component = self._create_sqlserver_write_with_schema(
             credentials_id=1,
             entity_name="test_table",
             name="test_component",
@@ -286,7 +312,7 @@ class TestSQLServerSpecificFeatures:
 
     def test_sqlserver_component_combined_parameters(self):
         """Test SQL Server component with all parameters combined."""
-        component = SQLServerWrite(
+        component = self._create_sqlserver_write_with_schema(
             credentials_id=999,
             entity_name="dbo.user_profiles",
             name="test_component",
@@ -295,7 +321,7 @@ class TestSQLServerSpecificFeatures:
             charset="latin1",
             collation="SQL_Latin1_General_CP1_CS_AS",
             query="SELECT * FROM dbo.user_profiles WHERE active = :active",
-            if_exists="replace",
+            operation=DatabaseOperation.UPSERT,
             bulk_chunk_size=25_000,
             bigdata_partition_chunk_size=100_000
         )
@@ -306,7 +332,7 @@ class TestSQLServerSpecificFeatures:
         assert component.charset == "latin1"
         assert component.collation == "SQL_Latin1_General_CP1_CS_AS"
         assert component.query == "SELECT * FROM dbo.user_profiles WHERE active = :active"
-        assert component.if_exists == "replace"
+        assert component.operation == DatabaseOperation.UPSERT
         assert component.bulk_chunk_size == 25_000
         assert component.bigdata_partition_chunk_size == 100_000
 
