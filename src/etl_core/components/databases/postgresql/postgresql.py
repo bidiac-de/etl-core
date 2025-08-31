@@ -32,5 +32,3 @@ class PostgreSQLComponent(SQLDatabaseComponent):
         # Set session variables after connection is established
         self._setup_session_variables()
         return self
-
-

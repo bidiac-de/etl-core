@@ -15,10 +15,186 @@ from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
 from etl_core.context.context_parameter import ContextParameter
 from etl_core.components.databases.pool_args import build_sql_engine_kwargs
+from etl_core.components.wiring.schema import Schema
+from etl_core.components.wiring.column_definition import FieldDef, DataType
 
 
 class TestPostgreSQLCredentialsIntegration:
-    """Test cases for real Credentials and Context integration with PostgreSQL."""
+    """Test PostgreSQL credentials integration."""
+
+    def _create_postgresql_write_with_schema(self, **kwargs):
+        """Helper to create PostgreSQLWrite component with proper schema."""
+
+        # Set up mock schema for testing
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
+        # Merge the schema into kwargs
+        if "in_port_schemas" not in kwargs:
+            kwargs["in_port_schemas"] = {"in": mock_schema}
+
+        write_comp = PostgreSQLWrite(**kwargs)
+        return write_comp
+
+    @pytest.fixture
+    def sample_credentials(self):
+        """Fixture for sample credentials."""
+        return Credentials(
+            credentials_id=1,
+            name="test_db_creds",
+            user="testuser",
+            host="localhost",
+            port=5432,  # PostgreSQL default port
+            database="testdb",
+            password="testpass123",
+            pool_max_size=10,
+            pool_timeout_s=30,
+        )
+
+    @pytest.fixture
+    def sample_context(self, sample_credentials):
+        """Fixture for sample context."""
+        context = Context(
+            id=1,
+            name="test_env",
+            environment=Environment.TEST,
+            parameters={
+                "db_host": ContextParameter(
+                    id=1,
+                    key="db_host",
+                    value="localhost",
+                    type="string",
+                    is_secure=False,
+                ),
+                "db_port": ContextParameter(
+                    id=2, key="db_port", value="5432", type="string", is_secure=False
+                ),
+            },
+        )
+        context.add_credentials(sample_credentials)
+        return context
+
+    @pytest.fixture
+    def sample_dataframe(self):
+        """Fixture for a sample DataFrame."""
+        import pandas as pd
+
+        return pd.DataFrame({"id": [1, 2, 3], "name": ["John", "Jane", "Bob"]})
+
+    @pytest.fixture
+    def multiple_credentials(self):
+        """Fixture for multiple credentials."""
+        return {
+            "minimal": Credentials(
+                credentials_id=21,
+                name="minimal_creds",
+                user="minuser",
+                host="localhost",
+                port=5432,  # PostgreSQL default port
+                database="mindb",
+                password="minpass",
+            ),
+            "with_pool": Credentials(
+                credentials_id=22,
+                name="pool_creds",
+                user="pooluser",
+                host="localhost",
+                port=5432,  # PostgreSQL default port
+                database="pooldb",
+                password="poolpass",
+                pool_max_size=50,
+                pool_timeout_s=60,
+            ),
+            "special_chars": Credentials(
+                credentials_id=23,
+                name="special_creds",
+                user="user@domain",
+                host="localhost",
+                port=5432,  # PostgreSQL default port
+                database="test-db_123",
+                password="pass@word#123",
+            ),
+            "no_password": Credentials(
+                credentials_id=24,
+                name="nopass_creds",
+                user="nopassuser",
+                host="localhost",
+                port=5432,  # PostgreSQL default port
+                database="nopassdb",
+            ),
+        }
+
+    @pytest.fixture
+    def context_with_multiple_credentials(self, multiple_credentials):
+        """Fixture for a context with multiple credentials."""
+        multi_context = Context(
+            id=23, name="multi_db_context", environment=Environment.TEST, parameters={}
+        )
+        for creds in multiple_credentials.values():
+            multi_context.add_credentials(creds)
+        return multi_context
+
+    @pytest.fixture
+    def postgresql_read_component(self, sample_context):
+        """Fixture for a PostgreSQLRead component."""
+        read_comp = PostgreSQLRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_postgresql",
+            entity_name="users",
+            query="SELECT * FROM users",
+            credentials_id=1,
+        )
+        read_comp.context = sample_context
+        return read_comp
+
+    @pytest.fixture
+    def postgresql_write_component(self, sample_context):
+        """Fixture for a PostgreSQLWrite component."""
+        write_comp = self._create_postgresql_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_postgresql",
+            entity_name="users",
+            credentials_id=1,
+        )
+        write_comp.context = sample_context
+        return write_comp
+
+    @pytest.fixture
+    def sample_sql_queries(self):
+        """Fixture for sample SQL queries."""
+        return {
+            "simple_select": "SELECT * FROM users",
+            "parameterized": "SELECT * FROM users WHERE id = \
+            %(id)s AND active = %(active)s",
+            "complex_join": "SELECT u.name, p.price FROM users \
+            u JOIN products p ON u.id = p.user_id",
+            "aggregation": "SELECT COUNT(*) FROM users",
+            "insert": "INSERT INTO users (name, email) VALUES (%(name)s, %(email)s)",
+            "update": "UPDATE users SET email = %(email)s WHERE id = %(id)s",
+            "delete": "DELETE FROM users WHERE id = %(id)s",
+        }
+
+    @pytest.fixture
+    def sample_query_params(self):
+        """Fixture for sample query parameters."""
+        return {
+            "simple": {"id": 1},
+            "user_lookup": {"id": 1, "active": True},
+            "bulk_insert": [
+                {"name": "John", "email": "john@example.com"},
+                {"name": "Jane", "email": "jane@example.com"},
+                {"name": "Bob", "email": "bob@example.com"},
+            ],
+            "filter": {"active": True},
+            "pagination": {"limit": 10, "offset": 0},
+        }
 
     def test_credentials_creation(self, sample_credentials):
         """Test that Credentials objects are created correctly."""
@@ -68,9 +244,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert retrieved.name == "new_creds"
         assert retrieved.user == "newuser"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_read_component_with_real_credentials(
         self, mock_handler_class, sample_context
     ):
@@ -83,7 +257,6 @@ class TestPostgreSQLCredentialsIntegration:
             name="test_read",
             description="Test read component",
             comp_type="read_postgresql",
-            database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -98,9 +271,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert creds["password"] == "testpass123"
         assert creds["database"] == "testdb"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_write_component_with_real_credentials(
         self, mock_handler_class, sample_context
     ):
@@ -109,7 +280,7 @@ class TestPostgreSQLCredentialsIntegration:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -173,7 +344,9 @@ class TestPostgreSQLCredentialsIntegration:
     def test_context_parameter_retrieval(self, sample_context):
         """Test that Context.get_parameter works for regular parameters."""
         assert sample_context.get_parameter("db_host") == "localhost"
-        assert sample_context.get_parameter("db_port") == "5432"  # PostgreSQL default port
+        assert (
+            sample_context.get_parameter("db_port") == "5432"
+        )  # PostgreSQL default port
 
         # Test non-existent parameter
         with pytest.raises(
@@ -336,9 +509,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_credentials_in_postgresql_component_integration(
         self, mock_handler_class, sample_context
     ):
@@ -469,9 +640,7 @@ class TestPostgreSQLCredentialsIntegration:
             )
             assert param.key == key
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_write_bulk_operations(
         self, mock_handler_class, sample_context, sample_dataframe
     ):
@@ -480,7 +649,7 @@ class TestPostgreSQLCredentialsIntegration:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write_bulk",
             description="Test write bulk component",
             comp_type="write_postgresql",
@@ -501,9 +670,7 @@ class TestPostgreSQLCredentialsIntegration:
         assert write_comp.entity_name == "users"
         assert write_comp.credentials_id == 1
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_postgresql_read_query_operations(self, mock_handler_class, sample_context):
         """Test PostgreSQL read query operations with real credentials."""
         # Mock the connection handler

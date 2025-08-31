@@ -404,18 +404,14 @@ class TestCLICommands:
 
     def test_invalid_json_file(self, runner):
         """Test CLI with invalid JSON file."""
-        # Create a temporary file with invalid JSON
-        temp_file = Path("invalid.json")
-        temp_file.write_text("invalid json content")
+        # Use existing bad JSON file
+        json_file = Path("tests/components/data/json/testdata_bad.json")
 
-        try:
-            result = runner.invoke(app, ["create-job", str(temp_file)])
-            assert result.exit_code != 0
-        finally:
-            # Use the helper function for cleanup
-            from tests.helpers import cleanup_temp_file
-
-            cleanup_temp_file(temp_file)
+        result = runner.invoke(app, ["create-job", str(json_file)])
+        assert result.exit_code != 0
+        assert result.exception is not None
+        # Check for the actual error message content
+        assert "Expecting property name" in str(result.exception)
 
     def test_help_output(self, runner):
         """Test CLI help output."""

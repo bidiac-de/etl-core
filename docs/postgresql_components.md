@@ -283,9 +283,9 @@ write_comp = PostgreSQLWrite(
     credentials_id=1,
     entity_name="users",
     query="""
-        INSERT INTO users (id, name, email) 
-        VALUES (:id, :name, :email) 
-        ON CONFLICT (email) DO UPDATE SET 
+        INSERT INTO users (id, name, email)
+        VALUES (:id, :name, :email)
+        ON CONFLICT (email) DO UPDATE SET
         name = EXCLUDED.name, updated_at = NOW()
     """,
     strategy_type="bulk"

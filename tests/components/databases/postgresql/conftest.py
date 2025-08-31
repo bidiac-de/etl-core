@@ -216,7 +216,9 @@ def sample_sql_queries():
     """Provide sample SQL queries for testing."""
     return {
         "simple_select": "SELECT * FROM users",
-        "parameterized": "SELECT * FROM users WHERE id = %(id)s AND active = %(active)s",
+        "parameterized": (
+            "SELECT * FROM users WHERE id = %(id)s AND active = %(active)s"
+        ),
         "complex_join": """
             SELECT u.id, u.name, u.email, p.phone, a.street, a.city
             FROM users u
@@ -225,7 +227,7 @@ def sample_sql_queries():
             WHERE u.active = %(active)s
         """,
         "aggregation": """
-            SELECT 
+            SELECT
                 city,
                 COUNT(*) as user_count,
                 AVG(age) as avg_age
@@ -236,8 +238,11 @@ def sample_sql_queries():
             HAVING COUNT(*) > %(min_users)s
             ORDER BY user_count DESC
         """,
-        "insert": "INSERT INTO users (name, email, age) VALUES (%(name)s, %(email)s, %(age)s)",
-        "update": "UPDATE users SET active = %(active)s WHERE id = %(id)s",
+        "insert": (
+            "INSERT INTO users (name, email, age) "
+            "VALUES (%(name)s, %(email)s, %(age)s)"
+        ),
+        "update": ("UPDATE users SET active = %(active)s WHERE id = %(id)s"),
         "delete": "DELETE FROM users WHERE id = %(id)s",
     }
 
@@ -254,7 +259,12 @@ def sample_query_params():
             {"name": "Bob", "email": "bob@example.com", "age": 35},
         ],
         "filter": {"active": True, "min_age": 18, "max_age": 65},
-        "pagination": {"offset": 0, "limit": 10, "sort_by": "name", "sort_order": "ASC"},
+        "pagination": {
+            "offset": 0,
+            "limit": 10,
+            "sort_by": "name",
+            "sort_order": "ASC",
+        },
     }
 
 
@@ -262,11 +272,41 @@ def sample_query_params():
 def sample_data():
     """Create sample data for testing."""
     return [
-        {"id": 1, "name": "John", "email": "john@example.com", "age": 25, "active": True},
-        {"id": 2, "name": "Jane", "email": "jane@example.com", "age": 30, "active": True},
-        {"id": 3, "name": "Bob", "email": "bob@example.com", "age": 35, "active": False},
-        {"id": 4, "name": "Alice", "email": "alice@example.com", "age": 28, "active": True},
-        {"id": 5, "name": "Charlie", "email": "charlie@example.com", "age": 32, "active": False},
+        {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+            "active": True,
+        },
+        {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+            "active": True,
+        },
+        {
+            "id": 3,
+            "name": "Bob",
+            "email": "bob@example.com",
+            "age": 35,
+            "active": False,
+        },
+        {
+            "id": 4,
+            "name": "Alice",
+            "email": "alice@example.com",
+            "age": 28,
+            "active": True,
+        },
+        {
+            "id": 5,
+            "name": "Charlie",
+            "email": "charlie@example.com",
+            "age": 32,
+            "active": False,
+        },
     ]
 
 
@@ -275,14 +315,16 @@ def large_dataset():
     """Create a large dataset for performance testing."""
     data = []
     for i in range(1000):
-        data.append({
-            "id": i + 1,
-            "name": f"User{i}",
-            "email": f"user{i}@example.com",
-            "age": 20 + (i % 50),
-            "active": i % 3 != 0,
-            "created_at": f"2024-01-{(i % 30) + 1:02d}",
-        })
+        data.append(
+            {
+                "id": i + 1,
+                "name": f"User{i}",
+                "email": f"user{i}@example.com",
+                "age": 20 + (i % 50),
+                "active": i % 3 != 0,
+                "created_at": f"2024-01-{(i % 30) + 1:02d}",
+            }
+        )
     return data
 
 
@@ -384,7 +426,7 @@ def postgresql_upsert_query():
     return """
         INSERT INTO users (name, email, age, active)
         VALUES (%(name)s, %(email)s, %(age)s, %(active)s)
-        ON CONFLICT (email) 
+        ON CONFLICT (email)
         DO UPDATE SET
             name = EXCLUDED.name,
             age = EXCLUDED.age,
@@ -492,7 +534,10 @@ def postgresql_replication_config():
         "max_replication_slots": 10,
         "hot_standby": True,
         "archive_mode": True,
-        "archive_command": "test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f",
+        "archive_command": (
+            "test ! -f /var/lib/postgresql/archive/%f && "
+            "cp %p /var/lib/postgresql/archive/%f"
+        ),
     }
 
 
@@ -517,40 +562,46 @@ def postgresql_security_config():
 def postgresql_monitoring_queries():
     """Provide PostgreSQL monitoring queries for testing."""
     return {
-        "active_connections": "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'",
-        "database_size": "SELECT pg_size_pretty(pg_database_size(current_database()))",
+        "active_connections": (
+            "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'",
+        ),
+        "database_size": (
+            "SELECT pg_size_pretty(pg_database_size(current_database()))"
+        ),
         "table_sizes": """
-            SELECT 
+            SELECT
                 schemaname,
                 tablename,
-                pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
-            FROM pg_tables 
-            ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+                pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename))
+                    as size
+            FROM pg_tables
+            ORDER BY
+                pg_total_relation_size(schemaname||'.'||tablename) DESC
         """,
         "slow_queries": """
-            SELECT 
+            SELECT
                 query,
                 calls,
                 total_time,
                 mean_time,
                 rows
-            FROM pg_stat_statements 
-            ORDER BY mean_time DESC 
+            FROM pg_stat_statements
+            ORDER BY mean_time DESC
             LIMIT 10
         """,
         "index_usage": """
-            SELECT 
+            SELECT
                 schemaname,
                 tablename,
                 indexname,
                 idx_scan,
                 idx_tup_read,
                 idx_tup_fetch
-            FROM pg_stat_user_indexes 
+            FROM pg_stat_user_indexes
             ORDER BY idx_scan DESC
         """,
         "locks": """
-            SELECT 
+            SELECT
                 locktype,
                 database,
                 relation,
@@ -565,7 +616,7 @@ def postgresql_monitoring_queries():
                 pid,
                 mode,
                 granted
-            FROM pg_locks 
+            FROM pg_locks
             WHERE NOT granted
         """,
     }
@@ -581,7 +632,9 @@ def postgresql_maintenance_queries():
         "cluster": "CLUSTER users USING idx_users_id",
         "check_table": "SELECT * FROM users LIMIT 1",
         "update_statistics": "ANALYZE",
-        "cleanup_logs": "DELETE FROM log_table WHERE created_at < NOW() - INTERVAL '30 days'",
+        "cleanup_logs": (
+            "DELETE FROM log_table WHERE created_at < NOW() - " "INTERVAL '30 days'"
+        ),
     }
 
 
@@ -590,9 +643,24 @@ def postgresql_test_data():
     """Provide test data for PostgreSQL operations."""
     return {
         "users": [
-            {"name": "Test User 1", "email": "test1@example.com", "age": 25, "active": True},
-            {"name": "Test User 2", "email": "test2@example.com", "age": 30, "active": True},
-            {"name": "Test User 3", "email": "test3@example.com", "age": 35, "active": False},
+            {
+                "name": "Test User 1",
+                "email": "test1@example.com",
+                "age": 25,
+                "active": True,
+            },
+            {
+                "name": "Test User 2",
+                "email": "test2@example.com",
+                "age": 30,
+                "active": True,
+            },
+            {
+                "name": "Test User 3",
+                "email": "test3@example.com",
+                "age": 35,
+                "active": False,
+            },
         ],
         "profiles": [
             {"user_id": 1, "phone": "+1234567890", "bio": "Test bio 1"},
@@ -600,9 +668,27 @@ def postgresql_test_data():
             {"user_id": 3, "phone": "+1122334455", "bio": "Test bio 3"},
         ],
         "addresses": [
-            {"user_id": 1, "street": "123 Test St", "city": "Test City", "state": "TS", "postal_code": "12345"},
-            {"user_id": 2, "street": "456 Test Ave", "city": "Test Town", "state": "TS", "postal_code": "67890"},
-            {"user_id": 3, "street": "789 Test Blvd", "city": "Test Village", "state": "TS", "postal_code": "11111"},
+            {
+                "user_id": 1,
+                "street": "123 Test St",
+                "city": "Test City",
+                "state": "TS",
+                "postal_code": "12345",
+            },
+            {
+                "user_id": 2,
+                "street": "456 Test Ave",
+                "city": "Test Town",
+                "state": "TS",
+                "postal_code": "67890",
+            },
+            {
+                "user_id": 3,
+                "street": "789 Test Blvd",
+                "city": "Test Village",
+                "state": "TS",
+                "postal_code": "11111",
+            },
         ],
     }
 

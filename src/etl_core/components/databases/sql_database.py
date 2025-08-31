@@ -22,12 +22,8 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     database-specific differences while maintaining the common interface.
     """
 
-    query: str = Field(default="", description="SQL query for read operations")
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
-
-    # ✅ NEU: if_exists Parameter für alle SQL-Datenbanken
-    if_exists: str = Field(default="append", description="How to behave if the table already exists")
 
     entity_name: str = Field(..., description="Name of the target entity (table/view)")
 
@@ -51,10 +47,11 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         creds = self._get_credentials()
 
         self._connection_handler = SQLConnectionHandler()
-        
-        # Direct usage of comp_type - no mapping logic needed!
+
+        # Map comp_type to actual database type
+        db_type = self._get_db_type_from_comp_type()
         url = SQLConnectionHandler.build_url(
-            db_type=self.comp_type,
+            db_type=db_type,
             user=creds["user"],
             password=creds["password"],
             host=creds["host"],
@@ -66,9 +63,27 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         engine_kwargs = build_sql_engine_kwargs(credentials_obj)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
-        
+
         # Force subclasses to set their own session variables
         self._setup_session_variables()
+
+    def _get_db_type_from_comp_type(self) -> str:
+        """Map component type to actual database type."""
+        if self.comp_type.startswith("read_postgresql") or self.comp_type.startswith(
+            "write_postgresql"
+        ):
+            return "postgresql"
+        elif self.comp_type.startswith("read_mariadb") or self.comp_type.startswith(
+            "write_mariadb"
+        ):
+            return "mariadb"
+        elif self.comp_type.startswith("read_mysql") or self.comp_type.startswith(
+            "write_mysql"
+        ):
+            return "mysql"
+        else:
+            # Default to the comp_type if no mapping found
+            return self.comp_type
 
     @abstractmethod
     def _setup_session_variables(self):
@@ -82,8 +97,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         """Cleanup connection when component is destroyed."""
         if hasattr(self, "_connection_handler") and self._connection_handler:
             self._connection_handler.close_pool(force=True)
-
-
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:

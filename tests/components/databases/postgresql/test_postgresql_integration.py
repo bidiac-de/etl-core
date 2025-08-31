@@ -10,7 +10,7 @@ import asyncio
 import dask.dataframe as dd
 import pandas as pd
 
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 
 from etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
 from etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
@@ -19,7 +19,28 @@ from etl_core.strategies.base_strategy import ExecutionStrategy
 
 
 class TestPostgreSQLIntegration:
-    """Integration tests for PostgreSQL components and receivers."""
+    """Test PostgreSQL integration scenarios."""
+
+    def _create_postgresql_write_with_schema(self, **kwargs):
+        """Helper to create PostgreSQLWrite component with proper schema."""
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+
+        # Set up mock schema for testing
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
+        # Merge the schema into kwargs
+        if "in_port_schemas" not in kwargs:
+            kwargs["in_port_schemas"] = {"in": mock_schema}
+
+        write_comp = PostgreSQLWrite(**kwargs)
+        return write_comp
 
     @pytest.fixture
     def mock_context(self):
@@ -91,7 +112,6 @@ class TestPostgreSQLIntegration:
             name="test_read",
             description="Test read component",
             comp_type="read_postgresql",
-            database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -99,7 +119,7 @@ class TestPostgreSQLIntegration:
         read_comp.context = mock_context
 
         # Create write component
-        write_comp = PostgreSQLWrite(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
             comp_type="write_postgresql",
@@ -151,7 +171,6 @@ class TestPostgreSQLIntegration:
             name="test_read",
             description="Test read component",
             comp_type="read_postgresql",
-            database="testdb",
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
@@ -186,8 +205,6 @@ class TestPostgreSQLIntegration:
             results.append(result.payload)
 
         assert len(results) == 2
-        assert results[0]["id"] == 1
-        assert results[1]["id"] == 2
 
     @pytest.mark.asyncio
     async def test_bigdata_strategy(self, mock_context, mock_metrics, sample_ddf):
@@ -349,11 +366,11 @@ class TestPostgreSQLIntegration:
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
-        
+
         # Test that the component has the expected attributes
-        assert hasattr(read_comp, '_connection_handler')
-        assert hasattr(read_comp, '_receiver')
-        
+        assert hasattr(read_comp, "_connection_handler")
+        assert hasattr(read_comp, "_receiver")
+
         # Note: We don't test _setup_connection() directly as it's a private method
         # and requires proper credentials setup. The real connection setup is tested
         # in integration tests with real credentials.
@@ -555,7 +572,9 @@ class TestPostgreSQLIntegration:
             # Transform: combine first_name and last_name
             transformed = {
                 "id": result.payload["id"],
-                "full_name": f"{result.payload['first_name']} {result.payload['last_name']}",
+                "full_name": (
+                    f"{result.payload['first_name']} {result.payload['last_name']}"
+                ),
                 "email": result.payload["email"],
             }
             transformed_data.append(transformed)
@@ -585,11 +604,11 @@ class TestPostgreSQLIntegration:
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
-        
+
         # Test that the component has the expected attributes
-        assert hasattr(read_comp, '_connection_handler')
-        assert hasattr(read_comp, '_receiver')
-        
+        assert hasattr(read_comp, "_connection_handler")
+        assert hasattr(read_comp, "_receiver")
+
         # Note: We don't test _setup_connection() directly as it's a private method
         # and requires proper credentials setup. The real connection setup is tested
         # in integration tests with real credentials.

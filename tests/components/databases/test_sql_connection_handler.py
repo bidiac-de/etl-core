@@ -49,7 +49,7 @@ class TestSQLConnectionHandler:
             port=3306,
             database="testdb",
         )
-        expected = "mysql://testuser:testpass@localhost:3306/testdb"
+        expected = "mysql+mysqlconnector://testuser:testpass@localhost:3306/testdb"
         assert url == expected
 
     def test_build_url_mariadb(self):
@@ -62,10 +62,8 @@ class TestSQLConnectionHandler:
             port=3306,
             database="testdb",
         )
-        expected = "mariadb://testuser:testpass@localhost:3306/testdb"
+        expected = "mysql+mysqlconnector://testuser:testpass@localhost:3306/testdb"
         assert url == expected
-
-
 
     def test_build_url_missing_required_params(self):
         """Test building URL with missing required parameters."""

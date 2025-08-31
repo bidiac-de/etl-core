@@ -6,7 +6,7 @@ from typing import Any, AsyncIterator, Dict
 import dask.dataframe as dd
 import pandas as pd
 
-from src.etl_core.receivers.base_receiver import Receiver
+from etl_core.receivers.base_receiver import Receiver
 
 
 class ReadDatabaseReceiver(Receiver, ABC):

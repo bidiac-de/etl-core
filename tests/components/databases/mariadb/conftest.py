@@ -124,8 +124,7 @@ def mock_metrics() -> Mock:
 def mariadb_read_component(sample_context: Context) -> MariaDBRead:
     """Create a MariaDBRead component with context."""
     with patch(
-        "etl_core.components.databases.sql_connection_handler."
-        "SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler." "SQLConnectionHandler"
     ):
         read_comp = MariaDBRead(
             name="test_read",
@@ -143,8 +142,7 @@ def mariadb_read_component(sample_context: Context) -> MariaDBRead:
 def mariadb_write_component(sample_context: Context) -> MariaDBWrite:
     """Create a MariaDBWrite component with context."""
     with patch(
-        "etl_core.components.databases.sql_connection_handler."
-        "SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler." "SQLConnectionHandler"
     ):
         write_comp = MariaDBWrite(
             name="test_write",
