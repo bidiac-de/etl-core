@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any, Dict, AsyncGenerator
 import pandas as pd
 import dask.dataframe as dd
@@ -11,10 +12,15 @@ from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
 
+
 @register_component("write_xml")
 class WriteXML(XML):
-    """
-    XML writer supporting row, bulk, and bigdata modes with port routing.
+    """XML writer supporting row, bulk, and bigdata modes with port routing.
+
+    Notes:
+    - Input can be either a nested dict under key 'record' or flat key/values.
+    - Row mode appends by rewriting the file inserting before the closing root tag.
+    - Bigdata mode writes partitioned files part-*.xml in a directory.
     """
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
@@ -28,27 +34,35 @@ class WriteXML(XML):
     async def process_row(
             self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        """Write a single record (dict), emit the written row on 'out'."""
         await self._receiver.write_row(
-            self.filepath, metrics=metrics, row=row, root_tag=self.root_tag, record_tag=self.record_tag
+            self.filepath,
+            metrics=metrics,
+            row=row,
+            root_tag=self.root_tag,
+            record_tag=self.record_tag,
         )
         yield Out(port="out", payload=row)
 
     async def process_bulk(
             self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        """Write full pandas DataFrame as XML, emit it on 'out'."""
         await self._receiver.write_bulk(
-            self.filepath, metrics=metrics, data=dataframe, root_tag=self.root_tag, record_tag=self.record_tag
+            self.filepath,
+            metrics=metrics,
+            data=dataframe,
+            root_tag=self.root_tag,
+            record_tag=self.record_tag,
         )
         yield Out(port="out", payload=dataframe)
 
     async def process_bigdata(
             self, dataframe: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        """Write Dask DataFrame partition-wise to part-*.xml, emit ddf on 'out'."""
         await self._receiver.write_bigdata(
-            self.filepath, metrics=metrics, data=dataframe, root_tag=self.root_tag, record_tag=self.record_tag
+            self.filepath,
+            metrics=metrics,
+            data=dataframe,
+            root_tag=self.root_tag,
+            record_tag=self.record_tag,
         )
         yield Out(port="out", payload=dataframe)
-

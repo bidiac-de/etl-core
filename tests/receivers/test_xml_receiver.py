@@ -30,8 +30,8 @@ def sample_xml_file() -> Path:
 
 
 @pytest.fixture
-def sample_bigdata_dir() -> Path:
-    return Path(__file__).parent.parent / "components" / "data" / "xml" / "bigdata"
+def sample_bigdata_file() -> Path:
+    return Path(__file__).parent.parent / "components" / "data" / "xml" / "test_bigdata.xml"
 
 
 
@@ -42,7 +42,6 @@ async def test_xml_receiver_read_row_streaming(sample_xml_file: Path, metrics: C
     rows = r.read_row(
         filepath=sample_xml_file,
         metrics=metrics,
-        root_tag="rows",
         record_tag="row",
     )
 
@@ -65,27 +64,30 @@ async def test_xml_receiver_read_row_streaming(sample_xml_file: Path, metrics: C
 @pytest.mark.asyncio
 async def test_read_xml_bulk(sample_xml_file: Path, metrics: ComponentMetrics):
     r = XMLReceiver()
-    df = await r.read_bulk(
-        filepath=sample_xml_file, metrics=metrics, root_tag="rows", record_tag="row"
-    )
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 3
-    assert set(df.columns) == {"id", "name"}
-    assert "Bob" in set(df["name"])
+    dfs = []
+    async for df in r.read_bulk(filepath=sample_xml_file, metrics=metrics, record_tag="row"):
+        assert isinstance(df, pd.DataFrame)
+        dfs.append(df)
+    all_df = pd.concat(dfs, ignore_index=True)
+    assert len(all_df) == 3
+    assert "Bob" in set(all_df["record"].apply(lambda x: x.get("name")))
 
 
 
 @pytest.mark.asyncio
-async def test_read_xml_bigdata(sample_bigdata_dir: Path, metrics: ComponentMetrics):
+async def test_read_xml_bigdata(sample_bigdata_file: Path, metrics: ComponentMetrics):
     r = XMLReceiver()
-    ddf = await r.read_bigdata(
-        filepath=sample_bigdata_dir, metrics=metrics, root_tag="rows", record_tag="row"
-    )
-    assert isinstance(ddf, dd.DataFrame)
-    pdf = ddf.compute().reset_index(drop=True)
-    assert len(pdf) == 3
-    assert set(pdf.columns) == {"id", "name"}
-    assert list(pdf["id"]) == ["1", "2", "3"]
+    dfs = []
+    async for df in r.read_bigdata(filepath=sample_bigdata_file, metrics=metrics, record_tag="row"):
+        assert isinstance(df, pd.DataFrame)
+        dfs.append(df)
+    all_df = pd.concat(dfs, ignore_index=True)
+
+    from etl_core.receivers.files.xml.xml_helper import flatten_records
+    flat = flatten_records(all_df)
+    assert len(flat) == 3
+    assert set(flat.columns) >= {"id", "name"}
+    assert list(flat["id"]) == ["1", "2", "3"]
 
 
 
@@ -163,39 +165,25 @@ async def test_write_xml_bulk(tmp_path: Path, metrics: ComponentMetrics):
 
 @pytest.mark.asyncio
 async def test_write_xml_bigdata(tmp_path: Path, metrics: ComponentMetrics):
-    out_dir = tmp_path / "out_bigxml"
+    out_fp = tmp_path / "out_big.xml"
     r = XMLReceiver()
 
-    pdf = pd.DataFrame(
-        [
-            {"id": "30", "name": "Hugo"},
-            {"id": "31", "name": "Ivy"},
-        ]
-    )
+    pdf = pd.DataFrame([{"id": "30", "name": "Hugo"}, {"id": "31", "name": "Ivy"}])
     ddf_in = dd.from_pandas(pdf, npartitions=2)
 
     await r.write_bigdata(
-        filepath=out_dir,
+        filepath=out_fp,
         metrics=metrics,
         data=ddf_in,
         root_tag="rows",
         record_tag="row",
     )
 
-    assert out_dir.exists() and out_dir.is_dir()
-    parts = sorted(out_dir.glob("part-*.xml"))
-    # with 2 partitions we expect 2 files
-    assert len(parts) == 2
-
-    # Collect IDs written across parts
-    ids = []
-    for p in parts:
-        tree = ET.parse(p)
-        root = tree.getroot()
-        for rnode in root.findall("./row"):
-            ids.append(rnode.findtext("id"))
-
-    assert set(ids) == {"30", "31"}
+    assert out_fp.exists()
+    tree = ET.parse(out_fp)
+    rows = tree.getroot().findall("./row")
+    got = [(x.findtext("id"), x.findtext("name")) for x in rows]
+    assert set(got) == {("30", "Hugo"), ("31", "Ivy")}
 
 
 
@@ -205,7 +193,6 @@ async def test_xml_receiver_read_row_missing_file_raises(metrics: ComponentMetri
     rows = r.read_row(
         filepath=tmp_path / "missing.xml",
         metrics=metrics,
-        root_tag="rows",
         record_tag="row",
     )
     with pytest.raises(FileNotFoundError):

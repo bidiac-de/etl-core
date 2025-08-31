@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any, Dict, AsyncGenerator, ClassVar
 import pandas as pd
 from pydantic import model_validator
@@ -12,7 +13,10 @@ from etl_core.components.wiring.ports import OutPortSpec
 
 @register_component("read_xml")
 class ReadXML(XML):
-    """XML reader supporting row, bulk, and bigdata modes with port routing."""
+    """XML reader supporting row, bulk, and bigdata with async *streaming* semantics.
+    - process_row yields individual nested dicts
+    - process_bulk and process_bigdata yield pandas DataFrame *chunks*
+    """
 
     ALLOW_NO_INPUTS: ClassVar[bool] = True
     OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
@@ -25,29 +29,23 @@ class ReadXML(XML):
     async def process_row(
             self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        """Stream XML records one-by-one and emit on 'out'."""
-        async for result in self._receiver.read_row(
-                self.filepath, metrics=metrics, root_tag=self.root_tag, record_tag=self.record_tag
+        async for rec in self._receiver.read_row(
+                self.filepath, metrics=metrics, record_tag=self.record_tag
         ):
-            yield Out(port="out", payload=result)
+            yield Out(port="out", payload=rec)
 
     async def process_bulk(
             self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        """Read whole XML as a pandas DataFrame and emit on 'out'."""
-        df = await self._receiver.read_bulk(
-            self.filepath, metrics=metrics, root_tag=self.root_tag, record_tag=self.record_tag
-        )
-        yield Out(port="out", payload=df)
+        async for df in self._receiver.read_bulk(
+                self.filepath, metrics=metrics, record_tag=self.record_tag
+        ):
+            yield Out(port="out", payload=df)
 
     async def process_bigdata(
             self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        """Read large XML (directory of .xml files) as a Dask DataFrame and emit on 'out'."""
-        ddf = await self._receiver.read_bigdata(
-            self.filepath, metrics=metrics, root_tag=self.root_tag, record_tag=self.record_tag
-        )
-        yield Out(port="out", payload=ddf)
-
-
-
+        async for df in self._receiver.read_bigdata(
+                self.filepath, metrics=metrics, record_tag=self.record_tag
+        ):
+            yield Out(port="out", payload=df)

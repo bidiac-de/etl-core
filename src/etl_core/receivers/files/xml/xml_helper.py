@@ -1,188 +1,204 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Generator, Union
+from typing import Tuple, Any, Dict, Iterable, List, Generator, Union
 import xml.etree.ElementTree as ET
 import pandas as pd
-import dask.dataframe as dd
-from dask import delayed
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
 
 
 
-def _flatten_element(elem: ET.Element, prefix: str = "") -> Dict[str, Any]:
+def element_to_nested(element: ET.Element) -> Any:
+    """Convert an XML element into a *truly nested* Python structure.
+    Rules:
+    - Attributes -> under "@attrs"
+    - Mixed content: text stored under "#text" if element also has children
+    - Repeated child tags become lists
+    - Leaf elements become their text (str)
     """
-    Flatten nested XML elements into a dictionary with dot-separated keys.
-    """
-    out: Dict[str, Any] = {}
+    if not list(element) and not element.attrib:
+        # pure leaf
+        return (element.text or "").strip()
 
-    def walk(e: ET.Element, pfx: str = ""):
-        groups: Dict[str, List[ET.Element]] = {}
-        for ch in list(e):
-            groups.setdefault(ch.tag, []).append(ch)
+    node: Dict[str, Any] = {}
+    if element.attrib:
+        node["@attrs"] = dict(element.attrib)
 
-        if len(groups) == 0:
-            text = (e.text or "").strip()
-            if pfx:
-                out[pfx] = text
-            return
+    text = (element.text or "").strip()
+    if text and list(element):
+        node["#text"] = text
+    elif text and not list(element):
+        return text
 
-        for tag, nodes in groups.items():
-            if len(nodes) == 1:
-                walk(nodes[0], f"{pfx}.{tag}" if pfx else tag)
-            else:
-                base = (pfx if tag == "item" else (f"{pfx}.{tag}" if pfx else tag))
-                for i, node in enumerate(nodes):
-                    walk(node, f"{base}.{i}" if base else str(i))
-
-    walk(elem, prefix)
-    return out
-
-
-
-def _set_nested(parent: ET.Element, dotted: str, value: str):
-    """
-    Create nested XML elements along a dot path (incl. index paths like tag.0).
-    """
-    parts = dotted.split(".")
-    node = parent
-    i = 0
-    while i < len(parts):
-        part = parts[i]
-        if part.isdigit():
-            i += 1
-            continue
-        next_is_index = (i + 1 < len(parts)) and parts[i + 1].isdigit()
-        child = None
-        if next_is_index:
-            child = ET.SubElement(node, part)
-            i += 2
+    for child in element:
+        child_payload = element_to_nested(child)
+        tag = child.tag
+        if tag in node:
+            # convert to list if repeated
+            if not isinstance(node[tag], list):
+                node[tag] = [node[tag]]
+            node[tag].append(child_payload)
         else:
-            for ch in node:
-                if ch.tag == part:
-                    child = ch
-                    break
-            if child is None:
-                child = ET.SubElement(node, part)
-            i += 1
-        node = child
-
-    node.text = "" if value is None else str(value)
+            node[tag] = child_payload
+    return node
 
 
-def dict_to_element(rec: Dict[str, Any], record_tag: str) -> ET.Element:
+def nested_to_element(tag: str, data: Any) -> ET.Element:
+    """Convert a nested dict/list/primitive back to an Element.
+    Special keys: "@attrs" for attributes, "#text" for mixed content text.
+    Lists create repeated child elements of the same tag.
     """
-    Convert a flattened dictionary into an XML <record_tag> element.
-    """
-    e = ET.Element(record_tag)
-    for k, v in rec.items():
-        _set_nested(e, k, "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v))
-    return e
+    el = ET.Element(tag)
+    if isinstance(data, dict):
+        attrs = data.get("@attrs")
+        if isinstance(attrs, dict):
+            for k, v in attrs.items():
+                el.set(str(k), str(v))
+        if "#text" in data:
+            text_val = data["#text"]
+            el.text = "" if text_val is None else str(text_val)
+        for k, v in data.items():
+            if k in ("@attrs", "#text"):
+                continue
+            if isinstance(v, list):
+                for item in v:
+                    el.append(nested_to_element(k, item))
+            else:
+                el.append(nested_to_element(k, v))
+    elif isinstance(data, list):
+        for item in data:
+            el.append(nested_to_element(tag, item))
+    else:
+        el.text = "" if data is None else str(data)
+    return el
 
 
 
-def iter_xml_records(path: Path, root_tag: str, record_tag: str) -> Generator[Dict[str, Any], None, None]:
-    """
-    Stream records from an XML file: <root><record>...</record>...</root>
-    Uses iterparse for memory-efficient streaming.
-    """
+def _iter_records(path: Path, record_tag: str) -> Generator[Dict[str, Any], None, None]:
+    """Stream <record_tag> elements as nested dicts using iterparse (low memory)."""
     path = resolve_file_path(path)
     context = ET.iterparse(str(path), events=("end",))
     for event, elem in context:
         if elem.tag == record_tag:
-            yield _flatten_element(elem)
+            yield element_to_nested(elem)
             elem.clear()
 
-def read_xml_bulk(path: Path, root_tag: str, record_tag: str) -> pd.DataFrame:
-    """
-    Read the entire XML file into a pandas DataFrame.
-    """
-    rows = list(iter_xml_records(path, root_tag, record_tag))
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
 
-def read_xml_bigdata(path: Path, root_tag: str, record_tag: str) -> dd.DataFrame:
+def read_xml_row(path: Path, record_tag: str) -> Generator[Dict[str, Any], None, None]:
+    return _iter_records(path, record_tag)
+
+
+def read_xml_bulk_chunks(path: Path, record_tag: str, *, chunk_size: int = 10000) -> Generator[pd.DataFrame, None, None]:
+    """Yield pandas DataFrame *chunks* from a single XML file.
+    Each row contains the *nested* dict in column 'record'.
     """
-    BigData read: expects a directory with multiple XML files (e.g. part-*.xml).
-    Reads each file via delayed -> pandas, then combines with dd.from_delayed
-    with correct metadata.
-    """
-    base = resolve_file_path(path)
-    if base.is_dir():
-        files = sorted([p for p in base.glob("*.xml") if p.is_file()])
+    buf: List[Dict[str, Any]] = []
+    for rec in _iter_records(path, record_tag):
+        buf.append(rec)
+        if len(buf) >= chunk_size:
+            yield pd.DataFrame({"record": buf})
+            buf = []
+    if buf:
+        yield pd.DataFrame({"record": buf})
+
+
+def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
+    """Read entire file into a single DataFrame (compat layer)."""
+    parts = list(read_xml_bulk_chunks(path, record_tag, chunk_size=10_000))
+    if parts:
+        return pd.concat(parts, ignore_index=True)
+    return pd.DataFrame({"record": []})
+
+
+
+
+def _flatten(prefix: str, value: Any) -> Iterable[Tuple[str, Any]]:
+    if isinstance(value, dict):
+        if len(value) == 1:
+            only_k, only_v = next(iter(value.items()))
+            if isinstance(only_v, list):
+                for idx, item in enumerate(only_v):
+                    new_prefix = f"{prefix}[{idx}]" if prefix else f"{only_k}[{idx}]"
+                    if prefix:
+                        yield from _flatten(new_prefix if not isinstance(item, (dict, list)) else prefix, item)
+                        if isinstance(item, (dict, list)):
+                            for sub_k, sub_v in _flatten("", item):
+                                yield f"{prefix}[{idx}].{sub_k}" if sub_k else f"{prefix}[{idx}]", sub_v
+                    else:
+                        yield from _flatten(f"{only_k}[{idx}]", item)
+                return
+        for k, v in value.items():
+            new_prefix = f"{prefix}.{k}" if prefix else str(k)
+            yield from _flatten(new_prefix, v)
+
+    elif isinstance(value, list):
+        for idx, item in enumerate(value):
+            new_prefix = f"{prefix}[{idx}]"
+            yield from _flatten(new_prefix, item)
+
     else:
-        files = [base]
+        yield prefix, value
 
-    if not files:
-        return dd.from_pandas(pd.DataFrame(), npartitions=1)
 
-    @delayed
-    def _read_one(p: Path) -> pd.DataFrame:
-        return read_xml_bulk(p, root_tag=root_tag, record_tag=record_tag)
-
-    delayed_dfs = [_read_one(p) for p in files]
-
-    # Derive schema (meta) from the first file
-    first_df = read_xml_bulk(files[0], root_tag=root_tag, record_tag=record_tag)
-    if first_df.empty:
-        meta = pd.DataFrame()
-    else:
-        meta = first_df.head(0)
-
-    return dd.from_delayed(delayed_dfs, meta=meta)
+def flatten_records(df: pd.DataFrame, col: str = "record") -> pd.DataFrame:
+    rows: List[Dict[str, Any]] = []
+    for rec in df[col].tolist():
+        flat: Dict[str, Any] = {}
+        for k, v in _flatten("", rec):
+            if k:
+                flat[k] = v
+        rows.append(flat)
+    return pd.DataFrame(rows)
 
 
 
-def write_xml_row(path: Path, row: Dict[str, Any], root_tag: str, record_tag: str):
-    """
-    Append a single record. If the file does not exist, create it.
-    Note: For large files this is O(n) due to parse+append+write.
-    """
+def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str) -> None:
     path = resolve_file_path(path)
+
+    def _row_to_element(row: Dict[str, Any]) -> ET.Element:
+        if "record" in row and isinstance(row["record"], dict):
+            return nested_to_element(record_tag, row["record"])
+        return nested_to_element(record_tag, {k: v for k, v in row.items()})
+
+    root = ET.Element(root_tag)
+    if not data.empty:
+        if "record" in data.columns:
+            for rec in data["record"].tolist():
+                root.append(nested_to_element(record_tag, rec))
+        else:
+            for _, r in data.iterrows():
+                root.append(_row_to_element(r.to_dict()))
+
+    tree = ET.ElementTree(root)
+    with open_file(path, "wb") as f:
+        tree.write(f, encoding="utf-8", xml_declaration=True)
+
+
+def write_xml_row(path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str) -> None:
+    path = resolve_file_path(path)
+    new_record_el = nested_to_element(record_tag, row.get("record", row))
+    new_record_xml = ET.tostring(new_record_el, encoding="unicode")
+
     if not path.exists() or path.stat().st_size == 0:
         root = ET.Element(root_tag)
-        root.append(dict_to_element(row, record_tag))
-        ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
+        root.append(new_record_el)
+        with open_file(path, "wb") as f:
+            ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
         return
 
-    tree = ET.parse(str(path))
-    root = tree.getroot()
-    root.append(dict_to_element(row, record_tag))
-    tree.write(path, encoding="utf-8", xml_declaration=True)
+    with open_file(path, "r") as f:
+        content = f.read()
 
-def write_xml_bulk(path: Path, data: Union[pd.DataFrame, List[Dict[str, Any]]], root_tag: str, record_tag: str):
-    """
-    Write multiple records at once to an XML file.
-    Accepts either a pandas DataFrame or a list of dicts.
-    """
-    path = resolve_file_path(path)
-    root = ET.Element(root_tag)
-
-    if isinstance(data, pd.DataFrame):
-        iterable = (rec for _, rec in data.fillna("").astype(str).iterrows())
-        for _, rec in data.iterrows():
-            root.append(dict_to_element(rec.to_dict(), record_tag))
-    else:
-        for rec in data:
-            root.append(dict_to_element(rec, record_tag))
-
-    ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
-
-def write_xml_bigdata(path: Path, data: dd.DataFrame, root_tag: str, record_tag: str):
-    """
-    Write a Dask DataFrame partition-wise into a directory: part-00000.xml, ...
-    """
-    outdir = resolve_file_path(path)
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    nparts = data.npartitions
-    for i in range(nparts):
-        pdf = data.get_partition(i).compute()
+    closing = f"</{root_tag}>"
+    idx = content.rfind(closing)
+    if idx == -1:
+        # malformed -> recreate safely
         root = ET.Element(root_tag)
-        for _, row in pdf.iterrows():
-            root.append(dict_to_element(row.to_dict(), record_tag))
-        out = outdir / f"part-{i:05d}.xml"
-        ET.ElementTree(root).write(out, encoding="utf-8", xml_declaration=True)
+        root.append(new_record_el)
+        with open_file(path, "wb") as f:
+            ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
+        return
 
-
-
-
+    new_content = content[:idx] + new_record_xml + content[idx:]
+    with open_file(path, "w") as f:
+        f.write(new_content)
 

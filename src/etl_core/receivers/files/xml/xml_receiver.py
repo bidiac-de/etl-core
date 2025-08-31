@@ -9,67 +9,69 @@ from etl_core.receivers.files.read_file_receiver import ReadFileReceiver
 from etl_core.receivers.files.write_file_receiver import WriteFileReceiver
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.files.xml.xml_helper import (
-    iter_xml_records,
-    read_xml_bulk,
-    read_xml_bigdata,
+    read_xml_row,
+    read_xml_bulk_chunks,
     write_xml_row,
     write_xml_bulk,
-    write_xml_bigdata,
 )
+
 
 _SENTINEL: Any = object()
 
 
 class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
-    """Receiver for XML files (supports nested structures)."""
+    """Receiver for XML files (nested read/write supported). All reads are async *streams*.
+    - read_row -> async iterator of dict records
+    - read_bulk -> async iterator of pandas DataFrame *chunks*
+    - read_bigdata -> alias to read_bulk with (potentially) different chunk_size
+    """
 
     async def read_row(
             self,
             filepath: Path,
             metrics: ComponentMetrics,
             *,
-            root_tag: str,
             record_tag: str,
     ) -> AsyncIterator[Dict[str, Any]]:
-        """Stream XML records sequentially in a worker thread."""
         ensure_file_exists(filepath)
-        it = iter_xml_records(filepath, root_tag=root_tag, record_tag=record_tag)
+        it = read_xml_row(filepath, record_tag=record_tag)
         while True:
-            row = await asyncio.to_thread(next, it, _SENTINEL)
-            if row is _SENTINEL:
+            rec = await asyncio.to_thread(next, it, _SENTINEL)
+            if rec is _SENTINEL:
                 break
-            metrics.lines_received += 1
-            yield row
+            metrics.lines_forwarded += 1
+            yield rec
 
     async def read_bulk(
             self,
             filepath: Path,
             metrics: ComponentMetrics,
             *,
-            root_tag: str,
             record_tag: str,
-    ) -> pd.DataFrame:
+            chunk_size: int = 10000,
+    ) -> AsyncIterator[pd.DataFrame]:
         ensure_file_exists(filepath)
-        df = await asyncio.to_thread(read_xml_bulk, filepath, root_tag, record_tag)
-        metrics.lines_received += len(df)
-        return df
+        it = read_xml_bulk_chunks(filepath, record_tag=record_tag, chunk_size=chunk_size)
+        while True:
+            df = await asyncio.to_thread(next, it, _SENTINEL)
+            if df is _SENTINEL:
+                break
+            n = len(df)
+            metrics.lines_forwarded += n
+            yield df
 
     async def read_bigdata(
             self,
             filepath: Path,
             metrics: ComponentMetrics,
             *,
-            root_tag: str,
             record_tag: str,
-    ) -> dd.DataFrame:
-        ddf = await asyncio.to_thread(read_xml_bigdata, filepath, root_tag, record_tag)
-        # counting rows safely (compute once)
-        try:
-            row_count = int(ddf.map_partitions(len).sum().compute())
-        except Exception:
-            row_count = 0
-        metrics.lines_received += row_count
-        return ddf
+            chunk_size: int = 50000,
+    ) -> AsyncIterator[pd.DataFrame]:
+        async for df in self.read_bulk(
+                filepath, metrics, record_tag=record_tag, chunk_size=chunk_size
+        ):
+            yield df
 
     async def write_row(
             self,
@@ -79,9 +81,9 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             row: Dict[str, Any],
             root_tag: str,
             record_tag: str,
-    ):
+    ) -> None:
         metrics.lines_received += 1
-        await asyncio.to_thread(write_xml_row, filepath, row, root_tag, record_tag)
+        await asyncio.to_thread(write_xml_row, filepath, row, root_tag=root_tag, record_tag=record_tag)
         metrics.lines_forwarded += 1
 
     async def write_bulk(
@@ -92,10 +94,11 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             data: pd.DataFrame,
             root_tag: str,
             record_tag: str,
-    ):
-        metrics.lines_received += len(data)
-        await asyncio.to_thread(write_xml_bulk, filepath, data, root_tag, record_tag)
-        metrics.lines_forwarded += len(data)
+    ) -> None:
+        n = len(data)
+        metrics.lines_received += n
+        await asyncio.to_thread(write_xml_bulk, filepath, data, root_tag=root_tag, record_tag=record_tag)
+        metrics.lines_forwarded += n
 
     async def write_bigdata(
             self,
@@ -105,23 +108,20 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             data: dd.DataFrame,
             root_tag: str,
             record_tag: str,
-    ):
-        try:
-            data = await asyncio.to_thread(data.persist)
-        except Exception as e:
-            raise FileReceiverError(f"Failed to persist dataframe before write: {e}") from e
-
+    ) -> None:
         try:
             row_count = await asyncio.to_thread(
                 lambda: int(data.map_partitions(len).sum().compute())
             )
-        except Exception as e:
-            raise FileReceiverError(f"Failed to count rows; aborting write: {e}") from e
+        except Exception:
+            row_count = None
 
-        try:
-            await asyncio.to_thread(write_xml_bigdata, filepath, data, root_tag, record_tag)
-        except Exception as e:
-            raise FileReceiverError(f"Failed to write XML: {e}") from e
+        pdf = await asyncio.to_thread(lambda: data.compute())
 
-        metrics.lines_forwarded += row_count
+        metrics.lines_received += len(pdf)
+        await asyncio.to_thread(
+            write_xml_bulk, filepath, pdf, root_tag=root_tag, record_tag=record_tag
+        )
+        metrics.lines_forwarded += row_count if row_count is not None else len(pdf)
+
 
