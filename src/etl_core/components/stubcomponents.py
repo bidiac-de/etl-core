@@ -80,7 +80,7 @@ class FailStubComponent(StubComponent):
     async def process_row(
         self, row: Dict[str, Any] | Any, metrics: ComponentMetrics
     ) -> AsyncIterator[Out]:
-        # keep generator type (no actual yield executed)
+        # no actual yield executed
         for _ in ():
             yield Out("out", {})
         raise RuntimeError("fail stubcomponent failed")

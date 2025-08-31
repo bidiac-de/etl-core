@@ -1,7 +1,9 @@
 from pydantic import Field
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.metrics.metrics_registry import register_metrics
 
 
+@register_metrics("schema_mapping")
 class DataOperationsMetrics(ComponentMetrics):
     """
     A class that offers metrics for data processing components.

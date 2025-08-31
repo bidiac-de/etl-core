@@ -1,14 +1,21 @@
+from typing import Dict, Union, Any, Mapping, List, TypeVar, AsyncIterator
 import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Dict, Union, Any, Mapping
 from etl_core.job_execution.runtimejob import RuntimeJob
 from etl_core.persistance.configs.job_config import JobConfig
 from etl_core.utils.common_helpers import (  # noqa: F401
     get_component_by_name,
     normalize_df,
 )
+
+T = TypeVar("T")
+
+
+async def collect_async(stream: AsyncIterator[T]) -> List[T]:
+    """Materialize an async stream to a list."""
+    return [item async for item in stream]
 
 
 def runtime_job_from_config(
