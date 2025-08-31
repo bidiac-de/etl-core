@@ -996,6 +996,11 @@ class TestPostgreSQLComponents:
 
         # Test that connection handler is properly set up
         assert hasattr(write_comp, "_connection_handler")
+        
+        # Mock the connection handler to avoid actual connection attempts
+        mock_connection_handler = Mock()
+        write_comp._connection_handler = mock_connection_handler
+        
         # The connection handler is set up during validation when context is set
         # We need to trigger the validation
         write_comp._build_objects()

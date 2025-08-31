@@ -29,20 +29,20 @@ class TestSQLConnectionHandler:
     def test_build_url_postgres(self):
         """Test building PostgreSQL URL."""
         url = SQLConnectionHandler.build_url(
-            db_type="postgres",
+            comp_type="write_postgresql",
             user="testuser",
             password="testpass",
             host="localhost",
             port=5432,
             database="testdb",
         )
-        expected = "postgres://testuser:testpass@localhost:5432/testdb"
+        expected = "postgresql+psycopg2://testuser:testpass@localhost:5432/testdb"
         assert url == expected
 
     def test_build_url_mysql(self):
         """Test building MySQL URL."""
         url = SQLConnectionHandler.build_url(
-            db_type="mysql",
+            comp_type="write_mysql",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -55,7 +55,7 @@ class TestSQLConnectionHandler:
     def test_build_url_mariadb(self):
         """Test building MariaDB URL."""
         url = SQLConnectionHandler.build_url(
-            db_type="mariadb",
+            comp_type="write_mariadb",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -69,19 +69,19 @@ class TestSQLConnectionHandler:
         """Test building URL with missing required parameters."""
         with pytest.raises(
             ValueError,
-            match="postgres requires user, password, host, port, and database",
+            match="write_postgresql requires user, password, host, port, and database",
         ):
             SQLConnectionHandler.build_url(
-                db_type="postgres",
+                comp_type="write_postgresql",
                 user="testuser",
                 # Missing password, host, port, database
             )
 
     def test_build_url_unsupported_dialect(self):
         """Test building URL with any database type (all are supported)."""
-        # The current implementation supports any db_type, so this should work
+        # The current implementation supports any comp_type, so this should work
         url = SQLConnectionHandler.build_url(
-            db_type="oracle",
+            comp_type="oracle",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -94,7 +94,7 @@ class TestSQLConnectionHandler:
     def test_build_url_case_insensitive(self):
         """Test that database type is case sensitive (as per current implementation)."""
         url1 = SQLConnectionHandler.build_url(
-            db_type="POSTGRES",
+            comp_type="WRITE_POSTGRESQL",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -102,7 +102,7 @@ class TestSQLConnectionHandler:
             database="testdb",
         )
         url2 = SQLConnectionHandler.build_url(
-            db_type="postgres",
+            comp_type="write_postgresql",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -111,8 +111,8 @@ class TestSQLConnectionHandler:
         )
         # Current implementation is case sensitive, so these should be different
         assert url1 != url2
-        assert url1 == "POSTGRES://testuser:testpass@localhost:5432/testdb"
-        assert url2 == "postgres://testuser:testpass@localhost:5432/testdb"
+        assert url1 == "WRITE_POSTGRESQL://testuser:testpass@localhost:5432/testdb"
+        assert url2 == "postgresql+psycopg2://testuser:testpass@localhost:5432/testdb"
 
     @patch(
         "src.etl_core.components.databases."
@@ -322,7 +322,7 @@ class TestSQLConnectionHandler:
         # Test with None values
         with pytest.raises(ValueError):
             SQLConnectionHandler.build_url(
-                db_type="postgres",
+                comp_type="write_postgresql",
                 user=None,
                 password="testpass",
                 host="localhost",
@@ -333,7 +333,7 @@ class TestSQLConnectionHandler:
         # Test with empty strings
         with pytest.raises(ValueError):
             SQLConnectionHandler.build_url(
-                db_type="postgres",
+                comp_type="write_postgresql",
                 user="",
                 password="testpass",
                 host="localhost",
@@ -344,14 +344,14 @@ class TestSQLConnectionHandler:
     def test_build_url_special_characters(self):
         """Test URL building with special characters in credentials."""
         url = SQLConnectionHandler.build_url(
-            db_type="postgres",
+            comp_type="write_postgresql",
             user="user@domain",
             password="pass@word!",
             host="localhost",
             port=5432,
             database="test-db",
         )
-        expected = "postgres://user@domain:pass@word!@localhost:5432/test-db"
+        expected = "postgresql+psycopg2://user@domain:pass@word!@localhost:5432/test-db"
         assert url == expected
 
     @patch(
