@@ -58,7 +58,6 @@ class MongoDBComponent(DatabaseComponent, ABC):
         Ensure database name is available once context/credentials are known.
         """
         if not self._database_name:
-            # Build once if a caller asks for it early
             self._setup_connection()
         if not self._database_name:
             raise RuntimeError(
@@ -74,7 +73,7 @@ class MongoDBComponent(DatabaseComponent, ABC):
         if self._connection_handler is not None:
             return
         if not getattr(self, "_context", None):
-            # Context not set yet; defer initialization.
+            # Context not set yet
             return
 
         creds = self._get_credentials()
