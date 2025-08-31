@@ -399,11 +399,17 @@ def _infer_meta_from_pairs(
     ddf: dd.DataFrame,
     pairs: List[Tuple[str, str]],
 ) -> pd.DataFrame:
-    # Create a meta frame so Dask knows dtypes/columns after mapping
-    cols: Dict[str, Any] = {}
+    """
+    Build a zero-row pandas.DataFrame that matches the post-mapping schema.
+    Each column is an empty Series with the correct dtype so Dask can
+    infer the partition schema without computing.
+    """
+    cols: Dict[str, pd.Series] = {}
     for src_col, dst_col in pairs:
         if src_col in ddf.columns:
-            cols[dst_col] = ddf._meta[src_col]
+            dtype = ddf.dtypes[src_col]
+            cols[dst_col] = pd.Series([], dtype=dtype)
         else:
             cols[dst_col] = pd.Series([], dtype="object")
-    return pd.DataFrame(cols)
+    meta = pd.DataFrame(cols)
+    return meta.iloc[:0]

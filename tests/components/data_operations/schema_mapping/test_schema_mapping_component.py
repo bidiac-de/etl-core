@@ -86,6 +86,10 @@ def _schema_userid_username_out() -> Schema:
     return schema_from_fields([fd("user_id", "integer"), fd("user_name", "string")])
 
 
+def _schema_userid_city_out() -> Schema:
+    return schema_from_fields([fd("user_id", "integer"), fd("city", "string")])
+
+
 @pytest.mark.asyncio
 async def test_component_process_row_fanout(
     data_ops_metrics: DataOperationsMetrics,
@@ -611,9 +615,7 @@ async def test_row_join_nested_to_flat_large(
             )
         ]
     )
-    purchases_schema = _schema_userid_username_out().model_copy(
-        update={"fields": [fd("user_id", "integer"), fd("city", "string")]}
-    )
+    purchases_schema = _schema_userid_city_out()
     out_schema = schema_from_fields(
         [fd("id", "integer"), fd("name", "string"), fd("city", "string")]
     )

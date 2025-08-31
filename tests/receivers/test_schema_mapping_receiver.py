@@ -15,19 +15,10 @@ from etl_core.receivers.data_operations_receivers.schema_mapping.schema_mapping_
     _infer_meta_from_pairs,
 )
 from etl_core.components.wiring.schema import Schema
-from etl_core.components.wiring.column_definition import FieldDef
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
 from tests.schema_helpers import schema_from_fields, fd
-
-
-def _fd(
-    name: str,
-    data_type: str,
-    children: List[FieldDef] | None = None,
-) -> FieldDef:
-    return FieldDef(name=name, data_type=data_type, children=children or [])
 
 
 def _flat_schema(*cols: str) -> Schema:
@@ -44,7 +35,7 @@ def _nested_user_schema() -> Schema:
                 children=[
                     fd("id", "integer"),
                     fd("name", "string"),
-                    fd("address", "object", children=[_fd("city", "string")]),
+                    fd("address", "object", children=[fd("city", "string")]),
                 ],
             )
         ]
