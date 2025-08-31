@@ -8,7 +8,9 @@ from pydantic import Field, model_validator
 
 from etl_core.components.component_registry import register_component
 from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
-from etl_core.components.databases.database_operation_mixin import DatabaseOperationMixin
+from etl_core.components.databases.database_operation_mixin import (
+    DatabaseOperationMixin,
+)
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.components.envelopes import Out
@@ -55,26 +57,27 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
 
         if operation == DatabaseOperation.TRUNCATE:
             # Clear table first, then insert
-            return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
-        
+            return f"TRUNCATE TABLE {table}; INSERT INTO {table} \
+            ({columns_str}) VALUES ({placeholders})"
+
         elif operation == DatabaseOperation.UPSERT:
             # Insert or update on duplicate key
             update_columns = kwargs.get("update_columns", columns)
             update_clause = ", ".join(
                 [f"{col} = VALUES({col})" for col in update_columns]
             )
-            return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders}) ON DUPLICATE KEY UPDATE {update_clause}"
-        
+            return f"INSERT INTO {table} ({columns_str}) VALUES \
+            ({placeholders}) ON DUPLICATE KEY UPDATE {update_clause}"
+
         elif operation == DatabaseOperation.UPDATE:
             # Pure update operation
-            where_conditions = kwargs.get("where_conditions", [])
-            if not where_conditions:
+            if not self.where_conditions:
                 raise ValueError("UPDATE operation requires where_conditions")
-        
+
             set_clause = ", ".join([f"{col} = :{col}" for col in columns])
-            where_clause = " AND ".join(where_conditions)
+            where_clause = " AND ".join(self.where_conditions)
             return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
-        
+
         else:  # INSERT (default)
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
@@ -87,7 +90,6 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
         columns = [field.name for field in schema.fields]
         self._query = self._build_query(self.entity_name, columns, self.operation)
         return self
-
 
     async def process_row(
         self, row: Dict[str, Any], metrics: ComponentMetrics

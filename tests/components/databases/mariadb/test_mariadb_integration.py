@@ -27,18 +27,20 @@ class TestMariaDBIntegration:
         """Helper to create MariaDBWrite component with proper schema."""
         from etl_core.components.wiring.schema import Schema
         from etl_core.components.wiring.column_definition import FieldDef, DataType
-        
+
         # Set up mock schema for testing
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         # Merge the schema into kwargs
         if "in_port_schemas" not in kwargs:
             kwargs["in_port_schemas"] = {"in": mock_schema}
-        
+
         write_comp = MariaDBWrite(**kwargs)
         return write_comp
 

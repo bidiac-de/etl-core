@@ -15,8 +15,6 @@ from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.base_strategy import ExecutionStrategy
-from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
-from etl_core.components.databases.database import DatabaseComponent
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
@@ -28,18 +26,20 @@ class TestMariaDBComponents:
     def _create_mariadb_write_with_schema(self, **kwargs):
         """Helper to create MariaDBWrite component with proper schema."""
         # Set up mock schema for testing
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         # Merge the schema into kwargs
         if "in_port_schemas" not in kwargs:
             kwargs["in_port_schemas"] = {"in": mock_schema}
-        
+
         write_comp = MariaDBWrite(**kwargs)
-        
+
         return write_comp
 
     @pytest.fixture
@@ -358,9 +358,7 @@ class TestMariaDBComponents:
         # in integration tests with real credentials.
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_error_handling(
-        self, mock_context, mock_metrics
-    ):
+    async def test_mariadb_component_error_handling(self, mock_context, mock_metrics):
         """Test MariaDB component error handling."""
         read_comp = MariaDBRead(
             name="test_read",
@@ -443,9 +441,7 @@ class TestMariaDBComponents:
         assert write_comp.row_batch_size == 500
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_with_complex_params(
-        self, mock_context, mock_metrics
-    ):
+    async def test_mariadb_read_with_complex_params(self, mock_context, mock_metrics):
         """Test MariaDBRead with complex query parameters."""
         read_comp = MariaDBRead(
             name="test_read",
@@ -750,6 +746,7 @@ class TestMariaDBComponents:
             entity_name="users",
             credentials_id=1,
             operation="update",
+            where_conditions=["id = :id"],
         )
         write_comp_update.context = mock_context
 
@@ -805,25 +802,34 @@ class TestMariaDBComponents:
 
         # Test query building with different operations
         columns = ["id", "name", "email"]
-        
+
         # Test INSERT query
-        insert_query = write_comp._build_query("users", columns, DatabaseOperation.INSERT)
+        insert_query = write_comp._build_query(
+            "users", columns, DatabaseOperation.INSERT
+        )
         assert "INSERT INTO users" in insert_query
         assert "id, name, email" in insert_query
-        
+
         # Test UPSERT query
-        upsert_query = write_comp._build_query("users", columns, DatabaseOperation.UPSERT, conflict_columns=["id"])
+        upsert_query = write_comp._build_query(
+            "users", columns, DatabaseOperation.UPSERT, conflict_columns=["id"]
+        )
         assert "INSERT INTO users" in upsert_query
         assert "ON DUPLICATE KEY UPDATE" in upsert_query
-        
+
         # Test UPDATE query
-        update_query = write_comp._build_query("users", columns, DatabaseOperation.UPDATE, where_conditions=["id = :id"])
+        write_comp.where_conditions = ["id = :id"]
+        update_query = write_comp._build_query(
+            "users", columns, DatabaseOperation.UPDATE
+        )
         assert "UPDATE users" in update_query
         assert "SET" in update_query
         assert "WHERE" in update_query
-        
+
         # Test TRUNCATE query
-        truncate_query = write_comp._build_query("users", columns, DatabaseOperation.TRUNCATE)
+        truncate_query = write_comp._build_query(
+            "users", columns, DatabaseOperation.TRUNCATE
+        )
         assert "TRUNCATE TABLE users" in truncate_query
         assert "INSERT INTO users" in truncate_query
 
@@ -839,42 +845,44 @@ class TestMariaDBComponents:
             query="SELECT * FROM users",
             credentials_id=1,
         )
-        
+
         # Verify input ports (should be empty for read component)
         assert len(read_comp.INPUT_PORTS) == 0
         assert read_comp.ALLOW_NO_INPUTS is True
-        
+
         # Verify output ports
         assert len(read_comp.OUTPUT_PORTS) == 1
         assert read_comp.OUTPUT_PORTS[0].name == "out"
         assert read_comp.OUTPUT_PORTS[0].required is True
         assert read_comp.OUTPUT_PORTS[0].fanout == "many"
-        
+
         # Test write component ports
         from etl_core.components.wiring.schema import Schema
         from etl_core.components.wiring.column_definition import FieldDef, DataType
-        
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        
+
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
             comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
-            in_port_schemas={"in": mock_schema}
+            in_port_schemas={"in": mock_schema},
         )
-        
+
         # Verify input ports
         assert len(write_comp.INPUT_PORTS) == 1
         assert write_comp.INPUT_PORTS[0].name == "in"
         assert write_comp.INPUT_PORTS[0].required is True
         assert write_comp.INPUT_PORTS[0].fanin == "many"
-        
+
         # Verify output ports
         assert len(write_comp.OUTPUT_PORTS) == 1
         assert write_comp.OUTPUT_PORTS[0].name == "out"
@@ -885,14 +893,16 @@ class TestMariaDBComponents:
     async def test_mariadb_component_schema_validation(self, mock_context):
         """Test MariaDB component schema validation."""
         from etl_core.components.wiring.schema import Schema
-        
+
         # Set up mock schema
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         # Create a component with schema
         write_comp = MariaDBWrite(
             name="test_write",
@@ -900,21 +910,23 @@ class TestMariaDBComponents:
             comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
-            in_port_schemas={"in": mock_schema}
+            in_port_schemas={"in": mock_schema},
         )
-        
+
         write_comp.context = mock_context
 
         # Test that schema is properly set
         assert "in" in write_comp.in_port_schemas
         assert write_comp.in_port_schemas["in"] == mock_schema
-        
-        # Test that query building works with schema (query is built during _build_objects)
+
+        # Test that query building works with schema
         assert write_comp._query is not None
         assert "INSERT INTO users" in write_comp._query
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_receiver_integration(self, mock_context, mock_metrics):
+    async def test_mariadb_component_receiver_integration(
+        self, mock_context, mock_metrics
+    ):
         """Test MariaDB component receiver integration."""
         write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
@@ -924,41 +936,43 @@ class TestMariaDBComponents:
             credentials_id=1,
         )
         write_comp.context = mock_context
-        
+
         # Mock the receiver methods
         mock_receiver = AsyncMock()
         mock_receiver.write_row.return_value = {"affected_rows": 1}
         mock_receiver.write_bulk.return_value = pd.DataFrame({"id": [1]})
-        mock_receiver.write_bigdata.return_value = dd.from_pandas(pd.DataFrame({"id": [1]}), npartitions=1)
-        
+        mock_receiver.write_bigdata.return_value = dd.from_pandas(
+            pd.DataFrame({"id": [1]}), npartitions=1
+        )
+
         write_comp._receiver = mock_receiver
-        
+
         # Test that receiver methods are called correctly
         test_row = {"id": 1, "name": "John"}
         test_df = pd.DataFrame([test_row])
         test_ddf = dd.from_pandas(test_df, npartitions=1)
-        
+
         # Test row processing
         results = []
         async for result in write_comp.process_row(test_row, mock_metrics):
             results.append(result.payload)
-        
+
         assert len(results) == 1
         mock_receiver.write_row.assert_called_once()
-        
+
         # Test bulk processing
         results = []
         async for result in write_comp.process_bulk(test_df, mock_metrics):
             results.append(result.payload)
-        
+
         assert len(results) == 1
         mock_receiver.write_bulk.assert_called_once()
-        
+
         # Test bigdata processing
         results = []
         async for result in write_comp.process_bigdata(test_ddf, mock_metrics):
             results.append(result.payload)
-        
+
         assert len(results) == 1
         mock_receiver.write_bigdata.assert_called_once()
 
@@ -973,26 +987,26 @@ class TestMariaDBComponents:
             credentials_id=1,
         )
         write_comp.context = mock_context
-        
+
         # Test that connection handler is properly set up
         assert hasattr(write_comp, "_connection_handler")
         # The connection handler is set up during validation when context is set
         # We need to trigger the validation
         write_comp._build_objects()
         assert write_comp.connection_handler is not None
-        
+
         # Test that connection handler is passed to receiver methods
         mock_receiver = AsyncMock()
         mock_receiver.write_row.return_value = {"affected_rows": 1}
         write_comp._receiver = mock_receiver
-        
+
         test_row = {"id": 1, "name": "John"}
-        
+
         # Process a row to trigger receiver call
         results = []
         async for result in write_comp.process_row(test_row, Mock()):
             results.append(result.payload)
-        
+
         # Verify connection handler was passed to receiver
         mock_receiver.write_row.assert_called_once()
         call_args = mock_receiver.write_row.call_args

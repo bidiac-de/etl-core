@@ -4,7 +4,9 @@ import dask.dataframe as dd
 from pydantic import model_validator, Field
 
 from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
-from etl_core.components.databases.database_operation_mixin import DatabaseOperationMixin
+from etl_core.components.databases.database_operation_mixin import (
+    DatabaseOperationMixin,
+)
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -55,8 +57,9 @@ class PostgreSQLWrite(PostgreSQLComponent, DatabaseOperationMixin):
 
         if operation == DatabaseOperation.TRUNCATE:
             # Clear table first, then insert
-            return f"TRUNCATE TABLE {table}; INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
-        
+            return f"TRUNCATE TABLE {table}; INSERT INTO {table} \
+            ({columns_str}) VALUES ({placeholders})"
+
         elif operation == DatabaseOperation.UPSERT:
             # Insert or update on conflict
             conflict_columns = kwargs.get("conflict_columns", ["id"])
@@ -69,17 +72,16 @@ class PostgreSQLWrite(PostgreSQLComponent, DatabaseOperationMixin):
                 f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders}) "
                 f"ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
             )
-        
+
         elif operation == DatabaseOperation.UPDATE:
             # Pure update operation
-            where_conditions = kwargs.get("where_conditions", [])
-            if not where_conditions:
+            if not self.where_conditions:
                 raise ValueError("UPDATE operation requires where_conditions")
-            
+
             set_clause = ", ".join([f"{col} = :{col}" for col in columns])
-            where_clause = " AND ".join(where_conditions)
+            where_clause = " AND ".join(self.where_conditions)
             return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
-        
+
         else:  # INSERT (default)
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 

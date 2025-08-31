@@ -69,11 +69,17 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
     def _get_db_type_from_comp_type(self) -> str:
         """Map component type to actual database type."""
-        if self.comp_type.startswith("read_postgresql") or self.comp_type.startswith("write_postgresql"):
+        if self.comp_type.startswith("read_postgresql") or self.comp_type.startswith(
+            "write_postgresql"
+        ):
             return "postgresql"
-        elif self.comp_type.startswith("read_mariadb") or self.comp_type.startswith("write_mariadb"):
+        elif self.comp_type.startswith("read_mariadb") or self.comp_type.startswith(
+            "write_mariadb"
+        ):
             return "mariadb"
-        elif self.comp_type.startswith("read_mysql") or self.comp_type.startswith("write_mysql"):
+        elif self.comp_type.startswith("read_mysql") or self.comp_type.startswith(
+            "write_mysql"
+        ):
             return "mysql"
         else:
             # Default to the comp_type if no mapping found
@@ -91,8 +97,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         """Cleanup connection when component is destroyed."""
         if hasattr(self, "_connection_handler") and self._connection_handler:
             self._connection_handler.close_pool(force=True)
-
-
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:

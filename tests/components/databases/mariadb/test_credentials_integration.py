@@ -38,18 +38,20 @@ class TestCredentialsIntegration:
 
     def _create_mariadb_write_with_schema(self, **kwargs):
         """Helper to create MariaDBWrite component with proper schema."""
-        
+
         # Set up mock schema for testing
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         # Merge the schema into kwargs
         if "in_port_schemas" not in kwargs:
             kwargs["in_port_schemas"] = {"in": mock_schema}
-        
+
         write_comp = MariaDBWrite(**kwargs)
         return write_comp
 
@@ -75,25 +77,21 @@ class TestCredentialsIntegration:
     @pytest.fixture
     def sample_context(self, sample_credentials: Credentials) -> Context:
         context = Context(
-            id=1, 
-            name="test_context", 
-            environment=Environment.TEST, 
+            id=1,
+            name="test_context",
+            environment=Environment.TEST,
             parameters={
                 "db_host": ContextParameter(
                     id=1,
                     key="db_host",
                     value="localhost",
                     type="string",
-                    is_secure=False
+                    is_secure=False,
                 ),
                 "db_port": ContextParameter(
-                    id=2,
-                    key="db_port",
-                    value="3306",
-                    type="string",
-                    is_secure=False
-                )
-            }
+                    id=2, key="db_port", value="3306", type="string", is_secure=False
+                ),
+            },
         )
         context.add_credentials(sample_credentials)
         return context
@@ -151,7 +149,9 @@ class TestCredentialsIntegration:
         return context
 
     @pytest.fixture
-    def mariadb_read_component(self, sample_context: Context, test_creds: Tuple[str, str]) -> MariaDBRead:
+    def mariadb_read_component(
+        self, sample_context: Context, test_creds: Tuple[str, str]
+    ) -> MariaDBRead:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
@@ -164,7 +164,9 @@ class TestCredentialsIntegration:
         return read_comp
 
     @pytest.fixture
-    def mariadb_write_component(self, sample_context: Context, test_creds: Tuple[str, str]) -> MariaDBWrite:
+    def mariadb_write_component(
+        self, sample_context: Context, test_creds: Tuple[str, str]
+    ) -> MariaDBWrite:
         write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
@@ -179,8 +181,10 @@ class TestCredentialsIntegration:
     def sample_sql_queries(self) -> dict:
         return {
             "simple_select": "SELECT * FROM users",
-            "parameterized": "SELECT * FROM users WHERE id = %(id)s AND active = %(active)s",
-            "complex_join": "SELECT u.name, p.price FROM users u JOIN products p ON u.id = p.user_id",
+            "parameterized": "SELECT * FROM users WHERE id = \
+            %(id)s AND active = %(active)s",
+            "complex_join": "SELECT u.name, p.price FROM \
+            users u JOIN products p ON u.id = p.user_id",
             "aggregation": "SELECT COUNT(*) FROM users",
             "insert": "INSERT INTO users (name, email) VALUES (%(name)s, %(email)s)",
             "update": "UPDATE users SET name = %(name)s WHERE id = %(id)s",
@@ -192,7 +196,11 @@ class TestCredentialsIntegration:
         return {
             "simple": {"id": 1},
             "user_lookup": {"id": 1, "active": True},
-            "bulk_insert": [{"name": "John", "email": "john@example.com"}, {"name": "Jane", "email": "jane@example.com"}, {"name": "Bob", "email": "bob@example.com"}],
+            "bulk_insert": [
+                {"name": "John", "email": "john@example.com"},
+                {"name": "Jane", "email": "jane@example.com"},
+                {"name": "Bob", "email": "bob@example.com"},
+            ],
             "filter": {"active": True},
             "pagination": {"offset": 0, "limit": 10},
         }

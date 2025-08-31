@@ -705,7 +705,8 @@ class TestMariaDBReceivers:
             entity_name="users",
             row=special_data,
             metrics=mock_metrics,
-            query="INSERT INTO users (name, email, description) VALUES (:name, :email, :description)",
+            query="INSERT INTO users (name, email, description) VALUES \
+            (:name, :email, :description)",
             connection_handler=mock_connection_handler,
             table="users",
         )
@@ -739,7 +740,9 @@ class TestMariaDBReceivers:
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
-            query="INSERT INTO numeric_table (integer, float, decimal, negative) VALUES (:integer, :float, :decimal, :negative)",
+            query="INSERT INTO numeric_table (integer, float, decimal, \
+            negative) VALUES \
+            (:integer, :float, :decimal, :negative)",
             connection_handler=mock_connection_handler,
             table="numeric_table",
         )
@@ -768,7 +771,8 @@ class TestMariaDBReceivers:
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
-            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) VALUES (:is_active, :is_deleted, :has_permission)",
+            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) \
+            VALUES (:is_active, :is_deleted, :has_permission)",
             connection_handler=mock_connection_handler,
             table="boolean_table",
         )

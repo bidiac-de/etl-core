@@ -24,18 +24,20 @@ class TestPostgreSQLCredentialsIntegration:
 
     def _create_postgresql_write_with_schema(self, **kwargs):
         """Helper to create PostgreSQLWrite component with proper schema."""
-        
+
         # Set up mock schema for testing
-        mock_schema = Schema(fields=[
-            FieldDef(name="id", data_type=DataType.INTEGER),
-            FieldDef(name="name", data_type=DataType.STRING),
-            FieldDef(name="email", data_type=DataType.STRING),
-        ])
-        
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
         # Merge the schema into kwargs
         if "in_port_schemas" not in kwargs:
             kwargs["in_port_schemas"] = {"in": mock_schema}
-        
+
         write_comp = PostgreSQLWrite(**kwargs)
         return write_comp
 
@@ -67,15 +69,11 @@ class TestPostgreSQLCredentialsIntegration:
                     key="db_host",
                     value="localhost",
                     type="string",
-                    is_secure=False
+                    is_secure=False,
                 ),
                 "db_port": ContextParameter(
-                    id=2,
-                    key="db_port",
-                    value="5432",
-                    type="string",
-                    is_secure=False
-                )
+                    id=2, key="db_port", value="5432", type="string", is_secure=False
+                ),
             },
         )
         context.add_credentials(sample_credentials)
@@ -85,6 +83,7 @@ class TestPostgreSQLCredentialsIntegration:
     def sample_dataframe(self):
         """Fixture for a sample DataFrame."""
         import pandas as pd
+
         return pd.DataFrame({"id": [1, 2, 3], "name": ["John", "Jane", "Bob"]})
 
     @pytest.fixture
@@ -172,8 +171,10 @@ class TestPostgreSQLCredentialsIntegration:
         """Fixture for sample SQL queries."""
         return {
             "simple_select": "SELECT * FROM users",
-            "parameterized": "SELECT * FROM users WHERE id = %(id)s AND active = %(active)s",
-            "complex_join": "SELECT u.name, p.price FROM users u JOIN products p ON u.id = p.user_id",
+            "parameterized": "SELECT * FROM users WHERE id = \
+            %(id)s AND active = %(active)s",
+            "complex_join": "SELECT u.name, p.price FROM users \
+            u JOIN products p ON u.id = p.user_id",
             "aggregation": "SELECT COUNT(*) FROM users",
             "insert": "INSERT INTO users (name, email) VALUES (%(name)s, %(email)s)",
             "update": "UPDATE users SET email = %(email)s WHERE id = %(id)s",
@@ -186,7 +187,11 @@ class TestPostgreSQLCredentialsIntegration:
         return {
             "simple": {"id": 1},
             "user_lookup": {"id": 1, "active": True},
-            "bulk_insert": [{"name": "John", "email": "john@example.com"}, {"name": "Jane", "email": "jane@example.com"}, {"name": "Bob", "email": "bob@example.com"}],
+            "bulk_insert": [
+                {"name": "John", "email": "john@example.com"},
+                {"name": "Jane", "email": "jane@example.com"},
+                {"name": "Bob", "email": "bob@example.com"},
+            ],
             "filter": {"active": True},
             "pagination": {"limit": 10, "offset": 0},
         }

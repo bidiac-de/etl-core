@@ -39,10 +39,10 @@ class SQLConnectionHandler:
             "mysql": "mysql+mysqlconnector",
             "sqlite": "sqlite",
         }
-        
+
         # Use the mapped driver or fall back to the original db_type
         driver = driver_map.get(db_type, db_type)
-        
+
         if not all([user, password, host, port, database]):
             raise ValueError(
                 f"{db_type} requires user, password, host, port, and database."
