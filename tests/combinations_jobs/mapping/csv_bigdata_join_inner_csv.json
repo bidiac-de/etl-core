@@ -1,0 +1,100 @@
+{
+  "name": "CSV bigdata self-join (inner) to CSV dir",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bigdata",
+  "components": [
+    {
+      "name": "L",
+      "comp_type": "read_csv",
+      "description": "left CSV (dask)",
+      "filepath": "__IN__",
+      "separator": ",",
+      "routes": { "out": [ { "to": "map", "in_port": "L" } ] },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "R",
+      "comp_type": "read_csv",
+      "description": "right CSV (dask)",
+      "filepath": "__IN__",
+      "separator": ",",
+      "routes": { "out": [ { "to": "map", "in_port": "R" } ] },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "map",
+      "comp_type": "schema_mapping",
+      "description": "join plan only; no mapping rules",
+      "extra_input_ports": ["L", "R"],
+      "extra_output_ports": ["J"],
+      "in_port_schemas": {
+        "L": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        },
+        "R": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      },
+      "routes": { "J": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "J": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name_x", "data_type": "string" },
+            { "name": "name_y", "data_type": "string" }
+          ]
+        }
+      },
+      "join_plan": {
+        "steps": [
+          {
+            "left_port": "L",
+            "right_port": "R",
+            "left_on": "id",
+            "right_on": "id",
+            "how": "inner",
+            "output_port": "J"
+          }
+        ]
+      },
+      "rules_by_dest": {}
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "CSV dir sink (dask)",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name_x", "data_type": "string" },
+            { "name": "name_y", "data_type": "string" }
+          ]
+        }
+      }
+    }
+  ]
+}

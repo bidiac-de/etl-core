@@ -20,7 +20,7 @@ from etl_core.components.wiring.column_definition import FieldDef, DataType
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
 
-# Generic / job & testing utils
+# Generic job and testing utils
 
 
 def get_component_by_name(job: Any, name: str) -> Component:
@@ -109,6 +109,17 @@ def leaf_field_paths_with_defs(
 def leaf_field_paths(schema: Schema, sep: str) -> List[str]:
     """Flattened leaf paths for a whole Schema (DataFrame view)."""
     return [p for p, _ in leaf_field_paths_with_defs(schema.fields, sep)]
+
+
+def get_leaf_field_map(schema: Schema, path_separator: str) -> Dict[str, FieldDef]:
+    """
+    Map flattened leaf paths -> FieldDef.
+    Arrays are considered leaves at their flattened path.
+    """
+    out = {}
+    for path, fd in leaf_field_paths_with_defs(schema.fields, path_separator):
+        out[path] = fd
+    return out
 
 
 def is_null(v: Any) -> bool:
