@@ -99,7 +99,7 @@ class MongoDBComponent(DatabaseComponent, ABC):
         # Best-effort pool cleanup
         if getattr(self, "_connection_handler", None):
             try:
-                self._connection_handler.close_pool(force=True)  # type: ignore[union-attr]
+                self._connection_handler.close_pool(force=True)
             except Exception:
                 pass
 

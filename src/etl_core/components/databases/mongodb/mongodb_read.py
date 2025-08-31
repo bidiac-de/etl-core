@@ -8,7 +8,6 @@ from etl_core.components.component_registry import register_component
 from etl_core.components.databases.mongodb.mongodb import MongoDBComponent
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec
-from etl_core.components.wiring.schema import Schema
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.databases.mongodb.mongodb_receiver import MongoDBReceiver
 from etl_core.utils.common_helpers import leaf_field_paths
@@ -30,9 +29,12 @@ class MongoDBRead(MongoDBComponent):
     ALLOW_NO_INPUTS = True
 
     # Query controls (user-configurable)
-    query_filter: Dict[str, Any] = Field(default_factory=dict, description="find() filter")
+    query_filter: Dict[str, Any] = Field(
+        default_factory=dict, description="find() filter"
+    )
     sort: Optional[List[Tuple[str, int]]] = Field(
-        default=None, description="List of (field, direction) where direction in {1, -1}"
+        default=None,
+        description="List of (field, direction) where direction in {1, -1}",
     )
     limit: Optional[int] = Field(default=None, description="Max documents to read")
     skip: int = Field(default=0, ge=0, description="Documents to skip")
@@ -42,7 +44,7 @@ class MongoDBRead(MongoDBComponent):
     _projection: Optional[Dict[str, int]] = PrivateAttr(default=None)
 
     @model_validator(mode="after")
-    def _init_runtime_bits(self) -> "MongoDBRead":
+    def _build_objects(self) -> "MongoDBRead":
         self._receiver = MongoDBReceiver()
         # Connection and receiver are set up at build time.
         self._setup_connection()
@@ -73,7 +75,7 @@ class MongoDBRead(MongoDBComponent):
         return proj
 
     async def process_row(self, metrics: ComponentMetrics) -> AsyncIterator[Out]:
-        # Yield each document as it arrives to keep true streaming behavior.
+        # Yield each document as it arrives to keep true streaming behavior
         async for doc in self._receiver.read_row(
             connection_handler=self.connection_handler,
             database_name=self._database_name,

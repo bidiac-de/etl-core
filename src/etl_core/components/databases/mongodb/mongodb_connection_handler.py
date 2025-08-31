@@ -23,13 +23,13 @@ class MongoConnectionHandler:
 
     @staticmethod
     def build_uri(
-            *,
-            user: str,
-            password: str,
-            host: str,
-            port: int,
-            auth_db: Optional[str] = None,
-            params: Optional[Dict[str, Any]] = None,
+        *,
+        user: str,
+        password: str,
+        host: str,
+        port: int,
+        auth_db: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Build a SCRAM URI with proper URL-quoting.
@@ -65,7 +65,8 @@ class MongoConnectionHandler:
     ) -> Generator[Tuple[Any, Any], None, None]:
         if not self._key or not self._client:
             raise RuntimeError(
-                "MongoConnectionHandler.connect() must be called before lease_collection()."
+                "MongoConnectionHandler.connect() must be called "
+                "before lease_collection()."
             )
         self._registry.lease_mongo(self._key)
         try:

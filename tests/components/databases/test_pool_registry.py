@@ -53,7 +53,9 @@ class TestPoolKey:
 
     def test_for_sql_different_kwargs(self) -> None:
         key1 = PoolKey.for_sql(url="sqlite:///:memory:", engine_kwargs={"pool_size": 5})
-        key2 = PoolKey.for_sql(url="sqlite:///:memory:", engine_kwargs={"pool_size": 10})
+        key2 = PoolKey.for_sql(
+            url="sqlite:///:memory:", engine_kwargs={"pool_size": 10}
+        )
         assert key1 != key2
 
     def test_for_mongo_without_kwargs(self) -> None:
@@ -63,14 +65,22 @@ class TestPoolKey:
 
     def test_for_mongo_with_kwargs(self) -> None:
         client_kwargs = {"maxPoolSize": 10, "serverSelectionTimeoutMS": 5000}
-        key1 = PoolKey.for_mongo(uri="mongodb://localhost:27017", client_kwargs=client_kwargs)
-        key2 = PoolKey.for_mongo(uri="mongodb://localhost:27017", client_kwargs=client_kwargs)
+        key1 = PoolKey.for_mongo(
+            uri="mongodb://localhost:27017", client_kwargs=client_kwargs
+        )
+        key2 = PoolKey.for_mongo(
+            uri="mongodb://localhost:27017", client_kwargs=client_kwargs
+        )
         assert key1 == key2
         assert key1.kind == "mongo"
 
     def test_for_mongo_different_kwargs(self) -> None:
-        key1 = PoolKey.for_mongo(uri="mongodb://localhost:27017", client_kwargs={"maxPoolSize": 10})
-        key2 = PoolKey.for_mongo(uri="mongodb://localhost:27017", client_kwargs={"maxPoolSize": 20})
+        key1 = PoolKey.for_mongo(
+            uri="mongodb://localhost:27017", client_kwargs={"maxPoolSize": 10}
+        )
+        key2 = PoolKey.for_mongo(
+            uri="mongodb://localhost:27017", client_kwargs={"maxPoolSize": 20}
+        )
         assert key1 != key2
 
 
@@ -90,8 +100,6 @@ class TestConnectionPoolRegistry:
         registry = ConnectionPoolRegistry()
         assert registry._sql == {}  # type: ignore[attr-defined]
         assert registry._mongo == {}  # type: ignore[attr-defined]
-
-    # ---------- SQL tests (real engine, in-memory SQLite) ----------
 
     def test_get_sql_engine_new_connection(self) -> None:
         registry = ConnectionPoolRegistry()
@@ -113,8 +121,12 @@ class TestConnectionPoolRegistry:
         registry = ConnectionPoolRegistry()
         kwargs_a = {"pool_size": 5}
         kwargs_b = {"pool_size": 10}
-        key_a, engine_a = registry.get_sql_engine(url="sqlite:///:memory:", engine_kwargs=kwargs_a)
-        key_b, engine_b = registry.get_sql_engine(url="sqlite:///:memory:", engine_kwargs=kwargs_b)
+        key_a, engine_a = registry.get_sql_engine(
+            url="sqlite:///:memory:", engine_kwargs=kwargs_a
+        )
+        key_b, engine_b = registry.get_sql_engine(
+            url="sqlite:///:memory:", engine_kwargs=kwargs_b
+        )
         assert key_a != key_b
         assert engine_a is not engine_b
 
@@ -170,8 +182,6 @@ class TestConnectionPoolRegistry:
         assert result is True
         stats = registry.stats()
         assert key.dsn not in stats["sql"]
-
-    # ---------- Mongo tests (real AsyncIOMotorClient, no patching) ----------
 
     def test_get_mongo_client_new_connection(self) -> None:
         registry = ConnectionPoolRegistry()

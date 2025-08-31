@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
@@ -15,21 +14,10 @@ from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
 from tests.helpers import normalize_df
 
 
-@pytest.fixture
-def metrics() -> ComponentMetrics:
-    return ComponentMetrics(
-        started_at=datetime.now(),
-        processing_time=timedelta(0),
-        error_count=0,
-        lines_received=0,
-        lines_forwarded=0,
-    )
-
-
 @pytest.fixture(scope="session")
 def sample_excel_file() -> Path:
     return (
-        Path(__file__).parent.parent
+        Path(__file__).parent.parent.parent
         / "components"
         / "data"
         / "excel"

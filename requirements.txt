@@ -3,6 +3,7 @@ pre-commit
 pytest
 pytest-cov
 pytest-asyncio
+mongomock
 
 # Web Framework
 fastapi

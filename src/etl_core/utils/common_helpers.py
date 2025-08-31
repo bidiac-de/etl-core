@@ -165,7 +165,6 @@ def ensure_df_columns(
         raise ValueError(f"{schema_name}: unknown columns present {extras}")
 
 
-
 def pandas_flatten_docs(docs: List[Dict[str, Any]], sep: str = ".") -> pd.DataFrame:
     """
     Normalize a list of nested documents into a flat DataFrame with dot columns.
@@ -203,6 +202,8 @@ def unflatten_record(flat: Dict[str, Any], sep: str = ".") -> Dict[str, Any]:
     return nested
 
 
-def unflatten_many(records: Iterable[Dict[str, Any]], sep: str = ".") -> List[Dict[str, Any]]:
+def unflatten_many(
+    records: Iterable[Dict[str, Any]], sep: str = "."
+) -> List[Dict[str, Any]]:
     """Batch version of unflatten_record."""
     return [unflatten_record(r, sep=sep) for r in records]

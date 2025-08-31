@@ -7,7 +7,9 @@ import pandas as pd
 from pydantic import Field, model_validator, PrivateAttr
 
 from etl_core.components.component_registry import register_component
-from etl_core.components.databases.database_operation_mixin import DatabaseOperationMixin
+from etl_core.components.databases.database_operation_mixin import (
+    DatabaseOperationMixin,
+)
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.databases.mongodb.mongodb import MongoDBComponent
 from etl_core.components.envelopes import Out
@@ -64,7 +66,9 @@ class MongoDBWrite(MongoDBComponent, DatabaseOperationMixin):
         }
         return self
 
-    async def process_row(self, row: Dict[str, Any], metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_row(
+        self, row: Dict[str, Any], metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
         result = await self._receiver.write_row(
             connection_handler=self.connection_handler,
             database_name=self.database_name or "",
@@ -76,7 +80,9 @@ class MongoDBWrite(MongoDBComponent, DatabaseOperationMixin):
         )
         yield Out(port="out", payload=result)
 
-    async def process_bulk(self, frame: pd.DataFrame, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_bulk(
+        self, frame: pd.DataFrame, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
         async for result in self._receiver.write_bulk(
             connection_handler=self.connection_handler,
             database_name=self.database_name or "",
@@ -88,7 +94,9 @@ class MongoDBWrite(MongoDBComponent, DatabaseOperationMixin):
         ):
             yield Out(port="out", payload=result)
 
-    async def process_bigdata(self, ddf: dd.DataFrame, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_bigdata(
+        self, ddf: dd.DataFrame, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
         async for result in self._receiver.write_bigdata(
             connection_handler=self.connection_handler,
             database_name=self.database_name or "",

@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime, timedelta
 import inspect
 from pathlib import Path
 from typing import AsyncGenerator
@@ -13,20 +12,13 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 
 
 @pytest.fixture
-def metrics() -> ComponentMetrics:
-    return ComponentMetrics(
-        started_at=datetime.now(),
-        processing_time=timedelta(0),
-        error_count=0,
-        lines_received=0,
-        lines_forwarded=0,
-    )
-
-
-@pytest.fixture
 def sample_csv_file() -> Path:
     return (
-        Path(__file__).parent.parent / "components" / "data" / "csv" / "test_data.csv"
+        Path(__file__).parent.parent.parent
+        / "components"
+        / "data"
+        / "csv"
+        / "test_data.csv"
     )
 
 

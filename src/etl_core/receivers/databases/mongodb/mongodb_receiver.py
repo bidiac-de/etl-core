@@ -34,21 +34,25 @@ def _pick_update_fields(
 async def _truncate_and_insert_many(
     coll: Any, docs: Sequence[Dict[str, Any]], *, ordered: bool
 ) -> None:
-    # Clear the collection, then insert the incoming docs (if any)
+    # Clear the collection, then insert the incoming docs
     await coll.delete_many({})
     if docs:
         await coll.insert_many(list(docs), ordered=ordered)
 
 
-async def _insert_many(coll: Any, docs: Sequence[Dict[str, Any]], *, ordered: bool) -> None:
+async def _insert_many(
+    coll: Any, docs: Sequence[Dict[str, Any]], *, ordered: bool
+) -> None:
     if docs:
         await coll.insert_many(list(docs), ordered=ordered)
 
 
 def _build_match_filter(
-    row: Dict[str, Any], key_fields: Sequence[str], match_filter: Optional[Dict[str, Any]]
+    row: Dict[str, Any],
+    key_fields: Sequence[str],
+    match_filter: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    # Explicit match_filter wins; otherwise derive from key_fields present in the row
+    # Explicit match_filter wins, otherwise derive from key_fields present in the row
     if match_filter:
         return dict(match_filter)
     if key_fields:
@@ -208,7 +212,7 @@ class MongoDBReceiver:
     ) -> AsyncIterator[dd.DataFrame]:
         """
         Stream Dask DataFrames; each chunk becomes a single-partition DDF.
-        Metrics are updated in read_bulk; do not double-count here.
+        Metrics are updated in read_bulk.
         """
         async for pdf in self.read_bulk(
             connection_handler=connection_handler,
@@ -223,7 +227,6 @@ class MongoDBReceiver:
             chunk_size=chunk_size,
         ):
             yield dd.from_pandas(pdf, npartitions=1)
-
 
     async def write_row(
         self,
@@ -271,7 +274,9 @@ class MongoDBReceiver:
                     return {
                         "matched": res.matched_count,
                         "modified": res.modified_count,
-                        "upserted_id": str(res.upserted_id) if res.upserted_id else None,
+                        "upserted_id": (
+                            str(res.upserted_id) if res.upserted_id else None
+                        ),
                         "row": row,
                     }
 
@@ -303,11 +308,10 @@ class MongoDBReceiver:
         write_options: Dict[str, Any],
     ) -> AsyncIterator[pd.DataFrame]:
         """
-        Write a DataFrame with Motor bulk ops; yield the same frame once.
+        Write a DataFrame with Motor bulk ops, yield the same frame once.
         Metrics: lines_received += len(frame), lines_forwarded += len(frame).
         """
         if frame.empty:
-            # Nothing to do; still yield for contract consistency
             yield frame
             return
 
@@ -319,7 +323,7 @@ class MongoDBReceiver:
         match_filter = write_options.get("match_filter")
         ordered: bool = bool(write_options.get("ordered", True))
 
-        # Convert once; reuse in all branches
+        # Convert once, reuse in all branches
         flat_docs: List[Dict[str, Any]] = frame.to_dict(orient="records")
 
         try:
@@ -335,7 +339,7 @@ class MongoDBReceiver:
                     await _insert_many(coll, nested, ordered=ordered)
 
                 elif operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
-                    # Dotted keys are path updates in Mongo -> keep them flat
+                    # Dotted keys are path updates in Mongo
                     upsert = operation == DatabaseOperation.UPSERT
                     ops = _build_update_ops(
                         flat_docs,
@@ -355,6 +359,7 @@ class MongoDBReceiver:
 
         except PyMongoError as exc:
             raise RuntimeError(f"Mongo write_bulk failed: {exc}") from exc
+
     async def write_bigdata(
         self,
         *,
@@ -367,7 +372,7 @@ class MongoDBReceiver:
         write_options: Dict[str, Any],
     ) -> AsyncIterator[dd.DataFrame]:
         """
-        Write a Dask DataFrame partition-by-partition using bulk ops.
+        Writes a Dask DataFrame partition-by-partition using bulk ops.
         """
         for i in range(frame.npartitions):
             pdf = frame.get_partition(i).compute()
