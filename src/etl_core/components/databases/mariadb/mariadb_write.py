@@ -32,11 +32,6 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    operation: DatabaseOperation = Field(
-        default=DatabaseOperation.INSERT,
-        description="Database operation type: insert, upsert, truncate, or update",
-    )
-
     def _build_query(
         self, table: str, columns: list, operation: DatabaseOperation, **kwargs
     ) -> str:

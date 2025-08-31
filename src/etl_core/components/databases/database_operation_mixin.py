@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Optional
 from pydantic import Field
 
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
@@ -16,11 +17,16 @@ class DatabaseOperationMixin:
     provide database-specific implementations.
     """
 
-    where_conditions: list[str] = Field(
+    where_conditions: Optional[list[str]] = Field(
         default_factory=list,
         description=(
             "WHERE conditions for UPDATE operations (required for update operation)",
         ),
+    )
+
+    operation: DatabaseOperation = Field(
+        default=DatabaseOperation.INSERT,
+        description="Database operation type: insert, upsert, truncate, or update",
     )
 
     def _build_query(
