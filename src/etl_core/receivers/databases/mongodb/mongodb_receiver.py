@@ -12,6 +12,7 @@ from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.databases.mongodb.mongodb_connection_handler import (
     MongoConnectionHandler,
 )
+from etl_core.utils.common_helpers import pandas_flatten_docs, unflatten_many
 
 
 def _to_serializable(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,7 +68,7 @@ def _build_update_ops(
     for row in rows:
         flt = _build_match_filter(row, key_fields, match_filter)
         if not flt and not upsert:
-            # Mirror previous behavior: UPDATE without any filter is not allowed
+            # UPDATE without any filter is not allowed
             raise ValueError("UPDATE requires match_filter or key_fields")
         doc = {"$set": _pick_update_fields(row, update_fields)}
         ops.append(UpdateOne(flt, doc, upsert=upsert))
@@ -84,7 +85,7 @@ def _build_cursor(
     limit: Optional[int],
     batch_size: int,
 ) -> Any:
-    # Build an AsyncIOMotorCursor with common options
+    # Build an AsyncIOMotorCursor for async iteration
     cursor = coll.find(
         filter=query_filter or {},
         projection=projection,
@@ -173,11 +174,12 @@ class MongoDBReceiver:
 
                 async for doc in cursor:
                     buf.append(_to_serializable(doc))
-                    if len(buf) >= chunk_size or (
+                    should_flush = len(buf) >= chunk_size or (
                         remaining is not None and len(buf) >= remaining
-                    ):
+                    )
+                    if should_flush:
                         metrics.lines_forwarded += len(buf)
-                        yield pd.DataFrame(buf)
+                        yield pandas_flatten_docs(buf, sep=".")
                         if remaining is not None:
                             remaining -= len(buf)
                             if remaining <= 0:
@@ -186,7 +188,7 @@ class MongoDBReceiver:
 
                 if buf:
                     metrics.lines_forwarded += len(buf)
-                    yield pd.DataFrame(buf)
+                    yield pandas_flatten_docs(buf, sep=".")
         except PyMongoError as exc:
             raise RuntimeError(f"Mongo read_bulk failed: {exc}") from exc
 
@@ -318,22 +320,25 @@ class MongoDBReceiver:
         ordered: bool = bool(write_options.get("ordered", True))
 
         # Convert once; reuse in all branches
-        docs: List[Dict[str, Any]] = frame.to_dict(orient="records")
+        flat_docs: List[Dict[str, Any]] = frame.to_dict(orient="records")
 
         try:
             with connection_handler.lease_collection(
                 database=database_name, collection=entity_name
             ) as (_, coll):
                 if operation == DatabaseOperation.TRUNCATE:
-                    await _truncate_and_insert_many(coll, docs, ordered=ordered)
+                    nested = unflatten_many(flat_docs, sep=".")
+                    await _truncate_and_insert_many(coll, nested, ordered=ordered)
 
                 elif operation == DatabaseOperation.INSERT:
-                    await _insert_many(coll, docs, ordered=ordered)
+                    nested = unflatten_many(flat_docs, sep=".")
+                    await _insert_many(coll, nested, ordered=ordered)
 
                 elif operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
+                    # Dotted keys are path updates in Mongo -> keep them flat
                     upsert = operation == DatabaseOperation.UPSERT
                     ops = _build_update_ops(
-                        docs,
+                        flat_docs,
                         key_fields=key_fields,
                         match_filter=match_filter,
                         update_fields=update_fields,
@@ -368,8 +373,6 @@ class MongoDBReceiver:
             pdf = frame.get_partition(i).compute()
             if pdf.empty:
                 continue
-            rows = int(len(pdf))
-            metrics.lines_received += rows
             async for result in self.write_bulk(
                 connection_handler=connection_handler,
                 database_name=database_name,
