@@ -16,13 +16,12 @@ from etl_core.utils.common_helpers import leaf_field_paths
 @register_component("read_mongodb")
 class MongoDBRead(MongoDBComponent):
     """
-    MongoDB reader supporting row, bulk, and bigdata modes.
-    Produces on a single 'out' port.
+    MongoDB reader supporting row, bulk, and bigdata strategies.
 
-    The MongoDB projection is ALWAYS derived from the 'out' port Schema:
-      - Include all leaf paths as {path: 1} (dot-separated).
-      - Exclude '_id' unless present in the schema (add {'_id': 0}).
-    No explicit 'projection' can be set on this component.
+    Projection is derived from the 'out' schema:
+      - include all leaf paths as {path: 1}
+      - exclude '_id' unless '_id' is present in the schema
+      - if no 'out' schema is available, projection is None (read all)
     """
 
     OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
@@ -34,10 +33,10 @@ class MongoDBRead(MongoDBComponent):
     )
     sort: Optional[List[Tuple[str, int]]] = Field(
         default=None,
-        description="List of (field, direction) where direction in {1, -1}",
+        description="List of (field, direction) pairs where direction in {1, -1}",
     )
     limit: Optional[int] = Field(default=None, description="Max documents to read")
-    skip: int = Field(default=0, ge=0, description="Documents to skip")
+    skip: int = Field(default=0, ge=0, description="Documents to skip from start")
 
     # Private state
     _receiver: MongoDBReceiver = PrivateAttr(default_factory=MongoDBReceiver)
@@ -46,9 +45,8 @@ class MongoDBRead(MongoDBComponent):
     @model_validator(mode="after")
     def _build_objects(self) -> "MongoDBRead":
         self._receiver = MongoDBReceiver()
-        # Connection and receiver are set up at build time.
         self._setup_connection()
-        # Build projection from the out port schema once.
+        # Build projection once from the out port schema
         self._projection = self._projection_from_out_schema()
         return self
 
@@ -57,15 +55,15 @@ class MongoDBRead(MongoDBComponent):
         Build a MongoDB projection from the 'out' port Schema.
 
         Behavior:
-        - Include all flattened leaf paths as {path: 1}.
-        - If '_id' is not part of the schema, add {'_id': 0} to exclude it.
-        - If there is no 'out' schema available, return None (no projection).
+        - include all flattened leaf paths as {path: 1}
+        - if '_id' is not part of the schema, add {'_id': 0} to exclude it
+        - if there is no 'out' schema, return None (no projection)
         """
+        schema = self.out_port_schemas.get("out")
+        if not schema:
+            return None
 
-        schema = self.out_port_schemas["out"]
-
-        # Collect dot-separated leaf paths (nested fields become 'a.b.c').
-        paths = leaf_field_paths(schema, ".")
+        paths = leaf_field_paths(schema, self._schema_path_separator)
         if not paths:
             return None
 
@@ -74,8 +72,13 @@ class MongoDBRead(MongoDBComponent):
             proj["_id"] = 0
         return proj
 
-    async def process_row(self, metrics: ComponentMetrics) -> AsyncIterator[Out]:
-        # Yield each document as it arrives to keep true streaming behavior
+    async def process_row(
+        self, _payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        """
+        RowStrategy calls: process_row(payload, metrics).
+        Readers ignore the incoming payload (should be None).
+        """
         async for doc in self._receiver.read_row(
             connection_handler=self.connection_handler,
             database_name=self._database_name,
@@ -90,7 +93,14 @@ class MongoDBRead(MongoDBComponent):
         ):
             yield Out(port="out", payload=doc)
 
-    async def process_bulk(self, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_bulk(
+        self, _payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        """
+        BulkStrategy calls: process_bulk(payload, metrics).
+        Readers ignore the incoming payload (should be None)
+        and emit pandas.DataFrame chunks.
+        """
         async for frame in self._receiver.read_bulk(
             connection_handler=self.connection_handler,
             database_name=self._database_name,
@@ -106,7 +116,14 @@ class MongoDBRead(MongoDBComponent):
         ):
             yield Out(port="out", payload=frame)
 
-    async def process_bigdata(self, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_bigdata(
+        self, _payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
+        """
+        BigDataStrategy calls: process_bigdata(payload, metrics).
+        Readers ignore the incoming payload (should be None) and emit a
+         Dask DataFrame per partition.
+        """
         async for ddf in self._receiver.read_bigdata(
             connection_handler=self.connection_handler,
             database_name=self._database_name,
