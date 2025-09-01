@@ -1,0 +1,84 @@
+{
+  "name": "mongo_row_nested_to_nested",
+  "strategy_type": "row",
+  "components": [
+    {
+      "comp_type": "read_mongodb",
+      "name": "read_people",
+      "description": "Read nested docs from source collection",
+      "entity_name": "people_src",
+      "credentials_id": 9001,
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "zip", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      },
+      "query_filter": {},
+      "sort": [["name", 1]]
+    },
+    {
+      "comp_type": "schema_mapping",
+      "name": "map_nested",
+      "description": "Passthrough/rename from nested to nested",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "zip", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "full_name", "data_type": "string" },
+            {
+              "name": "loc",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "postal", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      },
+      "rules_by_dest": {
+        "out": {
+          "full_name": { "src_port": "in", "src_path": "name" },
+          "loc.city":  { "src_port": "in", "src_path": "address.city" },
+          "loc.postal":{ "src_port": "in", "src_path": "address.zip" }
+        }
+      }
+    },
+    {
+      "comp_type": "write_mongodb",
+      "name": "write_people_out",
+      "description": "Write nested docs to target collection",
+      "entity_name": "people_out_nested",
+      "credentials_id": 9001,
+      "operation": "INSERT"
+    }
+  ],
+  "links": [
+    { "from": "read_people.out", "to": "map_nested.in" },
+    { "from": "map_nested.out",  "to": "write_people_out.in" }
+  ]
+}

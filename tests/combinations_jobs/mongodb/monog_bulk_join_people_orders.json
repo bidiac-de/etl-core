@@ -1,0 +1,116 @@
+{
+  "name": "mongo_bulk_join_people_orders",
+  "strategy_type": "bulk",
+  "components": [
+    {
+      "comp_type": "read_mongodb",
+      "name": "read_people",
+      "description": "People master data",
+      "entity_name": "people_src",
+      "credentials_id": 9001,
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "user_id", "data_type": "string" },
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "comp_type": "read_mongodb",
+      "name": "read_orders",
+      "description": "Orders keyed by user_id",
+      "entity_name": "orders_src",
+      "credentials_id": 9001,
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "order_id", "data_type": "string" },
+            { "name": "user_id",  "data_type": "string" },
+            { "name": "amount",   "data_type": "integer" }
+          ]
+        }
+      }
+    },
+    {
+      "comp_type": "schema_mapping",
+      "name": "map_join",
+      "description": "Join people + orders and select fields",
+      "in_port_schemas": {
+        "A": {
+          "fields": [
+            { "name": "user_id", "data_type": "string" },
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" }
+              ]
+            }
+          ]
+        },
+        "B": {
+          "fields": [
+            { "name": "order_id", "data_type": "string" },
+            { "name": "user_id",  "data_type": "string" },
+            { "name": "amount",   "data_type": "integer" }
+          ]
+        }
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "user_id", "data_type": "string" },
+            { "name": "name", "data_type": "string" },
+            { "name": "city", "data_type": "string" },
+            { "name": "order_id", "data_type": "string" },
+            { "name": "amount", "data_type": "integer" }
+          ]
+        }
+      },
+      "join_plan": {
+        "steps": [
+          {
+            "left_port": "A",
+            "right_port": "B",
+            "left_on": "user_id",
+            "right_on": "user_id",
+            "how": "inner",
+            "output_port": "out"
+          }
+        ]
+      },
+      "rules_by_dest": {
+        "out": {
+          "user_id":  { "src_port": "A", "src_path": "user_id" },
+          "name":     { "src_port": "A", "src_path": "name" },
+          "city":     { "src_port": "A", "src_path": "address.city" },
+          "order_id": { "src_port": "B", "src_path": "order_id" },
+          "amount":   { "src_port": "B", "src_path": "amount" }
+        }
+      }
+    },
+    {
+      "comp_type": "write_mongodb",
+      "name": "write_joined",
+      "description": "Write joined rows",
+      "entity_name": "people_orders_out",
+      "credentials_id": 9001,
+      "operation": "INSERT"
+    }
+  ],
+  "links": [
+    { "from": "read_people.out", "to": "map_join.A" },
+    { "from": "read_orders.out", "to": "map_join.B" },
+    { "from": "map_join.out",    "to": "write_joined.in" }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "name": "mongo_bulk_flat_to_nested_upsert",
+  "strategy_type": "bulk",
+  "components": [
+    {
+      "comp_type": "read_mongodb",
+      "name": "read_flat_src",
+      "description": "Read flat docs (e.g., from an upstream process)",
+      "entity_name": "people_src_flat",
+      "credentials_id": 9001,
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "ext_id", "data_type": "string" },
+            { "name": "full_name", "data_type": "string" },
+            { "name": "address_city", "data_type": "string" },
+            { "name": "address_zip",  "data_type": "string" }
+          ]
+        }
+      },
+      "query_filter": {}
+    },
+    {
+      "comp_type": "schema_mapping",
+      "name": "map_to_nested",
+      "description": "Reshape flat → nested and rename",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "ext_id", "data_type": "string" },
+            { "name": "full_name", "data_type": "string" },
+            { "name": "address_city", "data_type": "string" },
+            { "name": "address_zip",  "data_type": "string" }
+          ]
+        }
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "ext_id", "data_type": "string" },
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "zip",  "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      },
+      "rules_by_dest": {
+        "out": {
+          "ext_id":      { "src_port": "in", "src_path": "ext_id" },
+          "name":        { "src_port": "in", "src_path": "full_name" },
+          "address.city":{ "src_port": "in", "src_path": "address_city" },
+          "address.zip": { "src_port": "in", "src_path": "address_zip" }
+        }
+      }
+    },
+    {
+      "comp_type": "write_mongodb",
+      "name": "write_nested_upsert",
+      "description": "Upsert into nested target on ext_id",
+      "entity_name": "people_out_nested",
+      "credentials_id": 9001,
+      "operation": "UPSERT",
+      "key_fields": ["ext_id"],
+      "ordered": true
+    }
+  ],
+  "links": [
+    { "from": "read_flat_src.out", "to": "map_to_nested.in" },
+    { "from": "map_to_nested.out", "to": "write_nested_upsert.in" }
+  ]
+}
