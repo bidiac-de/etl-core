@@ -106,6 +106,7 @@ async def test_read_bulk_projection_limit_skip(
         limit=5,
         skip=0,
         chunk_size=3,
+        seperator=".",
     ):
         chunks.append(frame)
 
@@ -137,6 +138,7 @@ async def test_read_bigdata_emits_partitions(
         limit=None,
         skip=0,
         chunk_size=3,
+        seperator=".",
     ):
         ddfs.append(ddf)
 
@@ -228,6 +230,7 @@ async def test_write_bulk_insert_many(
                 "match_filter": None,
                 "ordered": True,
             },
+            seperator=".",
         )
     )
     # one result per chunk
@@ -274,6 +277,7 @@ async def test_write_bulk_upsert_builds_update_ops(
                 "match_filter": None,
                 "ordered": True,
             },
+            seperator=".",
         )
     )
     assert results  # at least one bulk result emitted
@@ -318,6 +322,7 @@ async def test_write_bulk_truncate_clears_then_inserts(
                 "match_filter": None,
                 "ordered": True,
             },
+            seperator=".",
         )
     )
 
@@ -359,6 +364,7 @@ async def test_write_bigdata_partitions(
                 "match_filter": None,
                 "ordered": True,
             },
+            seperator=".",
         )
     )
     # one result per partition

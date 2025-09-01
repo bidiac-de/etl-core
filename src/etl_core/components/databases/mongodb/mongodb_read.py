@@ -102,6 +102,7 @@ class MongoDBRead(MongoDBComponent):
             limit=self.limit,
             skip=self.skip,
             chunk_size=self.bulk_chunk_size,
+            seperator=self._schema_path_separator,
         ):
             yield Out(port="out", payload=frame)
 
@@ -117,5 +118,6 @@ class MongoDBRead(MongoDBComponent):
             limit=self.limit,
             skip=self.skip,
             chunk_size=self.bigdata_partition_chunk_size,
+            seperator=self._schema_path_separator,
         ):
             yield Out(port="out", payload=ddf)

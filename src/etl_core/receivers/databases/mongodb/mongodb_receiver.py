@@ -155,6 +155,7 @@ class MongoDBReceiver:
         limit: Optional[int],
         skip: int,
         chunk_size: int,
+        seperator: str,
     ) -> AsyncIterator[pd.DataFrame]:
         """
         Stream pandas DataFrames in chunks of size `chunk_size`.
@@ -183,7 +184,7 @@ class MongoDBReceiver:
                     )
                     if should_flush:
                         metrics.lines_forwarded += len(buf)
-                        yield pandas_flatten_docs(buf, sep=".")
+                        yield pandas_flatten_docs(buf, sep=seperator)
                         if remaining is not None:
                             remaining -= len(buf)
                             if remaining <= 0:
@@ -192,7 +193,7 @@ class MongoDBReceiver:
 
                 if buf:
                     metrics.lines_forwarded += len(buf)
-                    yield pandas_flatten_docs(buf, sep=".")
+                    yield pandas_flatten_docs(buf, sep=seperator)
         except PyMongoError as exc:
             raise RuntimeError(f"Mongo read_bulk failed: {exc}") from exc
 
@@ -209,6 +210,7 @@ class MongoDBReceiver:
         limit: Optional[int],
         skip: int,
         chunk_size: int,
+        seperator: str,
     ) -> AsyncIterator[dd.DataFrame]:
         """
         Stream Dask DataFrames; each chunk becomes a single-partition DDF.
@@ -225,6 +227,7 @@ class MongoDBReceiver:
             limit=limit,
             skip=skip,
             chunk_size=chunk_size,
+            seperator=seperator,
         ):
             yield dd.from_pandas(pdf, npartitions=1)
 
@@ -306,6 +309,7 @@ class MongoDBReceiver:
         metrics: Any,
         operation: DatabaseOperation,
         write_options: Dict[str, Any],
+        seperator: str,
     ) -> AsyncIterator[pd.DataFrame]:
         """
         Write a DataFrame with Motor bulk ops, yield the same frame once.
@@ -331,11 +335,11 @@ class MongoDBReceiver:
                 database=database_name, collection=entity_name
             ) as (_, coll):
                 if operation == DatabaseOperation.TRUNCATE:
-                    nested = unflatten_many(flat_docs, sep=".")
+                    nested = unflatten_many(flat_docs, sep=seperator)
                     await _truncate_and_insert_many(coll, nested, ordered=ordered)
 
                 elif operation == DatabaseOperation.INSERT:
-                    nested = unflatten_many(flat_docs, sep=".")
+                    nested = unflatten_many(flat_docs, sep=seperator)
                     await _insert_many(coll, nested, ordered=ordered)
 
                 elif operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
@@ -370,6 +374,7 @@ class MongoDBReceiver:
         metrics: Any,
         operation: DatabaseOperation,
         write_options: Dict[str, Any],
+        seperator: str,
     ) -> AsyncIterator[dd.DataFrame]:
         """
         Writes a Dask DataFrame partition-by-partition using bulk ops.
@@ -386,5 +391,6 @@ class MongoDBReceiver:
                 metrics=metrics,
                 operation=operation,
                 write_options=write_options,
+                seperator=seperator,
             ):
                 yield dd.from_pandas(result, npartitions=1)

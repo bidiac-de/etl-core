@@ -91,6 +91,7 @@ class MongoDBWrite(MongoDBComponent, DatabaseOperationMixin):
             metrics=metrics,
             operation=self.operation,
             write_options=self._write_options,
+            seperator=self._schema_path_separator,
         ):
             yield Out(port="out", payload=result)
 
@@ -105,5 +106,6 @@ class MongoDBWrite(MongoDBComponent, DatabaseOperationMixin):
             metrics=metrics,
             operation=self.operation,
             write_options=self._write_options,
+            seperator=self._schema_path_separator,
         ):
             yield Out(port="out", payload=result)
