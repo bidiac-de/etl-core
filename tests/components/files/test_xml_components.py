@@ -289,3 +289,95 @@ async def test_read_xml_nested_bulk_flattens(metrics):
     assert r0["address.street"] == "Main"
     assert r0["tags.item[0]"] == "alpha"
     assert r0["tags.item[1]"] == "beta"
+
+@pytest.mark.asyncio
+async def test_write_xml_row_from_flat_dict(tmp_path: Path, metrics):
+    out_fp = tmp_path / "row_flat.xml"
+    comp = WriteXML(
+        name="WriteXML_Row_Flat",
+        description="row from flat keys",
+        comp_type="write_xml",
+        filepath=out_fp,
+        root_tag="rows",
+        record_tag="row",
+    )
+    comp.strategy = RowExecutionStrategy()
+
+    row = {
+        "id": "1",
+        "name": "Alice",
+        "address.street": "Main",
+        "address.city": "Springfield",
+        "address.@attrs.cityId": "X-42",
+        "note.#text": "hello",
+        "tags.item[0]": "alpha",
+        "tags.item[1]": "beta",
+    }
+
+    out = await anext(comp.execute(payload=row, metrics=metrics), None)
+    assert isinstance(out, Out) and out.port == "out"
+
+    tree = ET.parse(out_fp)
+    root = tree.getroot()
+    rec = root.find("./row")
+    assert rec is not None
+    assert rec.findtext("id") == "1"
+    assert rec.findtext("name") == "Alice"
+
+    addr = rec.find("./address")
+    assert addr is not None
+    assert addr.get("cityId") == "X-42"
+    assert addr.findtext("street") == "Main"
+    assert addr.findtext("city") == "Springfield"
+
+    note = rec.find("./note")
+    assert note is not None and (note.text or "") == "hello"
+
+    items = rec.findall("./tags/item")
+    assert [i.text for i in items] == ["alpha", "beta"]
+
+@pytest.mark.asyncio
+async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
+    out_fp = tmp_path / "bulk_flat.xml"
+    comp = WriteXML(
+        name="WriteXML_Bulk_Flat",
+        description="bulk from flat df",
+        comp_type="write_xml",
+        filepath=out_fp,
+        root_tag="rows",
+        record_tag="row",
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    df = pd.DataFrame([
+        {
+            "id": "1", "name": "A",
+            "address.street": "Main", "address.city": "Town",
+            "tags.item[0]": "t1", "tags.item[1]": "t2",
+        },
+        {
+            "id": "2", "name": "B",
+            "address.street": "Second", "address.city": "Ville",
+            "tags.item[0]": "u1",
+        },
+    ])
+
+    out = await anext(comp.execute(payload=df, metrics=metrics), None)
+    assert isinstance(out, Out) and out.port == "out"
+
+    tree = ET.parse(out_fp)
+    rows = tree.getroot().findall("./row")
+    assert len(rows) == 2
+
+    r1, r2 = rows
+    assert r1.findtext("id") == "1"
+    assert r1.findtext("address/street") == "Main"
+    assert r1.findtext("address/city") == "Town"
+    assert [e.text for e in r1.findall("./tags/item")] == ["t1", "t2"]
+
+    assert r2.findtext("id") == "2"
+    assert r2.findtext("address/street") == "Second"
+    assert r2.findtext("address/city") == "Ville"
+    assert [e.text for e in r2.findall("./tags/item")] == ["u1"]
+
+
