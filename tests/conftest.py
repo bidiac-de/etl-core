@@ -43,6 +43,7 @@ from etl_core.components.databases.mongodb.mongodb_connection_handler import (
 from etl_core.components.databases.pool_args import build_mongo_client_kwargs
 from etl_core.components.databases import pool_args
 
+
 @pytest.fixture
 def data_ops_metrics() -> DataOperationsMetrics:
     """Fresh DataOperationsMetrics for each test."""
@@ -54,6 +55,7 @@ def data_ops_metrics() -> DataOperationsMetrics:
         lines_forwarded=0,
         lines_dismissed=0,
     )
+
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
     keys = list(sys.modules.keys())
