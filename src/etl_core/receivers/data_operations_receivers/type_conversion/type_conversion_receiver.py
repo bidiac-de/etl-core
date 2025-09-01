@@ -18,6 +18,8 @@ from etl_core.receivers.data_operations_receivers.type_conversion.type_conversio
 
 
 class TypeConversionReceiver(Receiver):
+    """Receiver for type conversion with row, pandas and dask paths."""
+
     async def process_row(
             self,
             *,
@@ -25,16 +27,12 @@ class TypeConversionReceiver(Receiver):
             rules: Sequence[TypeConversionRule],
             metrics: ComponentMetrics,
     ) -> AsyncIterator[Tuple[str, Any]]:
-        """
-        Convert nested row. SKIP-policy may drop the whole row (no yield).
-        """
+        """Convert a single nested row; yield ('out', payload)."""
         metrics.lines_received += 1
-
         keep, new_row = convert_row_nested(row, rules)
         if keep:
             metrics.lines_forwarded += 1
             yield "out", new_row
-
 
     async def process_bulk(
             self,
@@ -44,9 +42,7 @@ class TypeConversionReceiver(Receiver):
             metrics: ComponentMetrics,
             out_schema: Schema | None = None,
     ) -> AsyncIterator[Tuple[str, Any]]:
-        """
-        Convert top-level pandas DataFrame columns. Optionally validate against schema.
-        """
+        """Convert a pandas DataFrame; optionally validate schema."""
         try:
             metrics.lines_received += int(len(dataframe))
         except Exception:
@@ -72,16 +68,7 @@ class TypeConversionReceiver(Receiver):
             metrics: ComponentMetrics,
     ) -> AsyncIterator[Tuple[str, Any]]:
         """
-        Convert top-level Dask DataFrame columns lazily.
+        Convert a Dask DataFrame lazily.
         """
         converted = convert_dask_top_level(ddf, rules)
-
-        try:
-            n_in = ddf.map_partitions(len).sum().compute()
-            n_out = converted.map_partitions(len).sum().compute()
-            metrics.lines_received += int(n_in)
-            metrics.lines_forwarded += int(n_out)
-        except Exception:
-            pass
-
         yield "out", converted

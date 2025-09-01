@@ -94,5 +94,3 @@ async def test_receiver_process_bigdata__dask_df() -> None:
     got = out_ddf.compute()
     assert list(got["v"].astype("Int64")) == [1, 2, 3]
 
-    assert metrics.lines_received >= 3
-    assert metrics.lines_forwarded >= 3

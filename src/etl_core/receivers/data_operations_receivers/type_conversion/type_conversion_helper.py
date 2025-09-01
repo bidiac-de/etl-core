@@ -13,7 +13,7 @@ from etl_core.components.wiring.schema import Schema
 
 
 class SchemaValidationError(ValueError):
-    """Raised when produced data violates the declared schema."""
+    """Schema validation failed."""
 
 
 class OnError(str, Enum):
@@ -32,6 +32,7 @@ class TypeConversionRule:
 
 _ITEM = "*"
 
+
 def _parse_path(path: str) -> Tuple[str, ...]:
     """Split a dotted column path into parts."""
     parts = [seg.strip() for seg in path.split(".")]
@@ -49,10 +50,14 @@ def _pd_dtype(target: DataType) -> Optional[str]:
     return mapping.get(target)
 
 
-
 def _convert_scalar(value: Any, target: DataType) -> Any:
     """Convert a single scalar value to the target type."""
     if value is None:
+        return None
+
+    if isinstance(value, str) and value.strip().lower() in {
+        "", "na", "nan", "null", "none",
+    }:
         return None
 
     if target == DataType.STRING:
@@ -65,15 +70,17 @@ def _convert_scalar(value: Any, target: DataType) -> Any:
             raise ValueError("cannot cast bool to integer")
         if isinstance(value, (int, np.integer)):
             return int(value)
-        if isinstance(value, (float, np.floating)) and float(value).is_integer():
-            return int(value)
+        if isinstance(value, (float, np.floating)):
+            if float(value).is_integer():
+                return int(value)
+            raise ValueError(f"non-integer float {value!r} cannot be cast to integer")
         return int(value)
 
     if target == DataType.FLOAT:
         if pd.isna(value):
             return None
         if isinstance(value, (int, np.integer, float, np.floating)) and not isinstance(
-                value, (bool, np.bool_)
+                value, (bool, np.bool_),
         ):
             return float(value)
         return float(value)
@@ -90,17 +97,13 @@ def _convert_scalar(value: Any, target: DataType) -> Any:
             return True
         if s in {"false", "f", "0", "no", "n"}:
             return False
-
         raise ValueError(f"cannot coerce '{value}' to boolean")
 
     return value
 
 
-
 def _apply_on_error_row(value: Any, target: DataType, policy: OnError) -> Tuple[bool, Any]:
-    """
-    Convert a value with error policy in row mode, returning (keep, new_value).
-    """
+    """Convert a value with error policy in row mode, returning (keep, new_value)."""
     try:
         return True, _convert_scalar(value, target)
     except Exception:
@@ -108,8 +111,7 @@ def _apply_on_error_row(value: Any, target: DataType, policy: OnError) -> Tuple[
             raise
         if policy == OnError.NULL:
             return True, None
-
-        return False, None
+        return True, value
 
 
 def _walk_and_convert(
@@ -131,9 +133,7 @@ def _walk_and_convert(
         if isinstance(obj, list):
             new_items: List[Any] = []
             for item in obj:
-                keep, new_item = _walk_and_convert(item, tuple(rest), target, policy)
-                if not keep and policy == OnError.SKIP:
-                    return False, obj
+                _, new_item = _walk_and_convert(item, tuple(rest), target, policy)
                 new_items.append(new_item)
             return True, new_items
         return True, obj
@@ -141,9 +141,7 @@ def _walk_and_convert(
     if isinstance(obj, dict):
         if head not in obj:
             return True, obj
-        keep, new_val = _walk_and_convert(obj[head], tuple(rest), target, policy)
-        if not keep and policy == OnError.SKIP:
-            return False, obj
+        _, new_val = _walk_and_convert(obj[head], tuple(rest), target, policy)
         cloned = dict(obj)
         cloned[head] = new_val
         return True, cloned
@@ -159,12 +157,18 @@ def convert_row_nested(
     out = dict(row)
     for r in rules:
         parts = _parse_path(r.column_path)
-        keep, mutated = _walk_and_convert(out, parts, r.target, r.on_error)
-        if not keep and r.on_error == OnError.SKIP:
-            return False, out
+        _, mutated = _walk_and_convert(out, parts, r.target, r.on_error)
         if isinstance(mutated, dict):
             out = mutated
     return True, out
+
+
+def _safe_bool(v: Any) -> Optional[bool]:
+    """Return bool or None if conversion fails."""
+    try:
+        return _convert_scalar(v, DataType.BOOLEAN)
+    except Exception:
+        return None
 
 
 def convert_frame_top_level(
@@ -172,7 +176,6 @@ def convert_frame_top_level(
         rules: Sequence[TypeConversionRule],
 ) -> pd.DataFrame:
     """Convert top-level DataFrame columns according to rules."""
-
     if df is None or df.empty or not rules:
         return df
 
@@ -186,14 +189,49 @@ def convert_frame_top_level(
         if col not in out.columns:
             continue
 
+        s = out[col]
         dtype = _pd_dtype(r.target)
 
-        if dtype and r.on_error == OnError.RAISE:
+        if dtype and r.on_error == OnError.RAISE and r.target != DataType.BOOLEAN:
             try:
-                out[col] = out[col].astype(dtype)
+                out[col] = s.astype(dtype)
                 continue
             except Exception:
                 pass
+
+        if r.target in (DataType.INTEGER, DataType.FLOAT):
+            as_num = pd.to_numeric(s, errors="coerce")
+
+            if r.target == DataType.INTEGER:
+                mask_non_int = ~as_num.isna() & (as_num % 1 != 0)
+                as_num = as_num.mask(mask_non_int, other=np.nan)
+
+                if r.on_error == OnError.RAISE and (mask_non_int.any() or as_num.isna().any()):
+                    raise ValueError(f"invalid integer values in column '{col}'")
+
+                if r.on_error == OnError.NULL:
+                    out[col] = as_num.astype("Int64")
+                else:
+                    out[col] = s.where(as_num.isna(), as_num.astype("Int64"))
+            else:
+                if r.on_error == OnError.RAISE and as_num.isna().any():
+                    raise ValueError(f"invalid float values in column '{col}'")
+
+                if r.on_error == OnError.NULL:
+                    out[col] = as_num.astype("float64")
+                else:
+                    out[col] = s.where(as_num.isna(), as_num.astype("float64"))
+
+            continue
+
+        if r.target == DataType.BOOLEAN:
+            if r.on_error == OnError.RAISE:
+                out[col] = s.map(lambda v: _convert_scalar(v, DataType.BOOLEAN))
+            elif r.on_error == OnError.NULL:
+                out[col] = s.map(lambda v: _safe_bool(v))
+            else:
+                out[col] = s.map(lambda v: v if _safe_bool(v) is None else _safe_bool(v))
+            continue
 
         def elem(v: Any) -> Any:
             try:
@@ -205,16 +243,9 @@ def convert_frame_top_level(
                     return v
                 raise
 
-        out[col] = out[col].map(elem)
-
-        if r.target == DataType.INTEGER:
-            try:
-                out[col] = out[col].astype("Int64")
-            except Exception:
-                pass
+        out[col] = s.map(elem)
 
     return out
-
 
 
 def convert_dask_top_level(
@@ -222,7 +253,6 @@ def convert_dask_top_level(
         rules: Sequence[TypeConversionRule],
 ) -> dd.DataFrame:
     """Apply rules to a Dask DataFrame using map_partitions."""
-
     if ddf is None or not rules:
         return ddf
 
@@ -237,22 +267,22 @@ def convert_dask_top_level(
     return ddf.map_partitions(_apply, meta=meta)
 
 
-
 def derive_out_schema(in_schema: Schema, rules: Sequence[TypeConversionRule]) -> Schema:
     """Derive output schema by applying rules to input schema."""
-
     new_fields: List[FieldDef] = [f.model_copy(deep=True) for f in in_schema.fields]
 
     def ensure_path(root: FieldDef, parts: Tuple[str, ...]) -> FieldDef:
         if not parts:
             return root
         head, *rest = parts
+
         if head == _ITEM:
             if root.data_type != DataType.ARRAY:
                 root.data_type = DataType.ARRAY
             if root.item is None:
                 root.item = FieldDef(name=_ITEM, data_type=DataType.OBJECT, children=[])
             return ensure_path(root.item, tuple(rest))
+
         if root.data_type != DataType.OBJECT:
             root.data_type = DataType.OBJECT
         if root.children is None:
@@ -267,11 +297,13 @@ def derive_out_schema(in_schema: Schema, rules: Sequence[TypeConversionRule]) ->
         parts = _parse_path(r.column_path)
         if not parts:
             continue
+
         root_name = parts[0]
         root = next((f for f in new_fields if f.name == root_name), None)
         if root is None:
             root = FieldDef(name=root_name, data_type=DataType.OBJECT, children=[])
             new_fields.append(root)
+
         target_node = ensure_path(root, tuple(parts[1:])) if len(parts) > 1 else root
 
         if target_node.data_type not in (
@@ -287,8 +319,7 @@ def derive_out_schema(in_schema: Schema, rules: Sequence[TypeConversionRule]) ->
     return Schema(fields=new_fields)
 
 
-def _validate_scalar_against_field(value: Any, fd: FieldDef, path: str) -> None\
-        :
+def _validate_scalar_against_field(value: Any, fd: FieldDef, path: str) -> None:
     """Check a scalar value against a field definition."""
     if value is None:
         if not fd.nullable:
@@ -311,7 +342,7 @@ def _validate_scalar_against_field(value: Any, fd: FieldDef, path: str) -> None\
 
     if dt == DataType.FLOAT:
         if isinstance(value, (int, np.integer, float, np.floating)) and not isinstance(
-                value, (bool, np.bool_)
+                value, (bool, np.bool_),
         ):
             return
         raise SchemaValidationError(f"{path}: expected float, got {type(value).__name__}")
@@ -331,7 +362,16 @@ def validate_frame_against_schema(
     for col, fd in wanted.items():
         if col not in df.columns:
             raise SchemaValidationError(f"missing column '{col}' in DataFrame")
+
         sample = df[col].dropna()
         if sample.empty:
             continue
-        _validate_scalar_against_field(sample.iloc[0], fd, col)
+
+        try:
+            uniq = sample.unique()
+            values = list(uniq[:10])
+        except Exception:
+            values = list(sample.head(10).values)
+
+        for v in values:
+            _validate_scalar_against_field(v, fd, col)

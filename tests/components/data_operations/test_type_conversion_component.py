@@ -182,8 +182,7 @@ async def test_process_bigdata__top_level_cast__boolean_skip() -> None:
     got = out_ddf.compute()
 
     assert list(got["flag"]) == [True, False, "weird"]
-    assert metrics.lines_received >= 3
-    assert metrics.lines_forwarded >= 3
+
 
 
 @pytest.mark.asyncio
