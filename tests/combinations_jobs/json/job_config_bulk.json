@@ -1,0 +1,45 @@
+{
+  "name": "JsonPassThrough",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bulk",
+  "metadata": {
+    "created_by": "pytest",
+    "created_at": "2025-08-19T14:00:00"
+  },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "read json array input",
+      "filepath": "__IN__",
+      "routes": {
+        "out": [
+          { "to": "writer", "in_port": "in" }
+        ]
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_json",
+      "description": "write json array output",
+      "filepath": "__OUT__",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    }
+  ]
+}

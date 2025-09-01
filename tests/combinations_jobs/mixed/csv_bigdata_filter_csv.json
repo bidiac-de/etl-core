@@ -1,0 +1,55 @@
+{
+  "name": "CSV BigData Filter to CSV",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bigdata",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_csv",
+      "description": "CSV in (dask)",
+      "filepath": "__IN__",
+      "separator": ",",
+      "routes": { "out": [ { "to": "flt", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "flt",
+      "comp_type": "filter",
+      "description": "name contains 'i'",
+      "rule": { "column": "name", "operator": "contains", "value": "i" },
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "pass": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "pass": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "CSV out (dask)",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    }
+  ]
+}

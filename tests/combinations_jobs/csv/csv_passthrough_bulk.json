@@ -1,0 +1,43 @@
+{
+  "name": "csv_passthrough_bulk",
+  "strategy_type": "bulk",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_csv",
+      "description": "CSV source",
+      "filepath": "__IN__",
+      "separator": ",",
+      "routes": {
+        "out": [
+          { "to": "writer", "in_port": "in" }
+        ]
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "CSV sink",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    }
+  ]
+}

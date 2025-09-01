@@ -1,0 +1,45 @@
+{
+  "name": "ExcelPassThrough",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "row",
+  "metadata": {
+    "created_by": "pytest",
+    "created_at": "2025-08-19T14:00:00"
+  },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_excel",
+      "description": "read excel input",
+      "filepath": "__IN__",
+      "routes": {
+        "out": [
+          { "to": "writer", "in_port": "in" }
+        ]
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "integer" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_excel",
+      "description": "write excel output",
+      "filepath": "__OUT__",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "integer" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    }
+  ]
+}
