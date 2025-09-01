@@ -1,8 +1,8 @@
 """
-Tests for MariaDB ETL components.
+Tests for PostgreSQL ETL components.
 
 These tests mock the database connections and test the component logic
-without requiring actual MariaDB instances.
+without requiring actual PostgreSQL instances.
 """
 
 import pytest
@@ -11,20 +11,21 @@ import dask.dataframe as dd
 
 from unittest.mock import Mock, AsyncMock
 
-from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
+from etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
-from etl_core.components.wiring.schema import Schema
-from etl_core.components.wiring.column_definition import FieldDef, DataType
 
 
-class TestMariaDBComponents:
-    """Test cases for MariaDB components."""
+class TestPostgreSQLComponents:
+    """Test cases for PostgreSQL components."""
 
-    def _create_mariadb_write_with_schema(self, **kwargs):
-        """Helper to create MariaDBWrite component with proper schema."""
+    def _create_postgresql_write_with_schema(self, **kwargs):
+        """Helper to create PostgreSQLWrite component with proper schema."""
+        from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
+
         # Set up mock schema for testing
         mock_schema = Schema(
             fields=[
@@ -38,7 +39,7 @@ class TestMariaDBComponents:
         if "in_port_schemas" not in kwargs:
             kwargs["in_port_schemas"] = {"in": mock_schema}
 
-        write_comp = MariaDBWrite(**kwargs)
+        write_comp = PostgreSQLWrite(**kwargs)
 
         return write_comp
 
@@ -53,7 +54,7 @@ class TestMariaDBComponents:
             "password": "testpass",
             "database": "testdb",
             "host": "localhost",
-            "port": 3306,
+            "port": 5432,
         }.get(param)
         mock_credentials.decrypted_password = "testpass"
         context.get_credentials.return_value = mock_credentials
@@ -104,12 +105,12 @@ class TestMariaDBComponents:
         )
         return dd.from_pandas(df, npartitions=3)
 
-    def test_mariadb_read_initialization(self):
-        """Test MariaDBRead component initialization."""
-        read_comp = MariaDBRead(
+    def test_postgresql_read_initialization(self):
+        """Test PostgreSQLRead component initialization."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             params={"limit": 10},
@@ -120,12 +121,12 @@ class TestMariaDBComponents:
         assert read_comp.params == {"limit": 10}
         assert read_comp.credentials_id == 1
 
-    def test_mariadb_write_initialization(self):
-        """Test MariaDBWrite component initialization."""
-        write_comp = self._create_mariadb_write_with_schema(
+    def test_postgresql_write_initialization(self):
+        """Test PostgreSQLWrite component initialization."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -134,14 +135,14 @@ class TestMariaDBComponents:
         assert write_comp.credentials_id == 1
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_process_row(
+    async def test_postgresql_read_process_row(
         self, mock_context, mock_metrics, sample_data
     ):
-        """Test MariaDBRead process_row method."""
-        read_comp = MariaDBRead(
+        """Test PostgreSQLRead process_row method."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
@@ -170,14 +171,14 @@ class TestMariaDBComponents:
         assert results[1]["id"] == 2
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_process_bulk(
+    async def test_postgresql_read_process_bulk(
         self, mock_context, mock_metrics, sample_dataframe
     ):
-        """Test MariaDBRead process_bulk method."""
-        read_comp = MariaDBRead(
+        """Test PostgreSQLRead process_bulk method."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -198,14 +199,14 @@ class TestMariaDBComponents:
         assert len(results[0]) == 2  # DataFrame has 2 rows
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_process_bigdata(
+    async def test_postgresql_read_process_bigdata(
         self, mock_context, mock_metrics, sample_dask_dataframe
     ):
-        """Test MariaDBRead process_bigdata method."""
-        read_comp = MariaDBRead(
+        """Test PostgreSQLRead process_bigdata method."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -228,12 +229,12 @@ class TestMariaDBComponents:
         assert hasattr(results[0], "npartitions")
 
     @pytest.mark.asyncio
-    async def test_mariadb_write_process_row(self, mock_context, mock_metrics):
-        """Test MariaDBWrite process_row method."""
-        write_comp = self._create_mariadb_write_with_schema(
+    async def test_postgresql_write_process_row(self, mock_context, mock_metrics):
+        """Test PostgreSQLWrite process_row method."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -260,14 +261,14 @@ class TestMariaDBComponents:
         assert results[0]["row"]["name"] == "John"
 
     @pytest.mark.asyncio
-    async def test_mariadb_write_process_bulk(
+    async def test_postgresql_write_process_bulk(
         self, mock_context, mock_metrics, sample_dataframe
     ):
-        """Test MariaDBWrite process_bulk method."""
-        write_comp = self._create_mariadb_write_with_schema(
+        """Test PostgreSQLWrite process_bulk method."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -287,14 +288,14 @@ class TestMariaDBComponents:
         assert len(results[0]) == 2  # DataFrame has 2 rows
 
     @pytest.mark.asyncio
-    async def test_mariadb_write_process_bigdata(
+    async def test_postgresql_write_process_bigdata(
         self, mock_context, mock_metrics, sample_dask_dataframe
     ):
-        """Test MariaDBWrite process_bigdata method."""
-        write_comp = self._create_mariadb_write_with_schema(
+        """Test PostgreSQLWrite process_bigdata method."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             if_exists="replace",  # Test the new if_exists parameter
@@ -330,12 +331,12 @@ class TestMariaDBComponents:
         assert len(results) == 1  # Only one Out object
         assert hasattr(results[0], "npartitions")
 
-    def test_mariadb_component_connection_setup(self, mock_context):
-        """Test MariaDB component connection setup."""
-        read_comp = MariaDBRead(
+    def test_postgresql_component_connection_setup(self, mock_context):
+        """Test PostgreSQL component connection setup."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -344,7 +345,7 @@ class TestMariaDBComponents:
 
         # Test that the component can be created and has the right properties
         assert read_comp.name == "test_read"
-        assert read_comp.comp_type == "read_mariadb"
+        assert read_comp.comp_type == "read_postgresql"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
@@ -358,12 +359,14 @@ class TestMariaDBComponents:
         # in integration tests with real credentials.
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_error_handling(self, mock_context, mock_metrics):
-        """Test MariaDB component error handling."""
-        read_comp = MariaDBRead(
+    async def test_postgresql_component_error_handling(
+        self, mock_context, mock_metrics
+    ):
+        """Test PostgreSQL component error handling."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -382,14 +385,14 @@ class TestMariaDBComponents:
                 pass
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_strategy_integration(
+    async def test_postgresql_component_strategy_integration(
         self, mock_context, mock_metrics
     ):
-        """Test MariaDB component strategy integration."""
-        read_comp = MariaDBRead(
+        """Test PostgreSQL component strategy integration."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -426,12 +429,12 @@ class TestMariaDBComponents:
 
     # NEW TESTS FOR IMPROVED COVERAGE
 
-    def test_mariadb_write_batch_size_configuration(self, mock_context):
-        """Test MariaDBWrite batch size configuration."""
-        write_comp = self._create_mariadb_write_with_schema(
+    def test_postgresql_write_batch_size_configuration(self, mock_context):
+        """Test PostgreSQLWrite batch size configuration."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             row_batch_size=500,
@@ -441,12 +444,14 @@ class TestMariaDBComponents:
         assert write_comp.row_batch_size == 500
 
     @pytest.mark.asyncio
-    async def test_mariadb_read_with_complex_params(self, mock_context, mock_metrics):
-        """Test MariaDBRead with complex query parameters."""
-        read_comp = MariaDBRead(
+    async def test_postgresql_read_with_complex_params(
+        self, mock_context, mock_metrics
+    ):
+        """Test PostgreSQLRead with complex query parameters."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query=(
                 "SELECT * FROM users WHERE age > %(min_age)s AND city = ANY(%(cities)s)"
@@ -476,12 +481,12 @@ class TestMariaDBComponents:
         assert results[0]["city"] == "Berlin"
 
     @pytest.mark.asyncio
-    async def test_mariadb_write_with_empty_data(self, mock_context, mock_metrics):
-        """Test MariaDBWrite with empty data."""
-        write_comp = self._create_mariadb_write_with_schema(
+    async def test_postgresql_write_with_empty_data(self, mock_context, mock_metrics):
+        """Test PostgreSQLWrite with empty data."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -503,12 +508,12 @@ class TestMariaDBComponents:
         assert len(results[0]) == 0  # Empty DataFrame
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_connection_failure(self, mock_context):
-        """Test MariaDB component connection failure handling."""
-        read_comp = MariaDBRead(
+    async def test_postgresql_component_connection_failure(self, mock_context):
+        """Test PostgreSQL component connection failure handling."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=999,  # Use non-existent credentials ID
@@ -527,16 +532,16 @@ class TestMariaDBComponents:
             read_comp._get_credentials()
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_invalid_credentials(self, mock_context):
-        """Test MariaDB component with invalid credentials."""
+    async def test_postgresql_component_invalid_credentials(self, mock_context):
+        """Test PostgreSQL component with invalid credentials."""
         # Create context with invalid credentials
         invalid_context = Mock()
         invalid_context.get_credentials.side_effect = KeyError("Credentials not found")
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=999,  # Non-existent credentials
@@ -548,14 +553,14 @@ class TestMariaDBComponents:
             read_comp._get_credentials()
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_metrics_integration(
+    async def test_postgresql_component_metrics_integration(
         self, mock_context, mock_metrics
     ):
-        """Test MariaDB component metrics integration."""
-        read_comp = MariaDBRead(
+        """Test PostgreSQL component metrics integration."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -585,12 +590,12 @@ class TestMariaDBComponents:
         assert len(results) == 1
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_strategy_type_configuration(self, mock_context):
-        """Test MariaDB component strategy type configuration."""
-        read_comp = MariaDBRead(
+    async def test_postgresql_component_strategy_type_configuration(self, mock_context):
+        """Test PostgreSQL component strategy type configuration."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -604,10 +609,10 @@ class TestMariaDBComponents:
         assert read_comp.query == "SELECT * FROM users"
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_large_query_handling(
+    async def test_postgresql_component_large_query_handling(
         self, mock_context, mock_metrics
     ):
-        """Test MariaDB component with large queries."""
+        """Test PostgreSQL component with large queries."""
         large_query = """
         SELECT u.id, u.name, u.email, p.phone, a.street, a.city, a.country
         FROM users u
@@ -619,10 +624,10 @@ class TestMariaDBComponents:
         LIMIT %(limit)s
         """
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query=large_query,
             params={"start_date": "2023-01-01", "limit": 1000},
@@ -650,14 +655,14 @@ class TestMariaDBComponents:
         assert "LEFT JOIN" in read_comp.query
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_special_characters_in_table_name(
+    async def test_postgresql_component_special_characters_in_table_name(
         self, mock_context, mock_metrics
     ):
-        """Test MariaDB component with special characters in table names."""
-        write_comp = self._create_mariadb_write_with_schema(
+        """Test PostgreSQL component with special characters in table names."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="user_profiles_2024",  # Table with underscores and numbers
             credentials_id=1,
         )
@@ -676,27 +681,27 @@ class TestMariaDBComponents:
         assert len(results) == 1
         assert write_comp.entity_name == "user_profiles_2024"
 
-    def test_mariadb_component_charset_collation_defaults(self):
-        """Test MariaDB component default charset and collation settings."""
+    def test_postgresql_component_charset_collation_defaults(self):
+        """Test PostgreSQL component default charset and collation settings."""
         # Create a mock component for testing
         mock_comp = Mock()
         mock_comp.charset = "utf8"
-        mock_comp.collation = "utf8_general_ci"
+        mock_comp.collation = "en_US.UTF-8"
 
         # Test default values
         assert mock_comp.charset == "utf8"
-        assert mock_comp.collation == "utf8_general_ci"
+        assert mock_comp.collation == "en_US.UTF-8"
 
         # Test custom values
         mock_comp_custom = Mock()
         mock_comp_custom.charset = "latin1"
-        mock_comp_custom.collation = "latin1_swedish_ci"
+        mock_comp_custom.collation = "en_US.UTF-8"
 
         assert mock_comp_custom.charset == "latin1"
-        assert mock_comp_custom.collation == "latin1_swedish_ci"
+        assert mock_comp_custom.collation == "en_US.UTF-8"
 
-    def test_mariadb_component_connection_setup_with_session_variables(self):
-        """Test MariaDB component connection setup with session variables."""
+    def test_postgresql_component_connection_setup_with_session_variables(self):
+        """Test PostgreSQL component connection setup with session variables."""
         # Mock component and connection handler
         mock_comp = Mock()
         mock_handler = Mock()
@@ -707,20 +712,20 @@ class TestMariaDBComponents:
         # Test that session variables can be set
         mock_comp._connection_handler = mock_handler
         mock_comp.charset = "utf8"
-        mock_comp.collation = "utf8_general_ci"
+        mock_comp.collation = "en_US.UTF-8"
 
         # This is a basic test - the actual implementation would be more complex
         assert mock_comp.charset == "utf8"
-        assert mock_comp.collation == "utf8_general_ci"
+        assert mock_comp.collation == "en_US.UTF-8"
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_operation_types(self, mock_context):
-        """Test MariaDB component with different operation types."""
+    async def test_postgresql_component_operation_types(self, mock_context):
+        """Test PostgreSQL component with different operation types."""
         # Test INSERT operation (default)
-        write_comp_insert = self._create_mariadb_write_with_schema(
+        write_comp_insert = self._create_postgresql_write_with_schema(
             name="test_write_insert",
             description="Test write component with INSERT",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             operation="insert",
@@ -728,10 +733,10 @@ class TestMariaDBComponents:
         write_comp_insert.context = mock_context
 
         # Test UPSERT operation
-        write_comp_upsert = self._create_mariadb_write_with_schema(
+        write_comp_upsert = self._create_postgresql_write_with_schema(
             name="test_write_upsert",
             description="Test write component with UPSERT",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             operation="upsert",
@@ -739,10 +744,10 @@ class TestMariaDBComponents:
         write_comp_upsert.context = mock_context
 
         # Test UPDATE operation
-        write_comp_update = self._create_mariadb_write_with_schema(
+        write_comp_update = self._create_postgresql_write_with_schema(
             name="test_write_update",
             description="Test write component with UPDATE",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             operation="update",
@@ -751,10 +756,10 @@ class TestMariaDBComponents:
         write_comp_update.context = mock_context
 
         # Test TRUNCATE operation
-        write_comp_truncate = self._create_mariadb_write_with_schema(
+        write_comp_truncate = self._create_postgresql_write_with_schema(
             name="test_write_truncate",
             description="Test write component with TRUNCATE",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             operation="truncate",
@@ -768,12 +773,12 @@ class TestMariaDBComponents:
         assert write_comp_truncate.operation == DatabaseOperation.TRUNCATE
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_batch_size_configuration(self, mock_context):
-        """Test MariaDB component batch size configuration."""
-        write_comp = self._create_mariadb_write_with_schema(
+    async def test_postgresql_component_batch_size_configuration(self, mock_context):
+        """Test PostgreSQL component batch size configuration."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             row_batch_size=500,
@@ -788,12 +793,12 @@ class TestMariaDBComponents:
         assert write_comp.bigdata_partition_chunk_size == 100_000
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_query_building(self, mock_context):
-        """Test MariaDB component query building functionality."""
-        write_comp = self._create_mariadb_write_with_schema(
+    async def test_postgresql_component_query_building(self, mock_context):
+        """Test PostgreSQL component query building functionality."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             operation="insert",
@@ -815,7 +820,7 @@ class TestMariaDBComponents:
             "users", columns, DatabaseOperation.UPSERT, conflict_columns=["id"]
         )
         assert "INSERT INTO users" in upsert_query
-        assert "ON DUPLICATE KEY UPDATE" in upsert_query
+        assert "ON CONFLICT" in upsert_query
 
         # Test UPDATE query
         write_comp.where_conditions = ["id = :id"]
@@ -834,13 +839,13 @@ class TestMariaDBComponents:
         assert "INSERT INTO users" in truncate_query
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_port_configuration(self):
-        """Test MariaDB component port configuration."""
+    async def test_postgresql_component_port_configuration(self):
+        """Test PostgreSQL component port configuration."""
         # Test read component ports
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -868,10 +873,10 @@ class TestMariaDBComponents:
             ]
         )
 
-        write_comp = MariaDBWrite(
+        write_comp = PostgreSQLWrite(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             in_port_schemas={"in": mock_schema},
@@ -890,9 +895,10 @@ class TestMariaDBComponents:
         assert write_comp.OUTPUT_PORTS[0].fanout == "many"
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_schema_validation(self, mock_context):
-        """Test MariaDB component schema validation."""
+    async def test_postgresql_component_schema_validation(self, mock_context):
+        """Test PostgreSQL component schema validation."""
         from etl_core.components.wiring.schema import Schema
+        from etl_core.components.wiring.column_definition import FieldDef, DataType
 
         # Set up mock schema
         mock_schema = Schema(
@@ -904,16 +910,14 @@ class TestMariaDBComponents:
         )
 
         # Create a component with schema
-        write_comp = MariaDBWrite(
+        write_comp = PostgreSQLWrite(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
             in_port_schemas={"in": mock_schema},
         )
-
-        write_comp.context = mock_context
 
         # Test that schema is properly set
         assert "in" in write_comp.in_port_schemas
@@ -924,14 +928,14 @@ class TestMariaDBComponents:
         assert "INSERT INTO users" in write_comp._query
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_receiver_integration(
+    async def test_postgresql_component_receiver_integration(
         self, mock_context, mock_metrics
     ):
-        """Test MariaDB component receiver integration."""
-        write_comp = self._create_mariadb_write_with_schema(
+        """Test PostgreSQL component receiver integration."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -977,12 +981,14 @@ class TestMariaDBComponents:
         mock_receiver.write_bigdata.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_mariadb_component_connection_handler_integration(self, mock_context):
-        """Test MariaDB component connection handler integration."""
-        write_comp = self._create_mariadb_write_with_schema(
+    async def test_postgresql_component_connection_handler_integration(
+        self, mock_context
+    ):
+        """Test PostgreSQL component connection handler integration."""
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -996,10 +1002,8 @@ class TestMariaDBComponents:
         write_comp._connection_handler = mock_connection_handler
         
         # The connection handler is set up during validation when context is set
-        # We need to trigger the validation by calling _build_objects
+        # We need to trigger the validation
         write_comp._build_objects()
-        
-        # Now the connection handler should be available
         assert write_comp.connection_handler is not None
 
         # Test that connection handler is passed to receiver methods

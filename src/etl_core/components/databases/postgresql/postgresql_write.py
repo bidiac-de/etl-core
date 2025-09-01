@@ -1,27 +1,26 @@
-from __future__ import annotations
-
-from typing import Any, AsyncIterator, Dict, Optional  # noqa: F401
-
-import dask.dataframe as dd
+from typing import Any, Dict, AsyncIterator, Optional  # noqa: F401
 import pandas as pd
+import dask.dataframe as dd
 from pydantic import model_validator
 
-from etl_core.components.component_registry import register_component
-from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
+from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
 from etl_core.components.databases.database_operation_mixin import (
     DatabaseOperationMixin,
 )
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
+from etl_core.components.component_registry import register_component
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.databases.postgresql.postgresql_receiver import (
+    PostgreSQLReceiver,
+)
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
-from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
 
 
-@register_component("write_mariadb")
-class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
+@register_component("write_postgresql")
+class PostgreSQLWrite(PostgreSQLComponent, DatabaseOperationMixin):
     """
-    MariaDB writer with ports + schema.
+    PostgreSQL writer with ports + schema.
 
     - INPUT_PORTS:
         - 'in' (required): rows/frames to write
@@ -36,13 +35,14 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
         self, table: str, columns: list, operation: DatabaseOperation, **kwargs
     ) -> str:
         """
-        Build MariaDB-specific query based on operation type.
+        Build PostgreSQL-specific query based on operation type.
 
         Args:
             table: Target table name
             columns: List of column names
             operation: Database operation type
-            **kwargs: Additional parameters (e.g., update_columns for upsert)
+            **kwargs: Additional parameters
+            (e.g., conflict_columns, update_columns for ON CONFLICT)
 
         Returns:
             SQL query string
@@ -56,13 +56,17 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
             ({columns_str}) VALUES ({placeholders})"
 
         elif operation == DatabaseOperation.UPSERT:
-            # Insert or update on duplicate key
+            # Insert or update on conflict
+            conflict_columns = kwargs.get("conflict_columns", ["id"])
             update_columns = kwargs.get("update_columns", columns)
+            conflict_str = ", ".join(conflict_columns)
             update_clause = ", ".join(
-                [f"{col} = VALUES({col})" for col in update_columns]
+                [f"{col} = EXCLUDED.{col}" for col in update_columns]
             )
-            return f"INSERT INTO {table} ({columns_str}) VALUES \
-            ({placeholders}) ON DUPLICATE KEY UPDATE {update_clause}"
+            return (
+                f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders}) "
+                f"ON CONFLICT ({conflict_str}) DO UPDATE SET {update_clause}"
+            )
 
         elif operation == DatabaseOperation.UPDATE:
             # Pure update operation
@@ -78,9 +82,9 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
 
     @model_validator(mode="after")
     def _build_objects(self):
-        """Build MariaDB-specific objects after validation."""
+        """Build PostgreSQL-specific objects after validation."""
         super()._build_objects()
-        self._receiver = MariaDBReceiver()
+        self._receiver = PostgreSQLReceiver()
         schema = self.in_port_schemas["in"]
         columns = [field.name for field in schema.fields]
         self._query = self._build_query(self.entity_name, columns, self.operation)
@@ -126,4 +130,4 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
         yield Out(port="out", payload=result)
 
 
-MariaDBWrite.model_rebuild()
+PostgreSQLWrite.model_rebuild()

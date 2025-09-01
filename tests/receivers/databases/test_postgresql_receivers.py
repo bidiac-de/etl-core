@@ -1,20 +1,19 @@
 """
-Tests for MariaDB receivers.
+Tests for PostgreSQL database receivers.
 
 These tests mock the database connections and test the receiver logic
-without requiring actual MariaDB instances.
+without requiring actual PostgreSQL instances.
 """
 
 import pytest
 import pandas as pd
 import dask.dataframe as dd
-
 from unittest.mock import Mock, patch
 from sqlalchemy.engine import Connection as SQLConnection
 from sqlalchemy import text
 
-from src.etl_core.receivers.databases.mariadb.mariadb_receiver import (
-    MariaDBReceiver,
+from src.etl_core.receivers.databases.postgresql.postgresql_receiver import (
+    PostgreSQLReceiver,
 )
 from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from src.etl_core.components.databases.sql_connection_handler import (
@@ -22,8 +21,8 @@ from src.etl_core.components.databases.sql_connection_handler import (
 )
 
 
-class TestMariaDBReceivers:
-    """Test cases for MariaDB receivers."""
+class TestPostgreSQLReceiver:
+    """Test cases for PostgreSQL receiver."""
 
     @pytest.fixture
     def mock_connection_handler(self):
@@ -33,7 +32,7 @@ class TestMariaDBReceivers:
         mock_connection = Mock()
         mock_connection.execute.return_value = Mock()
         mock_connection.commit = Mock(return_value=None)
-        mock_connection.rollback = Mock(return_value=None)  # Added rollback method
+        mock_connection.rollback = Mock(return_value=None)
         # Make the mock connection pass isinstance(connection, SQLConnection) check
         mock_connection.__class__ = SQLConnection
 
@@ -67,9 +66,10 @@ class TestMariaDBReceivers:
         """Sample pandas DataFrame for testing."""
         return pd.DataFrame(
             {
-                "id": [1, 2],
-                "name": ["John", "Jane"],
-                "email": ["john@example.com", "jane@example.com"],
+                "id": [1, 2, 3],
+                "name": ["John", "Jane", "Bob"],
+                "email": ["john@example.com", "jane@example.com", "bob@example.com"],
+                "age": [25, 30, 35],
             }
         )
 
@@ -78,21 +78,23 @@ class TestMariaDBReceivers:
         """Sample Dask DataFrame for testing."""
         df = pd.DataFrame(
             {
-                "id": [1, 2, 3, 4],
-                "name": ["John", "Jane", "Bob", "Alice"],
+                "id": [1, 2, 3, 4, 5],
+                "name": ["John", "Jane", "Bob", "Alice", "Charlie"],
                 "email": [
                     "john@example.com",
                     "jane@example.com",
                     "bob@example.com",
                     "alice@example.com",
+                    "charlie@example.com",
                 ],
+                "age": [25, 30, 35, 28, 32],
             }
         )
-        return dd.from_pandas(df, npartitions=3)
+        return dd.from_pandas(df, npartitions=2)
 
-    def test_mariadb_receiver_get_connection(self, mock_connection_handler):
-        """Test MariaDBReceiver _get_connection method."""
-        receiver = MariaDBReceiver()
+    def test_postgresql_receiver_get_connection(self, mock_connection_handler):
+        """Test PostgreSQLReceiver _get_connection method."""
+        receiver = PostgreSQLReceiver()
         connection = receiver._get_connection(mock_connection_handler)
         assert connection == mock_connection_handler.lease().__enter__()
 
@@ -100,11 +102,11 @@ class TestMariaDBReceivers:
         # and once in lease().__enter__)
         assert mock_connection_handler.lease.call_count == 2
 
-    def test_mariadb_receiver_get_connection_invalid_type(
+    def test_postgresql_receiver_get_connection_invalid_type(
         self, mock_connection_handler
     ):
-        """Test MariaDBReceiver _get_connection with invalid type."""
-        receiver = MariaDBReceiver()
+        """Test PostgreSQLReceiver _get_connection with invalid type."""
+        receiver = PostgreSQLReceiver()
 
         # Test that the connection is properly retrieved through the lease
         connection = receiver._get_connection(mock_connection_handler)
@@ -114,21 +116,41 @@ class TestMariaDBReceivers:
         # and once in lease().__enter__)
         assert mock_connection_handler.lease.call_count == 2
 
+    def test_postgresql_receiver_initialization(self):
+        """Test PostgreSQL receiver initialization."""
+        receiver = PostgreSQLReceiver()
+        assert receiver is not None
+        assert hasattr(receiver, "read_row")
+        assert hasattr(receiver, "read_bulk")
+        assert hasattr(receiver, "read_bigdata")
+        assert hasattr(receiver, "write_row")
+        assert hasattr(receiver, "write_bulk")
+        assert hasattr(receiver, "write_bigdata")
+
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_read_row(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test MariaDBReceiver read_row method."""
-        receiver = MariaDBReceiver()
+    async def test_read_row_success(self, mock_connection_handler, mock_metrics):
+        """Test successful row reading."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution with proper SQLAlchemy result structure
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
-        mock_row1._mapping = {"id": 1, "name": "John"}
+        mock_row1._mapping = {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+        }
+
         mock_row2 = Mock()
-        mock_row2._mapping = {"id": 2, "name": "Jane"}
-        # Make the mock result itself iterable
+        mock_row2._mapping = {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+        }
+
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
@@ -146,22 +168,33 @@ class TestMariaDBReceivers:
         assert len(results) == 2
         assert results[0]["id"] == 1
         assert results[0]["name"] == "John"
+        assert results[1]["id"] == 2
+        assert results[1]["name"] == "Jane"
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_read_bulk(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test MariaDBReceiver read_bulk method."""
-        receiver = MariaDBReceiver()
+    async def test_read_bulk_success(self, mock_connection_handler, mock_metrics):
+        """Test successful bulk reading."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution with proper SQLAlchemy result structure
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
-        mock_row1._mapping = {"id": 1, "name": "John"}
+        mock_row1._mapping = {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+        }
+
         mock_row2 = Mock()
-        mock_row2._mapping = {"id": 2, "name": "Jane"}
-        # Make the mock result itself iterable
+        mock_row2._mapping = {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+        }
+
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
@@ -175,22 +208,33 @@ class TestMariaDBReceivers:
         )
 
         assert len(result) == 2
+        assert result.iloc[0]["name"] == "John"
+        assert result.iloc[1]["name"] == "Jane"
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_read_bigdata(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test MariaDBReceiver read_bigdata method."""
-        receiver = MariaDBReceiver()
+    async def test_read_bigdata_success(self, mock_connection_handler, mock_metrics):
+        """Test successful bigdata reading."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution with proper SQLAlchemy result structure
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
-        mock_row1._mapping = {"id": 1, "name": "John"}
+        mock_row1._mapping = {
+            "id": 1,
+            "name": "John",
+            "email": "john@example.com",
+            "age": 25,
+        }
+
         mock_row2 = Mock()
-        mock_row2._mapping = {"id": 2, "name": "Jane"}
-        # Make the mock result itself iterable
+        mock_row2._mapping = {
+            "id": 2,
+            "name": "Jane",
+            "email": "jane@example.com",
+            "age": 30,
+        }
+
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
@@ -204,13 +248,15 @@ class TestMariaDBReceivers:
         )
 
         assert len(result) == 2
+        # Convert to pandas for easier testing
+        pandas_result = result.compute()
+        assert pandas_result.iloc[0]["name"] == "John"
+        assert pandas_result.iloc[1]["name"] == "Jane"
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_write_row(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test MariaDBReceiver write_row method."""
-        receiver = MariaDBReceiver()
+    async def test_write_row_success(self, mock_connection_handler, mock_metrics):
+        """Test successful row writing."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution
         mock_result = Mock()
@@ -221,10 +267,9 @@ class TestMariaDBReceivers:
         # Test write_row with new signature
         result = await receiver.write_row(
             entity_name="users",
-            row={"name": "John", "email": "john@example.com"},
+            row={"name": "John", "email": "john@example.com", "age": 25},
             metrics=mock_metrics,
-            query="INSERT INTO users (name, email) VALUES (:name, :email)",
-            table="users",
+            query="INSERT INTO users (name, email, age) VALUES (:name, :email, :age)",
             connection_handler=mock_connection_handler,
         )
 
@@ -234,19 +279,19 @@ class TestMariaDBReceivers:
         # Verify return value
         assert result == {
             "affected_rows": 1,
-            "row": {"name": "John", "email": "john@example.com"},
+            "row": {"name": "John", "email": "john@example.com", "age": 25},
         }
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_write_bulk(
+    async def test_write_bulk_success(
         self, mock_connection_handler, mock_metrics, sample_dataframe
     ):
-        """Test MariaDBReceiver write_bulk method with DataFrame data."""
-        receiver = MariaDBReceiver()
+        """Test successful bulk writing."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution
         mock_result = Mock()
-        mock_result.rowcount = 2
+        mock_result.rowcount = 3
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_bulk with new signature
@@ -254,23 +299,24 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            table="users",
+            query=(
+                "INSERT INTO users (id, name, email, age) "
+                "VALUES (:id, :name, :email, :age)"
+            ),
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called for each row (2 rows in sample_dataframe)
-        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
-        mock_connection_handler.lease().__enter__().commit.assert_called_once()
+        # Verify execute was called for each row (3 rows = 3 calls)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 3
+        # Verify commit was called once after all inserts
+        assert mock_connection_handler.lease().__enter__().commit.call_count == 1
         # Verify return value
         assert result.equals(sample_dataframe)
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_write_bulk_empty_data(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test MariaDBReceiver write_bulk method with empty data."""
-        receiver = MariaDBReceiver()
+    async def test_write_bulk_empty_data(self, mock_connection_handler, mock_metrics):
+        """Test write_bulk method with empty data."""
+        receiver = PostgreSQLReceiver()
 
         # Test write_bulk with empty DataFrame
         empty_df = pd.DataFrame()
@@ -278,8 +324,10 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            table="users",
+            query=(
+                "INSERT INTO users (id, name, email, age) "
+                "VALUES (:id, :name, :email, :age)"
+            ),
             connection_handler=mock_connection_handler,
         )
 
@@ -290,15 +338,15 @@ class TestMariaDBReceivers:
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_write_bigdata(
+    async def test_write_bigdata_success(
         self, mock_connection_handler, mock_metrics, sample_dask_dataframe
     ):
-        """Test MariaDBReceiver write_bigdata method."""
-        receiver = MariaDBReceiver()
+        """Test successful bigdata writing."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution
         mock_result = Mock()
-        mock_result.rowcount = 4
+        mock_result.rowcount = 5
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
         # Test write_bigdata with new signature
@@ -307,8 +355,10 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
-                query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-                table="users",
+                query=(
+                    "INSERT INTO users (id, name, email, age) "
+                    "VALUES (:id, :name, :email, :age)"
+                ),
                 connection_handler=mock_connection_handler,
             )
             # Verify return value - result should be the DataFrame
@@ -318,9 +368,9 @@ class TestMariaDBReceivers:
             # If Dask tokenization fails, that's expected - check it's a known issue
             assert "tokenize" in str(e).lower() or "serialize" in str(e).lower()
 
-    def test_mariadb_receiver_inheritance(self, mock_connection_handler):
-        """Test MariaDBReceiver inheritance from abstract base classes."""
-        receiver = MariaDBReceiver()
+    def test_postgresql_receiver_inheritance(self, mock_connection_handler):
+        """Test PostgreSQLReceiver inheritance from abstract base classes."""
+        receiver = PostgreSQLReceiver()
 
         # Check that it has the required methods
         assert hasattr(receiver, "read_row")
@@ -331,11 +381,11 @@ class TestMariaDBReceivers:
         assert hasattr(receiver, "write_bigdata")
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_error_handling(
+    async def test_postgresql_receiver_error_handling(
         self, mock_connection_handler, mock_metrics
     ):
-        """Test MariaDBReceiver error handling."""
-        receiver = MariaDBReceiver()
+        """Test PostgreSQLReceiver error handling."""
+        receiver = PostgreSQLReceiver()
 
         # Mock connection to raise an error when execute is called
         mock_connection_handler.lease().__enter__().execute.side_effect = Exception(
@@ -355,11 +405,11 @@ class TestMariaDBReceivers:
                 pass
 
     @pytest.mark.asyncio
-    async def test_mariadb_receiver_async_thread_execution(
+    async def test_postgresql_receiver_async_thread_execution(
         self, mock_connection_handler, mock_metrics
     ):
-        """Test MariaDBReceiver async thread execution."""
-        receiver = MariaDBReceiver()
+        """Test PostgreSQLReceiver async thread execution."""
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution with proper SQLAlchemy result structure
         mock_result = Mock()
@@ -391,7 +441,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test handling of connection failures."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Simulate connection failure
         mock_connection_handler.lease.side_effect = Exception("Connection failed")
@@ -411,7 +461,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test that SQL injection attempts are properly handled."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         malicious_query = "SELECT * FROM users WHERE id = '1'; DROP TABLE users; --"
 
@@ -449,7 +499,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test transaction rollback when errors occur."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Mock connection to raise error on execute
         mock_conn = mock_connection_handler.lease().__enter__()
@@ -460,7 +510,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 row={"name": "John"},
                 metrics=mock_metrics,
-                table="users",
+                query="INSERT INTO users (name) VALUES (:name)",
                 connection_handler=mock_connection_handler,
             )
 
@@ -472,7 +522,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test Dask DataFrame partition processing."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create a real Dask DataFrame for testing
         df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
@@ -486,12 +536,11 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 frame=ddf,
                 metrics=mock_metrics,
-                query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-                table="users",
+                query="INSERT INTO users (id, name) VALUES (:id, :name)",
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify compute was called (2 partitions = 2 calls)
+            # Verify that compute was called (2 partitions = 2 calls)
             assert mock_compute.call_count == 2
 
     @pytest.mark.asyncio
@@ -499,7 +548,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bulk with empty DataFrame."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create empty DataFrame
         empty_df = pd.DataFrame()
@@ -509,7 +558,6 @@ class TestMariaDBReceivers:
             frame=empty_df,
             metrics=mock_metrics,
             query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            table="users",
             connection_handler=mock_connection_handler,
         )
 
@@ -524,7 +572,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bulk with single row data."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Single row data
         single_row_df = pd.DataFrame([{"name": "John", "email": "john@example.com"}])
@@ -539,11 +587,10 @@ class TestMariaDBReceivers:
             frame=single_row_df,
             metrics=mock_metrics,
             query="INSERT INTO users (name, email) VALUES (:name, :email)",
-            table="users",
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute and commit were called (once for the single row)
+        # Verify execute and commit were called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
@@ -554,7 +601,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test read_row with empty query result."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Mock empty result
         mock_result = Mock()
@@ -579,7 +626,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test read_bulk with empty query result."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Mock empty result
         mock_result = Mock()
@@ -603,7 +650,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test that connection lease context manager is properly used."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Mock the lease context manager
         mock_context = mock_connection_handler.lease.return_value
@@ -631,7 +678,7 @@ class TestMariaDBReceivers:
     @pytest.mark.asyncio
     async def test_metrics_integration(self, mock_connection_handler, mock_metrics):
         """Test that metrics are properly passed through to operations."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Mock the connection execution
         mock_result = Mock()
@@ -653,7 +700,7 @@ class TestMariaDBReceivers:
     @pytest.mark.asyncio
     async def test_large_data_handling(self, mock_connection_handler, mock_metrics):
         """Test handling of large datasets."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create large mock result with proper SQLAlchemy structure
         large_data = [{"id": i, "name": f"User{i}"} for i in range(1000)]
@@ -685,7 +732,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test handling of special characters in data."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Data with special characters
         special_data = {
@@ -719,7 +766,7 @@ class TestMariaDBReceivers:
     @pytest.mark.asyncio
     async def test_numeric_data_types(self, mock_connection_handler, mock_metrics):
         """Test handling of various numeric data types."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Data with different numeric types
         numeric_data = {
@@ -740,9 +787,8 @@ class TestMariaDBReceivers:
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
-            query="INSERT INTO numeric_table (integer, float, decimal, \
-            negative) VALUES \
-            (:integer, :float, :decimal, :negative)",
+            query="INSERT INTO numeric_table (integer, float, decimal, negative) \
+            VALUES (:integer, :float, :decimal, :negative)",
             connection_handler=mock_connection_handler,
             table="numeric_table",
         )
@@ -755,7 +801,7 @@ class TestMariaDBReceivers:
     @pytest.mark.asyncio
     async def test_boolean_data_types(self, mock_connection_handler, mock_metrics):
         """Test handling of boolean data types."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Data with boolean values
         boolean_data = {"is_active": True, "is_deleted": False, "has_permission": True}
@@ -771,8 +817,9 @@ class TestMariaDBReceivers:
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
-            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) \
-            VALUES (:is_active, :is_deleted, :has_permission)",
+            query="INSERT INTO boolean_table (is_active, is_deleted, \
+            has_permission) VALUES \
+            (:is_active, :is_deleted, :has_permission)",
             connection_handler=mock_connection_handler,
             table="boolean_table",
         )
@@ -789,7 +836,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test Dask DataFrame partition processing in write_bigdata."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create test data
         df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
@@ -825,7 +872,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bigdata with empty partition data."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create empty DataFrame
         df = pd.DataFrame()
@@ -856,7 +903,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bigdata with single partition."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create single partition DataFrame
         df = pd.DataFrame({"id": [1], "name": ["A"]})
@@ -892,7 +939,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bulk early return for empty DataFrame."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create empty DataFrame
         empty_df = pd.DataFrame()
@@ -918,7 +965,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bulk early return for empty list."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Test write_bulk with empty list (convert to DataFrame)
         empty_df = pd.DataFrame()
@@ -942,7 +989,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test read_bigdata default partition setting."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
         # Mock the connection execution
         mock_result = Mock()
         mock_row1 = Mock()
@@ -977,7 +1024,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bulk DataFrame to dict conversion."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # Create DataFrame
         df = pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]})
@@ -1006,7 +1053,7 @@ class TestMariaDBReceivers:
         self, mock_connection_handler, mock_metrics
     ):
         """Test write_bulk with list data (direct usage without conversion)."""
-        receiver = MariaDBReceiver()
+        receiver = PostgreSQLReceiver()
 
         # List data
         list_data = [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]
@@ -1064,7 +1111,7 @@ class TestMariaDBReceivers:
                 conn.execute(text(query), rows)
                 conn.commit()
 
-        # Verify the connection was used correctly
+        # Verify the connection was used correctly (once for the batch of rows)
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 

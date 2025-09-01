@@ -7,8 +7,8 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.base_component import Component
-from src.etl_core.context.context import Context
+from etl_core.components.base_component import Component
+from etl_core.context.context import Context
 
 
 class DatabaseComponent(Component, ABC):

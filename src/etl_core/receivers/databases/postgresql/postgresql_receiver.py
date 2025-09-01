@@ -11,8 +11,8 @@ from etl_core.components.databases.sql_connection_handler import SQLConnectionHa
 from etl_core.receivers.databases.sql_receiver import SQLReceiver
 
 
-class MariaDBReceiver(SQLReceiver):
-    """MariaDB receiver for database operations."""
+class PostgreSQLReceiver(SQLReceiver):
+    """PostgreSQL receiver for database operations."""
 
     async def read_row(
         self,
@@ -24,7 +24,7 @@ class MariaDBReceiver(SQLReceiver):
         query: str | None = None,
         params: Dict[str, Any] | None = None,
     ) -> AsyncIterator[Dict[str, Any]]:
-        """Yield MariaDB rows as dictionaries from a query."""
+        """Yield PostgreSQL rows as dictionaries from a query."""
         query = query or f"SELECT * FROM {entity_name}"
         params = params or {}
 

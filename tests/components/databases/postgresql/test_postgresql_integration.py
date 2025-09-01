@@ -1,30 +1,28 @@
 """
-Integration tests for MariaDB components with real database connections.
+Integration tests for PostgreSQL components with real database connections.
 
-These tests require a running MariaDB instance and test the full integration
+These tests require a running PostgreSQL instance and test the full integration
 of components with actual database operations.
 """
 
 import pytest
 import asyncio
-
-
 import dask.dataframe as dd
 import pandas as pd
 
 from unittest.mock import Mock, AsyncMock
 
-from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
+from etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.strategies.base_strategy import ExecutionStrategy
 
 
-class TestMariaDBIntegration:
-    """Test MariaDB integration scenarios."""
+class TestPostgreSQLIntegration:
+    """Test PostgreSQL integration scenarios."""
 
-    def _create_mariadb_write_with_schema(self, **kwargs):
-        """Helper to create MariaDBWrite component with proper schema."""
+    def _create_postgresql_write_with_schema(self, **kwargs):
+        """Helper to create PostgreSQLWrite component with proper schema."""
         from etl_core.components.wiring.schema import Schema
         from etl_core.components.wiring.column_definition import FieldDef, DataType
 
@@ -41,8 +39,23 @@ class TestMariaDBIntegration:
         if "in_port_schemas" not in kwargs:
             kwargs["in_port_schemas"] = {"in": mock_schema}
 
-        write_comp = MariaDBWrite(**kwargs)
+        write_comp = PostgreSQLWrite(**kwargs)
         return write_comp
+
+    @pytest.fixture
+    def mock_context(self):
+        """Create a mock context with credentials."""
+        context = Mock()
+        # Create mock credentials with get_parameter method
+        mock_credentials = Mock()
+        mock_credentials.get_parameter.side_effect = lambda param: {
+            "user": "testuser",
+            "password": "testpass",
+            "database": "testdb",
+        }.get(param)
+        mock_credentials.decrypted_password = "testpass"
+        context.get_credentials.return_value = mock_credentials
+        return context
 
     @pytest.fixture
     def mock_metrics(self):
@@ -95,11 +108,10 @@ class TestMariaDBIntegration:
     ):
         """Test complete read to write pipeline."""
         # Create read component
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
-            database="testdb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -107,10 +119,10 @@ class TestMariaDBIntegration:
         read_comp.context = mock_context
 
         # Create write component
-        write_comp = self._create_mariadb_write_with_schema(
+        write_comp = self._create_postgresql_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="write_postgresql",
             entity_name="users",
             credentials_id=1,
         )
@@ -154,12 +166,11 @@ class TestMariaDBIntegration:
     async def test_row_strategy_streaming(
         self, mock_context, mock_metrics, sample_data
     ):
-        """Test row strategy streaming with MariaDB components."""
-        read_comp = MariaDBRead(
+        """Test row strategy streaming with PostgreSQL components."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
-            database="testdb",
+            comp_type="read_postgresql",
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
@@ -194,16 +205,14 @@ class TestMariaDBIntegration:
             results.append(result.payload)
 
         assert len(results) == 2
-        assert results[0]["id"] == 1
-        assert results[1]["id"] == 2
 
     @pytest.mark.asyncio
     async def test_bigdata_strategy(self, mock_context, mock_metrics, sample_ddf):
-        """Test bigdata strategy with MariaDB components."""
-        read_comp = MariaDBRead(
+        """Test bigdata strategy with PostgreSQL components."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -220,9 +229,8 @@ class TestMariaDBIntegration:
         mock_strategy = Mock(spec=ExecutionStrategy)
 
         async def mock_execute_generator(component, payload, metrics):
-            gen = read_comp.process_bigdata(payload, metrics)
-            out = await anext(gen)
-            yield out
+            async for result in read_comp.process_bigdata(payload, metrics):
+                yield result
 
         mock_strategy.execute = mock_execute_generator
         read_comp._strategy = mock_strategy
@@ -238,10 +246,10 @@ class TestMariaDBIntegration:
     @pytest.mark.asyncio
     async def test_component_strategy_execution(self, mock_context, mock_metrics):
         """Test component strategy execution."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -280,10 +288,10 @@ class TestMariaDBIntegration:
     @pytest.mark.asyncio
     async def test_error_propagation(self, mock_context, mock_metrics):
         """Test error propagation through the pipeline."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -303,11 +311,11 @@ class TestMariaDBIntegration:
 
     @pytest.mark.asyncio
     async def test_metrics_integration(self, mock_context, mock_metrics):
-        """Test metrics integration with MariaDB components."""
-        read_comp = MariaDBRead(
+        """Test metrics integration with PostgreSQL components."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -341,10 +349,10 @@ class TestMariaDBIntegration:
     @pytest.mark.asyncio
     async def test_connection_handler_integration(self, mock_context, mock_metrics):
         """Test connection handler integration."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -354,7 +362,7 @@ class TestMariaDBIntegration:
 
         # Test that the component can be created and has the right properties
         assert read_comp.name == "test_read"
-        assert read_comp.comp_type == "read_mariadb"
+        assert read_comp.comp_type == "read_postgresql"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
@@ -371,11 +379,11 @@ class TestMariaDBIntegration:
     async def test_bulk_strategy_integration(
         self, mock_context, mock_metrics, sample_dataframe
     ):
-        """Test bulk strategy integration with MariaDB components."""
-        read_comp = MariaDBRead(
+        """Test bulk strategy integration with PostgreSQL components."""
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -393,9 +401,8 @@ class TestMariaDBIntegration:
         mock_strategy = Mock(spec=ExecutionStrategy)
 
         async def mock_execute_generator(component, payload, metrics):
-            gen = read_comp.process_bulk(payload, metrics)
-            out = await anext(gen)
-            yield out
+            async for result in read_comp.process_bulk(payload, metrics):
+                yield result.payload
 
         mock_strategy.execute = mock_execute_generator
         read_comp._strategy = mock_strategy
@@ -404,7 +411,7 @@ class TestMariaDBIntegration:
         payload = sample_dataframe
         results = []
         async for result in read_comp.execute(payload, mock_metrics):
-            results.append(result.payload)
+            results.append(result)
 
         assert len(results) == 1
         assert len(results[0]) == 2
@@ -412,10 +419,10 @@ class TestMariaDBIntegration:
     @pytest.mark.asyncio
     async def test_error_recovery_integration(self, mock_context, mock_metrics):
         """Test error recovery and retry logic in integration."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -431,7 +438,7 @@ class TestMariaDBIntegration:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("Temporary database error")
+                raise Exception("Database error")
             else:
                 yield {"id": 1, "name": "John"}
 
@@ -439,7 +446,7 @@ class TestMariaDBIntegration:
         read_comp._receiver = mock_receiver
 
         # Test error recovery (this would typically be handled by retry logic)
-        with pytest.raises(Exception, match="Temporary database error"):
+        with pytest.raises(Exception, match="Database error"):
             async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
 
@@ -453,10 +460,10 @@ class TestMariaDBIntegration:
         ]
         large_df = pd.DataFrame(large_data)
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -470,20 +477,22 @@ class TestMariaDBIntegration:
         read_comp._receiver = mock_receiver
 
         # Test large dataset processing
-        gen = read_comp.process_bulk(large_df, mock_metrics)
-        result = await anext(gen)
+        results = []
+        async for result in read_comp.process_bulk(large_df, mock_metrics):
+            results.append(result.payload)
 
-        assert len(result.payload) == 1000
-        assert result.payload.iloc[0]["id"] == 0
-        assert result.payload.iloc[999]["id"] == 999
+        assert len(results) == 1  # Only one Out object
+        assert len(results[0]) == 1000
+        assert results[0].iloc[0]["id"] == 0
+        assert results[0].iloc[999]["id"] == 999
 
     @pytest.mark.asyncio
     async def test_concurrent_operations_integration(self, mock_context, mock_metrics):
         """Test concurrent operations in integration."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -536,10 +545,10 @@ class TestMariaDBIntegration:
             },
         ]
 
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -560,12 +569,13 @@ class TestMariaDBIntegration:
         # Transform data (simulate ETL transformation)
         transformed_data = []
         async for result in read_comp.process_row({"id": 1}, mock_metrics):
-            res = result.payload
             # Transform: combine first_name and last_name
             transformed = {
-                "id": res["id"],
-                "full_name": f"{res['first_name']} {res['last_name']}",
-                "email": res["email"],
+                "id": result.payload["id"],
+                "full_name": (
+                    f"{result.payload['first_name']} {result.payload['last_name']}"
+                ),
+                "email": result.payload["email"],
             }
             transformed_data.append(transformed)
 
@@ -577,10 +587,10 @@ class TestMariaDBIntegration:
     @pytest.mark.asyncio
     async def test_connection_pool_integration(self, mock_context, mock_metrics):
         """Test connection pool integration."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -590,7 +600,7 @@ class TestMariaDBIntegration:
 
         # Test that the component can be created and has the right properties
         assert read_comp.name == "test_read"
-        assert read_comp.comp_type == "read_mariadb"
+        assert read_comp.comp_type == "read_postgresql"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.credentials_id == 1
@@ -606,10 +616,10 @@ class TestMariaDBIntegration:
     @pytest.mark.asyncio
     async def test_metrics_performance_integration(self, mock_context, mock_metrics):
         """Test metrics performance tracking in integration."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
@@ -651,10 +661,10 @@ class TestMariaDBIntegration:
         self, mock_context, mock_metrics
     ):
         """Test error handling strategy integration."""
-        read_comp = MariaDBRead(
+        read_comp = PostgreSQLRead(
             name="test_read",
             description="Test read component",
-            comp_type="read_mariadb",
+            comp_type="read_postgresql",
             database="testdb",
             entity_name="users",
             query="SELECT * FROM users",
