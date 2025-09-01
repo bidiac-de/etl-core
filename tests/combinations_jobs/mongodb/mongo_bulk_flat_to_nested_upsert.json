@@ -8,6 +8,7 @@
       "description": "Read flat docs (e.g., from an upstream process)",
       "entity_name": "people_src_flat",
       "credentials_id": 9001,
+      "routes": { "out": [ { "to": "map_to_nested", "in_port": "in" } ] },
       "out_port_schemas": {
         "out": {
           "fields": [
@@ -24,6 +25,9 @@
       "comp_type": "schema_mapping",
       "name": "map_to_nested",
       "description": "Reshape flat → nested and rename",
+      "extra_input_ports": ["in"],
+      "extra_output_ports": ["out"],
+      "routes": { "out": [ { "to": "write_nested_upsert", "in_port": "in" } ] },
       "in_port_schemas": {
         "in": {
           "fields": [
@@ -65,13 +69,25 @@
       "description": "Upsert into nested target on ext_id",
       "entity_name": "people_out_nested",
       "credentials_id": 9001,
-      "operation": "UPSERT",
+      "operation": "upsert",
       "key_fields": ["ext_id"],
+        "in_port_schemas": {
+            "in": {
+            "fields": [
+                { "name": "ext_id", "data_type": "string" },
+                { "name": "name", "data_type": "string" },
+                {
+                "name": "address",
+                "data_type": "object",
+                "children": [
+                    { "name": "city", "data_type": "string" },
+                    { "name": "zip",  "data_type": "string" }
+                ]
+                }
+            ]
+            }
+        },
       "ordered": true
     }
-  ],
-  "links": [
-    { "from": "read_flat_src.out", "to": "map_to_nested.in" },
-    { "from": "map_to_nested.out", "to": "write_nested_upsert.in" }
   ]
 }

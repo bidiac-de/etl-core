@@ -8,6 +8,7 @@
       "description": "Read nested docs from source collection",
       "entity_name": "people_src",
       "credentials_id": 9001,
+      "routes": { "out": [ { "to": "map_nested", "in_port": "in" } ] },
       "out_port_schemas": {
         "out": {
           "fields": [
@@ -30,6 +31,9 @@
       "comp_type": "schema_mapping",
       "name": "map_nested",
       "description": "Passthrough/rename from nested to nested",
+      "extra_input_ports": ["in"],
+      "extra_output_ports": ["out"],
+      "routes": { "out": [ { "to": "write_people_out", "in_port": "in" } ] },
       "in_port_schemas": {
         "in": {
           "fields": [
@@ -74,11 +78,22 @@
       "description": "Write nested docs to target collection",
       "entity_name": "people_out_nested",
       "credentials_id": 9001,
-      "operation": "INSERT"
+      "operation": "insert",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "full_name", "data_type": "string" },
+            {
+              "name": "loc",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "postal", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      }
     }
-  ],
-  "links": [
-    { "from": "read_people.out", "to": "map_nested.in" },
-    { "from": "map_nested.out",  "to": "write_people_out.in" }
   ]
 }

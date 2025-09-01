@@ -8,6 +8,7 @@
       "description": "Read nested docs",
       "entity_name": "people_src",
       "credentials_id": 9001,
+      "routes": { "out": [ { "to": "map_flatten", "in_port": "in" } ] },
       "out_port_schemas": {
         "out": {
           "fields": [
@@ -29,6 +30,9 @@
       "comp_type": "schema_mapping",
       "name": "map_flatten",
       "description": "Flatten nested address fields",
+      "extra_input_ports": ["in"],
+      "extra_output_ports": ["out"],
+      "routes": { "out": [ { "to": "write_flat", "in_port": "in" } ] },
       "in_port_schemas": {
         "in": {
           "fields": [
@@ -67,11 +71,16 @@
       "description": "Write flattened docs",
       "entity_name": "people_out_flat",
       "credentials_id": 9001,
-      "operation": "INSERT"
+      "operation": "insert",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "name", "data_type": "string" },
+            { "name": "address_city", "data_type": "string" },
+            { "name": "address_zip",  "data_type": "string" }
+          ]
+        }
+      }
     }
-  ],
-  "links": [
-    { "from": "read_people.out", "to": "map_flatten.in" },
-    { "from": "map_flatten.out", "to": "write_flat.in" }
   ]
 }
