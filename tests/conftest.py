@@ -22,6 +22,22 @@ from etl_core.persistance.table_definitions import (
     LayoutTable,
 )
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
+    DataOperationsMetrics,
+)
+
+
+@pytest.fixture
+def data_ops_metrics() -> DataOperationsMetrics:
+    """Fresh DataOperationsMetrics for each test."""
+    return DataOperationsMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+        lines_dismissed=0,
+    )
 
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
