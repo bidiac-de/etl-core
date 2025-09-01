@@ -1,23 +1,26 @@
 """
-Integration tests for MariaDB credentials and context system.
-"""
+Integration tests for MariaDB credentials and context functionality.
 
-from __future__ import annotations
+These tests verify that the Credentials and Context classes work together
+properly in real scenarios, using environment variables for sensitive data.
+"""
 
 import hashlib
 import os
 from typing import Tuple
-from unittest.mock import Mock, patch
 
 import pytest
+from unittest.mock import Mock, patch
 
-from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.context_parameter import ContextParameter
-from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
+from etl_core.context.context_parameter import ContextParameter
+from etl_core.components.databases.pool_args import build_sql_engine_kwargs
+from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.components.wiring.schema import Schema
+from etl_core.components.wiring.column_definition import FieldDef, DataType
 
 
 def derive_test_password(base_pw: str, purpose: str) -> str:
@@ -31,7 +34,176 @@ def derive_test_password(base_pw: str, purpose: str) -> str:
 
 
 class TestCredentialsIntegration:
-    """Test cases for real Credentials and Context integration."""
+    """Test MariaDB credentials integration."""
+
+    def _create_mariadb_write_with_schema(self, **kwargs):
+        """Helper to create MariaDBWrite component with proper schema."""
+
+        # Set up mock schema for testing
+        mock_schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+
+        # Merge the schema into kwargs
+        if "in_port_schemas" not in kwargs:
+            kwargs["in_port_schemas"] = {"in": mock_schema}
+
+        write_comp = MariaDBWrite(**kwargs)
+        return write_comp
+
+    @pytest.fixture
+    def sample_credentials(self, test_creds: Tuple[str, str]) -> Credentials:
+        user, password = test_creds
+        return Credentials(
+            credentials_id=1,
+            name="test_db_creds",
+            user=user,
+            host="localhost",
+            port=3306,
+            database="testdb",
+            password=password,
+            pool_max_size=10,
+            pool_timeout_s=30,
+        )
+
+    @pytest.fixture
+    def test_creds(self) -> Tuple[str, str]:
+        return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
+
+    @pytest.fixture
+    def sample_context(self, sample_credentials: Credentials) -> Context:
+        context = Context(
+            id=1,
+            name="test_context",
+            environment=Environment.TEST,
+            parameters={
+                "db_host": ContextParameter(
+                    id=1,
+                    key="db_host",
+                    value="localhost",
+                    type="string",
+                    is_secure=False,
+                ),
+                "db_port": ContextParameter(
+                    id=2, key="db_port", value="3306", type="string", is_secure=False
+                ),
+            },
+        )
+        context.add_credentials(sample_credentials)
+        return context
+
+    @pytest.fixture
+    def multiple_credentials(self, test_creds: Tuple[str, str]) -> dict:
+        _, base_pw = test_creds
+        return {
+            "minimal": Credentials(
+                credentials_id=1,
+                name="minimal_creds",
+                user="minuser",
+                host="localhost",
+                port=3306,
+                database="mindb",
+                password=base_pw,
+            ),
+            "with_pool": Credentials(
+                credentials_id=2,
+                name="pool_creds",
+                user="pooluser",
+                host="localhost",
+                port=3306,
+                database="pooldb",
+                password=derive_test_password(base_pw, "pool_ok"),
+                pool_max_size=50,
+                pool_timeout_s=60,
+            ),
+            "special_chars": Credentials(
+                credentials_id=3,
+                name="special_creds_2024",
+                user="user@domain",
+                host="localhost",
+                port=3306,
+                database="test-db_123",
+                password=derive_test_password(base_pw, "special_chars"),
+            ),
+            "no_password": Credentials(
+                credentials_id=4,
+                name="nopass_creds",
+                user="nopassuser",
+                host="localhost",
+                port=3306,
+                database="nopassdb",
+            ),
+        }
+
+    @pytest.fixture
+    def context_with_multiple_credentials(self, multiple_credentials: dict) -> Context:
+        context = Context(
+            id=23, name="multi_db_context", environment=Environment.TEST, parameters={}
+        )
+        for creds in multiple_credentials.values():
+            context.add_credentials(creds)
+        return context
+
+    @pytest.fixture
+    def mariadb_read_component(
+        self, sample_context: Context, test_creds: Tuple[str, str]
+    ) -> MariaDBRead:
+        read_comp = MariaDBRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_mariadb",
+            entity_name="users",
+            query="SELECT * FROM users",
+            credentials_id=1,
+        )
+        read_comp.context = sample_context
+        return read_comp
+
+    @pytest.fixture
+    def mariadb_write_component(
+        self, sample_context: Context, test_creds: Tuple[str, str]
+    ) -> MariaDBWrite:
+        write_comp = self._create_mariadb_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            credentials_id=1,
+        )
+        write_comp.context = sample_context
+        return write_comp
+
+    @pytest.fixture
+    def sample_sql_queries(self) -> dict:
+        return {
+            "simple_select": "SELECT * FROM users",
+            "parameterized": "SELECT * FROM users WHERE id = \
+            %(id)s AND active = %(active)s",
+            "complex_join": "SELECT u.name, p.price FROM \
+            users u JOIN products p ON u.id = p.user_id",
+            "aggregation": "SELECT COUNT(*) FROM users",
+            "insert": "INSERT INTO users (name, email) VALUES (%(name)s, %(email)s)",
+            "update": "UPDATE users SET name = %(name)s WHERE id = %(id)s",
+            "delete": "DELETE FROM users WHERE id = %(id)s",
+        }
+
+    @pytest.fixture
+    def sample_query_params(self) -> dict:
+        return {
+            "simple": {"id": 1},
+            "user_lookup": {"id": 1, "active": True},
+            "bulk_insert": [
+                {"name": "John", "email": "john@example.com"},
+                {"name": "Jane", "email": "jane@example.com"},
+                {"name": "Bob", "email": "bob@example.com"},
+            ],
+            "filter": {"active": True},
+            "pagination": {"offset": 0, "limit": 10},
+        }
 
     def test_credentials_creation(
         self, sample_credentials: Credentials, test_creds: Tuple[str, str]
@@ -79,9 +251,7 @@ class TestCredentialsIntegration:
         assert retrieved.name == "new_creds"
         assert retrieved.user == "newuser"
 
-    @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_read_component_with_real_credentials(
         self, mock_handler_class, sample_context: Context, test_creds
     ) -> None:
@@ -90,8 +260,7 @@ class TestCredentialsIntegration:
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="database",
-            database="testdb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -102,19 +271,16 @@ class TestCredentialsIntegration:
         assert creds["password"] == os.environ["APP_TEST_PASSWORD"]
         assert creds["database"] == "testdb"
 
-    @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_write_component_with_real_credentials(
         self, mock_handler_class, sample_context: Context
     ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write",
             description="Test write component",
-            comp_type="database",
-            database="testdb",
+            comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
         )
@@ -296,9 +462,7 @@ class TestCredentialsIntegration:
         assert valid_param.id == 20
         assert valid_param.key == "valid_key"
 
-    @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_credentials_in_mariadb_component_integration(
         self, mock_handler_class, sample_context: Context, test_creds: Tuple[str, str]
     ) -> None:
@@ -308,8 +472,7 @@ class TestCredentialsIntegration:
         read_comp = MariaDBRead(
             name="integration_test",
             description="Integration test component",
-            comp_type="database",
-            database="testdb",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users WHERE id = %(id)s",
             params={"id": 1},
@@ -410,20 +573,17 @@ class TestCredentialsIntegration:
             )
             assert param.key == key
 
-    @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_write_bulk_operations(
         self, mock_handler_class, sample_context: Context, sample_dataframe, test_creds
     ) -> None:
         mock_handler = Mock()
         mock_handler_class.return_value = mock_handler
 
-        write_comp = MariaDBWrite(
+        write_comp = self._create_mariadb_write_with_schema(
             name="test_write_bulk",
             description="Test write bulk component",
-            comp_type="database",
-            database="testdb",
+            comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
         )
@@ -434,9 +594,7 @@ class TestCredentialsIntegration:
         assert creds["user"] == user
         assert creds["database"] == "testdb"
 
-    @patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_mariadb_read_query_operations(
         self, mock_handler_class, sample_context: Context, test_creds
     ) -> None:
@@ -446,10 +604,9 @@ class TestCredentialsIntegration:
         read_comp = MariaDBRead(
             name="test_read_query",
             description="Test read query component",
-            comp_type="database",
-            database="testdb",
+            comp_type="read_mariadb",
             entity_name="users",
-            query="SELECT * FROM users WHERE active = %(active)s",
+            query="SELECT * FROM users WHERE active = %(id)s",
             params={"active": True},
             credentials_id=1,
         )

@@ -7,11 +7,11 @@ import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
-from src.etl_core.components.databases.database import DatabaseComponent
-from src.etl_core.components.databases.sql_connection_handler import (
+from etl_core.components.databases.database import DatabaseComponent
+from etl_core.components.databases.sql_connection_handler import (
     SQLConnectionHandler,
 )
-from src.etl_core.components.databases.pool_args import build_sql_engine_kwargs
+from etl_core.components.databases.pool_args import build_sql_engine_kwargs
 
 
 class SQLDatabaseComponent(DatabaseComponent, ABC):
@@ -22,7 +22,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     database-specific differences while maintaining the common interface.
     """
 
-    query: str = Field(default="", description="SQL query for read operations")
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
 
@@ -48,8 +47,10 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         creds = self._get_credentials()
 
         self._connection_handler = SQLConnectionHandler()
+
+        # Use comp_type directly instead of calling non-existent method
         url = SQLConnectionHandler.build_url(
-            db_type="mariadb",
+            comp_type=self.comp_type,
             user=creds["user"],
             password=creds["password"],
             host=creds["host"],
@@ -62,16 +63,16 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
 
-        if self._connection_handler and self.charset:
-            try:
-                with self._connection_handler.lease() as conn:
-                    if self.charset:
-                        conn.execute(f"SET NAMES {self.charset}")
-                    if self.collation:
-                        conn.execute(f"SET collation_connection = {self.collation}")
-                    conn.commit()
-            except Exception as e:
-                print(f"Warning: Could not set SQL session variables: {e}")
+        # Force subclasses to set their own session variables
+        self._setup_session_variables()
+
+    @abstractmethod
+    def _setup_session_variables(self):
+        """
+        Setup database-specific session variables.
+        Must be implemented by subclasses (MariaDB, PostgreSQL, etc.).
+        """
+        raise NotImplementedError
 
     def __del__(self):
         """Cleanup connection when component is destroyed."""

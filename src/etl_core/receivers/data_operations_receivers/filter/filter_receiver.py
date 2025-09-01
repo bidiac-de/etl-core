@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict, Tuple
-from uuid import uuid4
 
 import pandas as pd
 import dask.dataframe as dd
+from dask.dataframe.utils import make_meta
 
 from etl_core.receivers.base_receiver import Receiver
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
@@ -34,6 +34,12 @@ class FilterReceiver(Receiver):
       - 'fail': rows that do not match the rule
     All methods yield (port, payload) tuples. Metrics are updated consistently.
     """
+
+    @staticmethod
+    def _apply_filter(pdf: pd.DataFrame, rule: ComparisonRule) -> pd.DataFrame:
+        """Apply filter rule to a pandas DataFrame partition."""
+        mask = eval_rule_on_frame(pdf, rule)
+        return pdf[mask]
 
     async def process_row(
         self,
@@ -70,31 +76,38 @@ class FilterReceiver(Receiver):
         if total_fail:
             yield "fail", dataframe[~mask].reset_index(drop=True)
 
+    def _filter_partition(
+        self, pdf: pd.DataFrame, rule: ComparisonRule
+    ) -> pd.DataFrame:
+        """Apply filter rule to a pandas DataFrame partition."""
+        return self._apply_filter(pdf, rule)
+
     async def process_bigdata(
         self,
         ddf: dd.DataFrame,
         rule: ComparisonRule,
         metrics: FilterMetrics,
     ) -> AsyncGenerator[Tuple[str, dd.DataFrame], None]:
-        """
-        Build two Dask DataFrames (pass/fail) without computing them here.
-        """
-        passed = ddf.map_partitions(
-            _apply_filter_partition,
-            rule,
-            meta=ddf._meta,
-            token=f"filter-pass-{uuid4().hex}",
+        # Use a partial function to bind the rule parameter to the instance method
+        from functools import partial
+
+        # Create filtered and failed DataFrames
+        filtered = ddf.map_partitions(
+            partial(self._filter_partition, rule=rule),
+            meta=make_meta(ddf),
         )
+
+        # Create failed DataFrame (rows that don't match the rule)
         failed = ddf.map_partitions(
-            _apply_remainder_partition,
-            rule,
-            meta=ddf._meta,
-            token=f"filter-fail-{uuid4().hex}",
+            partial(_apply_remainder_partition, rule=rule),
+            meta=make_meta(ddf),
         )
+
+        # Best-effort metrics (safe-guarded)
         try:
             total_received = int(ddf.map_partitions(len).sum().compute())
-            total_pass = int(passed.map_partitions(len).sum().compute())
-            total_fail = max(0, total_received - total_pass)
+            total_pass = int(filtered.map_partitions(len).sum().compute())
+            total_fail = int(failed.map_partitions(len).sum().compute())
 
             metrics.lines_received += total_received
             metrics.lines_forwarded += total_pass
@@ -102,5 +115,5 @@ class FilterReceiver(Receiver):
         except Exception:
             pass
 
-        yield "pass", passed
+        yield "pass", filtered
         yield "fail", failed

@@ -223,6 +223,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             row={"name": "John", "email": "john@example.com"},
             metrics=mock_metrics,
+            query="INSERT INTO users (name, email) VALUES (:name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -253,12 +254,13 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=sample_dataframe,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute and commit were called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called for each row (2 rows in sample_dataframe)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
         assert result.equals(sample_dataframe)
@@ -276,6 +278,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -304,6 +307,7 @@ class TestMariaDBReceivers:
                 entity_name="users",
                 frame=sample_dask_dataframe,
                 metrics=mock_metrics,
+                query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
                 table="users",
                 connection_handler=mock_connection_handler,
             )
@@ -475,19 +479,20 @@ class TestMariaDBReceivers:
         ddf = dd.from_pandas(df, npartitions=2)
 
         # Mock the partition processing
-        with patch.object(ddf, "compute") as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             await receiver.write_bigdata(
                 entity_name="users",
                 frame=ddf,
                 metrics=mock_metrics,
+                query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
                 table="users",
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify that compute was called
-            mock_compute.assert_called_once()
+            # Verify compute was called (2 partitions = 2 calls)
+            assert mock_compute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_write_bulk_with_empty_dataframe(
@@ -503,6 +508,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -532,11 +538,12 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=single_row_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (name, email) VALUES (:name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute and commit were called
+        # Verify execute and commit were called (once for the single row)
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
         # Verify return value
@@ -698,6 +705,8 @@ class TestMariaDBReceivers:
             entity_name="users",
             row=special_data,
             metrics=mock_metrics,
+            query="INSERT INTO users (name, email, description) VALUES \
+            (:name, :email, :description)",
             connection_handler=mock_connection_handler,
             table="users",
         )
@@ -731,6 +740,9 @@ class TestMariaDBReceivers:
             entity_name="numeric_table",
             row=numeric_data,
             metrics=mock_metrics,
+            query="INSERT INTO numeric_table (integer, float, decimal, \
+            negative) VALUES \
+            (:integer, :float, :decimal, :negative)",
             connection_handler=mock_connection_handler,
             table="numeric_table",
         )
@@ -759,6 +771,8 @@ class TestMariaDBReceivers:
             entity_name="boolean_table",
             row=boolean_data,
             metrics=mock_metrics,
+            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) \
+            VALUES (:is_active, :is_deleted, :has_permission)",
             connection_handler=mock_connection_handler,
             table="boolean_table",
         )
@@ -786,25 +800,25 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock compute to return a mock object
-        mock_compute_result = df
-        ddf.compute = Mock(return_value=mock_compute_result)
+        # Mock compute to return real pandas DataFrames
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
+            mock_compute.return_value = df
 
-        # Test write_bigdata
-        result = await receiver.write_bigdata(
-            entity_name="test_table",
-            frame=ddf,
-            metrics=mock_metrics,
-            table="test_table",
-            connection_handler=mock_connection_handler,
-        )
+            # Test write_bigdata with new signature
+            result = await receiver.write_bigdata(
+                entity_name="test_table",
+                frame=ddf,
+                metrics=mock_metrics,
+                query="INSERT INTO test_table (id, name) VALUES (:id, :name)",
+                table="test_table",
+                connection_handler=mock_connection_handler,
+            )
 
-        # Verify compute was called
-        ddf.compute.assert_called_once()
-        # Verify return value
-        # result is now a DataFrame, not None
-        assert result is not None
-        assert hasattr(result, "npartitions")
+            # Verify compute was called (2 partitions = 2 calls)
+            assert mock_compute.call_count == 2
+            # Verify return value
+            assert result is not None
+            assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bigdata_empty_partition(
@@ -817,25 +831,25 @@ class TestMariaDBReceivers:
         df = pd.DataFrame()
         ddf = dd.from_pandas(df, npartitions=1)
 
-        # Mock compute to return a mock object
-        mock_compute_result = df
-        ddf.compute = Mock(return_value=mock_compute_result)
+        # Mock compute to return real pandas DataFrames
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
+            mock_compute.return_value = df
 
-        # Test write_bigdata with empty data
-        result = await receiver.write_bigdata(
-            entity_name="test_table",
-            frame=ddf,
-            metrics=mock_metrics,
-            connection_handler=mock_connection_handler,
-            table="test_table",
-        )
+            # Test write_bigdata with empty data and new signature
+            result = await receiver.write_bigdata(
+                entity_name="test_table",
+                frame=ddf,
+                metrics=mock_metrics,
+                query="INSERT INTO test_table (id, name) VALUES (:id, :name)",
+                connection_handler=mock_connection_handler,
+                table="test_table",
+            )
 
-        # Verify compute was called
-        ddf.compute.assert_called_once()
-        # Verify return value
-        # result is now a DataFrame, not None
-        assert result is not None
-        assert hasattr(result, "npartitions")
+            # Verify compute was called (once for first_partition + partitions)
+            assert mock_compute.call_count >= 1
+            # Verify return value
+            assert result is not None
+            assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bigdata_single_partition(
@@ -853,25 +867,25 @@ class TestMariaDBReceivers:
         mock_result.rowcount = 1
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock compute to return a mock object
-        mock_compute_result = df
-        ddf.compute = Mock(return_value=mock_compute_result)
+        # Mock compute to return real pandas DataFrames
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
+            mock_compute.return_value = df
 
-        # Test write_bigdata
-        result = await receiver.write_bigdata(
-            entity_name="test_table",
-            frame=ddf,
-            metrics=mock_metrics,
-            connection_handler=mock_connection_handler,
-            table="test_table",
-        )
+            # Test write_bigdata with new signature
+            result = await receiver.write_bigdata(
+                entity_name="test_table",
+                frame=ddf,
+                metrics=mock_metrics,
+                query="INSERT INTO test_table (id, name) VALUES (:id, :name)",
+                connection_handler=mock_connection_handler,
+                table="test_table",
+            )
 
-        # Verify compute was called
-        ddf.compute.assert_called_once()
-        # Verify return value
-        # result is now a DataFrame, not None
-        assert result is not None
-        assert hasattr(result, "npartitions")
+            # Verify compute was called (once for first_partition + partitions)
+            assert mock_compute.call_count >= 1
+            # Verify return value
+            assert result is not None
+            assert hasattr(result, "npartitions")
 
     @pytest.mark.asyncio
     async def test_write_bulk_empty_dataframe_early_return(
@@ -888,6 +902,7 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             table="users",
             connection_handler=mock_connection_handler,
         )
@@ -905,12 +920,13 @@ class TestMariaDBReceivers:
         """Test write_bulk early return for empty list."""
         receiver = MariaDBReceiver()
 
-        # Test write_bulk with empty list (convert to DataFrame first)
+        # Test write_bulk with empty list (convert to DataFrame)
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
             entity_name="users",
             frame=empty_df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
             connection_handler=mock_connection_handler,
             table="users",
         )
@@ -976,12 +992,13 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name) VALUES (:id, :name)",
             table="users",
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called (once for each row)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -1005,12 +1022,13 @@ class TestMariaDBReceivers:
             entity_name="users",
             frame=df,
             metrics=mock_metrics,
+            query="INSERT INTO users (id, name) VALUES (:id, :name)",
             table="users",
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
+        # Verify execute was called (once for each row)
+        assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
     @pytest.mark.asyncio

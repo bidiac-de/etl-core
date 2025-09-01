@@ -9,8 +9,13 @@ from src.etl_core.receivers.files.file_helper import (
     resolve_file_path,
 )
 
-READABLE_EXTS = {".xlsx", ".xlsm", ".xls"}
-WRITABLE_EXTS = {".xlsx", ".xlsm"}
+# File extension constants
+XLSX_EXT = ".xlsx"
+XLSM_EXT = ".xlsm"
+XLS_EXT = ".xls"
+
+READABLE_EXTS = {XLSX_EXT, XLSM_EXT, XLS_EXT}
+WRITABLE_EXTS = {XLSX_EXT, XLSM_EXT}
 
 SHEET_DEFAULT = "Sheet1"
 
@@ -20,9 +25,9 @@ def _ext(path: Path) -> str:
 
 
 def _engine_for_read(ext: str) -> str:
-    if ext in {".xlsx", ".xlsm"}:
+    if ext in {XLSX_EXT, XLSM_EXT}:
         return "openpyxl"
-    if ext == ".xls":
+    if ext == XLS_EXT:
         return "xlrd"
     raise ValueError(f"Unsupported excel extension for read: '{ext}'.")
 
@@ -91,10 +96,10 @@ def _iter_xlrd_rows(
     sh = book.sheet_by_name(sheet_name) if sheet_name else book.sheet_by_index(0)
     if sh.nrows == 0:
         raise ValueError("Worksheet is empty.")
-    headers = [
+    headers = list(
         str(sh.cell_value(0, c)) if sh.cell_value(0, c) != "" else ""
         for c in range(sh.ncols)
-    ]
+    )
     if not any(h for h in headers):
         raise ValueError("No header row found in worksheet.")
     for r in range(1, sh.nrows):
@@ -168,7 +173,10 @@ def _open_or_create_wb_ws(path: Path, sheet_name: Optional[str]):
     target = sheet_name or SHEET_DEFAULT
     if path.exists():
         wb = load_workbook(path)
-        ws = wb[target] if target in wb.sheetnames else wb.create_sheet(title=target)
+        if target in wb.sheetnames:
+            ws = wb[target]
+        else:
+            ws = wb.create_sheet(title=target)
         try:
             wb.move_sheet(ws, offset=-len(wb.worksheets))
         except Exception:
