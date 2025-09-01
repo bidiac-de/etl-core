@@ -44,13 +44,7 @@ class JobExecutionHandler:
 
     def execute_job(self, job: RuntimeJob) -> JobExecution:
         """
-        top-level method to execute a Job, managing its execution lifecycle:
-        - checks if the job is already running
-        - initializes a JobExecution instance
-        - starts the main loop for the job execution
-        - handles retries and finalization
-        :param job: Job instance to execute
-        :return: Execution instance containing job execution details
+        Top-level method to execute a Job, managing its execution lifecycle.
         """
         with self._guard_lock:
             if job.id in self._running_jobs:
@@ -71,11 +65,7 @@ class JobExecutionHandler:
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
-        Main loop for executing a JobExecution
-        - initializes job metrics
-        - runs attempts until success or max retries exhausted
-        - handles retries and finalization further
-        :param execution: Execution instance to run
+        Main loop for executing a JobExecution.
         """
         job = execution.job
         self.job_info.logging_handler.update_job_name(job.name)
@@ -140,6 +130,12 @@ class JobExecutionHandler:
         # List[(dest_queue, dest_in_port, needs_tag)]
         out_edges: Dict[str, Dict[str, List[Tuple[asyncio.Queue, str, bool]]]] = {}
 
+        # Destination-side helper:
+        # pred_to_in_port_by_component: dst_comp_name -> {pred_comp_id: in_port}
+        pred_to_in_port_by_component: Dict[str, Dict[str, str]] = {
+            comp.name: {} for comp in job.components
+        }
+
         for comp in job.components:
             by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]] = {}
             for outp, targets in comp.out_routes.items():
@@ -149,6 +145,8 @@ class JobExecutionHandler:
                     # destination declares multi-input?
                     multi_in = len(dst.expected_in_port_names()) > 1
                     triples.append((in_queues[dst.name], in_port, multi_in))
+                    # remember for the destination which in_port this predecessor feeds
+                    pred_to_in_port_by_component[dst.name][comp.id] = in_port
                 by_port[outp] = triples
             out_edges[comp.name] = by_port
 
@@ -162,8 +160,16 @@ class JobExecutionHandler:
                     comp.id,
                     get_metrics_class(comp.comp_type),
                 )
+                pred_map = pred_to_in_port_by_component.get(comp.name, {})
                 task = tg.create_task(
-                    self._worker(execution, comp, inputs, outputs, metrics),
+                    self._worker(
+                        execution,
+                        comp,
+                        inputs,
+                        outputs,
+                        metrics,
+                        pred_map,
+                    ),
                     name=f"worker-{comp.name}",
                 )
                 execution.latest_attempt().current_tasks[comp.id] = task
@@ -172,14 +178,15 @@ class JobExecutionHandler:
 
     async def _worker(
         self,
-        execution,
+        execution: JobExecution,
         component: Component,
         in_queues: List[asyncio.Queue],
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
         metrics: ComponentMetrics,
+        pred_to_in_port: Dict[str, str],
     ) -> None:
         """
-        async Worker loop per component.
+        Async worker loop per component.
         """
         attempt = execution.latest_attempt()
         sentinel = execution.sentinels[component.id]
@@ -194,18 +201,16 @@ class JobExecutionHandler:
                 await self._run_component(component, None, metrics, out_edges_by_port)
             else:
                 await self._consume_and_run(
-                    component, metrics, in_queues, out_edges_by_port
+                    component, metrics, in_queues, out_edges_by_port, pred_to_in_port
                 )
         except asyncio.CancelledError:
-            # mark cancelled in our metrics, then re-raise so upstream sees it
+            # mark cancelled in metrics, then re-raise
             metrics.status = RuntimeState.CANCELLED
             raise
-
         except Exception as exc:
             # component failure: mark FAILED, increment error, cancel successors
             self._handle_worker_exception(component, exc, metrics, execution, attempt)
             raise
-
         else:
             if metrics.status != RuntimeState.CANCELLED:
                 metrics.status = RuntimeState.SUCCESS
@@ -219,7 +224,7 @@ class JobExecutionHandler:
         Fan-out an item to all successor input queues.
         """
         for pairs in edges.values():
-            for q, _in_port, needs_tag in pairs:
+            for q, _in_port, _needs_tag in pairs:
                 await q.put(item)
 
     async def _run_component(
@@ -254,11 +259,21 @@ class JobExecutionHandler:
         metrics: ComponentMetrics,
         in_queues: List[asyncio.Queue],
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        pred_to_in_port: Dict[str, str],
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.
-        For single-input components we expect untagged payloads.
-        For multi-input components we require InTagged(in_port, payload).
+
+        - Single-input components: expect untagged payloads.
+        - Multi-input components: expect InTagged(...) on the queue.
+          * If the downstream component requires tagged input, we pass the
+            InTagged through unchanged so it can buffer by in_port.
+          * Otherwise we unwrap and validate like before.
+        - When a Sentinel arrives:
+          * If the downstream component **requires** tagged input, we pass a
+            synthetic InTagged(in_port, Ellipsis) into the component to mark that
+            port as closed. No new envelope types are introduced.
+          * Otherwise we just account for the closing predecessor.
         """
         queue = in_queues[0]
         remaining = {p.id for p in component.prev_components}
@@ -269,30 +284,52 @@ class JobExecutionHandler:
         if len(in_port_names) == 1:
             single_in_port = in_port_names[0]
 
+        requires_tagged = False
+        meth = getattr(component, "requires_tagged_input", None)
+        if callable(meth):
+            try:
+                requires_tagged = bool(meth())
+            except Exception:
+                requires_tagged = False
+
         while remaining:
             item = await queue.get()
 
-            # End-of-stream sentinel from a predecessor
             if isinstance(item, Sentinel) and item.component_id in remaining:
                 remaining.discard(item.component_id)
+                if requires_tagged:
+                    in_port = pred_to_in_port.get(item.component_id)
+                    if in_port:
+                        await self._run_component(
+                            component,
+                            InTagged(in_port, Ellipsis),
+                            metrics,
+                            out_edges_by_port,
+                        )
                 continue
 
-            # Tagged envelope, unwrap and validate for the specified in-port
             if isinstance(item, InTagged):
+                if requires_tagged:
+                    await self._run_component(
+                        component, item, metrics, out_edges_by_port
+                    )
+                    continue
                 dest_port = item.in_port
                 payload = item.payload
                 component.validate_in_payload(dest_port, payload)
-                item = payload
-            else:
-                # Untagged: only valid for components with exactly one input port
-                if single_in_port is None:
-                    raise ValueError(
-                        f"{component.name}: received untagged input but component "
-                        f"declares multiple input ports {in_port_names!r}; "
-                        "fan-in must use tagged envelopes."
-                    )
-                component.validate_in_payload(single_in_port, item)
+                await self._run_component(
+                    component, payload, metrics, out_edges_by_port
+                )
+                continue
 
+            # Untagged: only valid for single-input components
+            if single_in_port is None:
+                raise ValueError(
+                    f"{component.name}: received untagged input but component "
+                    f"declares multiple input ports {in_port_names!r}; "
+                    "fan-in must use tagged envelopes."
+                )
+            component.validate_in_payload(single_in_port, item)
             await self._run_component(component, item, metrics, out_edges_by_port)
 
     def _handle_worker_exception(
@@ -304,11 +341,7 @@ class JobExecutionHandler:
         attempt: Any,
     ) -> None:
         """
-        Handle exceptions raised by a component worker
-        - mark component as FAILED in metrics
-        - increment error count
-        - cancel all downstream components
-        :return:
+        Handle exceptions raised by a component worker.
         """
         metrics.status = RuntimeState.FAILED
         metrics.error_count += 1
@@ -339,8 +372,7 @@ class JobExecutionHandler:
         attempt: Any,
     ) -> None:
         """
-        BFS through downstream components: mark each CANCELLED in metrics
-        and use task.cancel() to stop its async worker.
+        BFS through downstream components and cancel their tasks.
         """
         dq = deque(component.next_components)
         seen: Set[str] = set()
@@ -397,7 +429,7 @@ class JobExecutionHandler:
         self, exc: Exception, execution: JobExecution, job_metrics: "ExecutionMetrics"
     ) -> None:
         """
-        Final actions when all retries are exhausted or streaming execution fails.
+        Final actions when streaming execution fails.
         """
         attempt = execution.latest_attempt()
         job_metrics.status = RuntimeState.FAILED

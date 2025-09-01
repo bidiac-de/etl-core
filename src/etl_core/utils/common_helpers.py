@@ -20,7 +20,7 @@ from etl_core.components.wiring.column_definition import FieldDef, DataType
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
 
-# Generic / job & testing utils
+# Generic job and testing utils
 
 
 def get_component_by_name(job: Any, name: str) -> Component:
@@ -62,6 +62,7 @@ def assert_unique(
     Assert that all items in the iterable are unique.
     Optionally accepts a `key` function to derive the comparison value.
     """
+
     seen = set()
     for idx, item in enumerate(items):
         value = key(item) if key else item
@@ -110,6 +111,17 @@ def leaf_field_paths(schema: Schema, sep: str) -> List[str]:
     return [p for p, _ in leaf_field_paths_with_defs(schema.fields, sep)]
 
 
+def get_leaf_field_map(schema: Schema, path_separator: str) -> Dict[str, FieldDef]:
+    """
+    Map flattened leaf paths -> FieldDef.
+    Arrays are considered leaves at their flattened path.
+    """
+    out = {}
+    for path, fd in leaf_field_paths_with_defs(schema.fields, path_separator):
+        out[path] = fd
+    return out
+
+
 def is_null(v: Any) -> bool:
     return v is None
 
@@ -139,9 +151,11 @@ def type_ok_scalar(v: Any, fd: FieldDef) -> bool:
 
 def enum_ok(v: Any, fd: FieldDef) -> bool:
     """Check enum domain membership (stringified compare), allowing nulls."""
-    if fd.data_type != DataType.ENUM or is_null(v) or not fd.enum_values:
+    if fd.data_type != DataType.ENUM or is_null(v):
         return True
-    return str(v) in set(fd.enum_values or [])
+    if not fd.enum_values:
+        return False
+    return str(v) in set(fd.enum_values)
 
 
 def ensure_df_columns(

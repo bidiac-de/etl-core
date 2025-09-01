@@ -33,12 +33,27 @@ from etl_core.persistance.table_definitions import (
     LayoutTable,
 )
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
+    DataOperationsMetrics,
+)
 from etl_core.components.databases.mongodb.mongodb_connection_handler import (
     MongoConnectionHandler,
 )
+
 from etl_core.components.databases.pool_args import build_mongo_client_kwargs
 from etl_core.components.databases import pool_args
 
+@pytest.fixture
+def data_ops_metrics() -> DataOperationsMetrics:
+    """Fresh DataOperationsMetrics for each test."""
+    return DataOperationsMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+        lines_dismissed=0,
+    )
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
     keys = list(sys.modules.keys())

@@ -990,9 +990,16 @@ class TestMariaDBComponents:
 
         # Test that connection handler is properly set up
         assert hasattr(write_comp, "_connection_handler")
+
+        # Mock the connection handler to avoid actual connection attempts
+        mock_connection_handler = Mock()
+        write_comp._connection_handler = mock_connection_handler
+
         # The connection handler is set up during validation when context is set
-        # We need to trigger the validation
+        # We need to trigger the validation by calling _build_objects
         write_comp._build_objects()
+
+        # Now the connection handler should be available
         assert write_comp.connection_handler is not None
 
         # Test that connection handler is passed to receiver methods
