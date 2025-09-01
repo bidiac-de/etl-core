@@ -43,7 +43,7 @@ async def test_mongodb_read_row(mongo_context, mongo_handler, sample_docs, metri
     reader.context = mongo_context
 
     docs = []
-    async for env in reader.process_row(metrics):
+    async for env in reader.process_row(None, metrics):
         docs.append(env.payload)
 
     assert len(docs) == 1
@@ -78,7 +78,7 @@ async def test_mongodb_read_bulk_and_bigdata(mongo_context, mongo_handler, metri
     reader.context = mongo_context
 
     frames = []
-    async for env in reader.process_bulk(metrics):
+    async for env in reader.process_bulk(None, metrics):
         frames.append(env.payload)
 
     assert sum(len(f) for f in frames) == 4
@@ -103,7 +103,7 @@ async def test_mongodb_read_bulk_and_bigdata(mongo_context, mongo_handler, metri
     )
     reader_big.context = mongo_context
     dd_out = []
-    async for env in reader_big.process_bigdata(metrics):
+    async for env in reader_big.process_bigdata(None, metrics):
         dd_out.append(env.payload)
 
     assert all(isinstance(x, dd.DataFrame) for x in dd_out)
@@ -111,13 +111,13 @@ async def test_mongodb_read_bulk_and_bigdata(mongo_context, mongo_handler, metri
 
 
 def _mk_writer(mongo_context, **kwargs) -> MongoDBWrite:
-    base = dict(
-        name="w",
-        description="w",
-        comp_type="write_mongodb",
-        entity_name="people",
-        credentials_id=101,
-    )
+    base = {
+        "name": "w",
+        "description": "w",
+        "comp_type": "write_mongodb",
+        "entity_name": "people",
+        "credentials_id": 101,
+    }
     base.update(kwargs)
     w = MongoDBWrite(**base)
     w.context = mongo_context

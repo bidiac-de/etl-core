@@ -11,9 +11,13 @@ from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from etl_core.components.runtime_state import RuntimeState
 from tests.helpers import runtime_job_from_config
 
-from etl_core.components.databases.mongodb.mongodb_write import MongoDBWrite  # noqa: F401
+from etl_core.components.databases.mongodb.mongodb_write import (  # noqa: F401
+    MongoDBWrite,
+)
 from etl_core.components.databases.mongodb.mongodb_read import MongoDBRead  # noqa: F401
-from etl_core.components.data_operations.schema_mapping.schema_mapping_component import SchemaMappingComponent  # noqa: F401
+from etl_core.components.data_operations.schema_mapping.schema_mapping_component import (  # noqa: F401, E501
+    SchemaMappingComponent,
+)
 
 BASE = Path(__file__).parent
 NESTED_TO_NESTED = BASE / "mongo_row_nested_to_nested.json"

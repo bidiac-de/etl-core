@@ -92,7 +92,7 @@ async def test_read_row_nested_projection_and_sort(
     )
 
     out_rows: List[Dict[str, Any]] = []
-    async for env in reader.process_row(metrics):
+    async for env in reader.process_row(None, metrics):
         out_rows.append(env.payload)
 
     assert [r["name"] for r in out_rows] == ["Ada", "Zoe"]
@@ -138,7 +138,7 @@ async def test_read_bulk_nested_with_limit_skip(mongo_context, mongo_handler, me
     )
 
     frames: List[pd.DataFrame] = []
-    async for env in reader.process_bulk(metrics):
+    async for env in reader.process_bulk(None, metrics):
         frames.append(env.payload)
 
     total = sum(len(f) for f in frames)
@@ -170,7 +170,7 @@ async def test_read_bigdata_filter_on_nested(mongo_context, mongo_handler, metri
     )
 
     dd_frames: List[dd.DataFrame] = []
-    async for env in reader.process_bigdata(metrics):
+    async for env in reader.process_bigdata(None, metrics):
         dd_frames.append(env.payload)
 
     assert dd_frames
@@ -362,7 +362,7 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
     )
     reader.context = mongo_context
     out = []
-    async for env in reader.process_row(metrics):
+    async for env in reader.process_row(None, metrics):
         out.append(env.payload)
     assert out and out[0]["name"] == "Authy"
 
