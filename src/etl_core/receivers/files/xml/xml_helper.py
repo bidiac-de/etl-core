@@ -87,28 +87,61 @@ def read_xml_row(path: Path, record_tag: str) -> Generator[Dict[str, Any], None,
     return _iter_records(path, record_tag)
 
 
-def read_xml_bulk_chunks(path: Path, record_tag: str, *, chunk_size: int = 10000) -> Generator[pd.DataFrame, None, None]:
-    """Yield pandas DataFrame *chunks* from a single XML file.
-    Each row contains the *nested* dict in column 'record'.
+def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
     """
-    buf: List[Dict[str, Any]] = []
-    for rec in _iter_records(path, record_tag):
-        buf.append(rec)
-        if len(buf) >= chunk_size:
-            yield pd.DataFrame({"record": buf})
-            buf = []
-    if buf:
-        yield pd.DataFrame({"record": buf})
+    Flattens nested structures:
+    - dict: keys are concatenated with '.' (e.g. address.street)
+    - list: indexed as [i] (e.g. tags[0], tags[1])
+    - special keys: '@attrs' -> attributes (e.g. address.@attrs.cityId),
+                    '#text'  -> mixed text content (e.g. para.#text)
+    """
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k in ("@attrs", "#text"):
+                key = f"{prefix}.{k}" if prefix else k
+                if k == "@attrs" and isinstance(v, dict):
+                    for ak, av in v.items():
+                        akey = f"{key}.{ak}"
+                        out[akey] = av
+                else:
+                    out[key] = v
+            else:
+                key = f"{prefix}.{k}" if prefix else k
+                _flatten_to_map(key, v, out)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            key = f"{prefix}[{i}]"
+            _flatten_to_map(key, item, out)
+    else:
+        out[prefix] = value
 
+def _flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
+    flat: Dict[str, Any] = {}
+    _flatten_to_map("", rec, flat)
+    return {k.lstrip("."): v for k, v in flat.items()}
+
+def read_xml_bulk_chunks(
+        path: Path,
+        record_tag: str,
+        *,
+        chunk_size: int = 10_000,
+) -> Generator[pd.DataFrame, None, None]:
+    """
+    Yield *flat* pandas DataFrame chunks directly from a file.
+    Column names represent the nesting (e.g. 'a.b', 'tags[0]', ...)
+    """
+    buf_rows: List[Dict[str, Any]] = []
+    for rec in _iter_records(path, record_tag):
+        buf_rows.append(_flatten_record(rec))
+        if len(buf_rows) >= chunk_size:
+            yield pd.DataFrame.from_records(buf_rows)
+            buf_rows = []
+    if buf_rows:
+        yield pd.DataFrame.from_records(buf_rows)
 
 def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
-    """Read entire file into a single DataFrame (compat layer)."""
     parts = list(read_xml_bulk_chunks(path, record_tag, chunk_size=10_000))
-    if parts:
-        return pd.concat(parts, ignore_index=True)
-    return pd.DataFrame({"record": []})
-
-
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
 def _flatten(prefix: str, value: Any) -> Iterable[Tuple[str, Any]]:
@@ -148,7 +181,6 @@ def flatten_records(df: pd.DataFrame, col: str = "record") -> pd.DataFrame:
                 flat[k] = v
         rows.append(flat)
     return pd.DataFrame(rows)
-
 
 
 def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str) -> None:

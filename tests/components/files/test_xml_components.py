@@ -9,7 +9,6 @@ from typing import AsyncGenerator
 
 from etl_core.components.file_components.xml.read_xml import ReadXML
 from etl_core.components.file_components.xml.write_xml import WriteXML
-from etl_core.receivers.files.xml.xml_helper import flatten_records
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
@@ -44,10 +43,8 @@ async def test_read_xml_valid_bulk(metrics):
 
     assert chunks
     df_all = pd.concat(chunks, ignore_index=True)
-    assert set(df_all.columns) == {"record"}
-    flat = flatten_records(df_all)
-    assert len(flat) == 3
-    assert set(flat.columns) >= {"id", "name"}
+    assert {"id", "name"}.issubset(set(df_all.columns))
+    assert len(df_all) == 3
 
 
 @pytest.mark.asyncio
@@ -68,12 +65,11 @@ async def test_read_xml_missing_values_bulk(metrics):
         chunks.append(item.payload)
 
     df_all = pd.concat(chunks, ignore_index=True)
-    flat = flatten_records(df_all)
-    assert len(flat) == 3
-    assert flat.iloc[0]["id"] == "1"
-    assert flat.iloc[0]["name"] == "Alice"
-    assert flat.iloc[1]["id"] == "2"
-    assert flat.iloc[1]["name"] in ("", None, pd.NA)
+    assert len(df_all) == 3
+    assert df_all.iloc[0]["id"] == "1"
+    assert df_all.iloc[0]["name"] == "Alice"
+    assert df_all.iloc[1]["id"] == "2"
+    assert df_all.iloc[1]["name"] in ("", None, pd.NA)
 
 
 
@@ -128,13 +124,10 @@ async def test_read_xml_bigdata(metrics):
         chunks.append(item.payload)
 
     df_all = pd.concat(chunks, ignore_index=True)
-    from etl_core.receivers.files.xml.xml_helper import flatten_records
-    flat = flatten_records(df_all)
-
-    assert len(flat) == 3
-    assert set(flat.columns) >= {"id", "name"}
-    assert flat.iloc[0]["id"] == "1"
-    assert flat.iloc[0]["name"] == "Alice"
+    assert {"id", "name"}.issubset(set(df_all.columns))
+    assert len(df_all) == 3
+    assert df_all.iloc[0]["id"] == "1"
+    assert df_all.iloc[0]["name"] == "Alice"
 
 
 
@@ -289,10 +282,10 @@ async def test_read_xml_nested_bulk_flattens(metrics):
     async for item in comp.execute(payload=None, metrics=metrics):
         chunks.append(item.payload)
     df_all = pd.concat(chunks, ignore_index=True)
-    flat = flatten_records(df_all)
-    assert {"id", "name", "address.street", "address.city", "tags[0]", "tags[1]"} <= set(flat.columns)
-    r0 = flat.iloc[0]
+    assert {"id","name","address.street","address.city","tags.item[0]","tags.item[1]"} <= set(df_all.columns)
+
+    r0 = df_all.iloc[0]
     assert r0["id"] == "1"
     assert r0["address.street"] == "Main"
-    assert r0["tags[0]"] == "alpha"
-    assert r0["tags[1]"] == "beta"
+    assert r0["tags.item[0]"] == "alpha"
+    assert r0["tags.item[1]"] == "beta"
