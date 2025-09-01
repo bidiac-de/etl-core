@@ -144,45 +144,6 @@ def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-def _flatten(prefix: str, value: Any) -> Iterable[Tuple[str, Any]]:
-    if isinstance(value, dict):
-        if len(value) == 1:
-            only_k, only_v = next(iter(value.items()))
-            if isinstance(only_v, list):
-                for idx, item in enumerate(only_v):
-                    new_prefix = f"{prefix}[{idx}]" if prefix else f"{only_k}[{idx}]"
-                    if prefix:
-                        yield from _flatten(new_prefix if not isinstance(item, (dict, list)) else prefix, item)
-                        if isinstance(item, (dict, list)):
-                            for sub_k, sub_v in _flatten("", item):
-                                yield f"{prefix}[{idx}].{sub_k}" if sub_k else f"{prefix}[{idx}]", sub_v
-                    else:
-                        yield from _flatten(f"{only_k}[{idx}]", item)
-                return
-        for k, v in value.items():
-            new_prefix = f"{prefix}.{k}" if prefix else str(k)
-            yield from _flatten(new_prefix, v)
-
-    elif isinstance(value, list):
-        for idx, item in enumerate(value):
-            new_prefix = f"{prefix}[{idx}]"
-            yield from _flatten(new_prefix, item)
-
-    else:
-        yield prefix, value
-
-
-def flatten_records(df: pd.DataFrame, col: str = "record") -> pd.DataFrame:
-    rows: List[Dict[str, Any]] = []
-    for rec in df[col].tolist():
-        flat: Dict[str, Any] = {}
-        for k, v in _flatten("", rec):
-            if k:
-                flat[k] = v
-        rows.append(flat)
-    return pd.DataFrame(rows)
-
-
 def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str) -> None:
     path = resolve_file_path(path)
 
