@@ -48,6 +48,8 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         self._connection_handler = SQLConnectionHandler()
 
+
+        # Use comp_type directly instead of calling non-existent method
         url = SQLConnectionHandler.build_url(
             comp_type=self.comp_type,
             user=creds["user"],
