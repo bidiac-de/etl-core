@@ -15,12 +15,15 @@ from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
 @register_component("write_xml")
 class WriteXML(XML):
-    """XML writer supporting row, bulk, and bigdata modes with port routing.
+    """
+    XML writer supporting row, bulk, and bigdata modes with port routing.
 
-    Notes:
-    - Input can be either a nested dict under key 'record' or flat key/values.
+    Input semantics:
+    - Accept either a flat dict with dotted/index keys (e.g. "addr.street", "tags.item[0]")
+      which will be unflattened into nested XML, or a truly nested dict.
     - Row mode appends by rewriting the file inserting before the closing root tag.
     - Bigdata mode writes partitioned files part-*.xml in a directory.
+
     """
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)

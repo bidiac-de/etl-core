@@ -30,8 +30,7 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             self,
             filepath: Path,
             metrics: ComponentMetrics,
-            *,
-            record_tag: str,
+            record_tag: str = "row",
     ) -> AsyncIterator[Dict[str, Any]]:
         ensure_file_exists(filepath)
         it = read_xml_row(filepath, record_tag=record_tag)
@@ -46,12 +45,12 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             self,
             filepath: Path,
             metrics: ComponentMetrics,
-            *,
-            record_tag: str,
-            chunk_size: int = 10000,
+            record_tag: str = "row",
+            chunk_size: int = 10_000,
     ) -> AsyncIterator[pd.DataFrame]:
         ensure_file_exists(filepath)
         it = read_xml_bulk_chunks(filepath, record_tag=record_tag, chunk_size=chunk_size)
+
         while True:
             df = await asyncio.to_thread(next, it, _SENTINEL)
             if df is _SENTINEL:
@@ -64,9 +63,8 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             self,
             filepath: Path,
             metrics: ComponentMetrics,
-            *,
-            record_tag: str,
-            chunk_size: int = 50000,
+            record_tag: str = "row",
+            chunk_size: int = 50_000,
     ) -> AsyncIterator[pd.DataFrame]:
         async for df in self.read_bulk(
                 filepath, metrics, record_tag=record_tag, chunk_size=chunk_size
@@ -77,37 +75,38 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             self,
             filepath: Path,
             metrics: ComponentMetrics,
-            *,
             row: Dict[str, Any],
-            root_tag: str,
-            record_tag: str,
+            root_tag: str = "rows",
+            record_tag: str = "row",
     ) -> None:
         metrics.lines_received += 1
-        await asyncio.to_thread(write_xml_row, filepath, row, root_tag=root_tag, record_tag=record_tag)
+        await asyncio.to_thread(
+            write_xml_row, filepath, row, root_tag=root_tag, record_tag=record_tag
+        )
         metrics.lines_forwarded += 1
 
     async def write_bulk(
             self,
             filepath: Path,
             metrics: ComponentMetrics,
-            *,
             data: pd.DataFrame,
-            root_tag: str,
-            record_tag: str,
+            root_tag: str = "rows",
+            record_tag: str = "row",
     ) -> None:
         n = len(data)
         metrics.lines_received += n
-        await asyncio.to_thread(write_xml_bulk, filepath, data, root_tag=root_tag, record_tag=record_tag)
+        await asyncio.to_thread(
+            write_xml_bulk, filepath, data, root_tag=root_tag, record_tag=record_tag
+        )
         metrics.lines_forwarded += n
 
     async def write_bigdata(
             self,
             filepath: Path,
             metrics: ComponentMetrics,
-            *,
             data: dd.DataFrame,
-            root_tag: str,
-            record_tag: str,
+            root_tag: str = "rows",
+            record_tag: str = "row",
     ) -> None:
         try:
             row_count = await asyncio.to_thread(

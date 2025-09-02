@@ -69,8 +69,11 @@ async def test_read_xml_bulk(sample_xml_file: Path, metrics: ComponentMetrics):
         assert isinstance(df, pd.DataFrame)
         dfs.append(df)
     all_df = pd.concat(dfs, ignore_index=True)
+
     assert len(all_df) == 3
-    assert "Bob" in set(all_df["record"].apply(lambda x: x.get("name")))
+    assert {"id", "name"}.issubset(set(all_df.columns))
+    assert "Bob" in set(all_df["name"])
+
 
 
 
@@ -83,11 +86,11 @@ async def test_read_xml_bigdata(sample_bigdata_file: Path, metrics: ComponentMet
         dfs.append(df)
     all_df = pd.concat(dfs, ignore_index=True)
 
-    from etl_core.receivers.files.xml.xml_helper import flatten_records
-    flat = flatten_records(all_df)
-    assert len(flat) == 3
-    assert set(flat.columns) >= {"id", "name"}
-    assert list(flat["id"]) == ["1", "2", "3"]
+    assert len(all_df) == 3
+    assert {"id", "name"}.issubset(set(all_df.columns))
+    assert list(all_df["id"]) == ["1", "2", "3"]  # falls Reihenfolge stabil ist
+    # sonst: assert sorted(all_df["id"]) == ["1", "2", "3"]
+
 
 
 

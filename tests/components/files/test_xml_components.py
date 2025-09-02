@@ -46,6 +46,10 @@ async def test_read_xml_valid_bulk(metrics):
     assert {"id", "name"}.issubset(set(df_all.columns))
     assert len(df_all) == 3
 
+    assert metrics.lines_forwarded == 3
+    assert metrics.lines_received == 0
+
+
 
 @pytest.mark.asyncio
 async def test_read_xml_missing_values_bulk(metrics):
@@ -70,6 +74,10 @@ async def test_read_xml_missing_values_bulk(metrics):
     assert df_all.iloc[0]["name"] == "Alice"
     assert df_all.iloc[1]["id"] == "2"
     assert df_all.iloc[1]["name"] in ("", None, pd.NA)
+
+    assert metrics.lines_forwarded == 3
+    assert metrics.lines_received == 0
+
 
 
 
@@ -102,6 +110,12 @@ async def test_read_xml_row_streaming(metrics):
     assert s["id"] == "2"
     assert s["name"] == "Bob"
 
+    async for _ in rows:
+        pass
+
+    assert metrics.lines_forwarded == 3
+    assert metrics.lines_received == 0
+
     await rows.aclose()
 
 
@@ -128,6 +142,10 @@ async def test_read_xml_bigdata(metrics):
     assert len(df_all) == 3
     assert df_all.iloc[0]["id"] == "1"
     assert df_all.iloc[0]["name"] == "Alice"
+
+    assert metrics.lines_forwarded == 3
+    assert metrics.lines_received == 0
+
 
 
 
@@ -158,6 +176,9 @@ async def test_write_xml_row(tmp_path: Path, metrics):
     assert len(recs) == 1
     assert recs[0].findtext("id") == "1"
     assert recs[0].findtext("name") == "Zoe"
+
+    assert metrics.lines_received == 1
+    assert metrics.lines_forwarded == 1
 
 
 
@@ -201,6 +222,10 @@ async def test_write_xml_bulk(tmp_path: Path, metrics):
     assert rows[2].findtext("id") == "3"
     assert rows[2].findtext("name") == "C"
 
+    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
+
+
 
 
 @pytest.mark.asyncio
@@ -230,6 +255,9 @@ async def test_write_xml_bigdata(tmp_path: Path, metrics):
     got = [(r.findtext("id"), r.findtext("name")) for r in rows]
     assert set(got) == {("10", "Nina"), ("11", "Omar")}
 
+    assert metrics.lines_received == 2
+    assert metrics.lines_forwarded == 2
+
 
 
 @pytest.mark.asyncio
@@ -247,6 +275,8 @@ async def test_read_xml_missing_file_bulk_raises(metrics, tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         gen = comp.execute(payload=None, metrics=metrics)
         await anext(gen)
+
+
 
 
 @pytest.mark.asyncio
@@ -289,6 +319,10 @@ async def test_read_xml_nested_bulk_flattens(metrics):
     assert r0["address.street"] == "Main"
     assert r0["tags.item[0]"] == "alpha"
     assert r0["tags.item[1]"] == "beta"
+
+    assert metrics.lines_forwarded == 2
+    assert metrics.lines_received == 0
+
 
 @pytest.mark.asyncio
 async def test_write_xml_row_from_flat_dict(tmp_path: Path, metrics):
@@ -336,6 +370,10 @@ async def test_write_xml_row_from_flat_dict(tmp_path: Path, metrics):
     items = rec.findall("./tags/item")
     assert [i.text for i in items] == ["alpha", "beta"]
 
+    assert metrics.lines_received == 1
+    assert metrics.lines_forwarded == 1
+
+
 @pytest.mark.asyncio
 async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
     out_fp = tmp_path / "bulk_flat.xml"
@@ -379,5 +417,9 @@ async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
     assert r2.findtext("address/street") == "Second"
     assert r2.findtext("address/city") == "Ville"
     assert [e.text for e in r2.findall("./tags/item")] == ["u1"]
+
+    assert metrics.lines_received == 2
+    assert metrics.lines_forwarded == 2
+
 
 

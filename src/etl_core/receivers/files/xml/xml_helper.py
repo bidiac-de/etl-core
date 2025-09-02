@@ -23,60 +23,81 @@ def element_to_nested(element: ET.Element) -> Any:
     - Repeated child tags become lists
     - Leaf elements become their text (str)
     """
-    if not list(element) and not element.attrib:
-        return (element.text or "").strip()
-
-    node: Dict[str, Any] = {}
-    if element.attrib:
-        node["@attrs"] = dict(element.attrib)
-
-    text = (element.text or "").strip()
-    if text and list(element):
-        node["#text"] = text
-    elif text and not list(element):
-        return text
-
-    for child in element:
-        child_payload = element_to_nested(child)
-        tag = child.tag
+    def _merge_child(node: Dict[str, Any], tag: str, payload: Any) -> None:
+        """Merge a child payload under 'tag', turning it into a list if repeated."""
         if tag in node:
             if not isinstance(node[tag], list):
                 node[tag] = [node[tag]]
-            node[tag].append(child_payload)
+            node[tag].append(payload)
         else:
-            node[tag] = child_payload
+            node[tag] = payload
+
+    children = list(element)
+    has_children = bool(children)
+    has_attrs = bool(element.attrib)
+    text = (element.text or "").strip()
+
+    if not has_children and not has_attrs:
+        return text
+
+    node: Dict[str, Any] = {}
+    if has_attrs:
+        node["@attrs"] = dict(element.attrib)
+
+    if text:
+        if has_children:
+            node["#text"] = text
+        else:
+            return text
+
+    for child in children:
+        _merge_child(node, child.tag, element_to_nested(child))
+
     return node
 
 
+
 def nested_to_element(tag: str, data: Any) -> ET.Element:
-    """Convert a nested dict/list/primitive back to an Element.
+    """
+    Convert a nested dict/list/primitive back to an Element.
     Special keys: "@attrs" for attributes, "#text" for mixed content text.
     Lists create repeated child elements of the same tag.
     """
     el = ET.Element(tag)
+    _apply_node(el, data)
+    return el
+
+
+def _apply_node(el: ET.Element, data: Any) -> None:
     if isinstance(data, dict):
-        attrs = data.get("@attrs")
-        if isinstance(attrs, dict):
-            for k, v in attrs.items():
-                el.set(str(k), str(v))
-        if "#text" in data:
-            text_val = data["#text"]
-            el.text = "" if text_val is None else str(text_val)
+        _apply_attrs_and_text(el, data)
         for k, v in data.items():
             if k in ("@attrs", "#text"):
                 continue
-            if isinstance(v, list):
-                for item in v:
-                    el.append(nested_to_element(k, item))
-            else:
-                el.append(nested_to_element(k, v))
+            _append_child(el, k, v)
     elif isinstance(data, list):
         for item in data:
-            el.append(nested_to_element(tag, item))
+            el.append(nested_to_element(el.tag, item))
     else:
         el.text = "" if data is None else str(data)
-    return el
 
+
+def _apply_attrs_and_text(el: ET.Element, data: Dict[str, Any]) -> None:
+    attrs = data.get("@attrs")
+    if isinstance(attrs, dict):
+        for k, v in attrs.items():
+            el.set(str(k), str(v))
+    if "#text" in data:
+        text_val = data["#text"]
+        el.text = "" if text_val is None else str(text_val)
+
+
+def _append_child(el: ET.Element, key: str, value: Any) -> None:
+    if isinstance(value, list):
+        for item in value:
+            el.append(nested_to_element(key, item))
+    else:
+        el.append(nested_to_element(key, value))
 
 
 def _iter_records(path: Path, record_tag: str) -> Generator[Dict[str, Any], None, None]:
@@ -94,32 +115,39 @@ def read_xml_row(path: Path, record_tag: str) -> Generator[Dict[str, Any], None,
 
 
 def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
-    """
-    Flattens nested structures:
-    - dict: keys are concatenated with '.' (e.g. address.street)
-    - list: indexed as [i] (e.g. tags[0], tags[1])
-    - special keys: '@attrs' -> attributes (e.g. address.@attrs.cityId),
-                    '#text'  -> mixed text content (e.g. para.#text)
-    """
+    """Flatten nested structures into dot / index paths."""
     if isinstance(value, dict):
-        for k, v in value.items():
-            if k in ("@attrs", "#text"):
-                key = f"{prefix}.{k}" if prefix else k
-                if k == "@attrs" and isinstance(v, dict):
-                    for ak, av in v.items():
-                        akey = f"{key}.{ak}"
-                        out[akey] = av
-                else:
-                    out[key] = v
-            else:
-                key = f"{prefix}.{k}" if prefix else k
-                _flatten_to_map(key, v, out)
+        _flatten_dict(prefix, value, out)
     elif isinstance(value, list):
-        for i, item in enumerate(value):
-            key = f"{prefix}[{i}]"
-            _flatten_to_map(key, item, out)
+        _flatten_list(prefix, value, out)
     else:
         out[prefix] = value
+
+
+def _flatten_dict(prefix: str, d: Dict[str, Any], out: Dict[str, Any]) -> None:
+    attrs = d.get("@attrs")
+    if isinstance(attrs, dict):
+        base = _join(prefix, "@attrs")
+        for ak, av in attrs.items():
+            out[_join(base, ak)] = av
+
+    if "#text" in d:
+        out[_join(prefix, "#text")] = d["#text"]
+
+    for k, v in d.items():
+        if k in ("@attrs", "#text"):
+            continue
+        _flatten_to_map(_join(prefix, k), v, out)
+
+
+def _flatten_list(prefix: str, lst: list, out: Dict[str, Any]) -> None:
+    for i, item in enumerate(lst):
+        _flatten_to_map(f"{prefix}[{i}]", item, out)
+
+
+def _join(prefix: str, key: str) -> str:
+    return f"{prefix}.{key}" if prefix else key
+
 
 def _flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     flat: Dict[str, Any] = {}
@@ -149,28 +177,34 @@ def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
     parts = list(read_xml_bulk_chunks(path, record_tag, chunk_size=10_000))
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
-def _build_payload_from_row_or_record(obj: Dict[str, Any]) -> Dict[str, Any] | Any:
+def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Takes either `{"record": {...}}` or a flat dict row.
-
-    * Filters out nulls (None, NaN, pd.NA)
-    * Unflattens if keys contain `.` or `[i]`
-    * Otherwise keeps the flat mapping as-is
+    Accepts either:
+      - flat dict with dotted / [i] keys  -> unflatten_record(...)
+      - nested dict                       -> passthrough
+    Nulls (None/NaN/pd.NA) are dropped.
     """
-
-    payload = obj.get("record", obj)
     if not isinstance(payload, dict):
-        return {"#text": "" if payload is None else str(payload)}
+        raise TypeError(f"Expected dict payload, got {type(payload).__name__}: {payload}")
 
     cleaned = {k: v for k, v in payload.items() if not _is_nullish(v)}
-    if any(("." in k) or ("[" in k and "]" in k) for k in cleaned.keys()):
+    if _has_flat_paths(cleaned):
         return unflatten_record(cleaned)
     return cleaned
 
 
 def _row_to_element(record_tag: str, row: Dict[str, Any]) -> ET.Element:
-    payload = _build_payload_from_row_or_record(row)
+    payload = build_payload(row)
     return nested_to_element(record_tag, payload)
+
+
+def _has_flat_paths(d: Dict[str, Any]) -> bool:
+    for k in d.keys():
+        if "." in k:
+            return True
+        if "[" in k and "]" in k:
+            return True
+    return False
 
 
 def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str) -> None:
@@ -178,12 +212,8 @@ def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag:
     root = ET.Element(root_tag)
 
     if not data.empty:
-        if "record" in data.columns:
-            for rec in data["record"].tolist():
-                root.append(nested_to_element(record_tag, rec))
-        else:
-            for _, r in data.iterrows():
-                root.append(_row_to_element(record_tag, r.to_dict()))
+        for _, r in data.iterrows():
+            root.append(_row_to_element(record_tag, r.to_dict()))
 
     tree = ET.ElementTree(root)
     with open_file(path, "wb") as f:
@@ -208,7 +238,6 @@ def write_xml_row(path: Path, row: Dict[str, Any], *, root_tag: str, record_tag:
     closing = f"</{root_tag}>"
     idx = content.rfind(closing)
     if idx == -1:
-        # malformed -> recreate safely
         root = ET.Element(root_tag)
         root.append(new_record_el)
         with open_file(path, "wb") as f:
@@ -238,40 +267,65 @@ def _ensure_dict(obj, key):
 def _set_path(root: dict, path: str, value):
     parts = _parse_path(path)
     cur = root
+    last_idx = len(parts) - 1
+
     for i, (name, idx) in enumerate(parts):
-        last = (i == len(parts) - 1)
+        last = i == last_idx
 
         if name == "@attrs":
-            if last:
-                return
-            attrs = _ensure_dict(cur, "@attrs")
-            next_name, _ = parts[i + 1]
-            if i + 1 == len(parts) - 1:
-                attrs[next_name] = value
-                return
-            cur = _ensure_dict(attrs, next_name)
-            continue
+            cur = _step_attrs(cur, parts, i, value)
+            return
 
-        if name == "#text" and last:
-            cur["#text"] = "" if value is None else str(value)
+        if name == "#text":
+            _step_text(cur, value, last)
             return
 
         if idx is None:
-            if last:
-                cur[name] = value
-                return
-            cur = _ensure_dict(cur, name)
+            cur = _step_dict(cur, name, value, last)
         else:
-            lst = _ensure_list(cur, name)
-            j = int(idx)
-            while len(lst) <= j:
-                lst.append({})
-            if last:
-                lst[j] = value
-                return
-            if not isinstance(lst[j], dict):
-                lst[j] = {}
-            cur = lst[j]
+            cur = _step_list(cur, name, idx, value, last)
+
+
+def _step_attrs(cur: dict, parts, i: int, value):
+    if i == len(parts) - 1:
+        return cur
+
+    attrs = _ensure_dict(cur, "@attrs")
+    next_name, _ = parts[i + 1]
+
+    if i + 1 == len(parts) - 1:
+        attrs[next_name] = value
+        return cur
+
+    return _ensure_dict(attrs, next_name)
+
+
+def _step_text(cur: dict, value, last: bool) -> None:
+    if last:
+        cur["#text"] = "" if value is None else str(value)
+
+
+def _step_dict(cur: dict, name: str, value, last: bool) -> dict:
+    if last:
+        cur[name] = value
+        return cur
+    return _ensure_dict(cur, name)
+
+
+def _step_list(cur: dict, name: str, idx: str, value, last: bool) -> dict:
+    lst = _ensure_list(cur, name)
+    j = int(idx)
+    while len(lst) <= j:
+        lst.append({})
+
+    if last:
+        lst[j] = value
+        return cur
+
+    if not isinstance(lst[j], dict):
+        lst[j] = {}
+    return lst[j]
+
 
 def unflatten_record(flat: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
