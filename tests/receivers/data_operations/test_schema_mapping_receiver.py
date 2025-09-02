@@ -136,7 +136,7 @@ def test_receiver_bulk_nested_in_to_flat_out(
             dataframe=df,
             rules=rules,
             out_port_schemas={"dst": _flat_schema("uid", "city")},
-            path_separator=".",
+            path_separator="..",
             metrics=data_ops_metrics,
         )
     )
@@ -165,7 +165,7 @@ def test_receiver_bulk_flat_in_to_nested_out(
             dataframe=df,
             rules=rules,
             out_port_schemas={"dst": _flat_schema("user.id", "user.profile.name")},
-            path_separator=".",
+            path_separator="..",
             metrics=data_ops_metrics,
         )
     )
@@ -192,7 +192,7 @@ def test_receiver_bulk_multiple_in_to_one_out(
             dataframe=df,
             rules=rules,
             out_port_schemas={"both": _flat_schema("uid", "uname")},
-            path_separator=".",
+            path_separator="..",
             metrics=data_ops_metrics,
         )
     )
@@ -223,7 +223,7 @@ def test_receiver_bigdata_flat_in_to_nested_out(
             ddf=ddf,
             rules=rules,
             out_port_schemas={"dst": _flat_schema("user.id", "user.name")},
-            path_separator=".",
+            path_separator="..",
             metrics=data_ops_metrics,
         )
     )

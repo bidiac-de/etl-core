@@ -277,10 +277,14 @@ async def test_write_bigdata_insert_nested_column(
     ddf = dd.from_pandas(base, npartitions=6)
 
     writer = _mk_writer(mongo_context, operation=DatabaseOperation.INSERT)
-    partitions = []
+
+    emissions = []
     async for env in writer.process_bigdata(ddf=ddf, metrics=metrics):
-        partitions.append(env)
-    assert len(partitions) == 6
+        emissions.append(env)
+
+    assert len(emissions) == 1
+    assert isinstance(emissions[0].payload, dd.DataFrame)
+    assert emissions[0].payload.compute().shape[0] == 60
 
     all_rows = await get_all_docs(handler, dbname, "people_ext")
     assert len(all_rows) == 60

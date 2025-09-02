@@ -377,20 +377,97 @@ class MongoDBReceiver:
         seperator: str,
     ) -> AsyncIterator[dd.DataFrame]:
         """
-        Writes a Dask DataFrame partition-by-partition using bulk ops.
+        Bigdata write mirroring bulk:
+        - Uses true bulk ops per partition.
+        - Processes all partitions but yields exactly once at the end.
+        - Metrics are updated once for the entire run.
         """
-        for i in range(frame.npartitions):
-            pdf = frame.get_partition(i).compute()
-            if pdf.empty:
-                continue
-            async for result in self.write_bulk(
-                connection_handler=connection_handler,
-                database_name=database_name,
-                entity_name=entity_name,
-                frame=pdf,
-                metrics=metrics,
-                operation=operation,
-                write_options=write_options,
-                seperator=seperator,
-            ):
-                yield dd.from_pandas(result, npartitions=1)
+        nparts = frame.npartitions
+        if nparts == 0:
+            # No partitions: return a single empty ddf
+            yield frame.repartition(npartitions=1)
+            return
+
+        key_fields: List[str] = write_options["key_fields"]
+        update_fields: Optional[List[str]] = write_options["update_fields"]
+        match_filter: Optional[Dict[str, Any]] = write_options["match_filter"]
+        ordered: bool = write_options["ordered"]
+
+        total_rows = 0
+
+        try:
+            with connection_handler.lease_collection(
+                database=database_name, collection=entity_name
+            ) as (_, coll):
+                if operation == DatabaseOperation.TRUNCATE:
+                    await coll.delete_many({})
+
+                for i in range(nparts):
+                    pdf: pd.DataFrame = frame.get_partition(i).compute()
+                    if pdf.empty:
+                        continue
+
+                    n_rows = int(len(pdf))
+                    total_rows += n_rows
+                    flat_docs: List[Dict[str, Any]] = pdf.to_dict(orient="records")
+
+                    await self._write_bigdata_partition(
+                        coll=coll,
+                        operation=operation,
+                        flat_docs=flat_docs,
+                        seperator=seperator,
+                        ordered=ordered,
+                        key_fields=key_fields,
+                        match_filter=match_filter,
+                        update_fields=update_fields,
+                    )
+
+                # Consolidated metrics
+                metrics.lines_received += total_rows
+                metrics.lines_forwarded += total_rows
+
+        except PyMongoError as exc:
+            raise RuntimeError(f"Mongo write_bigdata failed: {exc}") from exc
+
+        # final yield, number of partitions unchanged
+        yield frame.repartition(npartitions=nparts)
+
+    async def _write_bigdata_partition(
+        self,
+        *,
+        coll: Any,
+        operation: DatabaseOperation,
+        flat_docs: List[Dict[str, Any]],
+        seperator: str,
+        ordered: bool,
+        key_fields: List[str],
+        match_filter: Optional[Dict[str, Any]],
+        update_fields: Optional[List[str]],
+    ) -> None:
+        """
+        Execute the correct bulk operation for one partition.
+        Kept small and linear to reduce cognitive complexity in write_bigdata.
+        """
+        if not flat_docs:
+            return
+
+        if operation in (DatabaseOperation.TRUNCATE, DatabaseOperation.INSERT):
+            nested = unflatten_many(flat_docs, sep=seperator)
+            if nested:
+                await coll.insert_many(nested, ordered=ordered)
+            return
+
+        if operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
+            upsert = operation == DatabaseOperation.UPSERT
+            ops = _build_update_ops(
+                flat_docs,
+                key_fields=key_fields,
+                match_filter=match_filter,
+                update_fields=update_fields,
+                upsert=upsert,
+            )
+            if ops:
+                await coll.bulk_write(ops, ordered=ordered)
+            return
+
+        raise ValueError(f"Unsupported operation: {operation}")

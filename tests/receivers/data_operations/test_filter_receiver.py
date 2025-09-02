@@ -149,7 +149,7 @@ async def test_filter_receiver_bulk_contains_and_not(
         else pd.DataFrame(columns=["id", "name"])
     )
 
-    # NOT contains "li" keeps only "Bob"
+    # NOT contains 'li' keeps only 'Bob'
     assert passed.shape[0] == 1
     assert passed.iloc[0]["name"] == "Bob"
     assert failed.shape[0] == 3
@@ -220,7 +220,7 @@ async def test_filter_receiver_bigdata_map_partitions(
 
     assert pass_ddf is not None and fail_ddf is not None
 
-    # Compute and compare results
+    # Compute and compare results (dtype-agnostic)
     passed = pass_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
     failed = fail_ddf.compute().sort_values(["id", "name"]).reset_index(drop=True)
 

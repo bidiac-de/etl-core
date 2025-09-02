@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
@@ -12,6 +13,17 @@ from pandas.testing import assert_frame_equal
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.files.excel.excel_receiver import ExcelReceiver
 from tests.helpers import normalize_df
+
+
+@pytest.fixture
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
 
 
 @pytest.fixture(scope="session")

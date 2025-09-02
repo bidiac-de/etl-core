@@ -15,24 +15,27 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 
 
 @pytest.fixture
+def metrics() -> ComponentMetrics:
+    return ComponentMetrics(
+        started_at=datetime.now(),
+        processing_time=timedelta(0),
+        error_count=0,
+        lines_received=0,
+        lines_forwarded=0,
+    )
+
+
+@pytest.fixture
 def sample_json_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
-        / "components"
-        / "data"
-        / "json"
-        / "testdata.json"
+        Path(__file__).parent.parent.parent / "components" / "data" / "json" / "testdata.json"
     )
 
 
 @pytest.fixture
 def sample_ndjson_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
-        / "components"
-        / "data"
-        / "json"
-        / "testdata.jsonl"
+        Path(__file__).parent.parent.parent / "components" / "data" / "json" / "testdata.jsonl"
     )
 
 

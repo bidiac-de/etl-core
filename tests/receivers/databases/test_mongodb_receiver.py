@@ -367,8 +367,13 @@ async def test_write_bigdata_partitions(
             seperator=".",
         )
     )
-    # one result per partition
-    assert len(results) == 3
+
+    # yielded results
+    assert len(results) == 1
+    assert isinstance(results[0], dd.DataFrame)
+    assert int(results[0].compute().shape[0]) == 7
+
+    # metrics reflect total rows processed
     assert metrics.lines_received == 7
     assert metrics.lines_forwarded == 7
 
