@@ -5,7 +5,7 @@ from typing import Any, Dict, Generator, Optional, Tuple
 
 from sqlalchemy.engine import Connection, Engine
 
-from src.etl_core.components.databases.pool_registry import (
+from etl_core.components.databases.pool_registry import (
     ConnectionPoolRegistry,
     PoolKey,
 )
@@ -17,13 +17,6 @@ class SQLConnectionHandler:
     Keeps URL building outside; focuses on leasing from the registry.
     """
 
-    DIALECTS: Dict[str, str] = {
-        "postgres": "postgresql+psycopg2",
-        "mysql": "mysql+mysqlconnector",
-        "mariadb": "mysql+mysqlconnector",
-        "sqlite": "sqlite",
-    }
-
     def __init__(self) -> None:
         self._registry = ConnectionPoolRegistry.instance()
         self._key: Optional[PoolKey] = None
@@ -32,25 +25,32 @@ class SQLConnectionHandler:
     @staticmethod
     def build_url(
         *,
-        db_type: str,
+        comp_type: str,
         user: Optional[str] = None,
         password: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[int] = None,
         database: Optional[str] = None,
     ) -> str:
-        db = db_type.lower()
-        driver = SQLConnectionHandler.DIALECTS.get(db)
-        if driver is None:
-            raise ValueError(f"Unsupported SQL dialect: {db_type!r}")
+        # Map database types to SQLAlchemy driver prefixes
+        driver_map = {
+            "read_postgresql": "postgresql+psycopg2",
+            "write_postgresql": "postgresql+psycopg2",
+            "read_mariadb": "mysql+mysqlconnector",
+            "write_mariadb": "mysql+mysqlconnector",
+            "read_mysql": "mysql+mysqlconnector",
+            "write_mysql": "mysql+mysqlconnector",
+            "read_sqlite": "sqlite",
+            "write_sqlite": "sqlite",
+        }
 
-        if driver == "sqlite":
-            if not database:
-                raise ValueError("SQLite requires a database (file path).")
-            return f"sqlite:///{database}"
+        # Use the mapped driver or fall back to the original db_type
+        driver = driver_map.get(comp_type, comp_type)
 
         if not all([user, password, host, port, database]):
-            raise ValueError(f"{db} requires user, password, host, port, and database.")
+            raise ValueError(
+                f"{comp_type} requires user, password, host, port, and database."
+            )
         return f"{driver}://{user}:{password}@{host}:{port}/{database}"
 
     def connect(

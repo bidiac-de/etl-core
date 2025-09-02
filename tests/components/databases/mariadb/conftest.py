@@ -15,12 +15,12 @@ import pandas as pd
 import dask.dataframe as dd
 from unittest.mock import Mock, patch
 
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.context_parameter import ContextParameter
-from src.etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
-from src.etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.context.credentials import Credentials
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.context_parameter import ContextParameter
+from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
+from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 
 
 def derive_test_password(base_pw: str, purpose: str) -> str:
@@ -124,12 +124,12 @@ def mock_metrics() -> Mock:
 def mariadb_read_component(sample_context: Context) -> MariaDBRead:
     """Create a MariaDBRead component with context."""
     with patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler." "SQLConnectionHandler"
     ):
         read_comp = MariaDBRead(
             name="test_read",
             description="Test read component",
-            comp_type="database",
+            comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
             credentials_id=1,
@@ -142,12 +142,12 @@ def mariadb_read_component(sample_context: Context) -> MariaDBRead:
 def mariadb_write_component(sample_context: Context) -> MariaDBWrite:
     """Create a MariaDBWrite component with context."""
     with patch(
-        "src.etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        "etl_core.components.databases.sql_connection_handler." "SQLConnectionHandler"
     ):
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
-            comp_type="database",
+            comp_type="write_mariadb",
             entity_name="users",
             credentials_id=1,
         )
@@ -161,6 +161,7 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
     Create multiple credentials for testing different scenarios (env for passwords).
     """
     _, base_pw = test_creds
+
     return {
         "minimal": Credentials(
             credentials_id=2,
@@ -251,51 +252,6 @@ def sample_query_params() -> Dict[str, object]:
         ],
         "filter": {"active": True, "role": "admin"},
         "pagination": {"limit": 10, "offset": 0},
-    }
-
-
-@pytest.fixture
-def credentials_dict(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
-    """Create a dictionary of credentials for testing (env for passwords)."""
-    _, base_pw = test_creds
-    return {
-        "minimal": Credentials(
-            credentials_id=2,
-            name="minimal_creds",
-            user="minuser",
-            host="localhost",
-            port=3306,
-            database="mindb",
-            password=base_pw,
-        ),
-        "with_pool": Credentials(
-            credentials_id=3,
-            name="pool_creds",
-            user="pooluser",
-            host="localhost",
-            port=3306,
-            database="pooldb",
-            password=derive_test_password(base_pw, "pool"),
-            pool_max_size=50,
-            pool_timeout_s=60,
-        ),
-        "special_chars": Credentials(
-            credentials_id=4,
-            name="special_creds",
-            user="user@domain",
-            host="localhost",
-            port=3306,
-            database="special_db_123",
-            password=derive_test_password(base_pw, "special"),
-        ),
-        "no_password": Credentials(
-            credentials_id=5,
-            name="nopass_creds",
-            user="nopassuser",
-            host="localhost",
-            port=3306,
-            database="nopassdb",
-        ),
     }
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
-from src.etl_core.context.context_provider import IContextProvider
+from etl_core.context.context_provider import IContextProvider
 
 
 class Credentials(BaseModel, IContextProvider):
