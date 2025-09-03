@@ -25,6 +25,7 @@ from etl_core.receivers.data_operations_receivers.aggregation.aggregation_receiv
 
 class AggregationOp(str, Enum):
     """Supported aggregation operations."""
+
     COUNT = "count"
     SUM = "sum"
     MIN = "min"
@@ -37,6 +38,7 @@ class AggregationOp(str, Enum):
 
 class AggOp(BaseModel):
     """One aggregation instruction."""
+
     src: str = Field(..., description="Source field (or '*' for row count)")
     op: AggregationOp = Field(..., description="Aggregation operation")
     dest: str = Field(..., description="Destination field name")
@@ -68,7 +70,6 @@ class AggregationComponent(DataOperationsComponent):
     _row_buf: Dict[str, List[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
     _bulk_buf: Dict[str, pd.DataFrame] = PrivateAttr(default_factory=dict)
     _big_buf: Dict[str, dd.DataFrame] = PrivateAttr(default_factory=dict)
-
 
     @model_validator(mode="after")
     def _build_objects(self) -> "AggregationComponent":
@@ -108,7 +109,8 @@ class AggregationComponent(DataOperationsComponent):
         missing_gb = [c for c in self.group_by if c not in names]
         if missing_gb:
             raise ValueError(
-                f"{self.name}: group_by contains fields not in input schema: {missing_gb}"
+                f"{self.name}: group_by contains fields not "
+                f"in input schema: {missing_gb}"
             )
 
         missing_src = [
@@ -116,9 +118,9 @@ class AggregationComponent(DataOperationsComponent):
         ]
         if missing_src:
             raise ValueError(
-                f"{self.name}: aggregations reference missing fields: {sorted(set(missing_src))}"
+                f"{self.name}: aggregations reference missing "
+                f"fields: {sorted(set(missing_src))}"
             )
-
 
     def requires_tagged_input(self) -> bool:
         # component is buffering, needs to know end-of-stream
@@ -134,7 +136,6 @@ class AggregationComponent(DataOperationsComponent):
         if isinstance(obj, InTagged):
             return obj.in_port, obj.payload
         return default_port, obj
-
 
     async def process_row(
         self,
@@ -157,7 +158,6 @@ class AggregationComponent(DataOperationsComponent):
         # buffer until flush
         if isinstance(payload, dict):
             self._row_buf.setdefault(in_port, []).append(payload)
-
 
     async def process_bulk(
         self,
@@ -187,7 +187,6 @@ class AggregationComponent(DataOperationsComponent):
                 self._bulk_buf[in_port] = payload
             else:
                 self._bulk_buf[in_port] = pd.concat([cur, payload], ignore_index=True)
-
 
     async def process_bigdata(
         self,

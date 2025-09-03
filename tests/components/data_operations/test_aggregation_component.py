@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import dask.dataframe as dd
@@ -55,8 +54,8 @@ async def test_component_row_buffer_and_flush(
     assert len(outs) > 0
     assert all(o.port == "out" for o in outs)
 
-    got = pd.DataFrame([o.payload for o in outs]).sort_values("g").reset_index(
-        drop=True
+    got = (
+        pd.DataFrame([o.payload for o in outs]).sort_values("g").reset_index(drop=True)
     )
     expected = (
         pd.DataFrame(
