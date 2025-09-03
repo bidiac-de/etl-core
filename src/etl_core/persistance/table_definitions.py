@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer, String
 from sqlalchemy.types import JSON
 from sqlmodel import Field, Relationship, SQLModel
+from datetime import datetime
 
 from etl_core.persistance.base_models.component_base import ComponentBase
 from etl_core.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
@@ -12,6 +13,7 @@ from etl_core.persistance.base_models.job_base import JobBase
 _FOREIGN_KEY_COMPONENT_TABLE = "componenttable.id"
 _FOREIGN_KEY_JOB_TABLE = "jobtable.id"
 _CASCADE_ALL = "all, delete-orphan"
+_FOREIGN_KEY_CONTEXT_PROVIDER = "contexttable.provider_id"
 
 
 class JobTable(JobBase, table=True):
@@ -189,3 +191,70 @@ class LayoutTable(LayoutBase, table=True):
         ),
     )
     component: "ComponentTable" = Relationship(back_populates="layout")
+
+
+class CredentialsTable(SQLModel, table=True):
+    """
+    Persist non-secret parts of DB credentials.
+    Secrets (passwords, secure params) stay in keyring under provider_id/*.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    provider_id: str = Field(index=True, nullable=False)
+    name: str = Field(nullable=False)
+    user: str = Field(nullable=False)
+    host: str = Field(nullable=False)
+    port: int = Field(nullable=False)
+    database: str = Field(nullable=False)
+    pool_max_size: Optional[int] = None
+    pool_timeout_s: Optional[int] = None
+    created_at: datetime = Field(default_factory=datetime.now, nullable=False)
+
+
+class ContextTable(SQLModel, table=True):
+    """
+    Optional: persist context metadata only.
+    Secure params are tracked via ContextParameterTable rows but values live in keyring.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    provider_id: str = Field(
+        sa_column=Column(String, unique=True, index=True, nullable=False)
+    )
+    name: str = Field(nullable=False)
+    environment: str = Field(nullable=False)
+    created_at: datetime = Field(default_factory=datetime.now, nullable=False)
+
+    parameters: list["ContextParameterTable"] = Relationship(
+        back_populates="context",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
+    )
+
+
+class ContextParameterTable(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+
+    # references ContextTable.provider_id (not the PK)
+    context_provider_id: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey(_FOREIGN_KEY_CONTEXT_PROVIDER, ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
+    key: str = Field(index=True, nullable=False)
+    value: str = Field(default="", nullable=False)  # empty for secure keys
+    is_secure: bool = Field(default=False, nullable=False)
+
+    # avoid duplicate keys per context
+    __table_args__ = (
+        UniqueConstraint(
+            "context_provider_id", "key", name="uq_contextparam_context_key"
+        ),
+    )
+
+    context: ContextTable | None = Relationship(back_populates="parameters")

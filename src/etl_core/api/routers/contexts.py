@@ -1,7 +1,6 @@
 from __future__ import annotations
 from uuid import uuid4
-
-from typing import Optional, Literal
+from typing import Optional, Literal, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,6 +13,9 @@ from src.etl_core.context.secure_context_adapter import SecureContextAdapter
 
 from src.etl_core.context.secrets.secret_provider import SecretProvider
 from src.etl_core.context.secrets.keyring_provider import KeyringSecretProvider
+
+from src.etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from src.etl_core.persistance.handlers.context_handler import ContextHandler
 
 router = APIRouter(prefix="/contexts", tags=["contexts"])
 
@@ -29,7 +31,12 @@ def get_secret_provider(service: Optional[str] = None) -> SecretProvider:
     return KeyringSecretProvider(service=svc)
 
 
-# Request/response Schemas
+def get_credentials_handler() -> CredentialsHandler:
+    return CredentialsHandler()
+
+
+def get_context_handler() -> ContextHandler:
+    return ContextHandler()
 
 
 class ContextCreateRequest(BaseModel):
@@ -74,6 +81,38 @@ class ProviderListItem(BaseModel):
     environment: Optional[Environment] = None
 
 
+def _choose_secret_store(
+    default_provider: SecretProvider,
+    override_service: Optional[str],
+) -> SecretProvider:
+    return (
+        default_provider
+        if override_service is None
+        else get_secret_provider(override_service)
+    )
+
+
+def _append_item(
+    items: list[ProviderListItem],
+    pid: str,
+    kind: Literal["context", "credentials"],
+    name: Optional[str],
+    env: Optional[Environment],
+) -> None:
+    items.append(ProviderListItem(id=pid, kind=kind, name=name, environment=env))
+
+
+def _dedupe(items: Iterable[ProviderListItem]) -> list[ProviderListItem]:
+    seen: set[str] = set()
+    out: list[ProviderListItem] = []
+    for it in items:
+        if it.id in seen:
+            continue
+        seen.add(it.id)
+        out.append(it)
+    return out
+
+
 # register a general Context
 @router.post(
     "/context",
@@ -83,16 +122,13 @@ class ProviderListItem(BaseModel):
 def create_context_provider(
     req: ContextCreateRequest,
     default_provider: SecretProvider = Depends(get_secret_provider),
+    ctx_handler: ContextHandler = Depends(get_context_handler),
 ) -> ProviderCreateResponse:
     try:
         ctx = req.context
         context_id = str(uuid4())
 
-        secret_store = (
-            default_provider
-            if req.keyring_service is None
-            else get_secret_provider(req.keyring_service)
-        )
+        secret_store = _choose_secret_store(default_provider, req.keyring_service)
 
         adapter = SecureContextAdapter(
             provider_id=context_id,
@@ -100,15 +136,23 @@ def create_context_provider(
             context=ctx,
         )
 
-        # Move secure parameters into the secret store
+        # Move secure parameters into secret store
         adapter.bootstrap_to_store()
 
-        # Register the secure provider facade
-        ContextRegistry.register(context_id, adapter)
-
-        secure_count = sum(
-            1 for p in ctx.parameters.values() if getattr(p, "is_secure", False)
+        # persist non-secret context metadata + parameter presence
+        non_secure = {
+            k: p.value for k, p in ctx.parameters.items() if p.is_secure is False
+        }
+        secure_keys = [k for k, p in ctx.parameters.items() if p.is_secure]
+        ctx_handler.upsert(
+            provider_id=context_id,
+            name=ctx.name,
+            environment=ctx.environment.value,
+            non_secure_params=non_secure,
+            secure_param_keys=secure_keys,
         )
+
+        secure_count = len(secure_keys)
 
         return ProviderCreateResponse(
             id=context_id,
@@ -132,16 +176,13 @@ def create_context_provider(
 def create_credentials_provider(
     req: CredentialsCreateRequest,
     default_provider: SecretProvider = Depends(get_secret_provider),
+    creds_handler: CredentialsHandler = Depends(get_credentials_handler),
 ) -> ProviderCreateResponse:
     try:
         creds = req.credentials
         credentials_id = str(uuid4())
 
-        secret_store = (
-            default_provider
-            if req.keyring_service is None
-            else get_secret_provider(req.keyring_service)
-        )
+        secret_store = _choose_secret_store(default_provider, req.keyring_service)
 
         adapter = SecureContextAdapter(
             provider_id=credentials_id,
@@ -149,16 +190,16 @@ def create_credentials_provider(
             credentials=creds,
         )
 
-        # Store password secure in secret store
+        # Store password securely in secret store
         adapter.bootstrap_to_store()
 
         # reduce in-memory exposure of password
         req.credentials.password = None
 
-        # Register the secure provider facade
-        ContextRegistry.register(credentials_id, adapter)
+        # persist non-secret metadata (password stays in keyring)
+        creds_handler.upsert(provider_id=credentials_id, creds=creds)
 
-        # secure_count = 1, password is only secure parameter
+        # secure_count = 1, password is the only secure parameter
         return ProviderCreateResponse(
             id=credentials_id,
             kind="credentials",
@@ -178,41 +219,27 @@ def create_credentials_provider(
     response_model=list[ProviderListItem],
     status_code=status.HTTP_200_OK,
 )
-def list_providers() -> list[ProviderListItem]:
+def list_providers(
+    ctx_handler: ContextHandler = Depends(get_context_handler),
+    creds_handler: CredentialsHandler = Depends(get_credentials_handler),
+) -> list[ProviderListItem]:
     """
-    Return a flat list of all registered providers with safe data
-    so the GUI can present a picker during component creation.
+    Return a flat list of providers that are persisted
     """
     items: list[ProviderListItem] = []
-    for pid in ContextRegistry.list_ids():
-        try:
-            provider = ContextRegistry.resolve(pid)
-        except KeyError:
-            # If concurrently removed, just skip
-            continue
 
-        kind: Literal["context", "credentials"] = "credentials"
-        name: Optional[str] = None
-        env: Optional[Environment] = None
-
-        if isinstance(provider, SecureContextAdapter):
-            if provider.context is not None:
-                kind = "context"
-                name = getattr(provider.context, "name", None)
-                env = provider.context.environment
-            elif provider.credentials is not None:
-                kind = "credentials"
-                name = getattr(provider.credentials, "name", None)
-
-        items.append(
-            ProviderListItem(
-                id=pid,
-                kind=kind,
-                name=name,
-                environment=env,
-            )
+    for row in ctx_handler.list_all():
+        _append_item(
+            items,
+            row.provider_id,
+            "context",
+            row.name,
+            Environment(row.environment),
         )
-    return items
+    for row in creds_handler.list_all():
+        _append_item(items, row.provider_id, "credentials", row.name, None)
+
+    return _dedupe(items)
 
 
 # get context infos by id (no secrets)
@@ -221,40 +248,61 @@ def list_providers() -> list[ProviderListItem]:
     response_model=ProviderInfoResponse,
     status_code=status.HTTP_200_OK,
 )
-def get_provider(id: str) -> ProviderInfoResponse:
-    try:
-        adapter = ContextRegistry.resolve(id)
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+def get_provider(
+    id: str,
+    ctx_handler: ContextHandler = Depends(get_context_handler),
+    creds_handler: CredentialsHandler = Depends(get_credentials_handler),
+) -> ProviderInfoResponse:
 
-    kind: Literal["context", "credentials"] = "credentials"
-    environment: Optional[Environment] = None
+    row_ctx = ctx_handler.get_by_provider_id(id)
+    if row_ctx is not None:
+        return ProviderInfoResponse(
+            id=id,
+            kind="context",
+            environment=Environment(row_ctx.environment),
+            provider_class="SecureContextAdapter",
+        )
+    row_creds = creds_handler.get_by_provider_id(id)
+    if row_creds is not None:
+        return ProviderInfoResponse(
+            id=id,
+            kind="credentials",
+            environment=None,
+            provider_class="SecureContextAdapter",
+        )
 
-    if isinstance(adapter, SecureContextAdapter) and adapter.context is not None:
-        kind = "context"
-        environment = adapter.context.environment
-
-    return ProviderInfoResponse(
-        id=id,
-        kind=kind,
-        environment=environment,
-        provider_class=adapter.__class__.__name__,
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider '{id}' not found"
     )
 
 
 # unregister and purge secrets by id
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def delete_provider(id: str) -> Response:
+def delete_provider(
+    id: str,
+    creds_handler: CredentialsHandler = Depends(get_credentials_handler),
+    ctx_handler: ContextHandler = Depends(get_context_handler),
+) -> Response:
+    # Delete secrets + in-memory registry, if present
     try:
         adapter = ContextRegistry.resolve(id)
     except KeyError:
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        adapter = None
 
+    if adapter is not None:
+        try:
+            adapter.delete_from_store()
+        finally:
+            ContextRegistry.unregister(id)
+
+    # Also remove persisted metadata (try both kinds, since only one will match)
     try:
-        adapter.delete_from_store()
-    finally:
-        ContextRegistry.unregister(id)
+        creds_handler.delete_by_provider_id(id)
+    except Exception:
+        pass
+    try:
+        ctx_handler.delete_by_provider_id(id)
+    except Exception:
+        pass
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

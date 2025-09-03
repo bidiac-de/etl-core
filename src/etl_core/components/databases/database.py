@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Optional, Any
 
 import pandas as pd
 import dask.dataframe as dd
 from pydantic import Field, model_validator
 
 from etl_core.components.base_component import Component
-from etl_core.context.context import Context
+from etl_core.context.credentials import Credentials
+from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 
 
 class DatabaseComponent(Component, ABC):
@@ -19,7 +20,7 @@ class DatabaseComponent(Component, ABC):
     can use them consistently.
     """
 
-    credentials_id: int = Field(..., description="ID of credentials to use")
+    credentials_id: str = Field(..., description="ID of credentials to use")
 
     entity_name: str = Field(
         default="",
@@ -45,41 +46,42 @@ class DatabaseComponent(Component, ABC):
         ),
     )
 
-    _context: Context = None
+    _credentials: Optional[Credentials] = None
     _receiver: Any = None
 
     @model_validator(mode="after")
     def _build_objects(self):
         """Build database-specific objects after validation."""
         self._receiver = None
+        self._credentials = self._resolve_credentials()
         return self
 
-    @property
-    def context(self) -> Context:
-        return self._context
-
-    @context.setter
-    def context(self, value: Context):
-        if hasattr(value, "get_credentials"):
-            self._context = value
-        else:
-            raise TypeError("context must have get_credentials method")
+    def _resolve_credentials(self) -> Credentials:
+        """
+        Hydrate credentials from persistence (DB + keyring).
+        Raises if not found.
+        """
+        repo = CredentialsHandler()
+        loaded = repo.get_by_id(self.credentials_id)
+        if not loaded:
+            raise ValueError(f"Credentials with ID {self.credentials_id} not found")
+        creds, _ = loaded
+        return creds
 
     def _get_credentials(self) -> Dict[str, Any]:
-        """Get credentials from context."""
-        if not self._context:
-            raise ValueError("Context not set for database component")
+        """
+        Return connection parameters. Lazily resolves credentials if needed.
+        """
+        if self._credentials is None:
+            self._credentials = self._resolve_credentials()
 
-        credentials = self._context.get_credentials(self.credentials_id)
-        if not credentials:
-            raise ValueError(f"Credentials with ID {self.credentials_id} not found")
-
+        creds = self._credentials
         return {
-            "user": credentials.get_parameter("user"),
-            "password": credentials.decrypted_password,
-            "database": credentials.get_parameter("database"),
-            "host": credentials.get_parameter("host"),
-            "port": credentials.get_parameter("port"),
+            "user": creds.get_parameter("user"),
+            "password": creds.decrypted_password,
+            "database": creds.get_parameter("database"),
+            "host": creds.get_parameter("host"),
+            "port": creds.get_parameter("port"),
         }
 
     @abstractmethod

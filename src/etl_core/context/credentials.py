@@ -20,7 +20,7 @@ class Credentials(BaseModel, IContextProvider):
         frozen=False,
     )
 
-    credentials_id: int
+    credentials_id: str
     name: str
     user: str
     host: str = Field(..., description="Database host")

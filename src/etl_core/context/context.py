@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from etl_core.context.context_provider import IContextProvider
 from etl_core.context.context_parameter import ContextParameter
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
+from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 
 
 class Context(BaseModel, IContextProvider):
     """
-    Pydantic version of Context.
-
-    Keeps the old public API:
+    public API:
       - properties: id, name, environment, parameters
       - `parameters` can be passed as a list or as a dict keyed by `key`
       - `get_parameter(key)` returns the parameter's value
@@ -25,13 +24,14 @@ class Context(BaseModel, IContextProvider):
         validate_assignment=True,
     )
 
-    id: int
+    id: str
     name: str
     environment: Environment
     parameters: Dict[str, ContextParameter] = Field(default_factory=dict)
 
-    # Add credentials storage
-    _credentials: Dict[int, Credentials] = {}
+    # credentials storage
+    _credentials: Dict[str, Credentials] = {}
+    _credentials_repo: Optional[CredentialsHandler] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -70,12 +70,22 @@ class Context(BaseModel, IContextProvider):
         else:
             raise KeyError(f"Cannot set value, parameter with key '{key}' not found.")
 
+    def attach_credentials_repository(self, repo: CredentialsHandler) -> None:
+        self._credentials_repo = repo
+
     def add_credentials(self, credentials: Credentials) -> None:
         """Add credentials to the context."""
         self._credentials[credentials.credentials_id] = credentials
 
-    def get_credentials(self, credentials_id: int) -> Credentials:
-        """Get credentials by ID."""
-        if credentials_id not in self._credentials:
+    def get_credentials(self, credentials_id: str) -> Credentials:
+        cached = self._credentials.get(credentials_id)
+        if cached is not None:
+            return cached
+        if self._credentials_repo is None:
             raise KeyError(f"Credentials with ID {credentials_id} not found")
-        return self._credentials[credentials_id]
+        loaded = self._credentials_repo.get_by_id(credentials_id)
+        if loaded is None:
+            raise KeyError(f"Credentials with ID {credentials_id} not found")
+        creds, _provider_id = loaded
+        self._credentials[credentials_id] = creds
+        return creds
