@@ -5,7 +5,7 @@ from typing import Any, AsyncGenerator, Dict, List, Tuple, Union, Protocol
 import pandas as pd
 import dask.dataframe as dd
 from etl_core.receivers.base_receiver import Receiver
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
 
@@ -86,13 +86,19 @@ def _split_nunique(
 
 def _agg_base(grouped: Any, agg_map_no_nunique: Dict[str, List[str]]) -> Any:
     """Run base aggregation (without nunique), flatten columns, reset index."""
-    out = grouped.agg(agg_map_no_nunique) if agg_map_no_nunique else grouped.size().to_frame("_dummy_")  # noqa: E501
+    out = (
+        grouped.agg(agg_map_no_nunique)
+        if agg_map_no_nunique
+        else grouped.size().to_frame("_dummy_")
+    )  # noqa: E501
     if isinstance(out.columns, pd.MultiIndex):
         out.columns = [f"{c[0]}__{c[1]}" for c in out.columns]
     return out.reset_index()
 
 
-def _attach_size(grouped: Any, out: Any, keys: List[str], order: List[Tuple[str, str, str]]) -> Any:  # noqa: E501
+def _attach_size(
+    grouped: Any, out: Any, keys: List[str], order: List[Tuple[str, str, str]]
+) -> Any:  # noqa: E501
     """Attach count(*) if requested via '*'."""
     if not any(src == "*" for src, _f, _d in order):
         return out
@@ -156,6 +162,7 @@ def _apply_grouped(
     out = _attach_size(grouped, out, keys, order)
     out = _merge_nunique(grouped, out, keys, nunique_specs)
     return _finalize_columns(out, keys, order)
+
 
 class AggregationReceiver(Receiver):
     """Group-by aggregations for dict rows, pandas, and dask frames."""
