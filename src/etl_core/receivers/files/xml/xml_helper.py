@@ -1,11 +1,12 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Generator
+from typing import Any, Dict, List, Generator
 import xml.etree.ElementTree as ET
 import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
 import re
 import math
+
 
 def _is_nullish(v: Any) -> bool:
     if v is None:
@@ -15,6 +16,7 @@ def _is_nullish(v: Any) -> bool:
     except Exception:
         return isinstance(v, float) and math.isnan(v)
 
+
 def element_to_nested(element: ET.Element) -> Any:
     """Convert an XML element into a *truly nested* Python structure.
     Rules:
@@ -23,6 +25,7 @@ def element_to_nested(element: ET.Element) -> Any:
     - Repeated child tags become lists
     - Leaf elements become their text (str)
     """
+
     def _merge_child(node: Dict[str, Any], tag: str, payload: Any) -> None:
         """Merge a child payload under 'tag', turning it into a list if repeated."""
         if tag in node:
@@ -54,7 +57,6 @@ def element_to_nested(element: ET.Element) -> Any:
         _merge_child(node, child.tag, element_to_nested(child))
 
     return node
-
 
 
 def nested_to_element(tag: str, data: Any) -> ET.Element:
@@ -154,11 +156,12 @@ def _flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     _flatten_to_map("", rec, flat)
     return {k.lstrip("."): v for k, v in flat.items()}
 
+
 def read_xml_bulk_chunks(
-        path: Path,
-        record_tag: str,
-        *,
-        chunk_size: int = 10_000,
+    path: Path,
+    record_tag: str,
+    *,
+    chunk_size: int = 10_000,
 ) -> Generator[pd.DataFrame, None, None]:
     """
     Yield *flat* pandas DataFrame chunks directly from a file.
@@ -173,9 +176,11 @@ def read_xml_bulk_chunks(
     if buf_rows:
         yield pd.DataFrame.from_records(buf_rows)
 
+
 def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
     parts = list(read_xml_bulk_chunks(path, record_tag, chunk_size=10_000))
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
 
 def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -185,7 +190,9 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     Nulls (None/NaN/pd.NA) are dropped.
     """
     if not isinstance(payload, dict):
-        raise TypeError(f"Expected dict payload, got {type(payload).__name__}: {payload}")
+        raise TypeError(
+            f"Expected dict payload, got {type(payload).__name__}: {payload}"
+        )
 
     cleaned = {k: v for k, v in payload.items() if not _is_nullish(v)}
     if _has_flat_paths(cleaned):
@@ -207,7 +214,9 @@ def _has_flat_paths(d: Dict[str, Any]) -> bool:
     return False
 
 
-def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str) -> None:
+def write_xml_bulk(
+    path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str
+) -> None:
     path = resolve_file_path(path)
     root = ET.Element(root_tag)
 
@@ -220,9 +229,20 @@ def write_xml_bulk(path: Path, data: pd.DataFrame, *, root_tag: str, record_tag:
         tree.write(f, encoding="utf-8", xml_declaration=True)
 
 
-def write_xml_row(path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str) -> None:
+def write_xml_row(
+    path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str
+) -> None:
     path = resolve_file_path(path)
-    new_record_el = _row_to_element(record_tag, row)
+
+    if not isinstance(row, dict):
+        raise TypeError(f"Row mode expects a nested dict, got {type(row).__name__}")
+
+    if any(("." in k) or ("[" in k and "]" in k) for k in row.keys()):
+        raise ValueError("Row mode expects a nested dict (no dotted or indexed keys).")
+
+    cleaned = {k: v for k, v in row.items() if not _is_nullish(v)}
+
+    new_record_el = nested_to_element(record_tag, cleaned)
     new_record_xml = ET.tostring(new_record_el, encoding="unicode")
 
     if not path.exists() or path.stat().st_size == 0:
@@ -249,20 +269,24 @@ def write_xml_row(path: Path, row: Dict[str, Any], *, root_tag: str, record_tag:
         f.write(new_content)
 
 
-_PATH_RE = re.compile(r'\.?([^\.\[\]]+)(?:\[(\d+)\])?')
+_PATH_RE = re.compile(r"\.?([^\.\[\]]+)(?:\[(\d+)\])?")
+
 
 def _parse_path(path: str):
     return [(m.group(1), m.group(2)) for m in _PATH_RE.finditer(path)]
+
 
 def _ensure_list(obj, key):
     if key not in obj or not isinstance(obj[key], list):
         obj[key] = []
     return obj[key]
 
+
 def _ensure_dict(obj, key):
     if key not in obj or not isinstance(obj[key], dict):
         obj[key] = {}
     return obj[key]
+
 
 def _set_path(root: dict, path: str, value):
     parts = _parse_path(path)
@@ -333,6 +357,3 @@ def unflatten_record(flat: Dict[str, Any]) -> Dict[str, Any]:
         if k:
             _set_path(out, k, v)
     return out
-
-
-

@@ -27,25 +27,25 @@ class ReadXML(XML):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         async for rec in self._receiver.read_row(
-                self.filepath, metrics=metrics, record_tag=self.record_tag
+            self.filepath, metrics=metrics, record_tag=self.record_tag
         ):
             yield Out(port="out", payload=rec)
 
     async def process_bulk(
-            self, dataframe: pd.DataFrame, metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         async for df in self._receiver.read_bulk(
-                self.filepath, metrics=metrics, record_tag=self.record_tag
+            self.filepath, metrics=metrics, record_tag=self.record_tag
         ):
             yield Out(port="out", payload=df)
 
     async def process_bigdata(
-            self, dataframe: pd.DataFrame, metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         async for df in self._receiver.read_bigdata(
-                self.filepath, metrics=metrics, record_tag=self.record_tag
+            self.filepath, metrics=metrics, record_tag=self.record_tag
         ):
             yield Out(port="out", payload=df)

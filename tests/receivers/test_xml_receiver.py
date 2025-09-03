@@ -26,17 +26,26 @@ def metrics() -> ComponentMetrics:
 
 @pytest.fixture
 def sample_xml_file() -> Path:
-    return Path(__file__).parent.parent / "components" / "data" / "xml" / "test_data.xml"
+    return (
+        Path(__file__).parent.parent / "components" / "data" / "xml" / "test_data.xml"
+    )
 
 
 @pytest.fixture
 def sample_bigdata_file() -> Path:
-    return Path(__file__).parent.parent / "components" / "data" / "xml" / "test_bigdata.xml"
-
+    return (
+        Path(__file__).parent.parent
+        / "components"
+        / "data"
+        / "xml"
+        / "test_bigdata.xml"
+    )
 
 
 @pytest.mark.asyncio
-async def test_xml_receiver_read_row_streaming(sample_xml_file: Path, metrics: ComponentMetrics):
+async def test_xml_receiver_read_row_streaming(
+    sample_xml_file: Path, metrics: ComponentMetrics
+):
     r = XMLReceiver()
 
     rows = r.read_row(
@@ -60,12 +69,13 @@ async def test_xml_receiver_read_row_streaming(sample_xml_file: Path, metrics: C
     await rows.aclose()
 
 
-
 @pytest.mark.asyncio
 async def test_read_xml_bulk(sample_xml_file: Path, metrics: ComponentMetrics):
     r = XMLReceiver()
     dfs = []
-    async for df in r.read_bulk(filepath=sample_xml_file, metrics=metrics, record_tag="row"):
+    async for df in r.read_bulk(
+        filepath=sample_xml_file, metrics=metrics, record_tag="row"
+    ):
         assert isinstance(df, pd.DataFrame)
         dfs.append(df)
     all_df = pd.concat(dfs, ignore_index=True)
@@ -75,23 +85,20 @@ async def test_read_xml_bulk(sample_xml_file: Path, metrics: ComponentMetrics):
     assert "Bob" in set(all_df["name"])
 
 
-
-
 @pytest.mark.asyncio
 async def test_read_xml_bigdata(sample_bigdata_file: Path, metrics: ComponentMetrics):
     r = XMLReceiver()
     dfs = []
-    async for df in r.read_bigdata(filepath=sample_bigdata_file, metrics=metrics, record_tag="row"):
+    async for df in r.read_bigdata(
+        filepath=sample_bigdata_file, metrics=metrics, record_tag="row"
+    ):
         assert isinstance(df, pd.DataFrame)
         dfs.append(df)
     all_df = pd.concat(dfs, ignore_index=True)
 
     assert len(all_df) == 3
     assert {"id", "name"}.issubset(set(all_df.columns))
-    assert list(all_df["id"]) == ["1", "2", "3"]  # falls Reihenfolge stabil ist
-    # sonst: assert sorted(all_df["id"]) == ["1", "2", "3"]
-
-
+    assert list(all_df["id"]) == ["1", "2", "3"]
 
 
 @pytest.mark.asyncio
@@ -132,7 +139,6 @@ async def test_write_xml_row(tmp_path: Path, metrics: ComponentMetrics):
     assert rows[1].findtext("name") == "Eli"
 
 
-
 @pytest.mark.asyncio
 async def test_write_xml_bulk(tmp_path: Path, metrics: ComponentMetrics):
     file_path = tmp_path / "out_bulk.xml"
@@ -165,7 +171,6 @@ async def test_write_xml_bulk(tmp_path: Path, metrics: ComponentMetrics):
     assert rows[1].findtext("name") == "Gina"
 
 
-
 @pytest.mark.asyncio
 async def test_write_xml_bigdata(tmp_path: Path, metrics: ComponentMetrics):
     out_fp = tmp_path / "out_big.xml"
@@ -189,9 +194,10 @@ async def test_write_xml_bigdata(tmp_path: Path, metrics: ComponentMetrics):
     assert set(got) == {("30", "Hugo"), ("31", "Ivy")}
 
 
-
 @pytest.mark.asyncio
-async def test_xml_receiver_read_row_missing_file_raises(metrics: ComponentMetrics, tmp_path: Path):
+async def test_xml_receiver_read_row_missing_file_raises(
+    metrics: ComponentMetrics, tmp_path: Path
+):
     r = XMLReceiver()
     rows = r.read_row(
         filepath=tmp_path / "missing.xml",

@@ -50,7 +50,6 @@ async def test_read_xml_valid_bulk(metrics):
     assert metrics.lines_received == 0
 
 
-
 @pytest.mark.asyncio
 async def test_read_xml_missing_values_bulk(metrics):
     comp = ReadXML(
@@ -77,8 +76,6 @@ async def test_read_xml_missing_values_bulk(metrics):
 
     assert metrics.lines_forwarded == 3
     assert metrics.lines_received == 0
-
-
 
 
 @pytest.mark.asyncio
@@ -119,7 +116,6 @@ async def test_read_xml_row_streaming(metrics):
     await rows.aclose()
 
 
-
 @pytest.mark.asyncio
 async def test_read_xml_bigdata(metrics):
     comp = ReadXML(
@@ -145,8 +141,6 @@ async def test_read_xml_bigdata(metrics):
 
     assert metrics.lines_forwarded == 3
     assert metrics.lines_received == 0
-
-
 
 
 @pytest.mark.asyncio
@@ -179,7 +173,6 @@ async def test_write_xml_row(tmp_path: Path, metrics):
 
     assert metrics.lines_received == 1
     assert metrics.lines_forwarded == 1
-
 
 
 @pytest.mark.asyncio
@@ -226,8 +219,6 @@ async def test_write_xml_bulk(tmp_path: Path, metrics):
     assert metrics.lines_forwarded == 3
 
 
-
-
 @pytest.mark.asyncio
 async def test_write_xml_bigdata(tmp_path: Path, metrics):
     out_fp = tmp_path / "test_bigdata.xml"
@@ -242,9 +233,10 @@ async def test_write_xml_bigdata(tmp_path: Path, metrics):
     )
     comp.strategy = BigDataExecutionStrategy()
 
-    ddf_in = dd.from_pandas(pd.DataFrame(
-        [{"id": "10", "name": "Nina"}, {"id": "11", "name": "Omar"}]
-    ), npartitions=2)
+    ddf_in = dd.from_pandas(
+        pd.DataFrame([{"id": "10", "name": "Nina"}, {"id": "11", "name": "Omar"}]),
+        npartitions=2,
+    )
 
     out = await anext(comp.execute(payload=ddf_in, metrics=metrics), None)
     assert isinstance(out, Out) and out.port == "out"
@@ -257,7 +249,6 @@ async def test_write_xml_bigdata(tmp_path: Path, metrics):
 
     assert metrics.lines_received == 2
     assert metrics.lines_forwarded == 2
-
 
 
 @pytest.mark.asyncio
@@ -277,8 +268,6 @@ async def test_read_xml_missing_file_bulk_raises(metrics, tmp_path: Path):
         await anext(gen)
 
 
-
-
 @pytest.mark.asyncio
 async def test_read_xml_invalid_file_type_bulk_raises(metrics):
     comp = ReadXML(
@@ -296,7 +285,6 @@ async def test_read_xml_invalid_file_type_bulk_raises(metrics):
         await anext(gen)
 
 
-
 @pytest.mark.asyncio
 async def test_read_xml_nested_bulk_flattens(metrics):
     comp = ReadXML(
@@ -312,7 +300,14 @@ async def test_read_xml_nested_bulk_flattens(metrics):
     async for item in comp.execute(payload=None, metrics=metrics):
         chunks.append(item.payload)
     df_all = pd.concat(chunks, ignore_index=True)
-    assert {"id","name","address.street","address.city","tags.item[0]","tags.item[1]"} <= set(df_all.columns)
+    assert {
+        "id",
+        "name",
+        "address.street",
+        "address.city",
+        "tags.item[0]",
+        "tags.item[1]",
+    } <= set(df_all.columns)
 
     r0 = df_all.iloc[0]
     assert r0["id"] == "1"
@@ -325,11 +320,11 @@ async def test_read_xml_nested_bulk_flattens(metrics):
 
 
 @pytest.mark.asyncio
-async def test_write_xml_row_from_flat_dict(tmp_path: Path, metrics):
-    out_fp = tmp_path / "row_flat.xml"
+async def test_write_xml_row_from_nested_dict(tmp_path: Path, metrics):
+    out_fp = tmp_path / "row_nested.xml"
     comp = WriteXML(
-        name="WriteXML_Row_Flat",
-        description="row from flat keys",
+        name="WriteXML_Row_Nested",
+        description="row from nested dict",
         comp_type="write_xml",
         filepath=out_fp,
         root_tag="rows",
@@ -340,35 +335,34 @@ async def test_write_xml_row_from_flat_dict(tmp_path: Path, metrics):
     row = {
         "id": "1",
         "name": "Alice",
-        "address.street": "Main",
-        "address.city": "Springfield",
-        "address.@attrs.cityId": "X-42",
-        "note.#text": "hello",
-        "tags.item[0]": "alpha",
-        "tags.item[1]": "beta",
+        "address": {
+            "@attrs": {"cityId": "X-42"},
+            "street": "Main",
+            "city": "Springfield",
+        },
+        "note": {"#text": "hello"},
+        "tags": {"item": ["alpha", "beta"]},
     }
 
     out = await anext(comp.execute(payload=row, metrics=metrics), None)
     assert isinstance(out, Out) and out.port == "out"
 
     tree = ET.parse(out_fp)
-    root = tree.getroot()
-    rec = root.find("./row")
+    rec = tree.getroot().find("./row")
     assert rec is not None
     assert rec.findtext("id") == "1"
     assert rec.findtext("name") == "Alice"
 
     addr = rec.find("./address")
-    assert addr is not None
-    assert addr.get("cityId") == "X-42"
+    assert addr is not None and addr.get("cityId") == "X-42"
     assert addr.findtext("street") == "Main"
     assert addr.findtext("city") == "Springfield"
 
     note = rec.find("./note")
-    assert note is not None and (note.text or "") == "hello"
+    assert (note.text or "") == "hello"
 
-    items = rec.findall("./tags/item")
-    assert [i.text for i in items] == ["alpha", "beta"]
+    items = [e.text for e in rec.findall("./tags/item")]
+    assert items == ["alpha", "beta"]
 
     assert metrics.lines_received == 1
     assert metrics.lines_forwarded == 1
@@ -387,18 +381,25 @@ async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
     )
     comp.strategy = BulkExecutionStrategy()
 
-    df = pd.DataFrame([
-        {
-            "id": "1", "name": "A",
-            "address.street": "Main", "address.city": "Town",
-            "tags.item[0]": "t1", "tags.item[1]": "t2",
-        },
-        {
-            "id": "2", "name": "B",
-            "address.street": "Second", "address.city": "Ville",
-            "tags.item[0]": "u1",
-        },
-    ])
+    df = pd.DataFrame(
+        [
+            {
+                "id": "1",
+                "name": "A",
+                "address.street": "Main",
+                "address.city": "Town",
+                "tags.item[0]": "t1",
+                "tags.item[1]": "t2",
+            },
+            {
+                "id": "2",
+                "name": "B",
+                "address.street": "Second",
+                "address.city": "Ville",
+                "tags.item[0]": "u1",
+            },
+        ]
+    )
 
     out = await anext(comp.execute(payload=df, metrics=metrics), None)
     assert isinstance(out, Out) and out.port == "out"
@@ -420,6 +421,3 @@ async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
 
     assert metrics.lines_received == 2
     assert metrics.lines_forwarded == 2
-
-
-

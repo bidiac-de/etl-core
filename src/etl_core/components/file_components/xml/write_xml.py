@@ -12,18 +12,16 @@ from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 
 
-
 @register_component("write_xml")
 class WriteXML(XML):
     """
     XML writer supporting row, bulk, and bigdata modes with port routing.
-
     Input semantics:
-    - Accept either a flat dict with dotted/index keys (e.g. "addr.street", "tags.item[0]")
-      which will be unflattened into nested XML, or a truly nested dict.
-    - Row mode appends by rewriting the file inserting before the closing root tag.
+    - Row mode: expects a truly nested dict (no dotted/indexed keys).
+    - Bulk/BigData: accepts either flat dicts with dotted/index keys
+      (auto-unflattened) or already-nested dicts.
+    - Row mode appends by inserting before the closing root tag.
     - Bigdata mode writes partitioned files part-*.xml in a directory.
-
     """
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
@@ -35,7 +33,7 @@ class WriteXML(XML):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         await self._receiver.write_row(
             self.filepath,
@@ -47,7 +45,7 @@ class WriteXML(XML):
         yield Out(port="out", payload=row)
 
     async def process_bulk(
-            self, dataframe: pd.DataFrame, metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         await self._receiver.write_bulk(
             self.filepath,
@@ -59,7 +57,7 @@ class WriteXML(XML):
         yield Out(port="out", payload=dataframe)
 
     async def process_bigdata(
-            self, dataframe: dd.DataFrame, metrics: ComponentMetrics
+        self, dataframe: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         await self._receiver.write_bigdata(
             self.filepath,
