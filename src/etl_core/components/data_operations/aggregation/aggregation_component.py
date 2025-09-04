@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, AsyncIterator, Dict, List, Tuple, Union, Set
+from typing import Any, AsyncIterator, Dict, List, Union, Set
 
 import dask.dataframe as dd
 import pandas as pd
@@ -13,6 +13,7 @@ from etl_core.components.data_operations.data_operations import (  # noqa: E501
 )
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
+from etl_core.components.envelopes import unwrap
 from etl_core.components.wiring.schema import Schema
 from etl_core.job_execution.job_execution_handler import InTagged
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
@@ -120,21 +121,12 @@ class AggregationComponent(DataOperationsComponent):
         # which comes via InTagged envelope
         return True
 
-    @staticmethod
-    def _unwrap(obj: Any, default_port: str) -> Tuple[str, Any]:
-        """
-        Unwrap InTagged envelope to get payloads
-        """
-        if isinstance(obj, InTagged):
-            return obj.in_port, obj.payload
-        return default_port, obj
-
     async def process_row(
         self,
         row: Union[Dict[str, Any], InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        in_port, payload = self._unwrap(row, "in")
+        in_port, payload = unwrap(row, "in")
 
         if payload is Ellipsis:
             rows = self._row_buf.pop(in_port, [])
@@ -156,7 +148,7 @@ class AggregationComponent(DataOperationsComponent):
         dataframe: Union[pd.DataFrame, InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        in_port, payload = self._unwrap(dataframe, "in")
+        in_port, payload = unwrap(dataframe, "in")
 
         if payload is Ellipsis:
             pdf = self._bulk_buf.pop(in_port, None)
@@ -185,7 +177,7 @@ class AggregationComponent(DataOperationsComponent):
         ddf: Union[dd.DataFrame, InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        in_port, payload = self._unwrap(ddf, "in")
+        in_port, payload = unwrap(ddf, "in")
 
         if payload is Ellipsis:
             buf = self._big_buf.pop(in_port, None)
