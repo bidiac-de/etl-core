@@ -90,7 +90,7 @@ def _agg_base(grouped: Any, agg_map_no_nunique: Dict[str, List[str]]) -> Any:
         grouped.agg(agg_map_no_nunique)
         if agg_map_no_nunique
         else grouped.size().to_frame("_dummy_")
-    )  # noqa: E501
+    )
     if isinstance(out.columns, pd.MultiIndex):
         out.columns = [f"{c[0]}__{c[1]}" for c in out.columns]
     return out.reset_index()
@@ -98,7 +98,7 @@ def _agg_base(grouped: Any, agg_map_no_nunique: Dict[str, List[str]]) -> Any:
 
 def _attach_size(
     grouped: Any, out: Any, keys: List[str], order: List[Tuple[str, str, str]]
-) -> Any:  # noqa: E501
+) -> Any:
     """Attach count(*) if requested via '*'."""
     if not any(src == "*" for src, _f, _d in order):
         return out

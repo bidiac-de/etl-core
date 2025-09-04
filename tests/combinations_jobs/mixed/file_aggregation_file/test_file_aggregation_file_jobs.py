@@ -55,7 +55,6 @@ def test_csv_row_aggregation_count_by_name_to_csv(
     job = runtime_job_from_config(cfg)
 
     run = exec_handler.execute_job(job)
-    print(run.attempts[0].error)
     assert (
         exec_handler.job_info.metrics_handler.get_job_metrics(run.id).status
         == RuntimeState.SUCCESS
