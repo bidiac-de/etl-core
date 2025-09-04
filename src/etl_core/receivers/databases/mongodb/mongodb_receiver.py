@@ -31,22 +31,6 @@ def _pick_update_fields(
     return {k: row[k] for k in fields if k in row}
 
 
-async def _truncate_and_insert_many(
-    coll: Any, docs: Sequence[Dict[str, Any]], *, ordered: bool
-) -> None:
-    # Clear the collection, then insert the incoming docs
-    await coll.delete_many({})
-    if docs:
-        await coll.insert_many(list(docs), ordered=ordered)
-
-
-async def _insert_many(
-    coll: Any, docs: Sequence[Dict[str, Any]], *, ordered: bool
-) -> None:
-    if docs:
-        await coll.insert_many(list(docs), ordered=ordered)
-
-
 def _build_match_filter(
     row: Dict[str, Any],
     key_fields: Sequence[str],
@@ -104,8 +88,52 @@ def _build_cursor(
     return cursor.batch_size(int(batch_size))
 
 
-class MongoDBReceiver:
+async def _apply_bulk_ops(
+    coll: Any,
+    *,
+    operation: DatabaseOperation,
+    flat_docs: Sequence[Dict[str, Any]],
+    ordered: bool,
+    seperator: str,
+    key_fields: Sequence[str],
+    match_filter: Optional[Dict[str, Any]],
+    update_fields: Optional[Iterable[str]],
+) -> None:
+    """
+    Execute the correct MongoDB bulk operation for a list of *flattened* documents.
 
+    Inserts/TRUNCATE: re-nest (unflatten) first so MongoDB stores true nested docs.
+    UPDATE/UPSERT: keep flattened key paths for $set, which MongoDB understands.
+    """
+    if not flat_docs:
+        return
+
+    if operation in (DatabaseOperation.TRUNCATE, DatabaseOperation.INSERT):
+        nested = unflatten_many(flat_docs, sep=seperator)
+        if not nested:
+            return
+        if operation == DatabaseOperation.TRUNCATE:
+            await coll.delete_many({})
+        await coll.insert_many(nested, ordered=ordered)
+        return
+
+    if operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
+        upsert = operation == DatabaseOperation.UPSERT
+        ops = _build_update_ops(
+            flat_docs,
+            key_fields=key_fields,
+            match_filter=match_filter,
+            update_fields=update_fields,
+            upsert=upsert,
+        )
+        if ops:
+            await coll.bulk_write(ops, ordered=ordered)
+        return
+
+    raise ValueError(f"Unsupported operation: {operation}")
+
+
+class MongoDBReceiver:
     async def read_row(
         self,
         *,
@@ -120,9 +148,7 @@ class MongoDBReceiver:
         skip: int,
         batch_size: int,
     ) -> AsyncIterator[Dict[str, Any]]:
-        """
-        Stream documents one-by-one using a Motor cursor.
-        """
+        """Stream documents one-by-one using a Motor cursor."""
         try:
             with connection_handler.lease_collection(
                 database=database_name, collection=entity_name
@@ -157,9 +183,7 @@ class MongoDBReceiver:
         chunk_size: int,
         seperator: str,
     ) -> AsyncIterator[pd.DataFrame]:
-        """
-        Stream pandas DataFrames in chunks of size `chunk_size`.
-        """
+        """Stream pandas DataFrames in chunks of size `chunk_size` (flattened columns)."""
         try:
             with connection_handler.lease_collection(
                 database=database_name, collection=entity_name
@@ -242,9 +266,7 @@ class MongoDBReceiver:
         operation: DatabaseOperation,
         write_options: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """
-        Write one document, update metrics accordingly.
-        """
+        """Write one document, update metrics accordingly."""
         key_fields: List[str] = write_options["key_fields"]
         update_fields = write_options["update_fields"]
         match_filter = write_options["match_filter"]
@@ -312,55 +334,35 @@ class MongoDBReceiver:
         seperator: str,
     ) -> AsyncIterator[pd.DataFrame]:
         """
-        Write a DataFrame with Motor bulk ops, yield the same frame once.
-        Metrics: lines_received += len(frame), lines_forwarded += len(frame).
+        Write a pandas DataFrame of *flattened* columns.
+        - INSERT/TRUNCATE: re-nest records with `unflatten_many` before insert.
+        - UPDATE/UPSERT: keep flattened keys for $set paths.
         """
-        if frame.empty:
-            yield frame
-            return
-
-        n_rows = int(len(frame))
-        metrics.lines_received += n_rows
-
-        key_fields: List[str] = write_options.get("key_fields", [])
+        ordered: bool = bool(write_options.get("ordered", True))
+        key_fields: List[str] = list(write_options.get("key_fields", []))
         update_fields = write_options.get("update_fields")
         match_filter = write_options.get("match_filter")
-        ordered: bool = bool(write_options.get("ordered", True))
 
-        # Convert once, reuse in all branches
+        n_rows = int(frame.shape[0])
+        metrics.lines_received += n_rows
         flat_docs: List[Dict[str, Any]] = frame.to_dict(orient="records")
 
         try:
             with connection_handler.lease_collection(
                 database=database_name, collection=entity_name
             ) as (_, coll):
-                if operation == DatabaseOperation.TRUNCATE:
-                    nested = unflatten_many(flat_docs, sep=seperator)
-                    await _truncate_and_insert_many(coll, nested, ordered=ordered)
-
-                elif operation == DatabaseOperation.INSERT:
-                    nested = unflatten_many(flat_docs, sep=seperator)
-                    await _insert_many(coll, nested, ordered=ordered)
-
-                elif operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
-                    # Dotted keys are path updates in Mongo
-                    upsert = operation == DatabaseOperation.UPSERT
-                    ops = _build_update_ops(
-                        flat_docs,
-                        key_fields=key_fields,
-                        match_filter=match_filter,
-                        update_fields=update_fields,
-                        upsert=upsert,
-                    )
-                    if ops:
-                        await coll.bulk_write(ops, ordered=ordered)
-
-                else:
-                    raise ValueError(f"Unsupported operation: {operation}")
-
+                await _apply_bulk_ops(
+                    coll,
+                    operation=operation,
+                    flat_docs=flat_docs,
+                    ordered=ordered,
+                    seperator=seperator,
+                    key_fields=key_fields,
+                    match_filter=match_filter,
+                    update_fields=update_fields,
+                )
                 metrics.lines_forwarded += n_rows
                 yield frame
-
         except PyMongoError as exc:
             raise RuntimeError(f"Mongo write_bulk failed: {exc}") from exc
 
@@ -377,97 +379,44 @@ class MongoDBReceiver:
         seperator: str,
     ) -> AsyncIterator[dd.DataFrame]:
         """
-        Bigdata write mirroring bulk:
-        - Uses true bulk ops per partition.
-        - Processes all partitions but yields exactly once at the end.
-        - Metrics are updated once for the entire run.
+        Bigdata write, processing dask DataFrame partitions one-by-one.
         """
-        nparts = frame.npartitions
-        if nparts == 0:
-            # No partitions: return a single empty ddf
-            yield frame.repartition(npartitions=1)
-            return
+        ordered: bool = bool(write_options.get("ordered", True))
+        key_fields: List[str] = list(write_options.get("key_fields", []))
+        update_fields = write_options.get("update_fields")
+        match_filter = write_options.get("match_filter")
 
-        key_fields: List[str] = write_options["key_fields"]
-        update_fields: Optional[List[str]] = write_options["update_fields"]
-        match_filter: Optional[Dict[str, Any]] = write_options["match_filter"]
-        ordered: bool = write_options["ordered"]
-
-        total_rows = 0
+        nparts = int(frame.npartitions)
+        frame = frame.repartition(npartitions=nparts)
 
         try:
             with connection_handler.lease_collection(
                 database=database_name, collection=entity_name
             ) as (_, coll):
-                if operation == DatabaseOperation.TRUNCATE:
-                    await coll.delete_many({})
-
                 for i in range(nparts):
-                    pdf: pd.DataFrame = frame.get_partition(i).compute()
-                    if pdf.empty:
+                    part_df = frame.get_partition(i).compute()
+                    n_rows = int(part_df.shape[0])
+                    if n_rows == 0:
                         continue
 
-                    n_rows = int(len(pdf))
-                    total_rows += n_rows
-                    flat_docs: List[Dict[str, Any]] = pdf.to_dict(orient="records")
+                    metrics.lines_received += n_rows
+                    flat_docs: List[Dict[str, Any]] = part_df.to_dict(
+                        orient="records"
+                    )
 
-                    await self._write_bigdata_partition(
-                        coll=coll,
+                    await _apply_bulk_ops(
+                        coll,
                         operation=operation,
                         flat_docs=flat_docs,
-                        seperator=seperator,
                         ordered=ordered,
+                        seperator=seperator,
                         key_fields=key_fields,
                         match_filter=match_filter,
                         update_fields=update_fields,
                     )
+                    metrics.lines_forwarded += n_rows
 
-                # Consolidated metrics
-                metrics.lines_received += total_rows
-                metrics.lines_forwarded += total_rows
-
+                # final yield, all partitions processed
+                yield frame
         except PyMongoError as exc:
             raise RuntimeError(f"Mongo write_bigdata failed: {exc}") from exc
-
-        # final yield, number of partitions unchanged
-        yield frame.repartition(npartitions=nparts)
-
-    async def _write_bigdata_partition(
-        self,
-        *,
-        coll: Any,
-        operation: DatabaseOperation,
-        flat_docs: List[Dict[str, Any]],
-        seperator: str,
-        ordered: bool,
-        key_fields: List[str],
-        match_filter: Optional[Dict[str, Any]],
-        update_fields: Optional[List[str]],
-    ) -> None:
-        """
-        Execute the correct bulk operation for one partition.
-        Kept small and linear to reduce cognitive complexity in write_bigdata.
-        """
-        if not flat_docs:
-            return
-
-        if operation in (DatabaseOperation.TRUNCATE, DatabaseOperation.INSERT):
-            nested = unflatten_many(flat_docs, sep=seperator)
-            if nested:
-                await coll.insert_many(nested, ordered=ordered)
-            return
-
-        if operation in (DatabaseOperation.UPDATE, DatabaseOperation.UPSERT):
-            upsert = operation == DatabaseOperation.UPSERT
-            ops = _build_update_ops(
-                flat_docs,
-                key_fields=key_fields,
-                match_filter=match_filter,
-                update_fields=update_fields,
-                upsert=upsert,
-            )
-            if ops:
-                await coll.bulk_write(ops, ordered=ordered)
-            return
-
-        raise ValueError(f"Unsupported operation: {operation}")
