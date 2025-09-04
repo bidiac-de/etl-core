@@ -6,11 +6,13 @@ from copy import deepcopy
 import dask.dataframe as dd
 import pandas as pd
 
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import ( # noqa e501
     DataOperationsMetrics,
 )
 from etl_core.components.wiring.ports import OutPortSpec
-from etl_core.receivers.data_operations_receivers.data_operations_receiver import DataOperationsReceiver
+from etl_core.receivers.data_operations_receivers.data_operations_receiver import (
+    DataOperationsReceiver,
+)
 
 
 class SplitReceiver(DataOperationsReceiver):

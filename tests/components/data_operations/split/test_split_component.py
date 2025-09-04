@@ -1,13 +1,10 @@
-import asyncio
-from datetime import datetime, timedelta
-
 import pandas as pd
 import pytest
 
 from etl_core.components.wiring.ports import OutPortSpec
 from etl_core.components.data_operations.split.split import SplitComponent
 from etl_core.job_execution.job_execution_handler import Out as OutEnvelope
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa e501
     DataOperationsMetrics,
 )
 
@@ -37,6 +34,7 @@ async def test_split_component_process_bulk(data_ops_metrics: DataOperationsMetr
     comp = SplitComponent(
         name="split2",
         description="bulk splitter",
+        comp_type="split",
         OUTPUT_PORTS=(OutPortSpec(name="A"), OutPortSpec(name="B")),
     )
 

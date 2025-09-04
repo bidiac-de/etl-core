@@ -1,17 +1,14 @@
-import asyncio
-from datetime import datetime, timedelta
-from copy import deepcopy
-
 import dask.dataframe as dd
 import pandas as pd
 import pytest
 
 from etl_core.components.wiring.ports import OutPortSpec
-from etl_core.receivers.data_flow.split_receiver import SplitReceiver
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.receivers.data_operations_receivers.split.split_receiver import (
+    SplitReceiver,
+)
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa e501
     DataOperationsMetrics,
 )
-
 
 
 @pytest.mark.asyncio
@@ -21,7 +18,9 @@ async def test_map_row_fanout_and_copy(data_ops_metrics: DataOperationsMetrics):
     row = {"id": 1, "name": "Alice", "nested": {"x": 1}}
 
     outs = []
-    async for port, payload in recv.process_row(row=row, branches=ports, metrics=data_ops_metrics):
+    async for port, payload in recv.process_row(
+        row=row, branches=ports, metrics=data_ops_metrics
+    ):
         outs.append((port, payload))
 
     # two outputs, port objects returned and payloads are deep copies (fanout>1)
@@ -46,7 +45,9 @@ async def test_map_row_single_fanout_no_copy(data_ops_metrics: DataOperationsMet
     row = {"id": 2, "name": "Bob"}
 
     outs = []
-    async for port, payload in recv.process_row(row=row, branches=ports, metrics=data_ops_metrics):
+    async for port, payload in recv.process_row(
+        row=row, branches=ports, metrics=data_ops_metrics
+    ):
         outs.append((port, payload))
 
     assert len(outs) == 1
@@ -56,6 +57,7 @@ async def test_map_row_single_fanout_no_copy(data_ops_metrics: DataOperationsMet
 
     assert data_ops_metrics.lines_received >= 1
 
+
 @pytest.mark.asyncio
 async def test_map_row_second_fanout(data_ops_metrics: DataOperationsMetrics):
     recv = SplitReceiver()
@@ -63,7 +65,9 @@ async def test_map_row_second_fanout(data_ops_metrics: DataOperationsMetrics):
     row = {"id": 2, "name": "Bob"}
 
     outs = []
-    async for port, payload in recv.process_row(row=row, branches=ports, metrics=data_ops_metrics):
+    async for port, payload in recv.process_row(
+        row=row, branches=ports, metrics=data_ops_metrics
+    ):
         outs.append((port, payload))
 
     assert len(outs) == 2
@@ -81,13 +85,17 @@ async def test_map_row_second_fanout(data_ops_metrics: DataOperationsMetrics):
 
 
 @pytest.mark.asyncio
-async def test_map_bulk_copy_behavior_and_metrics(data_ops_metrics: DataOperationsMetrics):
+async def test_map_bulk_copy_behavior_and_metrics(
+    data_ops_metrics: DataOperationsMetrics,
+):
     recv = SplitReceiver()
     ports = (OutPortSpec(name="p1"), OutPortSpec(name="p2"))
     df = pd.DataFrame([{"id": 1}, {"id": 2}])
 
     outs = []
-    async for port, out_df in recv.process_bulk(dataframe=df, branches=ports, metrics=data_ops_metrics):
+    async for port, out_df in recv.process_bulk(
+        dataframe=df, branches=ports, metrics=data_ops_metrics
+    ):
         outs.append((port, out_df))
 
     assert len(outs) == 2
@@ -112,8 +120,6 @@ async def test_map_bigdata_forward_reference_and_count():
         outs.append((port, out_ddf))
 
     assert len(outs) == 2
-    # receiver forwards same dask object (currently not copied because of dask's lazy evaluation)
     for _, out_ddf in outs:
         assert isinstance(out_ddf, dd.DataFrame)
         assert out_ddf is ddf
-        
