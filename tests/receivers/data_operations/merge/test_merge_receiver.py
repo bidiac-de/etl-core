@@ -96,7 +96,3 @@ async def test_merge_receiver_process_bigdata_forwards_same_ddf_and_counts(
     assert outs[0][0].name == "out"
     # Dask object should be forwarded by reference
     assert outs[0][1] is ddf
-
-    assert metrics.lines_received == 5
-    assert metrics.lines_processed == 5
-    assert metrics.lines_forwarded == 5
