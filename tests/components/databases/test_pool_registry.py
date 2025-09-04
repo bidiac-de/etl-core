@@ -13,7 +13,8 @@ from src.etl_core.components.databases.pool_registry import (
 
 class TestPoolKey:
     """Test cases for PoolKey class."""
-    def test_pool_key_creation(self) -> None
+
+    def test_pool_key_creation(self) -> None:
         key = PoolKey(kind="sql", dsn="test://localhost:5432/db")
         assert key.kind == "sql"
         assert key.dsn == "test://localhost:5432/db"

@@ -12,8 +12,7 @@ from etl_core.components.databases.pool_registry import (
 
 class MongoConnectionHandler:
     """
-    MongoDB family-level handler that always works with an AsyncIOMotorClient
-    provided by the ConnectionPoolRegistry.
+    MongoDB handler returning pooled AsyncIOMotorClient instances.
     """
 
     def __init__(self) -> None:
@@ -38,8 +37,7 @@ class MongoConnectionHandler:
         - If no user is provided (None/""), omit credentials entirely.
         - If user is provided but password is None/empty, include only the username.
         - Apply URL quoting to user/password.
-        - 'host' may be a comma-separated list for replica sets.
-        - Extra 'params' join as query args (e.g. tls=true, replicaSet=rs0).
+        - host may be a comma-separated list for replica sets.
         """
         if user:
             u = quote_plus(user)

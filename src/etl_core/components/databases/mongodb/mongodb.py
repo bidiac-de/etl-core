@@ -41,15 +41,10 @@ class MongoDBComponent(DatabaseComponent, ABC):
     @property
     def connection_handler(self) -> MongoConnectionHandler:
         """
-        Lazily initialize the connection when first accessed, so tests (and user code)
-        can assign `context` after construction without tripping a None handler.
+        Lazily initialize the connection when first accessed.
         """
         if self._connection_handler is None:
             self._setup_connection()
-            if self._connection_handler is None:
-                raise RuntimeError(
-                    "Mongo connection is not initialized; context may be missing."
-                )
         return self._connection_handler
 
     @property
@@ -59,16 +54,12 @@ class MongoDBComponent(DatabaseComponent, ABC):
         """
         if not self._database_name:
             self._setup_connection()
-        if not self._database_name:
-            raise RuntimeError(
-                "Database name is not resolved; make sure context/credentials are set."
-            )
         return self._database_name
 
     def _setup_connection(self) -> None:
         """
-        Idempotent: builds and connects the Mongo handler once `context` is present.
-        Safe to call multiple times; subsequent calls return early.
+        Idempotent: builds and connects the Mongo handler once "context" is present.
+        Safe to call multiple times, subsequent calls return early.
         """
         if self._connection_handler is not None:
             return
