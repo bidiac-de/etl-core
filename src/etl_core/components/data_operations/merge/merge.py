@@ -29,8 +29,8 @@ class MergeComponent(DataOperationsComponent):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
-    INPUT_PORTS: Tuple[InPortSpec, ...] = ()
-    OUTPUT_PORTS: OutPortSpec = OutPortSpec(name="merge", required=True, fanout="one")
+    INPUT_PORTS: Tuple[InPortSpec, ...] = (InPortSpec(name="in", required=True, fanin="many"),)
+    OUTPUT_PORTS: Tuple[OutPortSpec, ...] = (OutPortSpec(name="merge", required=True, fanout="one"),)
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -43,7 +43,7 @@ class MergeComponent(DataOperationsComponent):
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         """Forward a single row (or tagged envelope) to the single output port."""
-        async for port_spec, payload_out in self._receiver.process_row(out_port=self.OUTPUT_PORT, row=row, metrics=metrics):
+        async for port_spec, payload_out in self._receiver.process_row(out_port=self.OUTPUT_PORTS[0], row=row, metrics=metrics):
             yield Out(port=port_spec.name, payload=payload_out)
 
     async def process_bulk(
@@ -53,7 +53,7 @@ class MergeComponent(DataOperationsComponent):
     ) -> AsyncIterator[Out]:
         """Forward a DataFrame (or tagged envelope) to the single output port."""
 
-        async for port_spec, payload_out in self._receiver.process_bulk(out_port=self.OUTPUT_PORT, dataframe=dataframe, metrics=metrics):
+        async for port_spec, payload_out in self._receiver.process_bulk(out_port=self.OUTPUT_PORTS[0], dataframe=dataframe, metrics=metrics):
             yield Out(port=port_spec.name, payload=payload_out)
 
     async def process_bigdata(
@@ -63,5 +63,5 @@ class MergeComponent(DataOperationsComponent):
     ) -> AsyncIterator[Out]:
         """Forward a Dask DataFrame (or tagged envelope) to the single output port."""
 
-        async for port_spec, payload_out in self._receiver.process_bigdata(out_port=self.OUTPUT_PORT, ddf=ddf, metrics=metrics):
+        async for port_spec, payload_out in self._receiver.process_bigdata(out_port=self.OUTPUT_PORTS[0], ddf=ddf, metrics=metrics):
             yield Out(port=port_spec.name, payload=payload_out)
