@@ -320,7 +320,6 @@ class TestSQLServerSpecificFeatures:
             comp_type="write_sqlserver",
             charset="latin1",
             collation="SQL_Latin1_General_CP1_CS_AS",
-            query="SELECT * FROM dbo.user_profiles WHERE active = :active",
             operation=DatabaseOperation.UPSERT,
             bulk_chunk_size=25_000,
             bigdata_partition_chunk_size=100_000
@@ -331,7 +330,6 @@ class TestSQLServerSpecificFeatures:
         assert component.entity_name == "dbo.user_profiles"
         assert component.charset == "latin1"
         assert component.collation == "SQL_Latin1_General_CP1_CS_AS"
-        assert component.query == "SELECT * FROM dbo.user_profiles WHERE active = :active"
         assert component.operation == DatabaseOperation.UPSERT
         assert component.bulk_chunk_size == 25_000
         assert component.bigdata_partition_chunk_size == 100_000

@@ -376,7 +376,6 @@ class TestSQLServerWrite(TestSQLServerComponents):
         assert component.operation == DatabaseOperation.INSERT
         assert component.where_conditions == []
         assert component.entity_name == "test_table"
-        assert component.query == ""
 
     def test_sqlserver_write_custom_values(self):
         """Test SQL Server write component with custom values."""
