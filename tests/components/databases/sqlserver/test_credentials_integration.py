@@ -6,17 +6,13 @@ properly in real scenarios, using environment variables for sensitive data.
 """
 
 import hashlib
-import os
 from typing import Tuple
 
 import pytest
 from unittest.mock import Mock, patch
 
 from etl_core.context.context import Context
-from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.context.context_parameter import ContextParameter
-from etl_core.components.databases.pool_args import build_sql_engine_kwargs
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
 from etl_core.components.wiring.schema import Schema
@@ -100,9 +96,7 @@ class TestSQLServerCredentialsIntegration:
         assert retrieved.name == "new_creds"
         assert retrieved.user == "newuser"
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_sqlserver_read_component_with_real_credentials(
         self, mock_handler_class, sample_context: Context, test_creds
     ) -> None:
@@ -123,9 +117,7 @@ class TestSQLServerCredentialsIntegration:
         assert creds["host"] == "localhost"
         assert creds["port"] == 1433
 
-    @patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    )
+    @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
     def test_sqlserver_write_component_with_real_credentials(
         self, mock_handler_class, sample_context: Context, test_creds
     ) -> None:
@@ -150,7 +142,7 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that credentials are properly integrated in SQL Server components."""
         user, password = test_creds
-        
+
         # Test read component
         read_comp = SQLServerRead(
             name="test_read",
@@ -161,7 +153,7 @@ class TestSQLServerCredentialsIntegration:
             credentials_id=1,
         )
         read_comp.context = sample_context
-        
+
         # Test write component
         write_comp = self._create_sqlserver_write_with_schema(
             name="test_write",
@@ -171,11 +163,11 @@ class TestSQLServerCredentialsIntegration:
             credentials_id=1,
         )
         write_comp.context = sample_context
-        
+
         # Verify both components have access to credentials
         read_creds = read_comp._get_credentials()
         write_creds = write_comp._get_credentials()
-        
+
         assert read_creds["user"] == user
         assert write_creds["user"] == user
         assert read_creds["database"] == "testdb"
@@ -185,15 +177,6 @@ class TestSQLServerCredentialsIntegration:
         self, sample_context: Context, test_creds
     ) -> None:
         """Test SQL Server write component bulk operations with credentials."""
-        import pandas as pd
-        
-        # Create test data
-        test_data = pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["John", "Jane", "Bob"],
-            "email": ["john@example.com", "jane@example.com", "bob@example.com"]
-        })
-        
         # Create write component
         write_comp = self._create_sqlserver_write_with_schema(
             name="test_write",
@@ -203,7 +186,7 @@ class TestSQLServerCredentialsIntegration:
             credentials_id=1,
         )
         write_comp.context = sample_context
-        
+
         # Verify credentials are accessible
         creds = write_comp._get_credentials()
         assert creds["user"] == test_creds[0]
@@ -214,16 +197,16 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that all fixtures work correctly with SQL Server components."""
         user, password = test_creds
-        
+
         # Test context fixture
         assert sample_context is not None
         assert hasattr(sample_context, "get_credentials")
-        
+
         # Test credentials fixture
         assert sample_credentials is not None
         assert sample_credentials.credentials_id == 1
         assert sample_credentials.user == user
-        
+
         # Test test_creds fixture
         assert test_creds[0] == user
         assert test_creds[1] == password
@@ -233,11 +216,11 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that credentials are properly encrypted and decrypted."""
         user, password = test_creds
-        
+
         # Verify the credentials are properly encrypted/decrypted
         assert sample_credentials.user == user
         assert sample_credentials.decrypted_password == password
-        
+
         # Verify the encrypted password is different from the plain text
         assert sample_credentials.password != password
 
@@ -246,7 +229,7 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that all credential parameters are accessible."""
         user, password = test_creds
-        
+
         # Test all available parameters
         assert sample_credentials.get_parameter("user") == user
         assert sample_credentials.get_parameter("host") == "localhost"
@@ -262,7 +245,7 @@ class TestSQLServerCredentialsIntegration:
         # Test retrieval by ID
         retrieved_creds = sample_context.get_credentials(1)
         assert retrieved_creds == sample_credentials
-        
+
         # Test that the retrieved credentials have the same properties
         assert retrieved_creds.credentials_id == sample_credentials.credentials_id
         assert retrieved_creds.name == sample_credentials.name
@@ -273,7 +256,7 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that credentials are properly validated."""
         user, password = test_creds
-        
+
         # Verify required fields are present
         assert sample_credentials.credentials_id is not None
         assert sample_credentials.name is not None
@@ -281,7 +264,7 @@ class TestSQLServerCredentialsIntegration:
         assert sample_credentials.host is not None
         assert sample_credentials.port is not None
         assert sample_credentials.database is not None
-        
+
         # Verify password is encrypted
         assert sample_credentials.password != password
         assert sample_credentials.decrypted_password == password
@@ -291,7 +274,7 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test various context credentials management operations."""
         _, password = test_creds
-        
+
         # Test adding multiple credentials
         creds2 = Credentials(
             credentials_id=3,
@@ -302,7 +285,7 @@ class TestSQLServerCredentialsIntegration:
             database="testdb2",
             password=password,
         )
-        
+
         creds3 = Credentials(
             credentials_id=4,
             name="creds3",
@@ -312,10 +295,10 @@ class TestSQLServerCredentialsIntegration:
             database="testdb3",
             password=password,
         )
-        
+
         sample_context.add_credentials(creds2)
         sample_context.add_credentials(creds3)
-        
+
         # Verify all credentials are accessible
         assert sample_context.get_credentials(1) is not None
         assert sample_context.get_credentials(3) == creds2
@@ -326,11 +309,11 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that credentials work with environment variables."""
         user, password = test_creds
-        
+
         # Verify that the test credentials are properly set up
         assert user is not None
         assert password is not None
-        
+
         # Verify that the context can access these credentials
         creds = sample_context.get_credentials(1)
         assert creds.user == user
@@ -341,7 +324,7 @@ class TestSQLServerCredentialsIntegration:
     ) -> None:
         """Test that SQL Server components can set up connections with credentials."""
         user, password = test_creds
-        
+
         # Test read component
         read_comp = SQLServerRead(
             name="test_read",
@@ -352,7 +335,7 @@ class TestSQLServerCredentialsIntegration:
             credentials_id=1,
         )
         read_comp.context = sample_context
-        
+
         # Test write component
         write_comp = self._create_sqlserver_write_with_schema(
             name="test_write",
@@ -362,11 +345,11 @@ class TestSQLServerCredentialsIntegration:
             credentials_id=1,
         )
         write_comp.context = sample_context
-        
+
         # Verify both components have access to credentials
         read_creds = read_comp._get_credentials()
         write_creds = write_comp._get_credentials()
-        
+
         assert read_creds["user"] == user
         assert write_creds["user"] == user
         assert read_creds["host"] == "localhost"
@@ -377,5 +360,3 @@ class TestSQLServerCredentialsIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-

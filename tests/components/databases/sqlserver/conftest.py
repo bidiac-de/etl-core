@@ -207,6 +207,7 @@ def sample_data():
 def sample_dataframe(sample_data):
     """Create sample pandas DataFrame for testing."""
     import pandas as pd
+
     return pd.DataFrame(sample_data)
 
 
@@ -214,5 +215,5 @@ def sample_dataframe(sample_data):
 def sample_dask_dataframe(sample_dataframe):
     """Create sample Dask DataFrame for testing."""
     import dask.dataframe as dd
-    return dd.from_pandas(sample_dataframe, npartitions=2)
 
+    return dd.from_pandas(sample_dataframe, npartitions=2)

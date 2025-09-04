@@ -8,14 +8,11 @@ collation handling, and SQL Server-specific SQL syntax.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
-import pandas as pd
-import dask.dataframe as dd
+from unittest.mock import Mock, patch
 
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
-from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
 
@@ -48,9 +45,9 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Check default session variables
         assert component.charset == "utf8"
         assert component.collation == "SQL_Latin1_General_CP1_CI_AS"
@@ -64,9 +61,9 @@ class TestSQLServerSpecificFeatures:
             description="Test SQL Server component",
             comp_type="read_sqlserver",
             charset="latin1",
-            collation="SQL_Latin1_General_CP1_CS_AS"
+            collation="SQL_Latin1_General_CP1_CS_AS",
         )
-        
+
         # Check custom session variables
         assert component.charset == "latin1"
         assert component.collation == "SQL_Latin1_General_CP1_CS_AS"
@@ -78,9 +75,9 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Mock connection handler
         mock_handler = Mock()
         mock_connection = Mock()
@@ -88,14 +85,14 @@ class TestSQLServerSpecificFeatures:
         mock_context.__enter__ = Mock(return_value=mock_connection)
         mock_context.__exit__ = Mock(return_value=None)
         mock_handler.lease.return_value = mock_context
-        
+
         # Mock the _setup_session_variables method to avoid connection issues
-        with patch.object(component, '_setup_session_variables') as mock_setup:
+        with patch.object(component, "_setup_session_variables") as mock_setup:
             component._connection_handler = mock_handler
-            
+
             # Test session variables setup
             component._setup_session_variables()
-            
+
             # Verify the method was called
             mock_setup.assert_called_once()
 
@@ -106,9 +103,9 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Test that no error occurs when connection handler is None
         component._setup_session_variables()
         # Should return early without error
@@ -120,9 +117,9 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Mock connection handler that raises an error
         mock_handler = Mock()
         mock_connection = Mock()
@@ -131,9 +128,9 @@ class TestSQLServerSpecificFeatures:
         mock_context.__enter__ = Mock(return_value=mock_connection)
         mock_context.__exit__ = Mock(return_value=None)
         mock_handler.lease.return_value = mock_context
-        
+
         component._connection_handler = mock_handler
-        
+
         # Test that error is handled gracefully
         component._setup_session_variables()
         # Should not raise an exception, just print a warning
@@ -146,10 +143,10 @@ class TestSQLServerSpecificFeatures:
             "SQL_Latin1_General_CP1_CS_AS",  # Case-sensitive, accent-sensitive
             "SQL_Latin1_General_CP1_CI_AI",  # Case-insensitive, accent-insensitive
             "SQL_Latin1_General_CP1_CS_AI",  # Case-sensitive, accent-insensitive
-            "Latin1_General_100_CI_AS",      # Modern collation
-            "Latin1_General_100_CS_AS"       # Modern case-sensitive
+            "Latin1_General_100_CI_AS",  # Modern collation
+            "Latin1_General_100_CS_AS",  # Modern case-sensitive
         ]
-        
+
         for collation in collations:
             component = SQLServerRead(
                 credentials_id=1,
@@ -157,20 +154,15 @@ class TestSQLServerSpecificFeatures:
                 name="test_component",
                 description="Test SQL Server component",
                 comp_type="read_sqlserver",
-                collation=collation
+                collation=collation,
             )
             assert component.collation == collation
 
     def test_sqlserver_charset_handling(self):
         """Test SQL Server charset handling."""
         # Test different charset types
-        charsets = [
-            "utf8",
-            "latin1",
-            "cp1252",
-            "iso_8859_1"
-        ]
-        
+        charsets = ["utf8", "latin1", "cp1252", "iso_8859_1"]
+
         for charset in charsets:
             component = SQLServerRead(
                 credentials_id=1,
@@ -178,7 +170,7 @@ class TestSQLServerSpecificFeatures:
                 name="test_component",
                 description="Test SQL Server component",
                 comp_type="read_sqlserver",
-                charset=charset
+                charset=charset,
             )
             assert component.charset == charset
 
@@ -189,14 +181,14 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Mock the receiver creation to avoid connection issues
-        with patch.object(component, '_receiver', None):
+        with patch.object(component, "_receiver", None):
             # Call _build_objects directly
             result = component._build_objects()
-            
+
             # Verify receiver was created
             assert component._receiver is not None
             # Verify self was returned
@@ -210,27 +202,69 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Verify basic attributes are set
         assert component.credentials_id == 1
         assert component.entity_name == "test_table"
         assert component.charset == "utf8"
         assert component.collation == "SQL_Latin1_General_CP1_CI_AS"
 
-    @pytest.mark.parametrize("test_type,test_values,component_class,expected_attr", [
-        ("entity_names", ["users", "dbo.users", "[Users]", "MyTable", "table_123", "user_profiles"], SQLServerRead, "entity_name"),
-        ("credential_ids", [1, 100, 999, 1000], SQLServerRead, "credentials_id"),
-        ("queries", ["", "SELECT * FROM users", "INSERT INTO users (name, email) VALUES (:name, :email)", "UPDATE users SET name = :name WHERE id = :id", "DELETE FROM users WHERE id = :id", "SELECT u.id, u.name, u.email, p.phone FROM users u LEFT JOIN profiles p ON u.id = p.user_id WHERE u.active = :active_status"], SQLServerRead, "query"),
-        ("if_exists_values", [DatabaseOperation.INSERT, DatabaseOperation.UPSERT, DatabaseOperation.TRUNCATE], SQLServerWrite, "operation"),
-        ("chunk_sizes", [1000, 5000, 10000, 50000, 100000], SQLServerWrite, "bulk_chunk_size"),
-    ])
+    @pytest.mark.parametrize(
+        "test_type,test_values,component_class,expected_attr",
+        [
+            (
+                "entity_names",
+                [
+                    "users",
+                    "dbo.users",
+                    "[Users]",
+                    "MyTable",
+                    "table_123",
+                    "user_profiles",
+                ],
+                SQLServerRead,
+                "entity_name",
+            ),
+            ("credential_ids", [1, 100, 999, 1000], SQLServerRead, "credentials_id"),
+            (
+                "queries",
+                [
+                    "",
+                    "SELECT * FROM users",
+                    "INSERT INTO users (name, email) VALUES (:name, :email)",
+                    "UPDATE users SET name = :name WHERE id = :id",
+                    "DELETE FROM users WHERE id = :id",
+                    "SELECT u.id, u.name, u.email, p.phone FROM users u LEFT JOIN \
+                    profiles p ON u.id = p.user_id WHERE u.active = :active_status",
+                ],
+                SQLServerRead,
+                "query",
+            ),
+            (
+                "if_exists_values",
+                [
+                    DatabaseOperation.INSERT,
+                    DatabaseOperation.UPSERT,
+                    DatabaseOperation.TRUNCATE,
+                ],
+                SQLServerWrite,
+                "operation",
+            ),
+            (
+                "chunk_sizes",
+                [1000, 5000, 10000, 50000, 100000],
+                SQLServerWrite,
+                "bulk_chunk_size",
+            ),
+        ],
+    )
     def test_sqlserver_component_validation_scenarios(
         self, test_type, test_values, component_class, expected_attr
     ):
         """Test SQL Server component validation scenarios."""
-        
+
         for value in test_values:
             if component_class == SQLServerRead:
                 component = component_class(
@@ -239,7 +273,7 @@ class TestSQLServerSpecificFeatures:
                     name="test_component",
                     description="Test SQL Server component",
                     comp_type="read_sqlserver",
-                    query=value if test_type == "queries" else ""
+                    query=value if test_type == "queries" else "",
                 )
             else:  # SQLServerWrite
                 component = self._create_sqlserver_write_with_schema(
@@ -248,11 +282,17 @@ class TestSQLServerSpecificFeatures:
                     name="test_component",
                     description="Test SQL Server component",
                     comp_type="write_sqlserver",
-                    operation=value if test_type == "if_exists_values" else DatabaseOperation.INSERT,
+                    operation=(
+                        value
+                        if test_type == "if_exists_values"
+                        else DatabaseOperation.INSERT
+                    ),
                     bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
-                    bigdata_partition_chunk_size=value * 2 if test_type == "chunk_sizes" else 50000
+                    bigdata_partition_chunk_size=(
+                        value * 2 if test_type == "chunk_sizes" else 50000
+                    ),
                 )
-            
+
             if test_type == "entity_names":
                 assert getattr(component, expected_attr) == value
             elif test_type == "credential_ids":
@@ -275,9 +315,9 @@ class TestSQLServerSpecificFeatures:
             description="Test SQL Server component",
             comp_type="write_sqlserver",
             bulk_chunk_size=1,
-            bigdata_partition_chunk_size=1
+            bigdata_partition_chunk_size=1,
         )
-        
+
         assert component.bulk_chunk_size == 1
         assert component.bigdata_partition_chunk_size == 1
 
@@ -292,7 +332,7 @@ class TestSQLServerSpecificFeatures:
                 description="Test SQL Server component",
                 comp_type="write_sqlserver",
                 bulk_chunk_size=0,
-                bigdata_partition_chunk_size=0
+                bigdata_partition_chunk_size=0,
             )
 
     def test_sqlserver_component_large_chunk_sizes(self):
@@ -304,9 +344,9 @@ class TestSQLServerSpecificFeatures:
             description="Test SQL Server component",
             comp_type="write_sqlserver",
             bulk_chunk_size=1_000_000,
-            bigdata_partition_chunk_size=2_000_000
+            bigdata_partition_chunk_size=2_000_000,
         )
-        
+
         assert component.bulk_chunk_size == 1_000_000
         assert component.bigdata_partition_chunk_size == 2_000_000
 
@@ -322,9 +362,9 @@ class TestSQLServerSpecificFeatures:
             collation="SQL_Latin1_General_CP1_CS_AS",
             operation=DatabaseOperation.UPSERT,
             bulk_chunk_size=25_000,
-            bigdata_partition_chunk_size=100_000
+            bigdata_partition_chunk_size=100_000,
         )
-        
+
         # Verify all parameters are set correctly
         assert component.credentials_id == 999
         assert component.entity_name == "dbo.user_profiles"

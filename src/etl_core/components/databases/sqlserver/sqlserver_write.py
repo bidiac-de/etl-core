@@ -4,7 +4,7 @@ from typing import Any, AsyncIterator, Dict, Optional  # noqa: F401
 
 import dask.dataframe as dd
 import pandas as pd
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from etl_core.components.databases.sqlserver.sqlserver import SQLServerComponent
 from etl_core.components.databases.database_operation_mixin import (
@@ -61,7 +61,6 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
             conflict_columns = kwargs.get("conflict_columns", ["id"])
             update_columns = kwargs.get("update_columns", columns)
 
-            conflict_str = ", ".join(conflict_columns)
             update_clause = ", ".join(
                 [f"target.{col} = source.{col}" for col in update_columns]
             )
@@ -69,7 +68,9 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
             merge_query = f"""
             MERGE {table} AS target
             USING (SELECT {', '.join([f':{col} AS {col}' for col in columns])}) AS source
-            ON {' AND '.join([f'target.{col} = source.{col}' for col in conflict_columns])}
+            ON {' AND '.join([
+                f'target.{col} = source.{col}' for col in conflict_columns
+            ])}
             WHEN MATCHED THEN
                 UPDATE SET {update_clause}
             WHEN NOT MATCHED THEN

@@ -14,7 +14,6 @@ from unittest.mock import Mock, AsyncMock
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
 from etl_core.components.wiring.schema import Schema
@@ -122,17 +121,17 @@ class TestSQLServerComponents:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
 
         # Check inheritance
         assert isinstance(component, SQLServerRead)
 
         # Check that it has the expected attributes
-        assert hasattr(component, 'charset')
-        assert hasattr(component, 'collation')
-        assert hasattr(component, 'entity_name')
-        assert hasattr(component, 'query')
+        assert hasattr(component, "charset")
+        assert hasattr(component, "collation")
+        assert hasattr(component, "entity_name")
+        assert hasattr(component, "query")
 
     def test_sqlserver_component_defaults(self):
         """Test SQL Server component default values."""
@@ -141,7 +140,7 @@ class TestSQLServerComponents:
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
 
         # Check default values
@@ -160,7 +159,7 @@ class TestSQLServerComponents:
             comp_type="read_sqlserver",
             charset="latin1",
             collation="SQL_Latin1_General_CP1_CS_AS",
-            query="SELECT * FROM custom_table"
+            query="SELECT * FROM custom_table",
         )
 
         # Check custom values
@@ -201,15 +200,15 @@ class TestSQLServerRead:
             entity_name="test_table",
             name="test_read_component",
             description="Test SQL Server read component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
 
         # Check inheritance
         assert isinstance(component, SQLServerRead)
 
         # Check that it has the expected attributes
-        assert hasattr(component, 'params')
-        assert hasattr(component, 'ALLOW_NO_INPUTS')
+        assert hasattr(component, "params")
+        assert hasattr(component, "ALLOW_NO_INPUTS")
         assert component.ALLOW_NO_INPUTS is True
 
     def test_sqlserver_read_defaults(self):
@@ -219,7 +218,7 @@ class TestSQLServerRead:
             entity_name="test_table",
             name="test_read_component",
             description="Test SQL Server read component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
 
         # Check default values
@@ -238,21 +237,33 @@ class TestSQLServerRead:
             description="Test SQL Server read component",
             comp_type="read_sqlserver",
             query="SELECT * FROM test_table WHERE user_id = :user_id",
-            params=custom_params
+            params=custom_params,
         )
-        
+
         # Check custom values
         assert component.params == custom_params
         assert component.query == "SELECT * FROM test_table WHERE user_id = :user_id"
 
-    @pytest.mark.parametrize("process_type,expected_results,expected_payload_type", [
-        ("row", 2, dict),           # process_row: 2 results, dict payload
-        ("bulk", 1, pd.DataFrame),  # process_bulk: 1 result, DataFrame payload
-        ("bigdata", 1, dd.DataFrame), # process_bigdata: 1 result, Dask DataFrame payload
-    ])
+    @pytest.mark.parametrize(
+        "process_type,expected_results,expected_payload_type",
+        [
+            ("row", 2, dict),  # process_row: 2 results, dict payload
+            ("bulk", 1, pd.DataFrame),  # process_bulk: 1 result, DataFrame payload
+            (
+                "bigdata",
+                1,
+                dd.DataFrame,
+            ),  # process_bigdata: 1 result, Dask DataFrame payload
+        ],
+    )
     @pytest.mark.asyncio
     async def test_sqlserver_read_process_methods(
-        self, mock_connection_handler, mock_metrics, process_type, expected_results, expected_payload_type
+        self,
+        mock_connection_handler,
+        mock_metrics,
+        process_type,
+        expected_results,
+        expected_payload_type,
     ):
         """Test SQL Server read component process methods."""
         component = SQLServerRead(
@@ -260,62 +271,77 @@ class TestSQLServerRead:
             entity_name="test_table",
             name="test_read_component",
             description="Test SQL Server read component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
-        
+
         # Mock the receiver with async methods
         mock_receiver = Mock()
-        
+
         if process_type == "row":
             # Create an async generator for read_row with new signature
-            async def mock_read_row_generator(*, entity_name, metrics, connection_handler, batch_size=1000, query=None, params=None):
+            async def mock_read_row_generator(
+                *,
+                entity_name,
+                metrics,
+                connection_handler,
+                batch_size=1000,
+                query=None,
+                params=None,
+            ):
                 yield {"id": 1, "name": "John"}
                 yield {"id": 2, "name": "Jane"}
 
             mock_receiver.read_row = mock_read_row_generator
             component._receiver = mock_receiver
-            
+
             # Test process_row
             results = []
             async for result in component.process_row(None, mock_metrics):
                 results.append(result)
-            
+
             # Verify results
             assert len(results) == expected_results
             assert results[0].payload["id"] == 1
             assert results[1].payload["id"] == 2
-            
+
         elif process_type == "bulk":
             mock_dataframe = pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]})
-            async def mock_read_bulk(*, entity_name, metrics, connection_handler, query=None, params=None):
+
+            async def mock_read_bulk(
+                *, entity_name, metrics, connection_handler, query=None, params=None
+            ):
                 return mock_dataframe
+
             mock_receiver.read_bulk = mock_read_bulk
             component._receiver = mock_receiver
-            
+
             # Test process_bulk
             results = []
             async for result in component.process_bulk(None, mock_metrics):
                 results.append(result)
-            
+
             # Verify results
             assert len(results) == expected_results
             assert results[0].payload.equals(mock_dataframe)
-            
+
         elif process_type == "bigdata":
             mock_dask_dataframe = dd.from_pandas(
-                pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]}),
-                npartitions=1
+                pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]}), npartitions=1
             )
-            async def mock_read_bigdata(*, entity_name, metrics, connection_handler, query=None, params=None):
+
+            async def mock_read_bigdata(
+                *, entity_name, metrics, connection_handler, query=None, params=None
+            ):
                 return mock_dask_dataframe
+
             mock_receiver.read_bigdata = mock_read_bigdata
             component._receiver = mock_receiver
-            
+
             # Test process_bigdata
             results = []
             async for result in component.process_bigdata(None, mock_metrics):
                 results.append(result)
-            
+
             # Verify results
             assert len(results) == expected_results
             assert results[0].payload.npartitions == 1
@@ -352,15 +378,15 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_write_component",
             description="Test SQL Server write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
 
         # Check inheritance
         assert isinstance(component, SQLServerWrite)
 
         # Check that it has the expected attributes from DatabaseOperationMixin
-        assert hasattr(component, 'operation')
-        assert hasattr(component, 'where_conditions')
+        assert hasattr(component, "operation")
+        assert hasattr(component, "where_conditions")
 
     def test_sqlserver_write_defaults(self):
         """Test SQL Server write component default values."""
@@ -369,7 +395,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_write_component",
             description="Test SQL Server write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
 
         # Check default values from DatabaseOperationMixin
@@ -386,21 +412,50 @@ class TestSQLServerWrite(TestSQLServerComponents):
             description="Test SQL Server write component",
             comp_type="write_sqlserver",
             operation=DatabaseOperation.UPSERT,
-            where_conditions=["id = :id"]
+            where_conditions=["id = :id"],
         )
 
         # Check custom values
         assert component.operation == DatabaseOperation.UPSERT
         assert component.where_conditions == ["id = :id"]
 
-    @pytest.mark.parametrize("process_type,test_data,expected_payload_type", [
-        ("row", {"name": "John", "email": "john@example.com"}, dict),
-        ("bulk", pd.DataFrame({"name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]}), pd.DataFrame),
-        ("bigdata", dd.from_pandas(pd.DataFrame({"name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]}), npartitions=1), dd.DataFrame),
-    ])
+    @pytest.mark.parametrize(
+        "process_type,test_data,expected_payload_type",
+        [
+            ("row", {"name": "John", "email": "john@example.com"}, dict),
+            (
+                "bulk",
+                pd.DataFrame(
+                    {
+                        "name": ["John", "Jane"],
+                        "email": ["john@example.com", "jane@example.com"],
+                    }
+                ),
+                pd.DataFrame,
+            ),
+            (
+                "bigdata",
+                dd.from_pandas(
+                    pd.DataFrame(
+                        {
+                            "name": ["John", "Jane"],
+                            "email": ["john@example.com", "jane@example.com"],
+                        }
+                    ),
+                    npartitions=1,
+                ),
+                dd.DataFrame,
+            ),
+        ],
+    )
     @pytest.mark.asyncio
     async def test_sqlserver_write_process_methods(
-        self, mock_connection_handler, mock_metrics, process_type, test_data, expected_payload_type
+        self,
+        mock_connection_handler,
+        mock_metrics,
+        process_type,
+        test_data,
+        expected_payload_type,
     ):
         """Test SQL Server write component process methods."""
         component = self._create_sqlserver_write_with_schema(
@@ -408,54 +463,66 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_write_component",
             description="Test SQL Server write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
-        
+
         # Mock the receiver with async methods
         mock_receiver = Mock()
-        
+
         if process_type == "row":
-            async def mock_write_row(*, entity_name, row, metrics, connection_handler, query, table=None):
+
+            async def mock_write_row(
+                *, entity_name, row, metrics, connection_handler, query, table=None
+            ):
                 return {"affected_rows": 1, "row": row}
+
             mock_receiver.write_row = mock_write_row
             component._receiver = mock_receiver
-            
+
             # Test process_row
             results = []
             async for result in component.process_row(test_data, mock_metrics):
                 results.append(result)
-            
+
             # Verify results
             assert len(results) == 1
             assert results[0].payload["affected_rows"] == 1
             assert results[0].payload["row"]["name"] == "John"
-            
+
         elif process_type == "bulk":
-            async def mock_write_bulk(*, entity_name, frame, metrics, connection_handler, query, table=None):
+
+            async def mock_write_bulk(
+                *, entity_name, frame, metrics, connection_handler, query, table=None
+            ):
                 return frame
+
             mock_receiver.write_bulk = mock_write_bulk
             component._receiver = mock_receiver
-            
+
             # Test process_bulk
             results = []
             async for result in component.process_bulk(test_data, mock_metrics):
                 results.append(result)
-            
+
             # Verify results
             assert len(results) == 1
             assert results[0].payload.equals(test_data)
-            
+
         elif process_type == "bigdata":
-            async def mock_write_bigdata(*, entity_name, frame, metrics, connection_handler, query, table=None):
+
+            async def mock_write_bigdata(
+                *, entity_name, frame, metrics, connection_handler, query, table=None
+            ):
                 return frame
+
             mock_receiver.write_bigdata = mock_write_bigdata
             component._receiver = mock_receiver
-            
+
             # Test process_bigdata
             results = []
             async for result in component.process_bigdata(test_data, mock_metrics):
                 results.append(result)
-            
+
             # Verify results
             assert len(results) == 1
             assert results[0].payload.npartitions == 1
@@ -467,7 +534,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_write_component",
             description="Test SQL Server write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
 
         # Check input ports
@@ -482,8 +549,6 @@ class TestSQLServerWrite(TestSQLServerComponents):
         assert component.OUTPUT_PORTS[0].required is False
         assert component.OUTPUT_PORTS[0].fanout == "many"
 
-
-
     @pytest.mark.asyncio
     async def test_sqlserver_component_error_handling(
         self, mock_context, mock_metrics, sample_data
@@ -494,20 +559,20 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
         component.context = mock_context
-        
+
         # Initialize the component to build objects
         component._build_objects()
 
         # Mock receiver to raise error
         mock_receiver = AsyncMock()
-        
+
         # Create an async generator that raises an exception
         async def error_generator():
             raise Exception("Database error")
-        
+
         mock_receiver.read_row.return_value = error_generator()
         component._receiver = mock_receiver
 
@@ -527,7 +592,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_read",
             description="Test read component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
         read_comp.context = mock_context
 
@@ -535,7 +600,9 @@ class TestSQLServerWrite(TestSQLServerComponents):
         mock_receiver = AsyncMock()
         mock_receiver.read_bulk.return_value = sample_dataframe
         mock_receiver.read_row = AsyncMock()
-        mock_receiver.read_bigdata.return_value = dd.from_pandas(sample_dataframe, npartitions=1)
+        mock_receiver.read_bigdata.return_value = dd.from_pandas(
+            sample_dataframe, npartitions=1
+        )
         read_comp._receiver = mock_receiver
 
         # Test bulk strategy
@@ -560,7 +627,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_write",
             description="Test write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
         component.context = mock_context
 
@@ -582,7 +649,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
         component.context = mock_context
 
@@ -604,7 +671,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
         component.context = mock_context
 
@@ -614,12 +681,10 @@ class TestSQLServerWrite(TestSQLServerComponents):
         component._receiver = mock_receiver
 
         # Test that connection handler is properly accessed
-        assert hasattr(component, 'connection_handler')
+        assert hasattr(component, "connection_handler")
 
     @pytest.mark.asyncio
-    async def test_sqlserver_read_with_complex_params(
-        self, mock_context, mock_metrics
-    ):
+    async def test_sqlserver_read_with_complex_params(self, mock_context, mock_metrics):
         """Test SQL Server read component with complex parameters."""
         component = SQLServerRead(
             credentials_id=1,
@@ -627,14 +692,17 @@ class TestSQLServerWrite(TestSQLServerComponents):
             name="test_read",
             description="Test read component",
             comp_type="read_sqlserver",
-            query="SELECT * FROM test_table WHERE status = :status AND created_at > :created_at",
-            params={"status": "active", "created_at": "2023-01-01"}
+            query="SELECT * FROM test_table WHERE status = :status AND \
+                created_at > :created_at",
+            params={"status": "active", "created_at": "2023-01-01"},
         )
         component.context = mock_context
 
         # Mock receiver
         mock_receiver = AsyncMock()
-        mock_receiver.read_bulk.return_value = pd.DataFrame({"id": [1, 2], "status": ["active", "active"]})
+        mock_receiver.read_bulk.return_value = pd.DataFrame(
+            {"id": [1, 2], "status": ["active", "active"]}
+        )
         component._receiver = mock_receiver
 
         # Test with complex parameters
@@ -650,7 +718,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_component",
             description="Test SQL Server component",
-            comp_type="read_sqlserver"
+            comp_type="read_sqlserver",
         )
 
         # Check default values
@@ -667,7 +735,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
             entity_name="test_table",
             name="test_write",
             description="Test write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
         component.context = mock_context
 
@@ -675,7 +743,7 @@ class TestSQLServerWrite(TestSQLServerComponents):
         special_data = {
             "name": "José María",
             "email": "jose.maria@café.com",
-            "description": "Special chars: äöüßñéèêë"
+            "description": "Special chars: äöüßñéèêë",
         }
 
         # Mock receiver
@@ -690,14 +758,16 @@ class TestSQLServerWrite(TestSQLServerComponents):
         assert len(results) == 1
 
     @pytest.mark.asyncio
-    async def test_sqlserver_component_numeric_data_types(self, mock_context, mock_metrics):
+    async def test_sqlserver_component_numeric_data_types(
+        self, mock_context, mock_metrics
+    ):
         """Test SQL Server component with various numeric data types."""
         component = self._create_sqlserver_write_with_schema(
             credentials_id=1,
             entity_name="numeric_table",
             name="test_write",
             description="Test write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
         component.context = mock_context
 
@@ -721,14 +791,16 @@ class TestSQLServerWrite(TestSQLServerComponents):
         assert len(results) == 1
 
     @pytest.mark.asyncio
-    async def test_sqlserver_component_boolean_data_types(self, mock_context, mock_metrics):
+    async def test_sqlserver_component_boolean_data_types(
+        self, mock_context, mock_metrics
+    ):
         """Test SQL Server component with boolean data types."""
         component = self._create_sqlserver_write_with_schema(
             credentials_id=1,
             entity_name="boolean_table",
             name="test_write",
             description="Test write component",
-            comp_type="write_sqlserver"
+            comp_type="write_sqlserver",
         )
         component.context = mock_context
 
@@ -749,4 +821,3 @@ class TestSQLServerWrite(TestSQLServerComponents):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

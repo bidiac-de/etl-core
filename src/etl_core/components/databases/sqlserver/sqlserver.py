@@ -23,12 +23,12 @@ class SQLServerComponent(SQLDatabaseComponent):
                 conn.execute("SET ANSI_WARNINGS ON")
                 conn.execute("SET QUOTED_IDENTIFIER ON")
                 conn.execute("SET NOCOUNT ON")
-                
+
                 if self.charset:
                     conn.execute(f"SET LANGUAGE {self.charset}")
                 if self.collation:
                     conn.execute(f"SET COLLATION {self.collation}")
-                    
+
                 conn.commit()
         except Exception as e:
             print(f"Warning: Could not set SQL Server session variables: {e}")

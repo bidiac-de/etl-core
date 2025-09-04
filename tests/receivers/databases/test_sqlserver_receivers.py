@@ -109,9 +109,8 @@ class TestSQLServerReceivers:
 
     def test_sqlserver_receiver_get_connection(self, mock_connection_handler):
         """Test SQLServerReceiver connection handling."""
-        # This method doesn't exist in SQLServerReceiver, so we'll test the connection handling differently
         receiver = SQLServerReceiver()
-        
+
         # Test that the receiver can be created and has the expected methods
         assert hasattr(receiver, "read_row")
         assert hasattr(receiver, "read_bulk")
@@ -141,9 +140,6 @@ class TestSQLServerReceivers:
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Also mock pandas DataFrame creation to avoid issues with row iteration
-        mock_df = pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]})
-
         # Test read_row with new signature
         results = []
         async for result in receiver.read_row(
@@ -166,7 +162,6 @@ class TestSQLServerReceivers:
         """Test SQLServerReceiver read_bulk method."""
         receiver = SQLServerReceiver()
 
-        # Mock the connection execution with proper SQLAlchemy result structure for read_bulk
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
@@ -196,7 +191,6 @@ class TestSQLServerReceivers:
         """Test SQLServerReceiver read_bigdata method."""
         receiver = SQLServerReceiver()
 
-        # Mock the connection execution with proper SQLAlchemy result structure for read_bigdata
         mock_result = Mock()
         # Create mock row objects with _mapping attribute
         mock_row1 = Mock()
@@ -295,15 +289,24 @@ class TestSQLServerReceivers:
         # Verify return value
         assert result.equals(empty_df)
 
-    @pytest.mark.parametrize("test_type,has_custom_query,has_chunk_size,expected_rowcount", [
-        ("basic", False, False, 4),
-        ("custom_query", True, False, 4),
-        ("chunk_size", False, True, 4),
-    ])
+    @pytest.mark.parametrize(
+        "test_type,has_custom_query,has_chunk_size,expected_rowcount",
+        [
+            ("basic", False, False, 4),
+            ("custom_query", True, False, 4),
+            ("chunk_size", False, True, 4),
+        ],
+    )
     @pytest.mark.asyncio
     async def test_sqlserver_receiver_write_bigdata_scenarios(
-        self, mock_connection_handler, mock_metrics, sample_dask_dataframe, 
-        test_type, has_custom_query, has_chunk_size, expected_rowcount
+        self,
+        mock_connection_handler,
+        mock_metrics,
+        sample_dask_dataframe,
+        test_type,
+        has_custom_query,
+        has_chunk_size,
+        expected_rowcount,
     ):
         """Test SQLServerReceiver write_bigdata with different scenarios."""
         receiver = SQLServerReceiver()
@@ -321,7 +324,7 @@ class TestSQLServerReceivers:
             "table": "users",
             "connection_handler": mock_connection_handler,
         }
-        
+
         # Set default parameters for new signature
         kwargs = {
             "entity_name": "users",
@@ -412,8 +415,6 @@ class TestSQLServerReceivers:
         # Verify return value
         assert result.equals(sample_dataframe)
 
-
-
     @pytest.mark.asyncio
     async def test_sqlserver_receiver_write_bulk_with_chunk_size(
         self, mock_connection_handler, mock_metrics, sample_dataframe
@@ -438,16 +439,22 @@ class TestSQLServerReceivers:
         # Verify return value
         assert result.equals(sample_dataframe)
 
-
-
-    @pytest.mark.parametrize("partition_size,expected_calls,has_data", [
-        (2, 2, True),   # Multiple partitions with data
-        (1, 1, False),  # Single partition, empty
-        (1, 1, True),   # Single partition with data
-    ])
+    @pytest.mark.parametrize(
+        "partition_size,expected_calls,has_data",
+        [
+            (2, 2, True),  # Multiple partitions with data
+            (1, 1, False),  # Single partition, empty
+            (1, 1, True),  # Single partition with data
+        ],
+    )
     @pytest.mark.asyncio
     async def test_write_bigdata_partition_scenarios(
-        self, mock_connection_handler, mock_metrics, partition_size, expected_calls, has_data
+        self,
+        mock_connection_handler,
+        mock_metrics,
+        partition_size,
+        expected_calls,
+        has_data,
     ):
         """Test write_bigdata with different partition scenarios."""
         receiver = SQLServerReceiver()
@@ -456,17 +463,19 @@ class TestSQLServerReceivers:
             df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
         else:
             df = pd.DataFrame()
-        
+
         ddf = dd.from_pandas(df, npartitions=partition_size)
 
         # Mock the connection execution if there's data
         if has_data:
             mock_result = Mock()
             mock_result.rowcount = len(df) if len(df) > 0 else 0
-            mock_connection_handler.lease().__enter__().execute.return_value = mock_result
+            mock_connection_handler.lease().__enter__().execute.return_value = (
+                mock_result
+            )
 
         # Mock compute to return real pandas DataFrames
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             # Test write_bigdata
@@ -566,7 +575,7 @@ class TestSQLServerReceivers:
         ddf = dd.from_pandas(df, npartitions=2)
 
         # Mock the partition processing
-        with patch('dask.dataframe.DataFrame.compute') as mock_compute:
+        with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
             await receiver.write_bigdata(
@@ -715,7 +724,6 @@ class TestSQLServerReceivers:
             params={},
         )
 
-        # Verify lease context manager was used (called twice: once directly, once via __enter__)
         assert mock_connection_handler.lease.call_count >= 1
 
     @pytest.mark.asyncio
@@ -741,9 +749,7 @@ class TestSQLServerReceivers:
         # This test documents the expected behavior for future metrics integration
 
     @pytest.mark.asyncio
-    async def test_large_data_handling(
-        self, mock_connection_handler, mock_metrics
-    ):
+    async def test_large_data_handling(self, mock_connection_handler, mock_metrics):
         """Test handling of large datasets."""
         receiver = SQLServerReceiver()
 
@@ -798,7 +804,8 @@ class TestSQLServerReceivers:
             row=special_data,
             metrics=mock_metrics,
             connection_handler=mock_connection_handler,
-            query="INSERT INTO users (name, email, description) VALUES (:name, :email, :description)",
+            query="INSERT INTO users (name, email, description) \
+                VALUES (:name, :email, :description)",
         )
 
         # Verify execute was called
@@ -830,7 +837,8 @@ class TestSQLServerReceivers:
             row=numeric_data,
             metrics=mock_metrics,
             connection_handler=mock_connection_handler,
-            query="INSERT INTO numeric_table (integer, float, decimal, negative) VALUES (:integer, :float, :decimal, :negative)",
+            query="INSERT INTO numeric_table (integer, float, decimal, negative) \
+                VALUES (:integer, :float, :decimal, :negative)",
         )
 
         # Verify execute was called
@@ -857,15 +865,14 @@ class TestSQLServerReceivers:
             row=boolean_data,
             metrics=mock_metrics,
             connection_handler=mock_connection_handler,
-            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) VALUES (:is_active, :is_deleted, :has_permission)",
+            query="INSERT INTO boolean_table (is_active, is_deleted, has_permission) \
+                VALUES (:is_active, :is_deleted, :has_permission)",
         )
 
         # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         # Verify return value
         assert result == {"affected_rows": 1, "row": boolean_data}
-
-    # Diese Tests wurden durch den parametrisierten Test test_write_bigdata_partition_scenarios ersetzt
 
     @pytest.mark.asyncio
     async def test_write_bulk_empty_dataframe_early_return(
@@ -920,16 +927,24 @@ class TestSQLServerReceivers:
         assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
-    @pytest.mark.parametrize("has_data,expected_execute_calls,expected_commit_calls", [
-        (True, 1, 1),   # With data: execute and commit
-        (False, 0, 0),  # Empty: no execute or commit
-    ])
+    @pytest.mark.parametrize(
+        "has_data,expected_execute_calls,expected_commit_calls",
+        [
+            (True, 1, 1),  # With data: execute and commit
+            (False, 0, 0),  # Empty: no execute or commit
+        ],
+    )
     @pytest.mark.asyncio
     async def test_partition_processing_logic(
-        self, mock_connection_handler, mock_metrics, has_data, expected_execute_calls, expected_commit_calls
+        self,
+        mock_connection_handler,
+        mock_metrics,
+        has_data,
+        expected_execute_calls,
+        expected_commit_calls,
     ):
         """Test the partition processing logic with different data scenarios."""
-        
+
         if has_data:
             partition_df = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
         else:
@@ -957,8 +972,14 @@ class TestSQLServerReceivers:
                 conn.commit()
 
         # Verify the connection was used correctly
-        assert mock_connection_handler.lease().__enter__().execute.call_count == expected_execute_calls
-        assert mock_connection_handler.lease().__enter__().commit.call_count == expected_commit_calls
+        assert (
+            mock_connection_handler.lease().__enter__().execute.call_count
+            == expected_execute_calls
+        )
+        assert (
+            mock_connection_handler.lease().__enter__().commit.call_count
+            == expected_commit_calls
+        )
 
         # Verify the correct SQL was generated if data exists
         if has_data:
@@ -1020,4 +1041,3 @@ class TestSQLServerReceivers:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
