@@ -88,13 +88,8 @@ class AggregationComponent(DataOperationsComponent):
         Extract top-level field names from declared input schema if present.
         """
         schema_like = self.in_port_schemas.get("in")
-        # Schema object in Runtime
         if isinstance(schema_like, Schema):
             return {f.name for f in schema_like.fields}
-        # Dict type in tests
-        if isinstance(schema_like, dict):
-            fields = schema_like.get("fields") or []
-            return {str(f.get("name")) for f in fields if isinstance(f, dict)}
         return set()
 
     def _prevalidate_against_schema(self) -> None:
