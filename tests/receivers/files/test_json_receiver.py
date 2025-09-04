@@ -28,14 +28,22 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_json_file() -> Path:
     return (
-        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.json"
+        Path(__file__).parent.parent.parent
+        / "components"
+        / "data"
+        / "json"
+        / "testdata.json"
     )
 
 
 @pytest.fixture
 def sample_ndjson_file() -> Path:
     return (
-        Path(__file__).parent.parent / "components" / "data" / "json" / "testdata.jsonl"
+        Path(__file__).parent.parent.parent
+        / "components"
+        / "data"
+        / "json"
+        / "testdata.jsonl"
     )
 
 
@@ -199,7 +207,7 @@ async def test_write_json_bigdata_roundtrip(tmp_path: Path, metrics: ComponentMe
     assert metrics.lines_received == 2
 
     parts = sorted(out_dir.glob("part-*.jsonl"))
-    assert parts, "No partitions wrote"
+    assert parts, "No partitiones wrote"
 
     parsed_lines = []
     for p in parts:
@@ -225,7 +233,7 @@ async def test_read_json_row_gz(
     sample_json_file: Path, tmp_path: Path, metrics: ComponentMetrics
 ):
     """
-    Test .gz read path (row base only), produces compressed file on-the-fly.
+    Test .gz read path (row base only), produces compromised file on-the-fly.
     """
     import gzip
     import json
