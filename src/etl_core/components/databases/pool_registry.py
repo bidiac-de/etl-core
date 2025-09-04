@@ -7,7 +7,7 @@ from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
 
 from sqlalchemy.engine import Engine
 from sqlalchemy import create_engine
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 @dataclass(frozen=True)
@@ -45,8 +45,8 @@ class PoolKey:
 
 class ConnectionPoolRegistry:
     """
-    Central registry that creates and reuses SQLAlchemy Engines and MongoClients.
-    Keeps simple lease counters for observability and safe shutdown.
+    Central registry that creates and reuses SQLAlchemy Engines and
+    Motor AsyncIOMotorClient instances. Keeps simple lease counters.
     """
 
     _instance: Optional["ConnectionPoolRegistry"] = None
@@ -92,13 +92,17 @@ class ConnectionPoolRegistry:
 
     def get_mongo_client(
         self, *, uri: str, client_kwargs: Optional[Mapping[str, Any]] = None
-    ) -> Tuple[PoolKey, MongoClient]:
+    ) -> Tuple[PoolKey, Any]:
+        """
+        Always returns an AsyncIOMotorClient pooled by (uri, client_kwargs).
+        """
+
         client_kwargs = dict(client_kwargs or {})
         key = PoolKey.for_mongo(uri=uri, client_kwargs=client_kwargs)
         with self._guard:
             slot = self._mongo.get(key)
             if slot is None:
-                client = MongoClient(uri, **client_kwargs)
+                client = AsyncIOMotorClient(uri, **client_kwargs)
                 self._mongo[key] = {"client": client, "leased": 0, "opened": 0}
                 slot = self._mongo[key]
             return key, slot["client"]
