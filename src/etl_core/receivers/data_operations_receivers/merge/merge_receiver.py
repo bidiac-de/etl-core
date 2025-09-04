@@ -6,7 +6,7 @@ import dask.dataframe as dd
 import pandas as pd
 
 from etl_core.components.wiring.ports import OutPortSpec
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa E501
     DataOperationsMetrics,
 )
 from etl_core.receivers.data_operations_receivers.data_operations_receiver import (
@@ -41,7 +41,6 @@ class MergeReceiver(DataOperationsReceiver):
     ) -> AsyncIterator[Tuple[OutPortSpec, pd.DataFrame]]:
         rows = int(dataframe.shape[0])
         metrics.lines_received += rows
-        # forward dataframe; copy to avoid in-place mutation risks if multiple consumers expect isolation
         out_df = dataframe.copy()
         metrics.lines_processed += rows
         metrics.lines_forwarded += rows

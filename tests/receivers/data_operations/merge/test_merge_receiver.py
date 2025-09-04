@@ -8,8 +8,10 @@ import pandas as pd
 import pytest
 
 from etl_core.components.wiring.ports import OutPortSpec
-from etl_core.receivers.data_operations_receivers.merge.merge_receiver import MergeReceiver
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.receivers.data_operations_receivers.merge.merge_receiver import (
+    MergeReceiver,
+)
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa E501
     DataOperationsMetrics,
 )
 
@@ -28,13 +30,17 @@ def metrics() -> DataOperationsMetrics:
 
 
 @pytest.mark.asyncio
-async def test_merge_receiver_process_row_forwards_and_metrics(metrics: DataOperationsMetrics):
+async def test_merge_receiver_process_row_forwards_and_metrics(
+    metrics: DataOperationsMetrics,
+):
     recv = MergeReceiver()
     out_port = OutPortSpec(name="out")
     row = {"id": 1, "name": "Alice"}
 
     outs: List[Tuple[OutPortSpec, dict]] = []
-    async for port_spec, payload in recv.process_row(out_port=out_port, row=row, metrics=metrics):
+    async for port_spec, payload in recv.process_row(
+        out_port=out_port, row=row, metrics=metrics
+    ):
         outs.append((port_spec, payload))
 
     assert len(outs) == 1
@@ -47,13 +53,17 @@ async def test_merge_receiver_process_row_forwards_and_metrics(metrics: DataOper
 
 
 @pytest.mark.asyncio
-async def test_merge_receiver_process_bulk_copies_dataframe_and_updates_metrics(metrics: DataOperationsMetrics):
+async def test_merge_receiver_process_bulk_copies_dataframe_and_updates_metrics(
+    metrics: DataOperationsMetrics,
+):
     recv = MergeReceiver()
     out_port = OutPortSpec(name="out")
     df = pd.DataFrame([{"x": 1}, {"x": 2}])
 
     outs = []
-    async for port_spec, out_df in recv.process_bulk(out_port=out_port, dataframe=df, metrics=metrics):
+    async for port_spec, out_df in recv.process_bulk(
+        out_port=out_port, dataframe=df, metrics=metrics
+    ):
         outs.append((port_spec, out_df))
 
     assert len(outs) == 1
@@ -68,14 +78,18 @@ async def test_merge_receiver_process_bulk_copies_dataframe_and_updates_metrics(
 
 
 @pytest.mark.asyncio
-async def test_merge_receiver_process_bigdata_forwards_same_ddf_and_counts(metrics: DataOperationsMetrics):
+async def test_merge_receiver_process_bigdata_forwards_same_ddf_and_counts(
+    metrics: DataOperationsMetrics,
+):
     recv = MergeReceiver()
     out_port = OutPortSpec(name="out")
     pdf = pd.DataFrame([{"i": i} for i in range(5)])
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     outs = []
-    async for port_spec, out_ddf in recv.process_bigdata(out_port=out_port, ddf=ddf, metrics=metrics):
+    async for port_spec, out_ddf in recv.process_bigdata(
+        out_port=out_port, ddf=ddf, metrics=metrics
+    ):
         outs.append((port_spec, out_ddf))
 
     assert len(outs) == 1

@@ -7,7 +7,7 @@ import pytest
 
 from etl_core.components.data_operations.merge.merge import MergeComponent
 from etl_core.job_execution.job_execution_handler import Out as OutEnvelope
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa E501
     DataOperationsMetrics,
 )
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec
