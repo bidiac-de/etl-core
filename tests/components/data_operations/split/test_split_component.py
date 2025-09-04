@@ -37,8 +37,7 @@ async def test_split_component_process_bulk(data_ops_metrics: DataOperationsMetr
     comp = SplitComponent(
         name="split2",
         description="bulk splitter",
-        comp_type="split",
-        OUTPUT_PORTS=(OutPortSpec(name="A"), OutPortSpec(name="B"),),
+        OUTPUT_PORTS=(OutPortSpec(name="A"), OutPortSpec(name="B")),
     )
 
     df = pd.DataFrame([{"id": i, "name": f"U{i}"} for i in range(3)])
