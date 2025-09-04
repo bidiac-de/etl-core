@@ -5,14 +5,14 @@ from typing import Any, AsyncIterator, Dict, Optional
 import dask.dataframe as dd
 import pandas as pd
 
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.receivers.files.file_helper import (
+from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.receivers.files.file_helper import (
     ensure_file_exists,
     FileReceiverError,
 )
-from src.etl_core.receivers.files.read_file_receiver import ReadFileReceiver
-from src.etl_core.receivers.files.write_file_receiver import WriteFileReceiver
-from src.etl_core.receivers.files.excel.excel_helper import (
+from etl_core.receivers.files.read_file_receiver import ReadFileReceiver
+from etl_core.receivers.files.write_file_receiver import WriteFileReceiver
+from etl_core.receivers.files.excel.excel_helper import (
     read_excel_rows,
     read_excel_bulk,
     read_excel_bigdata,
