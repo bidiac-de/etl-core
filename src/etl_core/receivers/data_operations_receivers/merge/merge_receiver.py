@@ -17,7 +17,6 @@ from etl_core.receivers.data_operations_receivers.data_operations_receiver impor
 class MergeReceiver(DataOperationsReceiver):
     """
     Receiver that routes incoming payloads from multiple inputs to a single output port.
-    It does not combine payloads; it forwards each input payload to the output.
     """
 
     async def process_row(
