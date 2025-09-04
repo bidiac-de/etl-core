@@ -22,9 +22,7 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 def _schema_for(*names: str) -> Dict[str, object]:
     # Keep it simple: tests only need field names; data types don’t matter here.
     return {
-        "fields": [
-            {"name": n, "data_type": "string", "nullable": True} for n in names
-        ]
+        "fields": [{"name": n, "data_type": "string", "nullable": True} for n in names]
     }
 
 
