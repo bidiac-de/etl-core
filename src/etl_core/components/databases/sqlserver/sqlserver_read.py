@@ -53,9 +53,9 @@ class SQLServerRead(SQLServerComponent):
         frame: pd.DataFrame = await self._receiver.read_bulk(
             entity_name=self.entity_name,
             metrics=metrics,
-            connection_handler=self.connection_handler,
             query=self.query,
             params=self.params,
+            connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=frame)
 
@@ -66,8 +66,8 @@ class SQLServerRead(SQLServerComponent):
         ddf: dd.DataFrame = await self._receiver.read_bigdata(
             entity_name=self.entity_name,
             metrics=metrics,
-            connection_handler=self.connection_handler,
             query=self.query,
             params=self.params,
+            connection_handler=self.connection_handler,
         )
         yield Out(port="out", payload=ddf)

@@ -32,8 +32,6 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    query: str = Field(default="", description="Custom SQL query for write operations")
-
     def _build_query(
         self, table: str, columns: list, operation: DatabaseOperation, **kwargs
     ) -> str:
