@@ -6,7 +6,7 @@ from copy import deepcopy
 import dask.dataframe as dd
 import pandas as pd
 
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import ( # noqa e501
+from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa e501
     DataOperationsMetrics,
 )
 from etl_core.components.wiring.ports import OutPortSpec
