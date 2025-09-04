@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Dict, AsyncIterator, Optional  # noqa: F401
 import pandas as pd
 import dask.dataframe as dd

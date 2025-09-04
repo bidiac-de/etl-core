@@ -1,0 +1,98 @@
+{
+  "name": "CSV bulk, mapping (fan-out),  two CSVs",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bulk",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_csv",
+      "description": "CSV source",
+      "filepath": "__IN__",
+      "separator": ",",
+      "routes": { "out": [ { "to": "map", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "map",
+      "comp_type": "schema_mapping",
+      "description": "single-layer mapping via rules_by_dest",
+      "extra_input_ports": ["in"],
+      "extra_output_ports": ["A", "B"],
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      },
+      "routes": {
+        "A": [ { "to": "writer_A", "in_port": "in" } ],
+        "B": [ { "to": "writer_B", "in_port": "in" } ]
+      },
+      "out_port_schemas": {
+        "A": {
+          "fields": [
+            { "name": "uid", "data_type": "string" },
+            { "name": "uname", "data_type": "string" }
+          ]
+        },
+        "B": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      },
+      "rules_by_dest": {
+        "A": {
+          "uid":  { "src_port": "in", "src_path": "id" },
+          "uname":{ "src_port": "in", "src_path": "name" }
+        },
+        "B": {
+          "id":   { "src_port": "in", "src_path": "id" },
+          "name": { "src_port": "in", "src_path": "name" }
+        }
+      }
+    },
+    {
+      "name": "writer_A",
+      "comp_type": "write_csv",
+      "description": "CSV sink A",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "uid", "data_type": "string" },
+            { "name": "uname", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "writer_B",
+      "comp_type": "write_csv",
+      "description": "CSV sink B",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    }
+  ]
+}
