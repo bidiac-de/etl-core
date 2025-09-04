@@ -151,9 +151,11 @@ def type_ok_scalar(v: Any, fd: FieldDef) -> bool:
 
 def enum_ok(v: Any, fd: FieldDef) -> bool:
     """Check enum domain membership (stringified compare), allowing nulls."""
-    if fd.data_type != DataType.ENUM or is_null(v) or not fd.enum_values:
+    if fd.data_type != DataType.ENUM or is_null(v):
         return True
-    return str(v) in set(fd.enum_values or [])
+    if not fd.enum_values:
+        return False
+    return str(v) in set(fd.enum_values)
 
 
 def ensure_df_columns(
@@ -175,3 +177,47 @@ def ensure_df_columns(
     extras = sorted([c for c in df_cols if c not in leafs])
     if extras:
         raise ValueError(f"{schema_name}: unknown columns present {extras}")
+
+
+def pandas_flatten_docs(docs: List[Dict[str, Any]], sep: str = ".") -> pd.DataFrame:
+    """
+    Normalize a list of nested documents into a flat DataFrame with dot columns.
+    """
+    if not docs:
+        return pd.DataFrame()
+    return pd.json_normalize(docs, sep=sep)
+
+
+def unflatten_record(flat: Dict[str, Any], sep: str = ".") -> Dict[str, Any]:
+    """
+    Convert a flat dict with dotted keys into a nested dict.
+
+    Example:
+        {'a.b': 1, 'a.c.d': 2} -> {'a': {'b': 1, 'c': {'d': 2}}}
+    """
+    nested: Dict[str, Any] = {}
+    for key, value in flat.items():
+        if not key or sep not in key:
+            nested[key] = value
+            continue
+
+        parts = [p for p in key.split(sep) if p]
+        if not parts:
+            continue
+
+        cursor: Dict[str, Any] = nested
+        for part in parts[:-1]:
+            nxt = cursor.get(part)
+            if not isinstance(nxt, dict):
+                nxt = {}
+                cursor[part] = nxt
+            cursor = nxt
+        cursor[parts[-1]] = value
+    return nested
+
+
+def unflatten_many(
+    records: Iterable[Dict[str, Any]], sep: str = "."
+) -> List[Dict[str, Any]]:
+    """Batch version of unflatten_record."""
+    return [unflatten_record(r, sep=sep) for r in records]
