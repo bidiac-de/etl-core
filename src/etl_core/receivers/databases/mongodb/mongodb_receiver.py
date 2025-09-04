@@ -183,7 +183,9 @@ class MongoDBReceiver:
         chunk_size: int,
         seperator: str,
     ) -> AsyncIterator[pd.DataFrame]:
-        """Stream pandas DataFrames in chunks of size `chunk_size` (flattened columns)."""
+        """
+        Stream pandas DataFrames in chunks of size `chunk_size` (flattened columns).
+        """
         try:
             with connection_handler.lease_collection(
                 database=database_name, collection=entity_name
@@ -400,9 +402,7 @@ class MongoDBReceiver:
                         continue
 
                     metrics.lines_received += n_rows
-                    flat_docs: List[Dict[str, Any]] = part_df.to_dict(
-                        orient="records"
-                    )
+                    flat_docs: List[Dict[str, Any]] = part_df.to_dict(orient="records")
 
                     await _apply_bulk_ops(
                         coll,
