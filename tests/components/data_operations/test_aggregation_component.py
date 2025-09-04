@@ -1,3 +1,4 @@
+# tests/components/data_operations/aggregation/test_aggregation_component.py
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -7,7 +8,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from etl_core.components.data_operations.aggregation.aggregation_component import (  # noqa: E501
+from etl_core.components.data_operations.aggregation.aggregation_component import (
     AggregationComponent,
     AggOp,
 )
@@ -16,6 +17,15 @@ from etl_core.job_execution.job_execution_handler import InTagged
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
+
+
+def _schema_for(*names: str) -> Dict[str, object]:
+    # Keep it simple: tests only need field names; data types don’t matter here.
+    return {
+        "fields": [
+            {"name": n, "data_type": "string", "nullable": True} for n in names
+        ]
+    }
 
 
 @pytest.mark.asyncio
@@ -31,6 +41,7 @@ async def test_component_row_buffer_and_flush(
             AggOp(src="v", op="sum", dest="sum_v"),
             AggOp(src="*", op="count", dest="n"),
         ],
+        in_port_schemas={"in": _schema_for("g", "v")},
     )
 
     rows: List[Dict[str, Any]] = [
@@ -84,6 +95,7 @@ async def test_component_bulk_concat_and_flush(
         comp_type="aggregation",
         group_by=["k"],
         aggregations=[AggOp(src="v", op="mean", dest="avg_v")],
+        in_port_schemas={"in": _schema_for("k", "v")},
     )
 
     df1 = pd.DataFrame([{"k": "x", "v": 1}, {"k": "x", "v": 3}])
@@ -133,6 +145,7 @@ async def test_component_bigdata_flush_empty_buffer_returns_empty_ddf(
         comp_type="aggregation",
         group_by=["k"],
         aggregations=[AggOp(src="v", op="sum", dest="sum_v")],
+        in_port_schemas={"in": _schema_for("k", "v")},
     )
 
     outs: List[Out] = []
@@ -162,6 +175,7 @@ async def test_component_bigdata_groupby_multi_aggs_and_count(
             AggOp(src="v", op="max", dest="v_max"),
             AggOp(src="*", op="count", dest="n"),
         ],
+        in_port_schemas={"in": _schema_for("k", "v")},
     )
 
     pdf = pd.DataFrame(
