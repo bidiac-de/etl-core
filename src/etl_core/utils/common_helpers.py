@@ -151,11 +151,9 @@ def type_ok_scalar(v: Any, fd: FieldDef) -> bool:
 
 def enum_ok(v: Any, fd: FieldDef) -> bool:
     """Check enum domain membership (stringified compare), allowing nulls."""
-    if fd.data_type != DataType.ENUM or is_null(v):
+    if fd.data_type != DataType.ENUM or is_null(v) or not fd.enum_values:
         return True
-    if not fd.enum_values:
-        return False
-    return str(v) in set(fd.enum_values)
+    return str(v) in set(fd.enum_values or [])
 
 
 def ensure_df_columns(

@@ -147,7 +147,7 @@ def mariadb_write_component(sample_context: Context) -> MariaDBWrite:
         write_comp = MariaDBWrite(
             name="test_write",
             description="Test write component",
-            comp_type="write_mariadb",
+            comp_type="read_mariadb",
             entity_name="users",
             credentials_id=1,
         )

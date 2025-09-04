@@ -65,7 +65,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         # Force subclasses to set their own session variables
         self._setup_session_variables()
-
+        
     @abstractmethod
     def _setup_session_variables(self):
         """
