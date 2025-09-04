@@ -44,7 +44,7 @@ class AggOp(BaseModel):
     dest: str = Field(..., description="Destination field name")
 
     def to_dict(self) -> Dict[str, Any]:
-        # Keep Enum value intact; receiver normalizes enums/strings
+        # Keep Enum value intact
         return {"src": self.src, "op": self.op, "dest": self.dest}
 
 
@@ -53,7 +53,7 @@ class AggregationComponent(DataOperationsComponent):
     """
     Group-by + aggregation with partition buffering for row/bulk/bigdata.
 
-    Input policy (mirrors SchemaMapping):
+    Input policy:
       - Accept either plain payloads or InTagged envelopes.
       - Ellipsis signals flush/closure for the given in-port.
     """
@@ -85,12 +85,13 @@ class AggregationComponent(DataOperationsComponent):
 
     def _input_field_names(self) -> Set[str]:
         """
-        Extract top-level field names from declared input schema, if present.
-        Works with either Schema objects or dict-style schemas (tests).
+        Extract top-level field names from declared input schema if present.
         """
         schema_like = self.in_port_schemas.get("in")
+        # Schema object in Runtime
         if isinstance(schema_like, Schema):
             return {f.name for f in schema_like.fields}
+        # Dict type in tests
         if isinstance(schema_like, dict):
             fields = schema_like.get("fields") or []
             return {str(f.get("name")) for f in fields if isinstance(f, dict)}
@@ -99,12 +100,9 @@ class AggregationComponent(DataOperationsComponent):
     def _prevalidate_against_schema(self) -> None:
         """
         Fail fast if group_by/src fields are not present in the declared input schema.
-        Skips '*' since it denotes row-count.
+        Skips "*" since it denotes row-count.
         """
         names = self._input_field_names()
-        if not names:
-            # No declared schema -> skip strict validation (keep runtime errors)
-            return
 
         missing_gb = [c for c in self.group_by if c not in names]
         if missing_gb:
@@ -130,8 +128,7 @@ class AggregationComponent(DataOperationsComponent):
     @staticmethod
     def _unwrap(obj: Any, default_port: str) -> Tuple[str, Any]:
         """
-        Accept both InTagged and raw payloads from the runtime.
-        Returns (in_port, payload).
+        Unwrap InTagged envelope to get payloads
         """
         if isinstance(obj, InTagged):
             return obj.in_port, obj.payload
