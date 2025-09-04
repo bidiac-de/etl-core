@@ -53,11 +53,4 @@ class MergeReceiver(DataOperationsReceiver):
         ddf: dd.DataFrame,
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Tuple[OutPortSpec, dd.DataFrame]]:
-        try:
-            count = int(ddf.map_partitions(len).sum().compute())
-        except Exception:
-            count = 0
-        metrics.lines_received += count
-        metrics.lines_processed += count
-        metrics.lines_forwarded += count
         yield out_port, ddf
