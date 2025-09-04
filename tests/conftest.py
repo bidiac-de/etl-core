@@ -252,7 +252,7 @@ class _DummyCreds:
             "port": 27017,
             "database": "testdb",
         }
-        self._password = "p"
+        self._password = ""
 
     def get_parameter(self, key: str) -> Any:
         return self._params.get(key)
@@ -270,29 +270,25 @@ class _DummyContext:
         return self._creds
 
 
-@pytest.fixture(autouse=True)
-def patch_mongo_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture(scope="session", autouse=True)
+def patch_mongo_clients() -> None:
+    mp = MonkeyPatch()
     # Motor async client -> async mongomock wrapper
-    monkeypatch.setattr(
-        motor_asyncio,
-        "AsyncIOMotorClient",
-        AsyncMongoMockClient,
-        raising=True,
-    )
+    mp.setattr(motor_asyncio, "AsyncIOMotorClient", AsyncMongoMockClient, raising=True)
 
     import etl_core.components.databases.pool_registry as pool_registry_mod
 
-    monkeypatch.setattr(
-        pool_registry_mod,
-        "AsyncIOMotorClient",
-        AsyncMongoMockClient,
-        raising=True,
+    mp.setattr(
+        pool_registry_mod, "AsyncIOMotorClient", AsyncMongoMockClient, raising=True
     )
 
-    monkeypatch.setattr(pymongo, "MongoClient", mongomock.MongoClient, raising=True)
-    monkeypatch.setattr(
-        pymongo_mclient, "MongoClient", mongomock.MongoClient, raising=True
-    )
+    # Pymongo sync fallbacks to mongomock
+    mp.setattr(pymongo, "MongoClient", mongomock.MongoClient, raising=True)
+    mp.setattr(pymongo_mclient, "MongoClient", mongomock.MongoClient, raising=True)
+
+    # keep patch active entire session
+    yield
+    mp.undo()
 
 
 @pytest.fixture
@@ -321,7 +317,6 @@ async def seed_docs(
     collection: str,
     docs: List[Dict[str, Any]],
 ) -> None:
-    """Insert many docs using the real handler directly (no components)."""
     if not docs:
         return
     with handler.lease_collection(database=database, collection=collection) as (
@@ -339,7 +334,6 @@ async def get_all_docs(
     flt: Dict[str, Any] | None = None,
     projection: Dict[str, int] | None = None,
 ) -> List[Dict[str, Any]]:
-    """Read all docs via the async cursor using the real handler directly."""
     out: List[Dict[str, Any]] = []
     with handler.lease_collection(database=database, collection=collection) as (
         _,
@@ -357,18 +351,12 @@ async def get_all_docs(
 async def mongo_handler(
     mongo_context,
 ) -> AsyncIterator[Tuple[MongoConnectionHandler, str]]:
-    """
-    Provide a fresh Mongo client + a UNIQUE database name per test to avoid
-    cross-test data bleed (mongomock keeps data alive across pooled clients).
-    Also align the component credentials database to that unique DB so
-    components and direct handler calls see the same data.
-    """
     creds = mongo_context.get_credentials(101)
     uri = MongoConnectionHandler.build_uri(
-        user=creds.get_parameter("user"),
-        password=creds.decrypted_password,
         host=creds.get_parameter("host"),
         port=creds.get_parameter("port"),
+        user=creds.get_parameter("user"),
+        password=creds.decrypted_password,
         auth_db=None,
         params=None,
     )
@@ -378,8 +366,6 @@ async def mongo_handler(
     handler.connect(uri=uri, client_kwargs=client_kwargs)
 
     dbname = f"testdb_{uuid4().hex}"
-
-    #  make the components use the same DB as the seeding helper
     creds._params["database"] = dbname  # noqa: SLF001
 
     try:
@@ -397,13 +383,17 @@ async def mongo_handler(
 
 @pytest.fixture(scope="session", autouse=True)
 def _force_mongomock_no_auth():
-    """
-    Session-wide patch: build *no-auth* Mongo URIs and strip username/password
-    from client kwargs to keep mongomock happy (no SCRAM, no 'mongodb://:@...').
-    """
     mp = MonkeyPatch()
 
-    def _build_uri_no_auth(user, password, host, port, auth_db, params):
+    def _build_uri_no_auth(
+        *,
+        host: str,
+        port: int,
+        user: str | None = None,
+        password: str | None = None,
+        auth_db: str | None = None,
+        params: Dict[str, Any] | None = None,
+    ) -> str:
         base = f"mongodb://{host}:{port}"
         if auth_db:
             base = f"{base}/{auth_db}"
@@ -423,17 +413,15 @@ def _force_mongomock_no_auth():
         raising=True,
     )
 
-    # Strip auth keys defensively from client kwargs
     _orig_build_kwargs = pool_args.build_mongo_client_kwargs
 
-    def _kwargs_no_auth(creds):
-        kw = _orig_build_kwargs(creds)
+    def _kwargs_no_auth(creds_obj):
+        kw = _orig_build_kwargs(creds_obj)
         kw.pop("username", None)
         kw.pop("password", None)
         return kw
 
     mp.setattr(pool_args, "build_mongo_client_kwargs", _kwargs_no_auth, raising=True)
 
-    # apply for entire session
     yield
     mp.undo()
