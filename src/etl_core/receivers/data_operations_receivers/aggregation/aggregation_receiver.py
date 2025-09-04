@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict, List, Tuple, Union, Protocol
 
-import pandas as pd
 import dask.dataframe as dd
-from etl_core.receivers.base_receiver import Receiver
+import pandas as pd
+
+from etl_core.components.data_operations.aggregation.types import AggregationOp
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
+from etl_core.receivers.base_receiver import Receiver
 
 AggDict = Dict[str, Any]
 
@@ -29,8 +31,12 @@ def _to_pd(rows: List[Dict[str, Any]], sep: str = ".") -> pd.DataFrame:
 def _build_agg_plan(
     aggs: List[AggDict],
 ) -> Tuple[Dict[str, List[str]], List[Tuple[str, str, str]]]:
-    """Build the aggregation plan, accepting either strings or Enum values for 'op'."""
-    allowed = {"count", "sum", "min", "max", "mean", "median", "std", "nunique"}
+    """
+    Build the aggregation plan, accepting either strings or Enum values for 'op'.
+
+    The allowed set is derived from AggregationOp to avoid local duplication.
+    """
+    allowed = {op.value for op in AggregationOp}
     agg_map: Dict[str, List[str]] = {}
     order: List[Tuple[str, str, str]] = []
 

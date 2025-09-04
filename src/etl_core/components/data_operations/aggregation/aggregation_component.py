@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, AsyncIterator, Dict, List, Union, Set
+from typing import Any, AsyncIterator, Dict, List, Set, Union
 
 import dask.dataframe as dd
 import pandas as pd
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from etl_core.components.component_registry import register_component
-from etl_core.components.data_operations.data_operations import (  # noqa: E501
+from etl_core.components.data_operations.data_operations import (
     DataOperationsComponent,
 )
-from etl_core.components.envelopes import Out
+from etl_core.components.envelopes import Out, unwrap
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
-from etl_core.components.envelopes import unwrap
 from etl_core.components.wiring.schema import Schema
 from etl_core.job_execution.job_execution_handler import InTagged
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
@@ -22,31 +20,7 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 from etl_core.receivers.data_operations_receivers.aggregation.aggregation_receiver import (  # noqa: E501
     AggregationReceiver,
 )
-
-
-class AggregationOp(str, Enum):
-    """Supported aggregation operations."""
-
-    COUNT = "count"
-    SUM = "sum"
-    MIN = "min"
-    MAX = "max"
-    MEAN = "mean"
-    MEDIAN = "median"
-    STD = "std"
-    NUNIQUE = "nunique"
-
-
-class AggOp(BaseModel):
-    """One aggregation instruction."""
-
-    src: str = Field(..., description="Source field (or '*' for row count)")
-    op: AggregationOp = Field(..., description="Aggregation operation")
-    dest: str = Field(..., description="Destination field name")
-
-    def to_dict(self) -> Dict[str, Any]:
-        # Keep Enum value intact
-        return {"src": self.src, "op": self.op, "dest": self.dest}
+from etl_core.components.data_operations.aggregation.types import AggOp
 
 
 @register_component("aggregation")
