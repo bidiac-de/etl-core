@@ -225,7 +225,7 @@ async def test_read_json_row_gz(
     sample_json_file: Path, tmp_path: Path, metrics: ComponentMetrics
 ):
     """
-    Test .gz read path (row base only), produces compromised file on-the-fly.
+    Test .gz read path (row base only), produces compressed file on-the-fly.
     """
     import gzip
     import json
