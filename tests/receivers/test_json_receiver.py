@@ -199,7 +199,7 @@ async def test_write_json_bigdata_roundtrip(tmp_path: Path, metrics: ComponentMe
     assert metrics.lines_received == 2
 
     parts = sorted(out_dir.glob("part-*.jsonl"))
-    assert parts, "No partitiones wrote"
+    assert parts, "No partitions wrote"
 
     parsed_lines = []
     for p in parts:
@@ -225,7 +225,7 @@ async def test_read_json_row_gz(
     sample_json_file: Path, tmp_path: Path, metrics: ComponentMetrics
 ):
     """
-    Test .gz read path (row base only), produces compromised file on-the-fly.
+    Test .gz read path (row base only), produces compressed file on-the-fly.
     """
     import gzip
     import json
