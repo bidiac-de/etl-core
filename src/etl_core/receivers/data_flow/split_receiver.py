@@ -55,6 +55,6 @@ class SplitReceiver(DataOperationsReceiver):
         branches: Tuple[OutPortSpec, ...],
     ) -> AsyncIterator[Tuple[OutPortSpec, dd.DataFrame]]:
 
-        #could change since dask dataframes are lazy
+        # Could change since Dask DataFrames are lazy.
         for port in branches:
             yield port, ddf
