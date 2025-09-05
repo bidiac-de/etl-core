@@ -10,10 +10,9 @@ from etl_core.components.component_registry import register_component
 from etl_core.components.data_operations.data_operations import (
     DataOperationsComponent,
 )
-from etl_core.components.envelopes import Out, unwrap
+from etl_core.components.envelopes import Out, unwrap, InTagged
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 from etl_core.components.wiring.schema import Schema
-from etl_core.job_execution.job_execution_handler import InTagged
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
