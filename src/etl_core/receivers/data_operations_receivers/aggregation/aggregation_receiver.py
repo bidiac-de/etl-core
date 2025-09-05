@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Dict, List, Tuple, Union, Protocol
+from typing import (
+    AsyncGenerator,
+    Dict,
+    List,
+    Tuple,
+    Union,
+    Protocol,
+)
 
 import dask.dataframe as dd
 import pandas as pd
@@ -11,18 +18,20 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 )
 from etl_core.receivers.base_receiver import Receiver
 
-AggDict = Dict[str, Any]
+AggDict = Dict[str, Union[str, AggregationOp]]
 
 
 class GroupedLike(Protocol):
     """Protocol for objects returned by pandas/dask groupby."""
 
-    def agg(self, agg_map: Dict[str, List[str]]) -> Any: ...
-    def size(self) -> Any: ...
-    def reset_index(self, *a: Any, **kw: Any) -> Any: ...
+    def agg(
+        self, agg_map: Dict[str, List[str]]
+    ) -> Union[pd.DataFrame, dd.DataFrame]: ...
+    def size(self) -> Union[pd.Series, dd.Series]: ...
+    def reset_index(self, *a, **kw) -> Union[pd.DataFrame, dd.DataFrame]: ...
 
 
-def _to_pd(rows: List[Dict[str, Any]], sep: str = ".") -> pd.DataFrame:
+def _to_pd(rows: List[Dict[str, object]], sep: str = ".") -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
     return pd.json_normalize(rows, sep=sep)
@@ -31,25 +40,22 @@ def _to_pd(rows: List[Dict[str, Any]], sep: str = ".") -> pd.DataFrame:
 def _build_agg_plan(
     aggs: List[AggDict],
 ) -> Tuple[Dict[str, List[str]], List[Tuple[str, str, str]]]:
-    """
-    Build the aggregation plan, accepting either strings or Enum values for 'op'.
-
-    The allowed set is derived from AggregationOp to avoid local duplication.
-    """
     allowed = {op.value for op in AggregationOp}
     agg_map: Dict[str, List[str]] = {}
     order: List[Tuple[str, str, str]] = []
 
     for a in aggs:
-        src = a["src"]
+        src = str(a["src"])
         op_raw = a["op"]
-        # op can be a string or an Enum
         op_val = getattr(op_raw, "value", op_raw)
         func = str(op_val).lower()
-        dest = a["dest"]
+        dest = str(a["dest"])
 
         if func not in allowed:
-            raise ValueError(f"Unsupported aggregation '{func}'")
+            raise ValueError(
+                f"Unsupported aggregation '{func}', allowed are "
+                f"the following: {allowed}"
+            )
 
         if src != "*":
             funcs = agg_map.setdefault(src, [])
@@ -70,7 +76,9 @@ def _ensure_keys(
     return df, ["_grp_const_"]
 
 
-def _strip_const_key(df: Union[pd.DataFrame, dd.DataFrame]) -> Any:
+def _strip_const_key(
+    df: Union[pd.DataFrame, dd.DataFrame],
+) -> Union[pd.DataFrame, dd.DataFrame]:
     if "_grp_const_" in df.columns:
         return df.drop(columns=["_grp_const_"])
     return df
@@ -80,18 +88,18 @@ def _split_nunique(
     order: List[Tuple[str, str, str]],
     agg_map: Dict[str, List[str]],
 ) -> Tuple[List[Tuple[str, str, str]], Dict[str, List[str]]]:
-    """Return (nunique_specs, agg_map_without_nunique)."""
     nunique_specs = [(s, f, d) for (s, f, d) in order if f == "nunique" and s != "*"]
-    agg_map_no_nunique: Dict[str, List[str]] = {}
-    for col, funcs in agg_map.items():
-        kept = [f for f in funcs if f != "nunique"]
-        if kept:
-            agg_map_no_nunique[col] = kept
+    agg_map_no_nunique: Dict[str, List[str]] = {
+        col: [f for f in funcs if f != "nunique"]
+        for col, funcs in agg_map.items()
+        if any(f != "nunique" for f in funcs)
+    }
     return nunique_specs, agg_map_no_nunique
 
 
-def _agg_base(grouped: Any, agg_map_no_nunique: Dict[str, List[str]]) -> Any:
-    """Run base aggregation (without nunique), flatten columns, reset index."""
+def _agg_base(
+    grouped: GroupedLike, agg_map_no_nunique: Dict[str, List[str]]
+) -> Union[pd.DataFrame, dd.DataFrame]:
     out = (
         grouped.agg(agg_map_no_nunique)
         if agg_map_no_nunique
@@ -103,9 +111,11 @@ def _agg_base(grouped: Any, agg_map_no_nunique: Dict[str, List[str]]) -> Any:
 
 
 def _attach_size(
-    grouped: Any, out: Any, keys: List[str], order: List[Tuple[str, str, str]]
-) -> Any:
-    """Attach count(*) if requested via '*'."""
+    grouped: GroupedLike,
+    out: Union[pd.DataFrame, dd.DataFrame],
+    keys: List[str],
+    order: List[Tuple[str, str, str]],
+) -> Union[pd.DataFrame, dd.DataFrame]:
     if not any(src == "*" for src, _f, _d in order):
         return out
     size_series = grouped.size()
@@ -117,12 +127,11 @@ def _attach_size(
 
 
 def _merge_nunique(
-    grouped: Any,
-    out: Any,
+    grouped: GroupedLike,
+    out: Union[pd.DataFrame, dd.DataFrame],
     keys: List[str],
     nunique_specs: List[Tuple[str, str, str]],
-) -> Any:
-    """Compute nunique per required src and merge into out."""
+) -> Union[pd.DataFrame, dd.DataFrame]:
     for src, _func, _dest in nunique_specs:
         series = grouped[src].nunique()
         try:
@@ -134,11 +143,10 @@ def _merge_nunique(
 
 
 def _finalize_columns(
-    out: Any,
+    out: Union[pd.DataFrame, dd.DataFrame],
     keys: List[str],
     order: List[Tuple[str, str, str]],
-) -> Any:
-    """Order and rename columns according to the declared order."""
+) -> Union[pd.DataFrame, dd.DataFrame]:
     cols: List[str] = []
     rename: Dict[str, str] = {}
     for src, func, dest in order:
@@ -154,15 +162,11 @@ def _finalize_columns(
 
 
 def _apply_grouped(
-    grouped: "GroupedLike",
+    grouped: GroupedLike,
     keys: List[str],
     agg_map: Dict[str, List[str]],
     order: List[Tuple[str, str, str]],
-) -> Any:
-    """
-    Apply groupby aggregations with special handling for `nunique` and count(*)
-    in a backend-agnostic way (pandas & dask).
-    """
+) -> Union[pd.DataFrame, dd.DataFrame]:
     nunique_specs, agg_map_no_nunique = _split_nunique(order, agg_map)
     out = _agg_base(grouped, agg_map_no_nunique)
     out = _attach_size(grouped, out, keys, order)
@@ -176,11 +180,11 @@ class AggregationReceiver(Receiver):
     async def process_rows(
         self,
         *,
-        rows: List[Dict[str, Any]],
+        rows: List[Dict[str, object]],
         group_by: List[str],
         aggregations: List[AggDict],
         metrics: DataOperationsMetrics,
-    ) -> AsyncGenerator[Tuple[str, Dict[str, Any]], None]:
+    ) -> AsyncGenerator[Tuple[str, Dict[str, object]], None]:
         df = _to_pd(rows)
         metrics.lines_received += int(df.shape[0])
         if df.empty:
