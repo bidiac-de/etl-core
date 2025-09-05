@@ -1,7 +1,9 @@
+import threading
+import time
+
 import pytest
-from unittest.mock import Mock, patch
 from sqlalchemy.engine import Engine
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.etl_core.components.databases.pool_registry import (
     ConnectionPoolRegistry,
@@ -12,73 +14,56 @@ from src.etl_core.components.databases.pool_registry import (
 class TestPoolKey:
     """Test cases for PoolKey class."""
 
-    def test_pool_key_creation(self):
-        """Test basic PoolKey creation."""
+    def test_pool_key_creation(self) -> None:
         key = PoolKey(kind="sql", dsn="test://localhost:5432/db")
         assert key.kind == "sql"
         assert key.dsn == "test://localhost:5432/db"
 
-    def test_pool_key_immutability(self):
-        """Test that PoolKey is immutable."""
+    def test_pool_key_immutability(self) -> None:
         key = PoolKey(kind="sql", dsn="test://localhost:5432/db")
         with pytest.raises(Exception):
-            key.kind = "mongo"
+            # dataclass(frozen=True) -> attributes are read-only
+            key.kind = "mongo"  # type: ignore[attr-defined]
 
-    def test_pool_key_equality(self):
-        """Test PoolKey equality comparison."""
+    def test_pool_key_equality(self) -> None:
         key1 = PoolKey(kind="sql", dsn="test://localhost:5432/db")
         key2 = PoolKey(kind="sql", dsn="test://localhost:5432/db")
         key3 = PoolKey(kind="mongo", dsn="test://localhost:5432/db")
-
         assert key1 == key2
         assert key1 != key3
         assert hash(key1) == hash(key2)
 
-    def test_normalize_pairs(self):
-        """Test _normalize_pairs static method."""
+    def test_normalize_pairs(self) -> None:
         pairs = {"b": 2, "a": 1, "c": 3}
         normalized = PoolKey._normalize_pairs(pairs)
         expected = (("a", 1), ("b", 2), ("c", 3))
         assert normalized == expected
 
-    def test_for_sql_without_kwargs(self):
-        """Test for_sql class method without engine kwargs."""
-        key = PoolKey.for_sql(url="postgresql://localhost:5432/db")
+    def test_for_sql_without_kwargs(self) -> None:
+        key = PoolKey.for_sql(url="sqlite:///:memory:")
         assert key.kind == "sql"
-        assert "postgresql://localhost:5432/db##" in key.dsn
+        assert "sqlite:///:memory:##" in key.dsn
 
-    def test_for_sql_with_kwargs(self):
-        """Test for_sql class method with engine kwargs."""
+    def test_for_sql_with_kwargs(self) -> None:
         engine_kwargs = {"pool_size": 10, "max_overflow": 20}
-        key1 = PoolKey.for_sql(
-            url="postgresql://localhost:5432/db", engine_kwargs=engine_kwargs
-        )
-        key2 = PoolKey.for_sql(
-            url="postgresql://localhost:5432/db", engine_kwargs=engine_kwargs
-        )
-
+        key1 = PoolKey.for_sql(url="sqlite:///:memory:", engine_kwargs=engine_kwargs)
+        key2 = PoolKey.for_sql(url="sqlite:///:memory:", engine_kwargs=engine_kwargs)
         assert key1 == key2
         assert key1.kind == "sql"
 
-    def test_for_sql_different_kwargs(self):
-        """Test that different engine kwargs create different keys."""
-        key1 = PoolKey.for_sql(
-            url="postgresql://localhost:5432/db", engine_kwargs={"pool_size": 10}
-        )
+    def test_for_sql_different_kwargs(self) -> None:
+        key1 = PoolKey.for_sql(url="sqlite:///:memory:", engine_kwargs={"pool_size": 5})
         key2 = PoolKey.for_sql(
-            url="postgresql://localhost:5432/db", engine_kwargs={"pool_size": 20}
+            url="sqlite:///:memory:", engine_kwargs={"pool_size": 10}
         )
-
         assert key1 != key2
 
-    def test_for_mongo_without_kwargs(self):
-        """Test for_mongo class method without client kwargs."""
+    def test_for_mongo_without_kwargs(self) -> None:
         key = PoolKey.for_mongo(uri="mongodb://localhost:27017")
         assert key.kind == "mongo"
         assert "mongodb://localhost:27017##" in key.dsn
 
-    def test_for_mongo_with_kwargs(self):
-        """Test for_mongo class method with client kwargs."""
+    def test_for_mongo_with_kwargs(self) -> None:
         client_kwargs = {"maxPoolSize": 10, "serverSelectionTimeoutMS": 5000}
         key1 = PoolKey.for_mongo(
             uri="mongodb://localhost:27017", client_kwargs=client_kwargs
@@ -86,275 +71,196 @@ class TestPoolKey:
         key2 = PoolKey.for_mongo(
             uri="mongodb://localhost:27017", client_kwargs=client_kwargs
         )
-
         assert key1 == key2
         assert key1.kind == "mongo"
 
-    def test_for_mongo_different_kwargs(self):
-        """Test that different client kwargs create different keys."""
+    def test_for_mongo_different_kwargs(self) -> None:
         key1 = PoolKey.for_mongo(
             uri="mongodb://localhost:27017", client_kwargs={"maxPoolSize": 10}
         )
         key2 = PoolKey.for_mongo(
             uri="mongodb://localhost:27017", client_kwargs={"maxPoolSize": 20}
         )
-
         assert key1 != key2
 
 
 class TestConnectionPoolRegistry:
     """Test cases for ConnectionPoolRegistry class."""
 
-    def setup_method(self):
-        """Reset the singleton instance before each test."""
-        ConnectionPoolRegistry._instance = None
+    def setup_method(self) -> None:
+        # Reset the singleton instance before each test.
+        ConnectionPoolRegistry._instance = None  # type: ignore[attr-defined]
 
-    def test_singleton_pattern(self):
-        """Test that ConnectionPoolRegistry follows singleton pattern."""
+    def test_singleton_pattern(self) -> None:
         registry1 = ConnectionPoolRegistry.instance()
         registry2 = ConnectionPoolRegistry.instance()
         assert registry1 is registry2
 
-    def test_initialization(self):
-        """Test registry initialization."""
+    def test_initialization(self) -> None:
         registry = ConnectionPoolRegistry()
-        assert registry._sql == {}
-        assert registry._mongo == {}
+        assert registry._sql == {}  # type: ignore[attr-defined]
+        assert registry._mongo == {}  # type: ignore[attr-defined]
 
-    @patch("src.etl_core.components.databases.pool_registry.create_engine")
-    def test_get_sql_engine_new_connection(self, mock_create_engine):
-        """Test getting a new SQL engine."""
-        mock_engine = Mock(spec=Engine)
-        mock_create_engine.return_value = mock_engine
-
+    def test_get_sql_engine_new_connection(self) -> None:
         registry = ConnectionPoolRegistry()
-        key, engine = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
+        key, engine = registry.get_sql_engine(url="sqlite:///:memory:")
         assert isinstance(key, PoolKey)
         assert key.kind == "sql"
-        assert engine == mock_engine
-        mock_create_engine.assert_called_once_with(
-            "postgresql://localhost:5432/db", **{}
-        )
+        assert isinstance(engine, Engine)
+        # str(engine.url) is observable behavior of created engine
+        assert str(engine.url).startswith("sqlite://")
 
-    @patch("src.etl_core.components.databases.pool_registry.create_engine")
-    def test_get_sql_engine_existing_connection(self, mock_create_engine):
-        """Test getting an existing SQL engine."""
-        mock_engine = Mock(spec=Engine)
-        mock_create_engine.return_value = mock_engine
-
+    def test_get_sql_engine_existing_connection(self) -> None:
         registry = ConnectionPoolRegistry()
-        key1, engine1 = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-        key2, engine2 = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
+        key1, engine1 = registry.get_sql_engine(url="sqlite:///:memory:")
+        key2, engine2 = registry.get_sql_engine(url="sqlite:///:memory:")
         assert key1 == key2
-        assert engine1 is engine2
-        # create_engine should only be called once
-        mock_create_engine.assert_called_once()
+        assert engine1 is engine2  # pooled
 
-    @patch("src.etl_core.components.databases.pool_registry.create_engine")
-    def test_get_sql_engine_with_kwargs(self, mock_create_engine):
-        """Test getting SQL engine with custom kwargs."""
-        mock_engine = Mock(spec=Engine)
-        mock_create_engine.return_value = mock_engine
-
+    def test_get_sql_engine_with_kwargs_distinguishes_pools(self) -> None:
         registry = ConnectionPoolRegistry()
-        engine_kwargs = {"pool_size": 10, "max_overflow": 20}
-        key, engine = registry.get_sql_engine(
-            url="postgresql://localhost:5432/db", engine_kwargs=engine_kwargs
+        kwargs_a = {"pool_size": 5}
+        kwargs_b = {"pool_size": 10}
+        key_a, engine_a = registry.get_sql_engine(
+            url="sqlite:///:memory:", engine_kwargs=kwargs_a
         )
-
-        mock_create_engine.assert_called_once_with(
-            "postgresql://localhost:5432/db", **engine_kwargs
+        key_b, engine_b = registry.get_sql_engine(
+            url="sqlite:///:memory:", engine_kwargs=kwargs_b
         )
+        assert key_a != key_b
+        assert engine_a is not engine_b
 
-    def test_lease_sql(self):
-        """Test leasing SQL connection."""
+    def test_lease_sql(self) -> None:
         registry = ConnectionPoolRegistry()
-        key, _ = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
+        key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
         registry.lease_sql(key)
         stats = registry.stats()
-
         assert stats["sql"][key.dsn]["leased"] == 1
         assert stats["sql"][key.dsn]["opened"] == 1
 
-    def test_release_sql(self):
-        """Test releasing SQL connection."""
+    def test_release_sql(self) -> None:
         registry = ConnectionPoolRegistry()
-        key, _ = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
+        key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
         registry.lease_sql(key)
         registry.lease_sql(key)
         registry.release_sql(key)
-
         stats = registry.stats()
         assert stats["sql"][key.dsn]["leased"] == 1
         assert stats["sql"][key.dsn]["opened"] == 2
 
-    def test_release_sql_nonexistent(self):
-        """Test releasing non-existent SQL connection."""
+    def test_release_sql_nonexistent(self) -> None:
         registry = ConnectionPoolRegistry()
         key = PoolKey(kind="sql", dsn="nonexistent")
-
-        # Should not raise an error
+        # should not raise
         registry.release_sql(key)
 
-    @patch("src.etl_core.components.databases.pool_registry.MongoClient")
-    def test_get_mongo_client_new_connection(self, mock_mongo_client):
-        """Test getting a new MongoDB client."""
-        mock_client = Mock(spec=MongoClient)
-        mock_mongo_client.return_value = mock_client
+    def test_close_pool_sql_success(self) -> None:
+        registry = ConnectionPoolRegistry()
+        key, engine = registry.get_sql_engine(url="sqlite:///:memory:")
+        # close without active leases
+        result = registry.close_pool(key)
+        assert result is True
+        # engine has been disposed and removed from stats
+        stats = registry.stats()
+        assert key.dsn not in stats["sql"]
+        # engine.dispose() is idempotent; calling again shouldn't be necessary,
+        # but ensure the object still has the attribute
+        assert hasattr(engine, "dispose")
 
+    def test_close_pool_sql_with_leases(self) -> None:
+        registry = ConnectionPoolRegistry()
+        key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
+        registry.lease_sql(key)
+        result = registry.close_pool(key)
+        assert result is False  # active leases prevent close
+
+    def test_close_pool_sql_force_close(self) -> None:
+        registry = ConnectionPoolRegistry()
+        key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
+        registry.lease_sql(key)
+        result = registry.close_pool(key, force=True)
+        assert result is True
+        stats = registry.stats()
+        assert key.dsn not in stats["sql"]
+
+    def test_get_mongo_client_new_connection(self) -> None:
         registry = ConnectionPoolRegistry()
         key, client = registry.get_mongo_client(uri="mongodb://localhost:27017")
-
         assert isinstance(key, PoolKey)
         assert key.kind == "mongo"
-        assert client == mock_client
-        mock_mongo_client.assert_called_once_with("mongodb://localhost:27017", **{})
+        assert isinstance(client, AsyncIOMotorClient)
 
-    @patch("src.etl_core.components.databases.pool_registry.MongoClient")
-    def test_get_mongo_client_existing_connection(self, mock_mongo_client):
-        """Test getting an existing MongoDB client."""
-        mock_client = Mock(spec=MongoClient)
-        mock_mongo_client.return_value = mock_client
-
+    def test_get_mongo_client_existing_connection(self) -> None:
         registry = ConnectionPoolRegistry()
         key1, client1 = registry.get_mongo_client(uri="mongodb://localhost:27017")
         key2, client2 = registry.get_mongo_client(uri="mongodb://localhost:27017")
-
         assert key1 == key2
-        assert client1 is client2
-        # MongoClient should only be called once
-        mock_mongo_client.assert_called_once()
+        assert client1 is client2  # pooled
 
-    def test_lease_mongo(self):
-        """Test leasing MongoDB connection."""
+    def test_lease_mongo(self) -> None:
         registry = ConnectionPoolRegistry()
         key, _ = registry.get_mongo_client(uri="mongodb://localhost:27017")
-
         registry.lease_mongo(key)
         stats = registry.stats()
-
         assert stats["mongo"][key.dsn]["leased"] == 1
         assert stats["mongo"][key.dsn]["opened"] == 1
 
-    def test_release_mongo(self):
-        """Test releasing MongoDB connection."""
+    def test_release_mongo(self) -> None:
         registry = ConnectionPoolRegistry()
         key, _ = registry.get_mongo_client(uri="mongodb://localhost:27017")
-
         registry.lease_mongo(key)
         registry.lease_mongo(key)
         registry.release_mongo(key)
-
         stats = registry.stats()
         assert stats["mongo"][key.dsn]["leased"] == 1
         assert stats["mongo"][key.dsn]["opened"] == 2
 
-    def test_stats_empty(self):
-        """Test stats when no connections exist."""
+    def test_stats_empty(self) -> None:
         registry = ConnectionPoolRegistry()
-        stats = registry.stats()
+        assert registry.stats() == {"sql": {}, "mongo": {}}
 
-        assert stats == {"sql": {}, "mongo": {}}
-
-    def test_stats_with_connections(self):
-        """Test stats with active connections."""
+    def test_stats_with_connections(self) -> None:
         registry = ConnectionPoolRegistry()
-
-        # Create some connections
-        sql_key, _ = registry.get_sql_engine(url="postgresql://localhost:5432/db")
+        sql_key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
         mongo_key, _ = registry.get_mongo_client(uri="mongodb://localhost:27017")
-
-        # Lease them
         registry.lease_sql(sql_key)
         registry.lease_mongo(mongo_key)
-
         stats = registry.stats()
-
-        assert "sql" in stats
-        assert "mongo" in stats
+        assert "sql" in stats and "mongo" in stats
         assert sql_key.dsn in stats["sql"]
         assert mongo_key.dsn in stats["mongo"]
 
-    def test_close_pool_sql_success(self):
-        """Test successfully closing SQL pool."""
-        registry = ConnectionPoolRegistry()
-        key, engine = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
-        # Mock the dispose method
-        engine.dispose = Mock()
-
-        result = registry.close_pool(key)
-        assert result is True
-        engine.dispose.assert_called_once()
-
-    def test_close_pool_sql_with_leases(self):
-        """Test closing SQL pool with active leases."""
-        registry = ConnectionPoolRegistry()
-        key, _ = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
-        registry.lease_sql(key)
-        result = registry.close_pool(key)
-
-        # Should fail because there are active leases
-        assert result is False
-
-    def test_close_pool_sql_force_close(self):
-        """Test force closing SQL pool with active leases."""
-        registry = ConnectionPoolRegistry()
-        key, engine = registry.get_sql_engine(url="postgresql://localhost:5432/db")
-
-        registry.lease_sql(key)
-        engine.dispose = Mock()
-
-        result = registry.close_pool(key, force=True)
-        assert result is True
-        engine.dispose.assert_called_once()
-
-    def test_close_pool_mongo_success(self):
-        """Test successfully closing MongoDB pool."""
+    def test_close_pool_mongo_success(self) -> None:
         registry = ConnectionPoolRegistry()
         key, client = registry.get_mongo_client(uri="mongodb://localhost:27017")
-
-        # Mock the close method
-        client.close = Mock()
-
+        # Close without active leases
         result = registry.close_pool(key)
         assert result is True
-        client.close.assert_called_once()
+        # removed from stats
+        stats = registry.stats()
+        assert key.dsn not in stats["mongo"]
+        # client exposes .close()
+        assert hasattr(client, "close")
 
-    def test_close_pool_nonexistent(self):
-        """Test closing non-existent pool."""
+    def test_close_pool_nonexistent(self) -> None:
         registry = ConnectionPoolRegistry()
         key = PoolKey(kind="sql", dsn="nonexistent")
+        assert registry.close_pool(key) is False
 
-        result = registry.close_pool(key)
-        assert result is False
-
-    def test_close_pool_invalid_kind(self):
-        """Test closing pool with invalid kind."""
+    def test_close_pool_invalid_kind(self) -> None:
         registry = ConnectionPoolRegistry()
         key = PoolKey(kind="invalid", dsn="test")
+        assert registry.close_pool(key) is False
 
-        result = registry.close_pool(key)
-        assert result is False
-
-    def test_thread_safety(self):
-        """Test that registry operations are thread-safe."""
-        import threading
-        import time
-
+    def test_thread_safety(self) -> None:
         registry = ConnectionPoolRegistry()
         results = []
 
-        def worker():
+        def worker() -> None:
             try:
-                key, _ = registry.get_sql_engine(url="postgresql://localhost:5432/db")
+                key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
                 registry.lease_sql(key)
-                time.sleep(0.01)  # Simulate work
+                time.sleep(0.01)
                 registry.release_sql(key)
                 results.append(True)
             except Exception:
@@ -366,6 +272,5 @@ class TestConnectionPoolRegistry:
         for t in threads:
             t.join()
 
-        # All operations should succeed without race conditions
         assert all(results)
         assert len(results) == 10

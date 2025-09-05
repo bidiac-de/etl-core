@@ -3,6 +3,7 @@ pre-commit
 pytest
 pytest-cov
 pytest-asyncio
+mongomock
 
 # Web Framework
 fastapi
@@ -19,6 +20,7 @@ mysql-connector-python
 psycopg2-binary
 pymongo
 keyring
+motor
 
 # Data Processing
 pandas

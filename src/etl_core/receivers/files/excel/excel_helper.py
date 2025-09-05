@@ -4,7 +4,7 @@ from typing import Dict, Iterator, List, Optional, Sequence, Union, Tuple
 import dask.dataframe as dd
 import pandas as pd
 
-from src.etl_core.receivers.files.file_helper import (
+from etl_core.receivers.files.file_helper import (
     ensure_file_exists,
     resolve_file_path,
 )

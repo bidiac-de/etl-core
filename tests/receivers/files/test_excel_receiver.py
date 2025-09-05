@@ -29,7 +29,7 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture(scope="session")
 def sample_excel_file() -> Path:
     return (
-        Path(__file__).parent.parent
+        Path(__file__).parent.parent.parent
         / "components"
         / "data"
         / "excel"

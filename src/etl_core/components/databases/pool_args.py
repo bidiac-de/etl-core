@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-from src.etl_core.context.context_provider import IContextProvider
+from etl_core.context.context_provider import IContextProvider
 
 
 def _get_int(provider: IContextProvider, key: str) -> Optional[int]:

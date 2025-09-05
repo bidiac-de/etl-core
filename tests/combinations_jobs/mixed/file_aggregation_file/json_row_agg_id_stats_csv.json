@@ -1,0 +1,73 @@
+{
+  "name": "JSON Row Aggregation (id stats) to CSV",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "row",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "NDJSON in (row)",
+      "filepath": "__IN__",
+      "routes": { "out": [ { "to": "agg", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "agg",
+      "comp_type": "aggregation",
+      "description": "stats on id",
+      "group_by": [],
+      "aggregations": [
+        { "src": "id", "op": "min", "dest": "id_min" },
+        { "src": "id", "op": "max", "dest": "id_max" },
+        { "src": "id", "op": "sum", "dest": "id_sum" },
+        { "src": "id", "op": "mean", "dest": "id_mean" },
+        { "src": "id", "op": "median", "dest": "id_median" },
+        { "src": "id", "op": "std", "dest": "id_std" },
+        { "src": "*", "op": "count", "dest": "n" }
+      ],
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "out": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id_min", "data_type": "integer" },
+          { "name": "id_max", "data_type": "integer" },
+          { "name": "id_sum", "data_type": "integer" },
+          { "name": "id_mean", "data_type": "float" },
+          { "name": "id_median", "data_type": "float" },
+          { "name": "id_std", "data_type": "float" },
+          { "name": "n", "data_type": "integer" }
+        ] }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "CSV out",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id_min", "data_type": "integer" },
+          { "name": "id_max", "data_type": "integer" },
+          { "name": "id_sum", "data_type": "integer" },
+          { "name": "id_mean", "data_type": "float" },
+          { "name": "id_median", "data_type": "float" },
+          { "name": "id_std", "data_type": "float" },
+          { "name": "n", "data_type": "integer" }
+        ] }
+      }
+    }
+  ]
+}

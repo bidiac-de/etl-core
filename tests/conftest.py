@@ -1,7 +1,18 @@
 from __future__ import annotations
 
-from typing import Generator, Callable, Iterable, Tuple, Dict
+from typing import Generator, Callable, Iterable, Tuple, Dict, Any, List, AsyncIterator
+import motor.motor_asyncio as motor_asyncio
+import pymongo
+import pymongo.mongo_client as pymongo_mclient
+import mongomock
+import pandas as pd
+from uuid import uuid4
+import asyncio
+
+from tests.utils.async_mongomock import AsyncMongoMockClient
 from fastapi.requests import Request
+from urllib.parse import urlencode
+from pytest import MonkeyPatch
 
 import pytest
 import os
@@ -25,6 +36,12 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
+from etl_core.components.databases.mongodb.mongodb_connection_handler import (
+    MongoConnectionHandler,
+)
+
+from etl_core.components.databases.pool_args import build_mongo_client_kwargs
+from etl_core.components.databases import pool_args
 
 
 @pytest.fixture
@@ -225,3 +242,186 @@ def schema_row_two_fields() -> Dict[str, object]:
             {"name": "value", "data_type": "integer", "nullable": True},
         ]
     }
+
+
+class _DummyCreds:
+    def __init__(self) -> None:
+        self._params: Dict[str, Any] = {
+            "user": "u",
+            "host": "localhost",
+            "port": 27017,
+            "database": "testdb",
+        }
+        self._password = ""
+
+    def get_parameter(self, key: str) -> Any:
+        return self._params.get(key)
+
+    @property
+    def decrypted_password(self) -> str:
+        return self._password
+
+
+class _DummyContext:
+    def __init__(self, creds: _DummyCreds) -> None:
+        self._creds = creds
+
+    def get_credentials(self, _: int) -> _DummyCreds:
+        return self._creds
+
+
+@pytest.fixture(scope="session", autouse=True)
+def patch_mongo_clients() -> None:
+    mp = MonkeyPatch()
+    # Motor async client -> async mongomock wrapper
+    mp.setattr(motor_asyncio, "AsyncIOMotorClient", AsyncMongoMockClient, raising=True)
+
+    import etl_core.components.databases.pool_registry as pool_registry_mod
+
+    mp.setattr(
+        pool_registry_mod, "AsyncIOMotorClient", AsyncMongoMockClient, raising=True
+    )
+
+    # Pymongo sync fallbacks to mongomock
+    mp.setattr(pymongo, "MongoClient", mongomock.MongoClient, raising=True)
+    mp.setattr(pymongo_mclient, "MongoClient", mongomock.MongoClient, raising=True)
+
+    # keep patch active entire session
+    yield
+    mp.undo()
+
+
+@pytest.fixture
+def mongo_context() -> _DummyContext:
+    return _DummyContext(_DummyCreds())
+
+
+@pytest.fixture
+def sample_docs() -> list[dict]:
+    return [
+        {"_id": 1, "name": "John", "age": 28, "city": "Berlin", "active": True},
+        {"_id": 2, "name": "Jane", "age": 31, "city": "Hamburg", "active": True},
+        {"_id": 3, "name": "Bob", "age": 22, "city": "Berlin", "active": False},
+        {"_id": 4, "name": "Alice", "age": 27, "city": "Munich", "active": True},
+    ]
+
+
+@pytest.fixture
+def sample_pdf(sample_docs: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame(sample_docs)
+
+
+async def seed_docs(
+    handler: MongoConnectionHandler,
+    database: str,
+    collection: str,
+    docs: List[Dict[str, Any]],
+) -> None:
+    if not docs:
+        return
+    with handler.lease_collection(database=database, collection=collection) as (
+        _,
+        coll,
+    ):
+        await coll.insert_many(list(docs), ordered=True)
+
+
+async def get_all_docs(
+    handler: MongoConnectionHandler,
+    database: str,
+    collection: str,
+    *,
+    flt: Dict[str, Any] | None = None,
+    projection: Dict[str, int] | None = None,
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    with handler.lease_collection(database=database, collection=collection) as (
+        _,
+        coll,
+    ):
+        cursor = coll.find(
+            filter=flt or {}, projection=projection, no_cursor_timeout=False
+        )
+        async for doc in cursor:
+            out.append(doc)
+    return out
+
+
+@pytest.fixture
+async def mongo_handler(
+    mongo_context,
+) -> AsyncIterator[Tuple[MongoConnectionHandler, str]]:
+    creds = mongo_context.get_credentials(101)
+    uri = MongoConnectionHandler.build_uri(
+        host=creds.get_parameter("host"),
+        port=creds.get_parameter("port"),
+        user=creds.get_parameter("user"),
+        password=creds.decrypted_password,
+        auth_db=None,
+        params=None,
+    )
+    client_kwargs = build_mongo_client_kwargs(creds)
+
+    handler = MongoConnectionHandler()
+    handler.connect(uri=uri, client_kwargs=client_kwargs)
+
+    dbname = f"testdb_{uuid4().hex}"
+    creds._params["database"] = dbname  # noqa: SLF001
+
+    try:
+        yield handler, dbname
+    finally:
+        try:
+            client = handler._client  # noqa: SLF001
+            if client is not None:
+                client.drop_database(dbname)
+        except Exception:
+            pass
+        handler.close_pool(force=True)
+        await asyncio.sleep(0)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _force_mongomock_no_auth():
+    mp = MonkeyPatch()
+
+    def _build_uri_no_auth(
+        *,
+        host: str,
+        port: int,
+        user: str | None = None,
+        password: str | None = None,
+        auth_db: str | None = None,
+        params: Dict[str, Any] | None = None,
+    ) -> str:
+        base = f"mongodb://{host}:{port}"
+        if auth_db:
+            base = f"{base}/{auth_db}"
+        if params:
+            if isinstance(params, dict) and params:
+                qs = urlencode(params, doseq=True)
+                base = f"{base}?{qs}"
+            elif isinstance(params, str) and params:
+                sep = "&" if "?" in base else "?"
+                base = f"{base}{sep}{params}"
+        return base
+
+    mp.setattr(
+        MongoConnectionHandler,
+        "build_uri",
+        staticmethod(_build_uri_no_auth),
+        raising=True,
+    )
+
+    _orig_build_kwargs = pool_args.build_mongo_client_kwargs
+
+    def _kwargs_no_auth(creds_obj):
+        kw = _orig_build_kwargs(creds_obj)
+        kw.pop("username", None)
+        kw.pop("password", None)
+        return kw
+
+    mp.setattr(pool_args, "build_mongo_client_kwargs", _kwargs_no_auth, raising=True)
+
+    yield
+    mp.undo()

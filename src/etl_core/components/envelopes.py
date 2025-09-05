@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Tuple
 
 
 @dataclass(frozen=True)
@@ -24,3 +24,12 @@ class InTagged:
 
     in_port: str
     payload: Any
+
+
+def unwrap(obj: Any, default_port: str) -> Tuple[str, Any]:
+    """
+    Unwrap InTagged envelope to get payloads
+    """
+    if isinstance(obj, InTagged):
+        return obj.in_port, obj.payload
+    return default_port, obj
