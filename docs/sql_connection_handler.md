@@ -44,7 +44,6 @@ The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for al
 ```python
 @staticmethod
 def build_url(
-
     *,
     db_type: str,
     user: Optional[str] = None,
@@ -181,7 +180,6 @@ with handler.lease() as conn:
         # Write data directly to COPY stream
         for user in users_data:
             cur.write_row(user)
-
 
         cur.close()
 ```

@@ -303,7 +303,6 @@ class TestEnsureDirectory:
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
 
-   
             # File itself should not exist
             assert not os.path.exists(file_path)
 
@@ -316,7 +315,6 @@ class TestEnsureDirectory:
             ensure_directory(new_dir)
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
-
 
             # Second call (should not fail)
             ensure_directory(new_dir)
@@ -338,6 +336,7 @@ class TestEnsureDirectory:
         """Test ensure_directory with special characters in path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "path@with#special$chars", "nested")
+
             ensure_directory(new_dir)
 
             # ensure_directory creates the parent directory
@@ -350,13 +349,12 @@ class TestEnsureDirectory:
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "permission_test")
 
-
             ensure_directory(new_dir)
 
-          # ensure_directory creates the parent directory
+            # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
-            assert os.path.isdir(parent_dir)=
+            assert os.path.isdir(parent_dir)
 
             # Check that directory is writable
             test_file = os.path.join(parent_dir, "test.txt")

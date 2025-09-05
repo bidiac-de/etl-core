@@ -413,7 +413,6 @@ class TestCLICommands:
         # Check for the actual error message content
         assert "Expecting property name" in str(result.exception)
 
-
     def test_help_output(self, runner):
         """Test CLI help output."""
         result = runner.invoke(app, ["--help"])

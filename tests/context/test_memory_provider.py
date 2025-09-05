@@ -102,7 +102,6 @@ class TestInMemorySecretProvider:
         long_key = "a" * 1000
         long_value = "b" * 10000
 
-
         self.provider.set(long_key, long_value)
         assert self.provider.get(long_key) == long_value
         assert self.provider.exists(long_key) is True
@@ -138,6 +137,7 @@ class TestInMemorySecretProvider:
             thread = threading.Thread(target=worker, args=(i,))
             threads.append(thread)
             thread.start()
+
         # Wait for all threads to complete
         for thread in threads:
             thread.join()
@@ -186,7 +186,6 @@ class TestInMemorySecretProvider:
         assert all(results)
         assert len(errors) == 0
 
-
     def test_lock_reentrancy(self):
         """Test that the RLock allows reentrant access."""
 
@@ -212,6 +211,7 @@ class TestInMemorySecretProvider:
     def test_memory_isolation_between_instances(self):
         """Test that different provider instances don't share memory."""
         provider1 = InMemorySecretProvider()
+        provider2 = InMemorySecretProvider()
 
         # Set secret in first provider
         provider1.set("shared_key", "provider1_value")

@@ -248,7 +248,6 @@ class TestSecureContextAdapter:
         mock_param.is_secure = True
         mock_param.value = "secret_value"
 
-
         mock_context.parameters = {"param": mock_param}
 
         self.mock_secret_store.exists.return_value = False
@@ -383,6 +382,7 @@ class TestSecureContextAdapter:
         mock_param = Mock()
         mock_param.is_secure = False
         mock_param.value = "plain_value"
+
         mock_context.parameters = {"param": mock_param}
 
         adapter = SecureContextAdapter(
@@ -436,7 +436,6 @@ class TestSecureContextAdapter:
         """Test get_parameter with missing key raises error."""
         mock_context = Mock()
         mock_context.parameters = {}
-
 
         adapter = SecureContextAdapter(
             provider_id=self.provider_id,
@@ -564,7 +563,6 @@ class TestSecureContextAdapter:
         assert result.skipped_existing == []
         assert "param2" in result.errors
         assert "Storage failed" in result.errors["param2"]
-
 
         # First param should be blanked, second should not
         assert mock_param1.value == ""

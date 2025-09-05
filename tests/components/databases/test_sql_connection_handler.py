@@ -118,7 +118,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-
     def test_connect(self, mock_registry_class):
         """Test connecting to database."""
         mock_registry = Mock()
@@ -167,7 +166,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-
     def test_lease_not_connected(self, mock_registry_class):
         """Test that lease raises error when not connected."""
         mock_registry = Mock()
@@ -189,7 +187,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-    
     def test_lease_success(self, mock_registry_class):
         """Test successful connection lease."""
         mock_registry = Mock()
@@ -221,7 +218,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-
     def test_lease_exception_handling(self, mock_registry_class):
         """Test that lease properly handles exceptions and releases connection."""
         mock_registry = Mock()
@@ -236,7 +232,6 @@ class TestSQLConnectionHandler:
         mock_context.__enter__ = Mock(return_value=mock_connection)
         mock_context.__exit__ = Mock(return_value=None)
         mock_engine.connect.return_value = mock_context
-
 
         mock_registry.get_sql_engine.return_value = (mock_key, mock_engine)
 
@@ -254,13 +249,10 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-
-    
     def test_close_pool_success(self, mock_registry_class):
         """Test successfully closing pool."""
         mock_registry = Mock()
         mock_registry_class.instance.return_value = mock_registry
-
 
         mock_key = Mock(spec=PoolKey)
         mock_registry.close_pool.return_value = True
@@ -276,7 +268,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-    
     def test_close_pool_force(self, mock_registry_class):
         """Test force closing pool."""
         mock_registry = Mock()
@@ -296,7 +287,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-
     def test_close_pool_no_key(self, mock_registry_class):
         """Test closing pool when no key exists."""
         mock_registry = Mock()
@@ -313,11 +303,11 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-    
     def test_stats(self, mock_registry_class):
         """Test getting stats from registry."""
         mock_registry = Mock()
         mock_registry_class.instance.return_value = mock_registry
+
         expected_stats = {"sql": {"test": {"leased": 1, "opened": 1}}}
         mock_registry.stats.return_value = expected_stats
 
@@ -368,7 +358,6 @@ class TestSQLConnectionHandler:
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-
     def test_multiple_connections(self, mock_registry_class):
         """Test handling multiple connections."""
         mock_registry = Mock()
@@ -385,7 +374,6 @@ class TestSQLConnectionHandler:
         ]
 
         handler = SQLConnectionHandler()
-
 
         # First connection
         key1, engine1 = handler.connect(url="postgresql://localhost:5432/db1")
