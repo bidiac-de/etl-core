@@ -310,12 +310,7 @@ def _validate_node_json(obj: Any, ctx: str = "") -> None:
     # primitives are fine
 
 
-
-def _join(prefix: str, key: str) -> str:
-    return f"{prefix}.{key}" if prefix else key
-
 def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
-    """dict/list rekursiv in dot-/[i]-Keys flatten."""
     if isinstance(value, dict):
         for k, v in value.items():
             _flatten_to_map(_join(prefix, str(k)), v, out)
