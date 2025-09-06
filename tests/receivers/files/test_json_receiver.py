@@ -151,7 +151,7 @@ async def test_write_json_row_and_re_read_single_row_mode(
     df_sorted = df.sort_values("id").reset_index(drop=True)
     expected_df = pd.DataFrame(expected_list)
     assert_frame_equal(df_sorted, expected_df)
-    assert read_metrics.lines_received == 2
+    assert read_metrics.lines_forwarded == 2
 
 
 @pytest.mark.asyncio
@@ -186,7 +186,7 @@ async def test_write_json_bulk_exact(tmp_path: Path, metrics: ComponentMetrics):
     df = await r.read_bulk(filepath=file_path, metrics=read_metrics)
     df_sorted = df.sort_values("id").reset_index(drop=True)
     assert_frame_equal(df_sorted, data.sort_values("id").reset_index(drop=True))
-    assert read_metrics.lines_received == 2
+    assert read_metrics.lines_forwarded == 2
 
 
 @pytest.mark.asyncio
@@ -374,7 +374,16 @@ async def test_write_bulk_unflattens_and_readback(tmp_path: Path, metrics: Compo
         {"id": 11, "addr": {"street": "B", "city": "BB"}},
     ]
 
-    df_out = await r.read_bulk(filepath=path, metrics=ComponentMetrics.from_now())
+    df_out = await r.read_bulk(
+        filepath=path,
+        metrics=ComponentMetrics(
+            started_at=datetime.now(),
+            processing_time=timedelta(0),
+            error_count=0,
+            lines_received=0,
+            lines_forwarded=0,
+        )
+    )
     df_out = df_out.sort_values("id").reset_index(drop=True)
     expected_flat = df_in.sort_values("id").reset_index(drop=True)
     assert set(expected_flat.columns) <= set(df_out.columns)

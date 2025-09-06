@@ -259,18 +259,11 @@ def unflatten_record(flat: Dict[str, Any]) -> Dict[str, Any]:
             _set_path(out, k, v)
     return out
 
+
 def _join(prefix: str, key: str) -> str:
     return f"{prefix}.{key}" if prefix else key
 
-def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
-    if isinstance(value, dict):
-        for k, v in value.items():
-            _flatten_to_map(_join(prefix, k), v, out)
-    elif isinstance(value, list):
-        for i, item in enumerate(value):
-            _flatten_to_map(f"{prefix}[{i}]", item, out)
-    else:
-        out[prefix] = value
+
 
 def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     flat: Dict[str, Any] = {}
@@ -317,19 +310,34 @@ def _validate_node_json(obj: Any, ctx: str = "") -> None:
     # primitives are fine
 
 
-def flatten_partition(pdf: pd.DataFrame) -> pd.DataFrame:
-    if pdf is None or pdf.empty:
-        return pd.DataFrame()
 
-    records = []
-    for _, row in pdf.iterrows():
-        obj = row.to_dict()
-        if len(obj) == 1 and isinstance(next(iter(obj.values())), dict):
-            obj = next(iter(obj.values()))
-        records.append(obj)
+def _join(prefix: str, key: str) -> str:
+    return f"{prefix}.{key}" if prefix else key
 
-    flat = pd.json_normalize(records, sep=".")
-    return flat
+def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
+    """dict/list rekursiv in dot-/[i]-Keys flatten."""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _flatten_to_map(_join(prefix, str(k)), v, out)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            _flatten_to_map(f"{prefix}[{i}]" if prefix else f"[{i}]", item, out)
+    else:
+        out[prefix] = value
+
+def _flatten_partition(pdf: pd.DataFrame) -> pd.DataFrame:
+    if pdf.empty:
+        return pdf
+    rows: List[Dict[str, Any]] = []
+    for _, sr in pdf.iterrows():
+        flat: Dict[str, Any] = {}
+        for col, v in sr.items():
+            if isinstance(v, (dict, list)):
+                _flatten_to_map(str(col), v, flat)
+            else:
+                flat[str(col)] = v
+        rows.append(flat)
+    return pd.DataFrame.from_records(rows)
 
 
 
@@ -337,7 +345,7 @@ def infer_flat_meta(ddf: dd.DataFrame) -> pd.DataFrame:
     try:
         sample: pd.DataFrame = ddf.head(1000, compute=True)
         if sample is not None and not sample.empty:
-            flat = flatten_partition(sample)
+            flat = _flatten_partition(sample)
             if flat is not None and list(flat.columns):
                 return flat.iloc[:0]
     except Exception:
@@ -346,7 +354,7 @@ def infer_flat_meta(ddf: dd.DataFrame) -> pd.DataFrame:
     try:
         first: pd.DataFrame = ddf.get_partition(0).compute()
         if first is not None and not first.empty:
-            flat = flatten_partition(first)
+            flat = _flatten_partition(first)
             if flat is not None and list(flat.columns):
                 return flat.iloc[:0]
     except Exception:
