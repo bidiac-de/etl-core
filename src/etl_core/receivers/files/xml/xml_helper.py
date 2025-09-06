@@ -229,63 +229,8 @@ def write_xml_bulk(
         tree.write(f, encoding="utf-8", xml_declaration=True)
 
 
-def _is_flat_key(key: str) -> bool:
-    return "." in key or ("[" in key and "]" in key)
-
-
-def _validate_key(key: Any, ctx: str) -> None:
-    if not isinstance(key, str):
-        where = ctx or "<root>"
-        raise ValueError(
-            f"Row mode expects string keys; offending non-string key at '{where}'."
-        )
-    if _is_flat_key(key):
-        where = ctx or "<root>"
-        raise ValueError(
-            "Row mode expects nested dicts only (no flat paths). "
-            f"Offending key '{key}' at '{where}'."
-        )
-
-
-def _validate_attrs(attrs: Any, ctx: str) -> None:
-    if not isinstance(attrs, dict):
-        where = ctx or "<root>"
-        raise ValueError(f"@attrs must be a dict at '{where}'.")
-    for ak in attrs.keys():
-        if not isinstance(ak, str) or _is_flat_key(ak):
-            where = ctx or "<root>"
-            raise ValueError(f"@attrs contains invalid key '{ak}' at '{where}'.")
-
-
-def _validate_node(obj: Any, ctx: str = "") -> None:
-    if isinstance(obj, dict):
-        _validate_dict_node(obj, ctx)
-        return
-    if isinstance(obj, list):
-        _validate_list_node(obj, ctx)
-        return
-
-
-def _validate_dict_node(d: dict, ctx: str) -> None:
-    for k, v in d.items():
-        _validate_key(k, ctx)
-        if k == "@attrs":
-            _validate_attrs(v, ctx)
-            continue
-        if k == "#text":
-            continue
-        next_ctx = f"{ctx}.{k}" if ctx else k
-        _validate_node(v, next_ctx)
-
-
-def _validate_list_node(items: list, ctx: str) -> None:
-    for i, item in enumerate(items):
-        next_ctx = f"{ctx}[{i}]" if ctx else f"[{i}]"
-        _validate_node(item, next_ctx)
-
-
 def _append_record_to_file(
-        path: Path, root_tag: str, new_record_el: ET.Element
+    path: Path, root_tag: str, new_record_el: ET.Element
 ) -> None:
     new_record_xml = ET.tostring(new_record_el, encoding="unicode")
 
@@ -314,19 +259,18 @@ def _append_record_to_file(
 
 
 def write_xml_row(
-        path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str
+    path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str
 ) -> None:
     path = resolve_file_path(path)
 
     if not isinstance(row, dict):
         raise TypeError(f"Row mode expects a nested dict, got {type(row).__name__}")
 
-    _validate_node(row)
-
     cleaned = {k: v for k, v in row.items() if not _is_nullish(v)}
 
     new_record_el = nested_to_element(record_tag, cleaned)
     _append_record_to_file(path, root_tag, new_record_el)
+
 
 _PATH_RE = re.compile(r"\.?([^\.\[\]]+)(?:\[(\d+)\])?")
 
