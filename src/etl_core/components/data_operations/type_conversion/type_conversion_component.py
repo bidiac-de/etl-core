@@ -11,13 +11,13 @@ from etl_core.components.component_registry import register_component
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import InPortSpec, OutPortSpec
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_helper import (
+from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_helper import (  # noqa: E501
     OnError,
     TypeConversionRule,
     Schema,
     derive_out_schema,
 )
-from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_receiver import (
+from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_receiver import (  # noqa: E501
     TypeConversionReceiver,
 )
 
@@ -68,9 +68,9 @@ class TypeConversionComponent(Component):
         return self
 
     def ensure_schemas_for_used_ports(
-            self,
-            used_in_ports: Dict[str, int],
-            used_out_ports: Dict[str, int],
+        self,
+        used_in_ports: Dict[str, int],
+        used_out_ports: Dict[str, int],
     ) -> None:
         """Ensure output schema is derived if needed."""
 
@@ -84,23 +84,23 @@ class TypeConversionComponent(Component):
         return super().ensure_schemas_for_used_ports(used_in_ports, used_out_ports)
 
     async def process_row(
-            self,
-            row: Dict[str, Any],
-            metrics: ComponentMetrics,
+        self,
+        row: Dict[str, Any],
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Out]:
         """Process a single row and yield converted output."""
 
         if self._receiver is None:
             raise RuntimeError("TypeConversionReceiver not initialized in process_row")
         async for port, payload in self._receiver.process_row(
-                row=row, rules=self._runtime_rules, metrics=metrics
+            row=row, rules=self._runtime_rules, metrics=metrics
         ):
             yield Out(port=port, payload=payload)
 
     async def process_bulk(
-            self,
-            dataframe: pd.DataFrame,
-            metrics: ComponentMetrics,
+        self,
+        dataframe: pd.DataFrame,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Out]:
         """Process a pandas DataFrame and yield converted output."""
 
@@ -108,17 +108,17 @@ class TypeConversionComponent(Component):
             raise RuntimeError("TypeConversionReceiver not initialized in process_bulk")
         out_schema: Optional[Schema] = self.out_port_schemas.get("out")
         async for port, payload in self._receiver.process_bulk(
-                dataframe=dataframe,
-                rules=self._runtime_rules,
-                metrics=metrics,
-                out_schema=out_schema,
+            dataframe=dataframe,
+            rules=self._runtime_rules,
+            metrics=metrics,
+            out_schema=out_schema,
         ):
             yield Out(port=port, payload=payload)
 
     async def process_bigdata(
-            self,
-            ddf: dd.DataFrame,
-            metrics: ComponentMetrics,
+        self,
+        ddf: dd.DataFrame,
+        metrics: ComponentMetrics,
     ) -> AsyncIterator[Out]:
         """Process a Dask DataFrame and yield converted output."""
 
@@ -127,6 +127,6 @@ class TypeConversionComponent(Component):
                 "TypeConversionReceiver not initialized in process_bigdata"
             )
         async for port, payload in self._receiver.process_bigdata(
-                ddf=ddf, rules=self._runtime_rules, metrics=metrics
+            ddf=ddf, rules=self._runtime_rules, metrics=metrics
         ):
             yield Out(port=port, payload=payload)

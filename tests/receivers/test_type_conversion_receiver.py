@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict
 
 import dask.dataframe as dd
 import pandas as pd
@@ -9,11 +9,11 @@ from pandas.testing import assert_frame_equal
 
 from etl_core.components.wiring.column_definition import DataType
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_helper import (
+from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_helper import (  # noqa: E501
     OnError,
     TypeConversionRule,
 )
-from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_receiver import (
+from etl_core.receivers.data_operations_receivers.type_conversion.type_conversion_receiver import (  # noqa: E501
     TypeConversionReceiver,
 )
 
@@ -25,7 +25,9 @@ async def test_receiver_process_row__simple_dict() -> None:
     rules = [TypeConversionRule(column_path="age", target=DataType.INTEGER)]
     metrics = ComponentMetrics()
 
-    outs = [item async for item in recv.process_row(row=row, rules=rules, metrics=metrics)]
+    outs = [  # noqa: E501
+        item async for item in recv.process_row(row=row, rules=rules, metrics=metrics)
+    ]
     assert len(outs) == 1
     port, out_row = outs[0]
     assert port == "out"
@@ -40,16 +42,21 @@ async def test_receiver_process_bulk__pandas_df__int_cast() -> None:
     recv = TypeConversionReceiver()
     df = pd.DataFrame({"x": ["1", "2", None]})
     rules = [TypeConversionRule(column_path="x", target=DataType.INTEGER)]
-    metrics = ComponentMetrics()
+    metrics = ComponentMetrics()  # noqa: E501
 
-    outs = [item async for item in recv.process_bulk(dataframe=df, rules=rules, metrics=metrics)]
+    outs = [
+        item
+        async for item in recv.process_bulk(dataframe=df, rules=rules, metrics=metrics)
+    ]
     assert len(outs) == 1
     port, out_df = outs[0]
     assert port == "out"
 
     expected = pd.DataFrame({"x": [1, 2, pd.NA]}).astype({"x": "Int64"})
     got = out_df.astype({"x": "Int64"})
-    assert_frame_equal(got.reset_index(drop=True), expected.reset_index(drop=True), check_dtype=False)
+    assert_frame_equal(
+        got.reset_index(drop=True), expected.reset_index(drop=True), check_dtype=False
+    )
 
     assert metrics.lines_received == 3
     assert metrics.lines_forwarded == 3
@@ -61,14 +68,17 @@ async def test_receiver_process_bulk__on_error_skip() -> None:
     df = pd.DataFrame({"flag": ["true", "x"]})
     rules = [
         TypeConversionRule(
-            column_path="flag",
+            column_path="flag",  # noqa: E501
             target=DataType.BOOLEAN,
             on_error=OnError.SKIP,
         )
     ]
     metrics = ComponentMetrics()
 
-    outs = [item async for item in recv.process_bulk(dataframe=df, rules=rules, metrics=metrics)]
+    outs = [
+        item
+        async for item in recv.process_bulk(dataframe=df, rules=rules, metrics=metrics)
+    ]
     assert len(outs) == 1
     port, out_df = outs[0]
     assert port == "out"
@@ -86,11 +96,13 @@ async def test_receiver_process_bigdata__dask_df() -> None:
     rules = [TypeConversionRule(column_path="v", target=DataType.INTEGER)]
     metrics = ComponentMetrics()
 
-    outs = [item async for item in recv.process_bigdata(ddf=ddf, rules=rules, metrics=metrics)]
+    outs = [
+        item
+        async for item in recv.process_bigdata(ddf=ddf, rules=rules, metrics=metrics)
+    ]
     assert len(outs) == 1
     port, out_ddf = outs[0]
     assert port == "out"
 
     got = out_ddf.compute()
     assert list(got["v"].astype("Int64")) == [1, 2, 3]
-
