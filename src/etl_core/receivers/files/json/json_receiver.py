@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Dict, TypeVar, List
 
 import dask.dataframe as dd
-from dask.dataframe.utils import make_meta
+import dask
+from dask import delayed
 import pandas as pd
 
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -23,9 +24,8 @@ from etl_core.receivers.files.json.json_helper import (
     build_payload,
     ensure_nested_for_read,
     flatten_record,
-    _validate_node_json,
-    _flatten_partition,
-    infer_flat_meta, iter_ndjson_lenient, dump_ndjson_records,
+    iter_ndjson_lenient,
+    _write_part_ndjson,
 )
 
 _SENTINEL: Any = object()
@@ -55,14 +55,16 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     """
 
     async def read_row(
-            self, filepath: Path, metrics: ComponentMetrics
+        self, filepath: Path, metrics: ComponentMetrics
     ) -> AsyncIterator[Dict[str, Any]]:
         ensure_file_exists(filepath)
 
         if is_ndjson_path(filepath):
             from etl_core.receivers.files.json.json_helper import iter_ndjson_lenient
+
             def _on_error(_: Exception):
                 metrics.error_count += 1
+
             it = iter_ndjson_lenient(filepath, on_error=_on_error)
         else:
             it = read_json_row(filepath)
@@ -78,24 +80,32 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             yield nested
 
     async def read_bulk(
-            self, filepath: Path, metrics: ComponentMetrics
+        self, filepath: Path, metrics: ComponentMetrics
     ) -> pd.DataFrame:
         """Return a FLAT DataFrame (columns are dot / [i] paths), matching XML bulk."""
         ensure_file_exists(filepath)
         try:
             # Load as list of dicts (robust to NDJSON / JSON array / single object)
             if is_ndjson_path(filepath):
-                from etl_core.receivers.files.json.json_helper import iter_ndjson_lenient
+                from etl_core.receivers.files.json.json_helper import (
+                    iter_ndjson_lenient,
+                )
+
                 def _on_error(_: Exception):
                     metrics.error_count += 1
+
                 records_iter = iter_ndjson_lenient(filepath, on_error=_on_error)
-                records: List[Dict[str, Any]] = await asyncio.to_thread(list, records_iter)
+                records: List[Dict[str, Any]] = await asyncio.to_thread(
+                    list, records_iter
+                )
             else:
                 records = await asyncio.to_thread(load_json_records, filepath)
 
             # Normalize to nested & then flatten -> stable flat schema
             flat_records = [
-                flatten_record(ensure_nested_for_read(r if isinstance(r, dict) else {"_value": r}))
+                flatten_record(
+                    ensure_nested_for_read(r if isinstance(r, dict) else {"_value": r})
+                )
                 for r in records
             ]
             df = pd.DataFrame.from_records(flat_records)
@@ -106,13 +116,12 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += len(df)
         return df
 
-
     async def read_bigdata(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            *,
-            chunk_size: int = 50_000,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        *,
+        chunk_size: int = 50_000,
     ) -> dd.DataFrame:
         ensure_file_exists(filepath)
 
@@ -141,19 +150,26 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
         return ddf
 
-
     async def write_row(
-            self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
+        self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
     ) -> None:
-        _validate_node_json(row)
+        if not isinstance(row, dict):
+            raise TypeError(
+                f"Row mode expects a dict payload, got {type(row).__name__}"
+            )
+
         try:
             if is_ndjson_path(filepath):
                 await asyncio.to_thread(append_ndjson_record, filepath, row)
             else:
+
                 def _rmw():
                     existing = load_json_records(filepath) if filepath.exists() else []
                     existing.append(row)
-                    _atomic_overwrite(filepath, lambda tmp: dump_json_records(tmp, existing, indent=2))
+                    _atomic_overwrite(
+                        filepath, lambda tmp: dump_json_records(tmp, existing, indent=2)
+                    )
+
                 await asyncio.to_thread(_rmw)
         except Exception as exc:
             raise FileReceiverError(f"Failed to write JSON row: {exc}") from exc
@@ -162,7 +178,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += 1
 
     async def write_bulk(
-            self, filepath: Path, metrics: ComponentMetrics, data: pd.DataFrame
+        self, filepath: Path, metrics: ComponentMetrics, data: pd.DataFrame
     ) -> None:
         # Build nested records first (flat → unflatten; drop nullish)
         records = []
@@ -182,30 +198,25 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_received += len(data)
         metrics.lines_forwarded += len(data)
 
-
     async def write_bigdata(
-            self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
+        self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
     ) -> None:
-        ensure_file_exists(filepath.parent) if filepath.parent else None
-
         if (not filepath.suffix) or filepath.is_dir():
             out_dir = filepath if filepath.is_dir() else filepath
             out_dir.mkdir(parents=True, exist_ok=True)
 
-            parts = await asyncio.to_thread(lambda: data.to_delayed())
-            total_rows = 0
-
+            parts = data.to_delayed()
+            tasks = []
             for i, dpart in enumerate(parts):
-                pdf_i = await asyncio.to_thread(lambda: dpart.compute())
-                records = [build_payload(r) for r in pdf_i.to_dict(orient="records")]
-                part_path = out_dir / f"part-{i:05d}.jsonl"
-                await asyncio.to_thread(dump_ndjson_records, part_path, records)
-                total_rows += len(pdf_i)
+                part_path = str(out_dir / f"part-{i:05d}.jsonl")
+                tasks.append(delayed(_write_part_ndjson)(dpart, part_path))
 
-            metrics.lines_received += total_rows
-            metrics.lines_forwarded += total_rows
+            counts = await asyncio.to_thread(lambda: dask.compute(*tasks))
+            total = int(sum(counts))
+
+            metrics.lines_received += total
+            metrics.lines_forwarded += total
             return
 
         pdf = await asyncio.to_thread(lambda: data.compute())
         await self.write_bulk(filepath, metrics, pdf)
-

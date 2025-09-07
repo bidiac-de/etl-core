@@ -174,7 +174,6 @@ async def test_read_bulk_json_array_nested_and_nulls(metrics: ComponentMetrics) 
     assert metrics.error_count == 0
 
 
-
 @pytest.mark.asyncio
 async def test_read_bulk_broken_json_raises_and_counts_error(
     metrics: ComponentMetrics,
@@ -513,23 +512,9 @@ async def test_read_json_bigdata_flattens_partitions(metrics, tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_write_json_row_rejects_flat_keys(metrics, tmp_path: Path) -> None:
-    out = tmp_path / "rows.json"
-    comp = WriteJSON(
-        name="write_row_reject_flat",
-        description="reject flat in row mode",
-        comp_type="write_json",
-        filepath=out,
-    )
-    comp.strategy = RowExecutionStrategy()
-
-    with pytest.raises(ValueError):
-        gen = comp.execute(payload={"id": 1, "addr.street": "X"}, metrics=metrics)
-        await anext(gen)
-
-
-@pytest.mark.asyncio
-async def test_write_json_row_accepts_nested_and_appends(metrics, tmp_path: Path) -> None:
+async def test_write_json_row_accepts_nested_and_appends(
+    metrics, tmp_path: Path
+) -> None:
     out = tmp_path / "rows.json"
     comp = WriteJSON(
         name="write_row_nested_ok",
@@ -564,7 +549,13 @@ async def test_write_json_bulk_unflattens_from_flat_df(metrics, tmp_path: Path) 
 
     df = pd.DataFrame(
         [
-            {"id": 1, "addr.street": "Main", "addr.city": "Town", "tags[0]": "t1", "tags[1]": "t2"},
+            {
+                "id": 1,
+                "addr.street": "Main",
+                "addr.city": "Town",
+                "tags[0]": "t1",
+                "tags[1]": "t2",
+            },
             {"id": 2, "addr.street": "Second", "addr.city": "Ville", "tags[0]": "u1"},
         ]
     )
@@ -580,7 +571,9 @@ async def test_write_json_bulk_unflattens_from_flat_df(metrics, tmp_path: Path) 
 
 
 @pytest.mark.asyncio
-async def test_write_json_bigdata_like_bulk_single_file(metrics, tmp_path: Path) -> None:
+async def test_write_json_bigdata_like_bulk_single_file(
+    metrics, tmp_path: Path
+) -> None:
     out = tmp_path / "bigdata.json"
     comp = WriteJSON(
         name="write_bigdata_single_file",

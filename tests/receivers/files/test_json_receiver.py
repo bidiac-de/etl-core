@@ -262,9 +262,7 @@ async def test_read_json_row_gz(
 
 
 @pytest.mark.asyncio
-async def test_read_bulk_missing_file_raises(
-    metrics: ComponentMetrics, tmp_path: Path
-):
+async def test_read_bulk_missing_file_raises(metrics: ComponentMetrics, tmp_path: Path):
     r = JSONReceiver()
     missing = tmp_path / "missing.json"
     with pytest.raises(FileNotFoundError):
@@ -304,12 +302,16 @@ async def test_read_bulk_flattens_nested(tmp_path: Path, metrics: ComponentMetri
     df = await r.read_bulk(filepath=path, metrics=metrics)
     df = df.sort_values("id").reset_index(drop=True)
 
-    expected = pd.DataFrame(
-        [
-            {"id": 1, "addr.street": "Main", "addr.city": "Town"},
-            {"id": 2, "addr.street": "Second", "addr.city": "Ville"},
-        ]
-    ).sort_values("id").reset_index(drop=True)
+    expected = (
+        pd.DataFrame(
+            [
+                {"id": 1, "addr.street": "Main", "addr.city": "Town"},
+                {"id": 2, "addr.street": "Second", "addr.city": "Ville"},
+            ]
+        )
+        .sort_values("id")
+        .reset_index(drop=True)
+    )
 
     assert set(expected.columns) <= set(df.columns)
     assert_frame_equal(df[expected.columns], expected, check_dtype=False)
@@ -336,27 +338,30 @@ async def test_read_bigdata_flattens_nested(tmp_path: Path, metrics: ComponentMe
 
 
 @pytest.mark.asyncio
-async def test_write_row_nested_only_and_append(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_row_nested_only_and_append(
+    tmp_path: Path, metrics: ComponentMetrics
+):
     path = tmp_path / "rows.json"
     r = JSONReceiver()
 
-    await r.write_row(filepath=path, metrics=metrics, row={"id": 1, "addr": {"street": "X"}})
-    await r.write_row(filepath=path, metrics=metrics, row={"id": 2, "addr": {"street": "Y"}})
+    await r.write_row(
+        filepath=path, metrics=metrics, row={"id": 1, "addr": {"street": "X"}}
+    )
+    await r.write_row(
+        filepath=path, metrics=metrics, row={"id": 2, "addr": {"street": "Y"}}
+    )
 
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data == [{"id": 1, "addr": {"street": "X"}}, {"id": 2, "addr": {"street": "Y"}}]
+    assert data == [
+        {"id": 1, "addr": {"street": "X"}},
+        {"id": 2, "addr": {"street": "Y"}},
+    ]
 
 
 @pytest.mark.asyncio
-async def test_write_row_rejects_flat_keys(tmp_path: Path, metrics: ComponentMetrics):
-    path = tmp_path / "rows.json"
-    r = JSONReceiver()
-    with pytest.raises(ValueError):
-        await r.write_row(filepath=path, metrics=metrics, row={"id": 1, "addr.street": "X"})
-
-
-@pytest.mark.asyncio
-async def test_write_bulk_unflattens_and_readback(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_bulk_unflattens_and_readback(
+    tmp_path: Path, metrics: ComponentMetrics
+):
     path = tmp_path / "bulk.json"
     r = JSONReceiver()
 
@@ -382,7 +387,7 @@ async def test_write_bulk_unflattens_and_readback(tmp_path: Path, metrics: Compo
             error_count=0,
             lines_received=0,
             lines_forwarded=0,
-        )
+        ),
     )
     df_out = df_out.sort_values("id").reset_index(drop=True)
     expected_flat = df_in.sort_values("id").reset_index(drop=True)
@@ -391,7 +396,9 @@ async def test_write_bulk_unflattens_and_readback(tmp_path: Path, metrics: Compo
 
 
 @pytest.mark.asyncio
-async def test_write_bigdata_single_file_nested(tmp_path: Path, metrics: ComponentMetrics):
+async def test_write_bigdata_single_file_nested(
+    tmp_path: Path, metrics: ComponentMetrics
+):
     path = tmp_path / "big.json"
     r = JSONReceiver()
 
