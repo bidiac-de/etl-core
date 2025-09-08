@@ -69,7 +69,7 @@ def test_job_schema_is_cached(
         job_base.JobBase, "model_json_schema", staticmethod(_wrapped_job_schema)
     )
 
-    # Patch inline_defs on the live router module
+    # Patch inline_defs on the live router module (job schema uses inline_defs)
     schemas_router = _schemas_router_module(client)
     real_inline_defs = schemas_router.inline_defs  # type: ignore[attr-defined]
 
@@ -98,7 +98,7 @@ def test_component_schema_is_cached_and_invalidates(
 ) -> None:
     """
     Ensure component schema caching works and invalidate_schema_caches()
-    forces recompute.
+    forces recompute. Component schemas are NOT inlined in the router.
     """
     client = fresh_client("test")
     _require_cache_or_skip(client)
@@ -107,7 +107,7 @@ def test_component_schema_is_cached_and_invalidates(
     if not comp:
         pytest.skip("No public components available to test component schema caching")
 
-    calls: Dict[str, int] = {"model_json_schema": 0, "inline_defs": 0}
+    calls: Dict[str, int] = {"model_json_schema": 0}
 
     # Find the component class in the live registry
     import etl_core.components.component_registry as registry
@@ -123,34 +123,23 @@ def test_component_schema_is_cached_and_invalidates(
 
     monkeypatch.setattr(cls, "model_json_schema", staticmethod(_wrapped_comp_schema))
 
-    # Patch inline_defs on the live router
     schemas_router = _schemas_router_module(client)
-    real_inline_defs = schemas_router.inline_defs  # type: ignore[attr-defined]
-
-    def _wrapped_inline_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
-        calls["inline_defs"] += 1
-        return real_inline_defs(schema)
-
-    monkeypatch.setattr(schemas_router, "inline_defs", _wrapped_inline_defs)
-
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]
 
     # miss
-    r1 = client.get(f"/configs/{comp}")
+    r1 = client.get(f"/configs/{comp}/form")
     assert r1.status_code == 200
     # hit
-    r2 = client.get(f"/configs/{comp}")
+    r2 = client.get(f"/configs/{comp}/form")
     assert r2.status_code == 200
 
     assert calls["model_json_schema"] == 1
-    assert calls["inline_defs"] == 1
 
     # invalidate -> recompute
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]
-    r3 = client.get(f"/configs/{comp}")
+    r3 = client.get(f"/configs/{comp}/form")
     assert r3.status_code == 200
     assert calls["model_json_schema"] == 2
-    assert calls["inline_defs"] == 2
 
 
 def test_mode_is_part_of_cache_key(
