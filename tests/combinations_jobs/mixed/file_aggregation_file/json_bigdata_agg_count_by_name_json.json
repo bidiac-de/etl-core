@@ -1,0 +1,56 @@
+{
+  "name": "JSON BigData Aggregation (count by name) to JSON dir",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bigdata",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "NDJSON in (dask)",
+      "filepath": "__IN__",
+      "routes": { "out": [ { "to": "agg", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "agg",
+      "comp_type": "aggregation",
+      "description": "count per name",
+      "group_by": ["name"],
+      "aggregations": [
+        { "src": "*", "op": "count", "dest": "n" }
+      ],
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "out": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "name", "data_type": "string" },
+          { "name": "n", "data_type": "integer" }
+        ] }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_json",
+      "description": "NDJSON out (partitioned directory)",
+      "filepath": "__OUT__",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "name", "data_type": "string" },
+          { "name": "n", "data_type": "integer" }
+        ] }
+      }
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "name": "Excel Bulk Aggregation (nunique names) to JSON",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bulk",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_excel",
+      "description": "Excel in (bulk)",
+      "filepath": "__IN__",
+      "routes": { "out": [ { "to": "agg", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "agg",
+      "comp_type": "aggregation",
+      "description": "nunique(name)",
+      "group_by": [],
+      "aggregations": [
+        { "src": "name", "op": "nunique", "dest": "names" }
+      ],
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "out": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "names", "data_type": "integer" }
+        ] }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_json",
+      "description": "JSON array out",
+      "filepath": "__OUT__",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "names", "data_type": "integer" }
+        ] }
+      }
+    }
+  ]
+}
