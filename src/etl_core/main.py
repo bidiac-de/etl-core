@@ -3,7 +3,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from starlette.config import Config
 
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
 
 from .logger.logging_setup import setup_logging
 from .api.routers import schemas, setup, jobs, execution, contexts
@@ -36,6 +37,21 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def _add_access_control_allow_origin(request: Request, call_next):
+    """
+    Add 'Access-Control-Allow-Origin: *' to every response without changing
+    endpoint behavior. If the header is already present (e.g., from another
+    middleware), we leave it untouched.
+    """
+    response = await call_next(request)
+    if response.headers.get("Access-Control-Allow-Origin") is None:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
 app.include_router(schemas.router)
 app.include_router(setup.router)
 app.include_router(jobs.router)
