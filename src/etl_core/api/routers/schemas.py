@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple, Type, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import ValidationError
 
-from etl_core.api.helpers import _error_payload, _exc_meta, inline_defs
+from etl_core.api.helpers import _error_payload, _exc_meta, schema_post_processing
 from etl_core.components.component_registry import (
     RegistryMode,
     component_meta,
@@ -40,18 +40,55 @@ def invalidate_schema_caches() -> None:
         _COMPONENT_TYPES_CACHE.clear()
 
 
-def _cached_job_schema() -> Dict[str, Any]:
-    mode = get_registry_mode()
-    mode_key = getattr(mode, "value", str(mode))
-    with _CACHE_LOCK:
-        hit = _JOB_SCHEMA_CACHE.get(mode_key)
-        if hit is not None:
-            return hit
-    # Compute outside dict mutation to minimize lock hold time
-    computed = inline_defs(JobBase.model_json_schema())
-    with _CACHE_LOCK:
-        _JOB_SCHEMA_CACHE[mode_key] = computed
-    return computed
+
+_ORDER_DEFAULT = 1_000_000
+
+
+def _field_order_for_class(cls: type) -> Dict[str, Tuple[int, int]]:
+    """
+    Build an order map for fields of a Pydantic model class.
+
+    You can set json_schema_extra={"order": <int>} on fields to control order.
+    Lower numbers appear first. Fields without 'order' keep definition order,
+    after explicitly ordered ones.
+    """
+    order_map: Dict[str, Tuple[int, int]] = {}
+    fields = getattr(cls, "model_fields", {}) or {}
+    for idx, (name, f) in enumerate(fields.items()):
+        extra = getattr(f, "json_schema_extra", None) or {}
+        raw = extra.get("order")
+        if isinstance(raw, int):
+            primary = raw
+        elif isinstance(raw, str) and raw.isdigit():
+            primary = int(raw)
+        else:
+            primary = _ORDER_DEFAULT
+        order_map[name] = (primary, idx)
+    return order_map
+
+
+def _apply_field_ordering(schema: Dict[str, Any], cls: type) -> Dict[str, Any]:
+    """
+    Return a copy of 'schema' with top-level 'properties' sorted according to
+    the class-level field order. This only reorders the top-level properties,
+    which is what the GUI form typically consumes.
+    """
+    props = schema.get("properties")
+    if not isinstance(props, dict) or not props:
+        return schema
+
+    order_map = _field_order_for_class(cls)
+    items = list(props.items())
+
+    def _key(item: Tuple[str, Any]) -> Tuple[int, int]:
+        name, _ = item
+        return order_map.get(name, (_ORDER_DEFAULT, _ORDER_DEFAULT))
+
+    new_props = {k: v for k, v in sorted(items, key=_key)}
+    out = dict(schema)
+    out["properties"] = new_props
+    return out
+
 
 
 def _hidden_fields_for_class(cls: type) -> set[str]:
@@ -104,11 +141,9 @@ def _dump_spec(obj: Any) -> Dict[str, Any]:
     Best-effort conversion of OutPortSpec/InPortSpec (or other small objects)
     into plain dicts for transport to the GUI.
     """
-    # Pydantic models: model_dump
     dump = getattr(obj, "model_dump", None)
     if callable(dump):
         return dump()  # type: ignore[no-any-return]
-    # dataclasses
     try:
         from dataclasses import asdict, is_dataclass
 
@@ -116,7 +151,6 @@ def _dump_spec(obj: Any) -> Dict[str, Any]:
             return asdict(obj)  # type: ignore[no-any-return]
     except Exception:
         pass
-    # Fallback: shallow vars()
     try:
         return {k: v for k, v in vars(obj).items() if not k.startswith("_")}
     except Exception:
@@ -127,7 +161,6 @@ def _class_vars_payload(cls: Type[Component]) -> Dict[str, Any]:
     """
     Extract class-level declarations useful to the GUI.
     """
-    # ClassVar sequences may be tuples; turn into serializable lists of dicts
     input_specs = [_dump_spec(p) for p in getattr(cls, "INPUT_PORTS", ()) or ()]
     output_specs = [_dump_spec(p) for p in getattr(cls, "OUTPUT_PORTS", ()) or ()]
     allow_no_inputs: bool = bool(getattr(cls, "ALLOW_NO_INPUTS", False))
@@ -182,10 +215,32 @@ def _resolve_component_class(comp_type: str) -> Type[Component]:
     return cls
 
 
+def _cached_job_schema() -> Dict[str, Any]:
+    """
+    Return the Job schema without inlining ($defs preserved) and with
+    optional top-level field ordering via json_schema_extra={'order': int}.
+    """
+    mode = get_registry_mode()
+    mode_key = getattr(mode, "value", str(mode))
+    with _CACHE_LOCK:
+        hit = _JOB_SCHEMA_CACHE.get(mode_key)
+        if hit is not None:
+            return hit
+
+    # Keep $defs as provided by Pydantic; only re-order top-level properties.
+    schema = JobBase.model_json_schema()
+    ordered = _apply_field_ordering(schema, JobBase)
+
+    with _CACHE_LOCK:
+        _JOB_SCHEMA_CACHE[mode_key] = ordered
+    return ordered
+
+
 def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     """
     Current behavior: form-focused schema (hidden fields stripped),
-    with class vars attached.
+    with class vars attached and properties optionally ordered via
+    json_schema_extra={"order": <int>} on fields.
     """
     mode = get_registry_mode()
     mode_key = getattr(mode, "value", str(mode))
@@ -200,7 +255,8 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     full = cls.model_json_schema()
     hidden = _hidden_fields_for_class(cls)
     filtered = _strip_hidden(full, hidden)
-    enriched = _attach_class_vars(filtered, cls)
+    ordered = _apply_field_ordering(filtered, cls)
+    enriched = _attach_class_vars(ordered, cls)
 
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_FORM_CACHE[cache_key] = enriched
@@ -210,6 +266,7 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
 def _cached_component_schema_full(comp_type: str) -> Dict[str, Any]:
     """
     Full component schema, nothing stripped, class vars attached.
+    Properties are optionally ordered via json_schema_extra={"order": <int>}.
     """
     mode = get_registry_mode()
     mode_key = getattr(mode, "value", str(mode))
@@ -222,7 +279,8 @@ def _cached_component_schema_full(comp_type: str) -> Dict[str, Any]:
 
     cls = _resolve_component_class(comp_type)
     full = cls.model_json_schema()
-    enriched = _attach_class_vars(full, cls)
+    ordered = _apply_field_ordering(full, cls)
+    enriched = _attach_class_vars(ordered, cls)
 
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_FULL_CACHE[cache_key] = enriched
@@ -232,7 +290,7 @@ def _cached_component_schema_full(comp_type: str) -> Dict[str, Any]:
 def _cached_component_schema_hidden(comp_type: str) -> Dict[str, Any]:
     """
     Hidden-only schema (only fields marked used_in_table=False),
-    with class vars attached.
+    with class vars attached. Properties are optionally ordered.
     """
     mode = get_registry_mode()
     mode_key = getattr(mode, "value", str(mode))
@@ -247,7 +305,8 @@ def _cached_component_schema_hidden(comp_type: str) -> Dict[str, Any]:
     full = cls.model_json_schema()
     hidden = _hidden_fields_for_class(cls)
     only_hidden = _keep_only_hidden(full, hidden)
-    enriched = _attach_class_vars(only_hidden, cls)
+    ordered = _apply_field_ordering(only_hidden, cls)
+    enriched = _attach_class_vars(ordered, cls)
 
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_HIDDEN_CACHE[cache_key] = enriched
@@ -271,16 +330,15 @@ def _cached_component_types() -> List[str]:
         _COMPONENT_TYPES_CACHE[mode_key] = list(types)
         return list(types)
 
-
-# Routes
 @router.get(
     "/job",
     response_model=dict,
-    summary="Get Job JSON schema (with dataclasses & enums inlined)",
+    summary="Get Job JSON schema (not inlined; $defs preserved)",
 )
 def get_job_schema() -> Dict[str, Any]:
     try:
-        return _cached_job_schema()
+        raw = _cached_job_schema()
+        return schema_post_processing(raw)
     except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
