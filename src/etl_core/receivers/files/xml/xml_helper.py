@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, List, Generator
+from typing import Any, Dict, List, Generator, Iterator
 import xml.etree.ElementTree as ET
 import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
@@ -360,3 +360,29 @@ def unflatten_record(flat: Dict[str, Any]) -> Dict[str, Any]:
         if k:
             _set_path(out, k, v)
     return out
+
+
+def iter_pdf_chunks_core(
+        filepath: Path,
+        *,
+        record_tag: str,
+        chunk_size: int,
+) -> Iterator[pd.DataFrame]:
+    yield from read_xml_bulk_chunks(filepath, record_tag=record_tag, chunk_size=chunk_size)
+
+import xml.etree.ElementTree as ET
+import pandas as pd
+from typing import Tuple, List, Dict, Any
+
+def render_rows_to_xml_fragment(pdf: pd.DataFrame, record_tag: str) -> Tuple[int, str]:
+    pieces: List[str] = []
+    count = 0
+    for _, r in pdf.iterrows():
+        payload: Dict[str, Any] = build_payload(r.to_dict())
+        el = nested_to_element(record_tag, payload)
+        pieces.append(ET.tostring(el, encoding="unicode"))
+        count += 1
+    return count, "".join(pieces)
+
+def wrap_with_root(fragment: str, root_tag: str) -> str:
+    return f'<?xml version="1.0" encoding="utf-8"?>\n<{root_tag}>' + fragment + f"</{root_tag}>"

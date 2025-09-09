@@ -43,9 +43,9 @@ class ReadXML(XML):
             yield Out(port="out", payload=df)
 
     async def process_bigdata(
-        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
+            self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
-        async for df in self._receiver.read_bigdata(
-            self.filepath, metrics=metrics, record_tag=self.record_tag
+        async for ddf in self._receiver.read_bigdata(
+                self.filepath, metrics=metrics, record_tag=self.record_tag
         ):
-            yield Out(port="out", payload=df)
+            yield Out(port="out", payload=ddf)

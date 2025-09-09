@@ -92,8 +92,9 @@ async def test_read_xml_bigdata(sample_bigdata_file: Path, metrics: ComponentMet
     async for df in r.read_bigdata(
         filepath=sample_bigdata_file, metrics=metrics, record_tag="row"
     ):
-        assert isinstance(df, pd.DataFrame)
-        dfs.append(df)
+        assert isinstance(df, dd.DataFrame)
+        pdf = df.compute()
+        dfs.append(pdf)
     all_df = pd.concat(dfs, ignore_index=True)
 
     assert len(all_df) == 3

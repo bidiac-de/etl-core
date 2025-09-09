@@ -130,8 +130,10 @@ async def test_read_xml_bigdata(metrics):
 
     chunks = []
     async for item in comp.execute(payload=None, metrics=metrics):
-        assert isinstance(item, Out) and isinstance(item.payload, pd.DataFrame)
-        chunks.append(item.payload)
+        assert isinstance(item, Out)
+        assert isinstance(item.payload, dd.DataFrame)
+        pdf = item.payload.compute()
+        chunks.append(pdf)
 
     df_all = pd.concat(chunks, ignore_index=True)
     assert {"id", "name"}.issubset(set(df_all.columns))
