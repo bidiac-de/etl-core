@@ -24,6 +24,7 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 from etl_core.context.credentials import Credentials
 from etl_core.strategies.base_strategy import ExecutionStrategy
+from etl_core.context.environment import Environment
 
 
 @pytest.fixture
@@ -127,12 +128,14 @@ class TestMariaDBComponents:
                 entity_name="users",
                 query="SELECT * FROM users",
                 params={"limit": 10},
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.params == {"limit": 10}
-        assert read_comp.credentials_id == persisted_credentials.credentials_id
+        assert read_comp._active_credentials_id == persisted_credentials.credentials_id
 
     def test_mariadb_write_initialization(
         self, persisted_credentials: Credentials
@@ -146,11 +149,13 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert write_comp.entity_name == "users"
-        assert write_comp.credentials_id == persisted_credentials.credentials_id
+        assert write_comp._active_credentials_id == persisted_credentials.credentials_id
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_row(
@@ -170,7 +175,9 @@ class TestMariaDBComponents:
                 entity_name="users",
                 query="SELECT * FROM users WHERE id = %(id)s",
                 params={"id": 1},
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -207,7 +214,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -238,7 +247,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -267,7 +278,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -303,7 +316,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -333,7 +348,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 if_exists="replace",
                 bigdata_partition_chunk_size=25_000,
             )
@@ -372,14 +389,16 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert read_comp.name == "test_read"
         assert read_comp.comp_type == "read_mariadb"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
-        assert read_comp.credentials_id == persisted_credentials.credentials_id
+        assert read_comp._active_credentials_id == persisted_credentials.credentials_id
         assert hasattr(read_comp, "_connection_handler")
         assert hasattr(read_comp, "_receiver")
 
@@ -397,7 +416,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -422,7 +443,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -462,7 +485,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 row_batch_size=500,
             )
 
@@ -486,7 +511,9 @@ class TestMariaDBComponents:
                     "WHERE age > %(min_age)s AND city = ANY(%(cities)s)"
                 ),
                 params={"min_age": 18, "cities": ["Berlin", "München", "Hamburg"]},
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -519,7 +546,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         empty_df = pd.DataFrame()
@@ -550,7 +579,7 @@ class TestMariaDBComponents:
                     comp_type="read_mariadb",
                     entity_name="users",
                     query="SELECT 1",
-                    credentials_id=bogus_id,
+                    credentials_ids={Environment.TEST.value: bogus_id},
                 )
 
     @pytest.mark.asyncio
@@ -567,7 +596,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -601,7 +632,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
         assert read_comp.name == "test_read"
         assert read_comp.query == "SELECT * FROM users"
@@ -631,7 +664,9 @@ class TestMariaDBComponents:
                 entity_name="users",
                 query=large_query,
                 params={"start_date": "2023-01-01", "limit": 1000},
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -664,7 +699,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="user_profiles_2024",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -722,7 +759,9 @@ class TestMariaDBComponents:
                 description="Test write component with INSERT",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 operation="insert",
             )
             write_comp_upsert = self._create_mariadb_write_with_schema(
@@ -730,7 +769,9 @@ class TestMariaDBComponents:
                 description="Test write component with UPSERT",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 operation="upsert",
             )
             write_comp_update = self._create_mariadb_write_with_schema(
@@ -738,7 +779,9 @@ class TestMariaDBComponents:
                 description="Test write component with UPDATE",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 operation="update",
                 where_conditions=["id = :id"],
             )
@@ -747,7 +790,9 @@ class TestMariaDBComponents:
                 description="Test write component with TRUNCATE",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 operation="truncate",
             )
 
@@ -768,7 +813,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 row_batch_size=500,
                 bulk_chunk_size=25_000,
                 bigdata_partition_chunk_size=100_000,
@@ -790,7 +837,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 operation="insert",
             )
 
@@ -835,7 +884,9 @@ class TestMariaDBComponents:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert len(read_comp.INPUT_PORTS) == 0
@@ -862,7 +913,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 in_port_schemas={"in": mock_schema},
             )
 
@@ -897,7 +950,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 in_port_schemas={"in": mock_schema},
             )
 
@@ -919,7 +974,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -965,7 +1022,9 @@ class TestMariaDBComponents:
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert hasattr(write_comp, "_connection_handler")

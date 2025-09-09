@@ -16,25 +16,31 @@ import dask.dataframe as dd
 from unittest.mock import Mock, patch
 
 from etl_core.context.credentials import Credentials
+from etl_core.context.environment import Environment
 from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 
 
 def derive_test_password(base_pw: str, purpose: str) -> str:
-    """
-    Deterministically derive a test password variant without hard-coded secrets.
-    Keeps static analysis happy while remaining stable across a run.
-    """
+    """Deterministically derive a test password variant without hard-coded secrets."""
     digest = hashlib.blake2b(
         f"{purpose}:{base_pw}".encode("utf-8"), digest_size=6
     ).hexdigest()
     return f"{base_pw}_{digest}"
 
 
+@pytest.fixture(autouse=True)
+def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Ensure env-based credential selection is deterministic across tests.
+    """
+    monkeypatch.setenv("COMP_ENV", Environment.TEST.value)
+    monkeypatch.setenv("SECRET_BACKEND", "memory")
+
+
 @pytest.fixture
 def test_creds() -> Tuple[str, str]:
-    # Use your environment like before
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 
@@ -42,7 +48,7 @@ def test_creds() -> Tuple[str, str]:
 def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
     """
     Persist a real Credentials object via CredentialsHandler so components
-    can resolve it by credentials_id.
+    can resolve it by credentials_id (referenced in credentials_by_env).
     """
     user, password = test_creds
     creds = Credentials(
@@ -111,7 +117,7 @@ def mock_metrics() -> Mock:
 
 @pytest.fixture
 def mariadb_read_component(persisted_credentials: Credentials) -> MariaDBRead:
-    """Create a MariaDBRead with a persisted credentials_id."""
+    """Create a MariaDBRead with env-based credentials mapping."""
     with patch(
         "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     ):
@@ -121,18 +127,19 @@ def mariadb_read_component(persisted_credentials: Credentials) -> MariaDBRead:
             comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
-            credentials_id=persisted_credentials.credentials_id,
+            credentials_ids={
+                Environment.TEST.value: persisted_credentials.credentials_id
+            },
         )
         return comp
 
 
 @pytest.fixture
 def mariadb_write_component(persisted_credentials: Credentials) -> MariaDBWrite:
-    """Create a MariaDBWrite with a persisted credentials_id."""
+    """Create a MariaDBWrite with env-based credentials mapping."""
     with patch(
         "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     ):
-        # Minimal schema to satisfy write component validation
         from etl_core.components.wiring.schema import Schema
         from etl_core.components.wiring.column_definition import FieldDef, DataType
 
@@ -150,7 +157,9 @@ def mariadb_write_component(persisted_credentials: Credentials) -> MariaDBWrite:
             comp_type="write_mariadb",
             entity_name="users",
             in_port_schemas={"in": schema},
-            credentials_id=persisted_credentials.credentials_id,
+            credentials_ids={
+                Environment.TEST.value: persisted_credentials.credentials_id
+            },
         )
         return comp
 

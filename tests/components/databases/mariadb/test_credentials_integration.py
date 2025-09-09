@@ -90,8 +90,17 @@ def mariadb_read_component(persisted_credentials: Credentials) -> MariaDBRead:
         comp_type="read_mariadb",
         entity_name="users",
         query="SELECT * FROM users",
-        credentials_id=persisted_credentials.credentials_id,
+        credentials_ids={Environment.TEST.value: persisted_credentials.credentials_id},
     )
+
+
+@pytest.fixture(autouse=True)
+def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Ensure env-based credential selection is deterministic across tests.
+    """
+    monkeypatch.setenv("COMP_ENV", Environment.TEST.value)
+    monkeypatch.setenv("SECRET_BACKEND", "memory")
 
 
 @pytest.fixture
@@ -102,7 +111,7 @@ def mariadb_write_component(persisted_credentials: Credentials) -> MariaDBWrite:
         comp_type="write_mariadb",
         entity_name="users",
         in_port_schemas={"in": _mk_schema()},
-        credentials_id=persisted_credentials.credentials_id,
+        credentials_ids={Environment.TEST.value: persisted_credentials.credentials_id},
     )
 
 
@@ -293,7 +302,7 @@ def test_mariadb_read_query_operations(
         entity_name="users",
         query="SELECT * FROM users WHERE active = %(id)s",
         params={"active": True},
-        credentials_id=persisted_credentials.credentials_id,
+        credentials_ids={Environment.TEST.value: persisted_credentials.credentials_id},
     )
 
     creds = read_comp._get_credentials()

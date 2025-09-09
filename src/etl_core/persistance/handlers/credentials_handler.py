@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from typing import Optional, Tuple, List
 
 from sqlmodel import Session, select
@@ -8,17 +10,38 @@ from etl_core.persistance.db import engine
 from etl_core.persistance.table_definitions import CredentialsTable
 from etl_core.context.credentials import Credentials
 from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
+from etl_core.context.secrets.memory_provider import InMemorySecretProvider
+from etl_core.context.secrets.secret_provider import SecretProvider
+
+_MEMORY_PROVIDER_SINGLETON: Optional[InMemorySecretProvider] = (
+    None  # singleton for in-memory provider if used
+)
+
+
+def _make_secret_provider() -> SecretProvider:
+    """
+    Decide the secret backend at runtime.
+      - SECRET_BACKEND: "memory" (default) or "keyring"
+    """
+    backend = os.getenv("SECRET_BACKEND", "memory").strip().lower()
+    if backend == "memory":
+        global _MEMORY_PROVIDER_SINGLETON
+        if _MEMORY_PROVIDER_SINGLETON is None:
+            _MEMORY_PROVIDER_SINGLETON = InMemorySecretProvider()
+        return _MEMORY_PROVIDER_SINGLETON
+    if backend == "keyring":
+        return KeyringSecretProvider(service="etl_core")
+    raise ValueError(f"Unsupported SECRET_BACKEND={backend!r}")
 
 
 class CredentialsHandler:
     """
     CRUD for credentials metadata; secrets are stored/retrieved via Keyring.
-    Mirrors your existing handler style: use shared engine + short transactions.
     """
 
-    def __init__(self, engine_=engine, service_prefix: str = "etl-core") -> None:
+    def __init__(self, engine_=engine) -> None:
         self.engine = engine_
-        self.secret_store = KeyringSecretProvider(service_prefix)
+        self.secret_store = _make_secret_provider()
 
     def _password_key(self, provider_id: str) -> str:
         return f"{provider_id}/password"

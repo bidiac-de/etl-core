@@ -22,6 +22,7 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.context.credentials import Credentials
 from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.context.environment import Environment
 
 
 class TestMariaDBIntegration:
@@ -129,14 +130,18 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
             write_comp = self._create_mariadb_write_with_schema(
                 name="test_write",
                 description="Test write component",
                 comp_type="write_mariadb",
                 entity_name="users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_read_receiver = AsyncMock()
@@ -186,7 +191,9 @@ class TestMariaDBIntegration:
                 entity_name="users",
                 query="SELECT * FROM users WHERE id = %(id)s",
                 params={"id": 1},
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_read_receiver = AsyncMock()
@@ -233,7 +240,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -271,7 +280,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -313,7 +324,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -338,7 +351,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -374,14 +389,16 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert read_comp.name == "test_read"
         assert read_comp.comp_type == "read_mariadb"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
-        assert read_comp.credentials_id == persisted_credentials.credentials_id
+        assert read_comp._active_credentials_id == persisted_credentials.credentials_id
         assert hasattr(read_comp, "_connection_handler")
         assert hasattr(read_comp, "_receiver")
 
@@ -402,7 +419,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
                 strategy_type="bulk",
             )
 
@@ -442,7 +461,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -482,7 +503,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -510,7 +533,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -564,7 +589,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_read_receiver = AsyncMock()
@@ -604,14 +631,16 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         assert read_comp.name == "test_read"
         assert read_comp.comp_type == "read_mariadb"
         assert read_comp.entity_name == "users"
         assert read_comp.query == "SELECT * FROM users"
-        assert read_comp.credentials_id == persisted_credentials.credentials_id
+        assert read_comp._active_credentials_id == persisted_credentials.credentials_id
         assert hasattr(read_comp, "_connection_handler")
         assert hasattr(read_comp, "_receiver")
 
@@ -629,7 +658,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
@@ -667,7 +698,9 @@ class TestMariaDBIntegration:
                 comp_type="read_mariadb",
                 entity_name="users",
                 query="SELECT * FROM users",
-                credentials_id=persisted_credentials.credentials_id,
+                credentials_ids={
+                    Environment.TEST.value: persisted_credentials.credentials_id
+                },
             )
 
         mock_receiver = AsyncMock()
