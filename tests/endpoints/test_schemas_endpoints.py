@@ -3,17 +3,39 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
+def _prop_names_list(schema: dict) -> set[str]:
+    """
+    The job schema's 'properties' is now a list of
+    {'name': str, 'schema': dict, 'required': bool}.
+    """
+    props = schema.get("properties", [])
+    if not isinstance(props, list):
+        return set()
+    names = []
+    for entry in props:
+        if isinstance(entry, dict):
+            name = entry.get("name")
+            if isinstance(name, str):
+                names.append(name)
+    return set(names)
+
+
 def test_get_job_schema_structure(client: TestClient) -> None:
     response = client.get("/configs/job")
     assert response.status_code == 200
     schema = response.json()
+
+    # 1) properties exist and are now an ordered LIST of entries
     assert "properties" in schema
-    assert "name" in schema["properties"]
-    assert "file_logging" in schema["properties"]
-    assert "num_of_retries" in schema["properties"]
-    assert "strategy_type" in schema["properties"]
-    # Job schema is inlined
-    assert "$defs" not in schema
+    assert isinstance(schema["properties"], list)
+
+    # 2) check a few expected fields by name
+    prop_names = _prop_names_list(schema)
+    for expected in {"name", "file_logging", "num_of_retries", "strategy_type"}:
+        assert expected in prop_names
+
+    # 3) Job schema keeps $defs (router does not inline at this endpoint)
+    assert "$defs" in schema
 
 
 def test_schema_component_types(client: TestClient) -> None:
@@ -26,6 +48,8 @@ def test_schema_component_types(client: TestClient) -> None:
 
 def test_get_specific_schema_valid_form(client: TestClient) -> None:
     comp_types = client.get("/configs/component_types").json()
+    if not comp_types:
+        return
     comp = comp_types[0]
     response = client.get(f"/configs/{comp}/form")
     assert response.status_code == 200

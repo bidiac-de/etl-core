@@ -177,6 +177,7 @@ def _exc_meta(exc: BaseException) -> Dict[str, Optional[str]]:
         "context": str(exc.__context__) if exc.__context__ else None,
     }
 
+
 def _collapse_allof_ref(node: Dict[str, Any]) -> Dict[str, Any]:
     """
     Collapse {"allOf": [{"$ref": ...}], <siblings>} -> {"$ref": ..., <siblings>}
@@ -209,6 +210,7 @@ def _order_prop_names(
       1) integer 'order' on the property's schema
       2) original insertion order
     """
+
     def key(name: str) -> Tuple[int, int, int]:
         raw = props.get(name, {})
         ord_val = raw.get("order")

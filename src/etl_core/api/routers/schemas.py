@@ -40,7 +40,6 @@ def invalidate_schema_caches() -> None:
         _COMPONENT_TYPES_CACHE.clear()
 
 
-
 _ORDER_DEFAULT = 1_000_000
 
 
@@ -88,7 +87,6 @@ def _apply_field_ordering(schema: Dict[str, Any], cls: type) -> Dict[str, Any]:
     out = dict(schema)
     out["properties"] = new_props
     return out
-
 
 
 def _hidden_fields_for_class(cls: type) -> set[str]:
@@ -329,6 +327,7 @@ def _cached_component_types() -> List[str]:
     with _CACHE_LOCK:
         _COMPONENT_TYPES_CACHE[mode_key] = list(types)
         return list(types)
+
 
 @router.get(
     "/job",

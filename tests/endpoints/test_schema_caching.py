@@ -10,8 +10,7 @@ from fastapi.testclient import TestClient
 def _schemas_router_module(client: TestClient):
     """
     Resolve the *exact* schemas router module object that the mounted app uses.
-    We find the /configs/job endpoint and import its module; both endpoints
-    live in the same router module.
+    We find the /configs/job endpoint and import its module for patching.
     """
     for route in client.app.routes:
         if getattr(route, "path", None) == "/configs/job":
@@ -49,12 +48,13 @@ def test_job_schema_is_cached(
 ) -> None:
     """
     First call should compute schema; second call should hit cache.
-    Run against a fresh app so we patch before any cache warm-up.
+    We only count JobBase.model_json_schema() calls now, because the
+    job endpoint no longer inlines $defs at the router.
     """
     client = fresh_client("test")
     _require_cache_or_skip(client)
 
-    calls: Dict[str, int] = {"job_model_json_schema": 0, "inline_defs": 0}
+    calls: Dict[str, int] = {"job_model_json_schema": 0}
 
     # Patch JobBase.model_json_schema
     import etl_core.persistance.base_models.job_base as job_base
@@ -69,17 +69,8 @@ def test_job_schema_is_cached(
         job_base.JobBase, "model_json_schema", staticmethod(_wrapped_job_schema)
     )
 
-    # Patch inline_defs on the live router module (job schema uses inline_defs)
-    schemas_router = _schemas_router_module(client)
-    real_inline_defs = schemas_router.inline_defs  # type: ignore[attr-defined]
-
-    def _wrapped_inline_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
-        calls["inline_defs"] += 1
-        return real_inline_defs(schema)
-
-    monkeypatch.setattr(schemas_router, "inline_defs", _wrapped_inline_defs)
-
     # Start clean
+    schemas_router = _schemas_router_module(client)
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]
 
     # miss -> compute
@@ -90,7 +81,6 @@ def test_job_schema_is_cached(
     assert r2.status_code == 200
 
     assert calls["job_model_json_schema"] == 1
-    assert calls["inline_defs"] == 1
 
 
 def test_component_schema_is_cached_and_invalidates(
@@ -98,7 +88,7 @@ def test_component_schema_is_cached_and_invalidates(
 ) -> None:
     """
     Ensure component schema caching works and invalidate_schema_caches()
-    forces recompute. Component schemas are NOT inlined in the router.
+    forces recompute. Component schemas are not inlined in the router.
     """
     client = fresh_client("test")
     _require_cache_or_skip(client)
