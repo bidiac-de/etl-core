@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from pydantic import ConfigDict
+from pydantic import ConfigDict, NonNegativeInt
 from etl_core.components.base_component import StrategyType
 
 
@@ -15,7 +15,7 @@ class JobBase(SQLModel):
         nullable=False,
         description="The display name of the job.",
     )
-    num_of_retries: int = Field(
+    num_of_retries: NonNegativeInt = Field(
         default=0,
         nullable=False,
         description="Number of retries to attempt if a component fails.",
