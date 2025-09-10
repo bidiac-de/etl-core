@@ -112,7 +112,10 @@ class TestMariaDBComponents:
 
         # Optional sanity: the resolved object is present
         assert read_comp._credentials is not None
-        assert read_comp._credentials.credentials_id == persisted_credentials.credentials_id
+        assert (
+            read_comp._credentials.credentials_id
+            == persisted_credentials.credentials_id
+        )
 
     def test_mariadb_write_initialization(
         self,

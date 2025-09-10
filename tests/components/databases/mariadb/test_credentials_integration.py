@@ -228,7 +228,9 @@ def test_credentials_password_handling() -> None:
         port=3306,
         database="nopassdb",
     )
-    CredentialsHandler().upsert(provider_id=creds_no_pass.credentials_id, creds=creds_no_pass)
+    CredentialsHandler().upsert(
+        provider_id=creds_no_pass.credentials_id, creds=creds_no_pass
+    )
     assert creds_no_pass.decrypted_password is None
 
 
