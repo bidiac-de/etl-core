@@ -1,5 +1,6 @@
-from typing import Dict, Optional
-from pydantic import Field
+# etl_core/context/credentials_mapping_context.py
+from typing import Dict, Optional, Any
+from pydantic import Field, model_validator
 import os
 from etl_core.context.context import Context
 from etl_core.context.environment import Environment
@@ -13,15 +14,30 @@ class CredentialsMappingContext(Context):
     Inherits Context so it is swappable anywhere a Context is expected.
     """
 
-    credentials_ids: Dict[Environment, str] = Field(
+    # store as string keys to match DB rows (e.g., "TEST", "DEV", "PROD")
+    credentials_ids: Dict[str, str] = Field(
         default_factory=dict, description="Mapping environment -> credentials_id."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_map_keys(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        mapping = values.get("credentials_ids")
+        if not mapping:
+            return values
+        # Accept Environment or str keys; store as strings (e.g., "TEST")
+        normalized: Dict[str, str] = {}
+        for k, v in mapping.items():
+            if isinstance(k, Environment):
+                normalized[k.value] = v
+            else:
+                normalized[str(k)] = v
+        values["credentials_ids"] = normalized
+        return values
+
     def _lookup_credentials_id(self, env: Environment) -> Optional[str]:
         key = env.value
-        if key in self.credentials_ids:
-            return self.credentials_ids[key]
-        return None
+        return self.credentials_ids.get(key)
 
     def resolve_active_credentials(
         self,
@@ -52,9 +68,6 @@ class CredentialsMappingContext(Context):
     def determine_active_environment(
         self, override: Optional[Environment] = None
     ) -> Environment:
-        """
-        Order: explicit override -> COMP_ENV -> this Context.environment
-        """
         if override is not None:
             return self._normalize_env(override)
         env_from_os = os.getenv("COMP_ENV")

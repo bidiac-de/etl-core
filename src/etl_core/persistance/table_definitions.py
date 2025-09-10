@@ -200,7 +200,9 @@ class CredentialsTable(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    provider_id: str = Field(index=True, nullable=False)
+    provider_id: str = Field(
+        sa_column=Column(String, unique=True, index=True, nullable=False)
+    )
     name: str = Field(nullable=False)
     user: str = Field(nullable=False)
     host: str = Field(nullable=False)

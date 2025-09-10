@@ -1,3 +1,4 @@
+# tests/components/databases/mariadb/test_credentials_integration.py
 import hashlib
 import os
 from typing import Tuple
@@ -63,8 +64,14 @@ def sample_context() -> Context:
 
 @pytest.fixture
 def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
-    """Create domain credentials, persist via handler,
-    return the model with its string id."""
+    """
+    Create domain credentials, persist via handler, and return the model.
+
+    IMPORTANT:
+    We use provider_id == credentials_id so that ContextCredentialsMapTable,
+    whose FK references CredentialsTable.provider_id, can be populated with
+    the model's credentials_id without violating the FK.
+    """
     user, password = test_creds
     creds = Credentials(
         credentials_id=str(uuid4()),
@@ -77,21 +84,9 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    # Persist so components can resolve by credentials_id
-    CredentialsHandler().upsert(provider_id=str(uuid4()), creds=creds)
+    # Align provider_id with the domain model's credentials_id
+    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
     return creds
-
-
-@pytest.fixture
-def mariadb_read_component(persisted_credentials: Credentials) -> MariaDBRead:
-    return MariaDBRead(
-        name="test_read",
-        description="Test read component",
-        comp_type="read_mariadb",
-        entity_name="users",
-        query="SELECT * FROM users",
-        credentials_ids={Environment.TEST.value: persisted_credentials.credentials_id},
-    )
 
 
 @pytest.fixture(autouse=True)
@@ -104,15 +99,38 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def mariadb_write_component(persisted_credentials: Credentials) -> MariaDBWrite:
-    return MariaDBWrite(
-        name="test_write",
-        description="Test write component",
-        comp_type="write_mariadb",
-        entity_name="users",
-        in_port_schemas={"in": _mk_schema()},
-        credentials_ids={Environment.TEST.value: persisted_credentials.credentials_id},
-    )
+def mariadb_read_component(
+    persisted_mapping_context_id: str,  # provided by conftest.py
+) -> MariaDBRead:
+    # Patch during construction because SQLDatabaseComponent connects in model validator
+    with patch(
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    ):
+        return MariaDBRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_mariadb",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
+
+
+@pytest.fixture
+def mariadb_write_component(
+    persisted_mapping_context_id: str,  # provided by conftest.py
+) -> MariaDBWrite:
+    with patch(
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    ):
+        return MariaDBWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_mariadb",
+            entity_name="users",
+            in_port_schemas={"in": _mk_schema()},
+            context_id=persisted_mapping_context_id,
+        )
 
 
 def test_credentials_creation(
@@ -193,7 +211,8 @@ def test_credentials_without_pool_settings(test_creds) -> None:
         database="mindb",
         password=password,
     )
-    CredentialsHandler().upsert(provider_id=str(uuid4()), creds=creds)
+    # Keep provider_id aligned for consistency across tests
+    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
     assert creds.pool_max_size is None
     assert creds.pool_timeout_s is None
     engine_kwargs = build_sql_engine_kwargs(creds)
@@ -209,7 +228,7 @@ def test_credentials_password_handling() -> None:
         port=3306,
         database="nopassdb",
     )
-    CredentialsHandler().upsert(provider_id=str(uuid4()), creds=creds_no_pass)
+    CredentialsHandler().upsert(provider_id=creds_no_pass.credentials_id, creds=creds_no_pass)
     assert creds_no_pass.decrypted_password is None
 
 
@@ -276,7 +295,6 @@ def test_credentials_pool_configuration_validation(test_creds) -> None:
 def test_mariadb_write_bulk_operations(
     mock_handler_class,
     mariadb_write_component: MariaDBWrite,
-    sample_dataframe,
     test_creds,
 ) -> None:
     mock_handler = Mock()
@@ -290,7 +308,9 @@ def test_mariadb_write_bulk_operations(
 
 @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
 def test_mariadb_read_query_operations(
-    mock_handler_class, persisted_credentials: Credentials, test_creds
+    mock_handler_class,
+    persisted_mapping_context_id: str,  # provided by conftest.py
+    test_creds,
 ) -> None:
     mock_handler = Mock()
     mock_handler_class.return_value = mock_handler
@@ -302,7 +322,7 @@ def test_mariadb_read_query_operations(
         entity_name="users",
         query="SELECT * FROM users WHERE active = %(id)s",
         params={"active": True},
-        credentials_ids={Environment.TEST.value: persisted_credentials.credentials_id},
+        context_id=persisted_mapping_context_id,
     )
 
     creds = read_comp._get_credentials()

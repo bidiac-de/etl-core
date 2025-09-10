@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from sqlmodel import Session, select
 
@@ -10,6 +10,9 @@ from etl_core.persistance.table_definitions import (
     ContextParameterTable,
     ContextTable,
     ContextCredentialsMapTable,
+)
+from etl_core.context.credentials_mapping_context import (
+    CredentialsMappingContext,
 )
 
 
@@ -167,12 +170,29 @@ class ContextHandler:
         with self._session() as s:
             return list(s.exec(select(ContextTable)).all())
 
-    def get_by_provider_id(self, provider_id: str) -> Optional[ContextTable]:
-        """Return a single context by provider_id, or None."""
+    def get_by_provider_id(
+        self, provider_id: str
+    ) -> Optional[Tuple[CredentialsMappingContext, str]]:
+        """
+        Return a hydrated CredentialsMappingContext and its provider_id.
+        The mapping uses raw env values (e.g. "TEST") mapped to credentials provider IDs.
+        """
         with self._session() as s:
-            return s.exec(
+            row = s.exec(
                 select(ContextTable).where(ContextTable.provider_id == provider_id)
             ).first()
+            if row is None:
+                return None
+
+        env_to_creds = self.get_credentials_map(provider_id)
+
+        ctx = CredentialsMappingContext(
+            id=provider_id,
+            name=row.name,
+            environment=row.environment,
+            credentials_ids=env_to_creds,
+        )
+        return ctx, provider_id
 
     def delete_by_provider_id(self, provider_id: str) -> None:
         """

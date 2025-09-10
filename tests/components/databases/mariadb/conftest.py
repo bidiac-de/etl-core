@@ -1,23 +1,23 @@
 """
 Shared test fixtures for MariaDB database tests.
-
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
-from typing import Tuple, Dict
+from typing import Dict, Tuple
 from uuid import uuid4
 
-import pytest
-import pandas as pd
 import dask.dataframe as dd
+import pandas as pd
+import pytest
 from unittest.mock import Mock, patch
 
-from etl_core.context.credentials import Credentials
 from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
 from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistance.handlers.context_handler import ContextHandler
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 
@@ -41,14 +41,15 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def test_creds() -> Tuple[str, str]:
+    # Provide these via your test env (e.g., in CI) or .env for local runs
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 
 @pytest.fixture
 def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
     """
-    Persist a real Credentials object via CredentialsHandler so components
-    can resolve it by credentials_id (referenced in credentials_by_env).
+    Persist a Credentials object. IMPORTANT: use the model's credentials_id
+    as the provider_id so mapping can reference it directly.
     """
     user, password = test_creds
     creds = Credentials(
@@ -62,8 +63,28 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    CredentialsHandler().upsert(provider_id=str(uuid4()), creds=creds)
+    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
     return creds
+
+
+@pytest.fixture
+def persisted_mapping_context_id(persisted_credentials: Credentials) -> str:
+    """
+    Create/update a mapping context (env -> credentials_id) and return its provider_id.
+    NOTE: Use upsert_credentials_mapping_context (no `context=` kw).
+    """
+    provider_id = str(uuid4())
+
+    # Persist the context shell + mapping rows. The handler expects raw env strings.
+    ContextHandler().upsert_credentials_mapping_context(
+        provider_id=provider_id,
+        name="test_mapping_ctx",
+        environment=Environment.TEST.value,
+        mapping_env_to_credentials_id={
+            Environment.TEST.value: persisted_credentials.credentials_id
+        },
+    )
+    return provider_id
 
 
 @pytest.fixture
@@ -116,8 +137,11 @@ def mock_metrics() -> Mock:
 
 
 @pytest.fixture
-def mariadb_read_component(persisted_credentials: Credentials) -> MariaDBRead:
-    """Create a MariaDBRead with env-based credentials mapping."""
+def mariadb_read_component(persisted_mapping_context_id: str) -> MariaDBRead:
+    """
+    Construct MariaDBRead with a persisted mapping context and patch the
+    SQLConnectionHandler during validation/initialization.
+    """
     with patch(
         "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     ):
@@ -127,21 +151,22 @@ def mariadb_read_component(persisted_credentials: Credentials) -> MariaDBRead:
             comp_type="read_mariadb",
             entity_name="users",
             query="SELECT * FROM users",
-            credentials_ids={
-                Environment.TEST.value: persisted_credentials.credentials_id
-            },
+            context_id=persisted_mapping_context_id,
         )
         return comp
 
 
 @pytest.fixture
-def mariadb_write_component(persisted_credentials: Credentials) -> MariaDBWrite:
-    """Create a MariaDBWrite with env-based credentials mapping."""
+def mariadb_write_component(persisted_mapping_context_id: str) -> MariaDBWrite:
+    """
+    Construct MariaDBWrite with a persisted mapping context and patch the
+    SQLConnectionHandler during validation/initialization.
+    """
     with patch(
         "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     ):
         from etl_core.components.wiring.schema import Schema
-        from etl_core.components.wiring.column_definition import FieldDef, DataType
+        from etl_core.components.wiring.column_definition import DataType, FieldDef
 
         schema = Schema(
             fields=[
@@ -157,9 +182,7 @@ def mariadb_write_component(persisted_credentials: Credentials) -> MariaDBWrite:
             comp_type="write_mariadb",
             entity_name="users",
             in_port_schemas={"in": schema},
-            credentials_ids={
-                Environment.TEST.value: persisted_credentials.credentials_id
-            },
+            context_id=persisted_mapping_context_id,
         )
         return comp
 
