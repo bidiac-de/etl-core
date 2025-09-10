@@ -232,12 +232,18 @@ class ContextTable(SQLModel, table=True):
             "passive_deletes": True,
         },
     )
+    credentials_map: list["ContextCredentialsMapTable"] = Relationship(
+        back_populates="context",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
+    )
 
 
 class ContextParameterTable(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
-    # references ContextTable.provider_id (not the PK)
     context_provider_id: str = Field(
         sa_column=Column(
             String,

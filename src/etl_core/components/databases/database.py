@@ -17,11 +17,7 @@ class DatabaseComponent(Component, ABC):
     Base class for database components (Mongo, SQL, ...).
 
     Enforces multiple-credentials-by-environment:
-      - credentials_by_env is REQUIRED; no legacy fallback.
       - The active environment is chosen in this order:
-          (1) explicitly set via set_runtime_environment()
-          (2) environment variable ETL_ENV (case-insensitive)
-          (3) raise if neither is provided
       - Exactly one credential is resolved for the active env.
 
     Reusability:
