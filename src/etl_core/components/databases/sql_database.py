@@ -33,7 +33,6 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     def _build_objects(self):
         """Build SQL database-specific objects after validation."""
         self._setup_connection()
-        self._credentials = self._resolve_credentials()
         return self
 
     @property

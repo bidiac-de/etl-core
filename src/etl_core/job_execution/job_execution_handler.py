@@ -13,6 +13,7 @@ from etl_core.metrics.system_metrics import SystemMetricsHandler
 from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
 from etl_core.components.envelopes import InTagged, Out
+from etl_core.context.environment import Environment
 
 
 class ExecutionAlreadyRunning(Exception):
@@ -42,10 +43,17 @@ class JobExecutionHandler:
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
 
-    def execute_job(self, job: RuntimeJob) -> JobExecution:
+    def execute_job(
+        self,
+        job: RuntimeJob,
+        environment: Optional[Environment | str] = None,  # NEW
+    ) -> JobExecution:
         """
         Top-level method to execute a Job, managing its execution lifecycle.
         """
+        env_obj: Optional[Environment] = (
+            Environment(environment) if isinstance(environment, str) else environment
+        )
         with self._guard_lock:
             if job.id in self._running_jobs:
                 self.logger.warning("Job '%s' is already running", job.name)
@@ -54,7 +62,7 @@ class JobExecutionHandler:
                 )
             # mark as running and create the execution instance
             self._running_jobs.add(job.id)
-            execution = JobExecution(job)
+            execution = JobExecution(job, environment=env_obj)
 
         try:
             return asyncio.run(self._main_loop(execution))
@@ -63,6 +71,17 @@ class JobExecutionHandler:
             with self._guard_lock:
                 self._running_jobs.discard(job.id)
 
+    def _prepare_comps_for_execution(
+        self, job: RuntimeJob, environment: Optional[Environment] = None
+    ) -> None:
+        if environment is not None:
+            for comp in job.components:
+                (
+                    comp.prepare_for_execution(environment)
+                    if hasattr(comp, "prepare_for_execution")
+                    else None
+                )
+
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
         Main loop for executing a JobExecution.
@@ -70,6 +89,10 @@ class JobExecutionHandler:
         job = execution.job
         self.job_info.logging_handler.update_job_name(job.name)
         self.logger.info("Starting execution of '%s'", job.name)
+
+        self._prepare_comps_for_execution(
+            job, execution.environment if execution.environment else None
+        )
 
         job_metrics = self.job_info.metrics_handler.create_job_metrics(execution.id)
 

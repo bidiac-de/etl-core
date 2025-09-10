@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.etl_core.context.context import Context
 from src.etl_core.context.environment import Environment
 from src.etl_core.context.credentials import Credentials
+from src.etl_core.context.credentials_mapping_context import (
+    CredentialsMappingContext,
+)
 from src.etl_core.context.context_registry import ContextRegistry
 from src.etl_core.context.secure_context_adapter import SecureContextAdapter
 
@@ -19,14 +22,8 @@ from src.etl_core.persistance.handlers.context_handler import ContextHandler
 
 router = APIRouter(prefix="/contexts", tags=["contexts"])
 
-# Dependencies
-
 
 def get_secret_provider(service: Optional[str] = None) -> SecretProvider:
-    """
-    Default secret provider using OS keychain. You can override this dependency
-    in tests with an in-memory implementation.
-    """
     svc = service or "sep-sose-2025/default"
     return KeyringSecretProvider(service=svc)
 
@@ -53,6 +50,10 @@ class CredentialsCreateRequest(BaseModel):
         default=None,
         description="Override secret storage service name for this registration.",
     )
+
+
+class CredentialsMappingContextCreateRequest(BaseModel):
+    context: CredentialsMappingContext
 
 
 class ProviderCreateResponse(BaseModel):
@@ -113,7 +114,6 @@ def _dedupe(items: Iterable[ProviderListItem]) -> list[ProviderListItem]:
     return out
 
 
-# register a general Context
 @router.post(
     "/context",
     response_model=ProviderCreateResponse,
@@ -167,7 +167,58 @@ def create_context_provider(
         ) from exc
 
 
-# register Credentials
+@router.post(
+    "/context-mapping",
+    response_model=ProviderCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_credentials_mapping_context(
+    req: CredentialsMappingContextCreateRequest,
+    ctx_handler: ContextHandler = Depends(get_context_handler),
+    creds_handler: CredentialsHandler = Depends(get_credentials_handler),
+) -> ProviderCreateResponse:
+    """
+    Register a CredentialsMappingContext:
+      - persists Context metadata
+      - validates all referenced credentials providers exist
+      - persists env->credentials_id mapping rows
+    """
+    try:
+        cmc = req.context
+        context_id = str(uuid4())
+
+        # Validate referenced credentials exist
+        missing: list[str] = []
+        for cred_id in cmc.credentials_ids.values():
+            if creds_handler.get_by_provider_id(cred_id) is None:
+                missing.append(cred_id)
+        if missing:
+            raise ValueError(
+                "Unknown credentials provider_id(s): " + ", ".join(sorted(missing))
+            )
+
+        mapping = {env.value: cred_id for env, cred_id in cmc.credentials_ids.items()}
+
+        ctx_handler.upsert_credentials_mapping_context(
+            provider_id=context_id,
+            name=cmc.name,
+            environment=cmc.environment.value,
+            mapping_env_to_credentials_id=mapping,
+        )
+
+        return ProviderCreateResponse(
+            id=context_id,
+            kind="context",
+            environment=cmc.environment,
+            parameters_registered=len(mapping),
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to register credentials mapping context: {exc}",
+        ) from exc
+
+
 @router.post(
     "/credentials",
     response_model=ProviderCreateResponse,
@@ -213,7 +264,6 @@ def create_credentials_provider(
         ) from exc
 
 
-# list all registered providers and their data, no secrets
 @router.get(
     "/",
     response_model=list[ProviderListItem],
@@ -223,9 +273,6 @@ def list_providers(
     ctx_handler: ContextHandler = Depends(get_context_handler),
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
 ) -> list[ProviderListItem]:
-    """
-    Return a flat list of providers that are persisted
-    """
     items: list[ProviderListItem] = []
 
     for row in ctx_handler.list_all():
@@ -242,7 +289,6 @@ def list_providers(
     return _dedupe(items)
 
 
-# get context infos by id (no secrets)
 @router.get(
     "/{id}",
     response_model=ProviderInfoResponse,
@@ -253,7 +299,6 @@ def get_provider(
     ctx_handler: ContextHandler = Depends(get_context_handler),
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
 ) -> ProviderInfoResponse:
-
     row_ctx = ctx_handler.get_by_provider_id(id)
     if row_ctx is not None:
         return ProviderInfoResponse(
@@ -276,14 +321,12 @@ def get_provider(
     )
 
 
-# unregister and purge secrets by id
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_provider(
     id: str,
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
     ctx_handler: ContextHandler = Depends(get_context_handler),
 ) -> Response:
-    # Delete secrets + in-memory registry, if present
     try:
         adapter = ContextRegistry.resolve(id)
     except KeyError:
@@ -295,7 +338,6 @@ def delete_provider(
         finally:
             ContextRegistry.unregister(id)
 
-    # Also remove persisted metadata (try both kinds, since only one will match)
     try:
         creds_handler.delete_by_provider_id(id)
     except Exception:

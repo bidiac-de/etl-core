@@ -1,15 +1,22 @@
-from typing import Any, Dict, Annotated
+from typing import Any, Dict, Annotated, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
 from etl_core.api.dependencies import get_execution_handler, get_job_handler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from etl_core.persistance.errors import PersistNotFoundError
 from etl_core.persistance.handlers.job_handler import JobHandler
 from etl_core.api.helpers import _error_payload, _exc_meta
+from etl_core.context.environment import Environment
+
 
 router = APIRouter(prefix="/execution", tags=["execution"])
+
+
+class StartExecutionBody(BaseModel):
+    environment: Environment
 
 
 @router.post(
@@ -21,6 +28,7 @@ def start_execution(
     job_id: str,
     job_handler: Annotated[JobHandler, Depends(get_job_handler)],
     execution_handler: Annotated[JobExecutionHandler, Depends(get_execution_handler)],
+    body: Optional[StartExecutionBody] = None,
 ) -> Dict[str, Any]:
     try:
         runtime_job = job_handler.load_runtime_job(job_id)
@@ -36,12 +44,14 @@ def start_execution(
         ) from exc
 
     try:
-        execution = execution_handler.execute_job(runtime_job)
+        env = body.environment if body else None
+        execution = execution_handler.execute_job(runtime_job, environment=env)
         return {
             "job_id": job_id,
             "status": "started",
             "execution_id": execution.id,
             "max_attempts": execution.max_attempts,
+            "environment": env.value if isinstance(env, Environment) else None,
         }
     except Exception as exc:  # pragma: no cover
         raise HTTPException(

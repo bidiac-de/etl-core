@@ -258,3 +258,40 @@ class ContextParameterTable(SQLModel, table=True):
     )
 
     context: ContextTable | None = Relationship(back_populates="parameters")
+
+
+class ContextCredentialsMapTable(SQLModel, table=True):
+    """
+    Env -> credentials mapping for a context.
+    Rows are non-secret: they reference credentials providers by ID.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+
+    context_provider_id: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey(_FOREIGN_KEY_CONTEXT_PROVIDER, ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
+    environment: str = Field(nullable=False)
+    credentials_provider_id: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey("credentialstable.provider_id", ondelete="RESTRICT"),
+            index=True,
+            nullable=False,
+        )
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "context_provider_id",
+            "environment",
+            name="uq_ctxcred_context_env",
+        ),
+    )
+
+    context: "ContextTable" = Relationship(back_populates="credentials_map")

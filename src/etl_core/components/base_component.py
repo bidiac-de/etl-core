@@ -20,7 +20,6 @@ from pydantic import (
     PrivateAttr,
     field_validator,
 )
-from enum import Enum
 
 from etl_core.components.dataclasses import MetaData, Layout
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -30,6 +29,7 @@ from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
 from etl_core.persistance.base_models.component_base import ComponentBase
+from etl_core.persistance.handlers.context_handler import ContextHandler
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec, EdgeRef
@@ -38,16 +38,8 @@ from etl_core.components.wiring.validation import (
     validate_dataframe_against_schema,
     validate_dask_dataframe_against_schema,
 )
-
-
-class StrategyType(str, Enum):
-    """
-    Enum for different strategy types
-    """
-
-    ROW = "row"
-    BULK = "bulk"
-    BIGDATA = "bigdata"
+from etl_core.context.context import Context
+from etl_core.components.strategy_type import StrategyType
 
 
 class Component(ComponentBase, ABC):
@@ -121,6 +113,11 @@ class Component(ComponentBase, ABC):
         validate_assignment=True,
     )
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
+
+    context_id: Optional[str] = Field(
+        default=None, description="Persisted Context ID to resolve during build."
+    )
+    _resolved_context: Optional[Context] = PrivateAttr(default=None)
 
     routes: Dict[str, List[EdgeRef | str]] = Field(
         default_factory=dict,
@@ -236,6 +233,25 @@ class Component(ComponentBase, ABC):
     @classmethod
     def _class_in_specs(cls) -> List[InPortSpec]:
         return list(cls.INPUT_PORTS)
+
+    @model_validator(mode="after")
+    def _resolve_context_by_id(self) -> "Component":
+        if self._resolved_context is not None:
+            return self
+        if not self.context_id:
+            return self  # not all components require a context
+        ctx_handler = ContextHandler()
+        loaded = ctx_handler.get_by_provider_id(self.context_id)
+        if not loaded:
+            raise ValueError(f"Context with ID {self.context_id} not found")
+        ctx, _provider_id = loaded
+        if not isinstance(ctx, Context):
+            raise TypeError("Resolved object is not a Context")
+        self._resolved_context = ctx
+        return self
+
+    def get_resolved_context(self) -> Optional[Context]:
+        return self._resolved_context
 
     # public instance methods used by wiring/runtime
     def expected_ports(self) -> List[OutPortSpec]:
