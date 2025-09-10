@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Final
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -34,11 +34,10 @@ class TypeConversionRule:
 _ITEM = "*"
 
 
-_NULL_STRINGS: Final = frozenset({"", "na", "nan", "null", "none"})
-_TRUE_STRINGS: Final = frozenset({"true", "t", "1", "yes", "y"})
-_FALSE_STRINGS: Final = frozenset({"false", "f", "0", "no", "n"})
-
-_PD_DTYPES: Final[Dict[DataType, str]] = {
+_NULL_STRINGS = frozenset({"", "na", "nan", "null", "none"})
+_TRUE_STRINGS = frozenset({"true", "t", "1", "yes", "y"})
+_FALSE_STRINGS = frozenset({"false", "f", "0", "no", "n"})
+_PD_DTYPES = {
     DataType.STRING: "string",
     DataType.INTEGER: "Int64",
     DataType.FLOAT: "float64",
@@ -218,28 +217,41 @@ def convert_frame_top_level(
                 pass
 
         if r.target in (DataType.INTEGER, DataType.FLOAT):
+            if r.on_error == OnError.SKIP:
+                continue
+
+            bool_mask = s.map(lambda v: isinstance(v, (bool, np.bool_)))
+            if bool_mask.any():
+                if r.on_error == OnError.RAISE:
+                    raise ValueError(
+                        f"boolean values not allowed for numeric column '{col}'"
+                    )
+                s = s.mask(bool_mask)
+
             as_num = pd.to_numeric(s, errors="coerce")
+            orig_null = s.isna()
 
             if r.target == DataType.INTEGER:
                 mask_non_int = ~as_num.isna() & (as_num % 1 != 0)
-                as_num = as_num.mask(mask_non_int, other=np.nan)
+                new_null = (as_num.isna() & ~orig_null) | mask_non_int
 
                 if r.on_error == OnError.RAISE and (
-                    mask_non_int.any() or as_num.isna().any()
+                    mask_non_int.any() or new_null.any()
                 ):
-                    raise ValueError(
-                        f"invalid integer values in column '{col}'",
-                    )
+                    raise ValueError(f"invalid integer values in column '{col}'")
 
                 if r.on_error == OnError.NULL:
+                    as_num = as_num.mask(mask_non_int, other=np.nan)
                     out[col] = as_num.astype("Int64")
                 else:
-                    out[col] = s.where(as_num.isna(), as_num.astype("Int64"))
-            else:
-                if r.on_error == OnError.RAISE and as_num.isna().any():
-                    raise ValueError(
-                        f"invalid float values in column '{col}'",
+                    out[col] = s.where(
+                        as_num.isna() | mask_non_int, as_num.astype("Int64")
                     )
+
+            else:
+                new_null = as_num.isna() & ~orig_null
+                if r.on_error == OnError.RAISE and new_null.any():
+                    raise ValueError(f"invalid float values in column '{col}'")
 
                 if r.on_error == OnError.NULL:
                     out[col] = as_num.astype("float64")
@@ -252,11 +264,14 @@ def convert_frame_top_level(
             if r.on_error == OnError.RAISE:
                 out[col] = s.map(lambda v: _convert_scalar(v, DataType.BOOLEAN))
             elif r.on_error == OnError.NULL:
-                out[col] = s.map(lambda v: _safe_bool(v))
+                out[col] = s.map(_safe_bool)
             else:
-                out[col] = s.map(
-                    lambda v: v if _safe_bool(v) is None else _safe_bool(v),
-                )
+
+                def _safe_or_orig(v: Any) -> Any:
+                    b = _safe_bool(v)
+                    return v if b is None else b
+
+                out[col] = s.map(_safe_or_orig)
             continue
 
         def elem(v: Any) -> Any:
@@ -286,9 +301,9 @@ def convert_dask_top_level(
         return convert_frame_top_level(pdf, rules)
 
     try:
-        meta = _apply(ddf._meta_nonempty)
+        meta = _apply(ddf.head(1))
     except (AttributeError, TypeError, ValueError, NotImplementedError):
-        meta = ddf._meta
+        meta = _apply(ddf.head(0))
 
     return ddf.map_partitions(_apply, meta=meta)
 
