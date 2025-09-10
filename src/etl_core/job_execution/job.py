@@ -86,7 +86,7 @@ class Job(BaseModel):
             try:
                 next_objs = [name_map[n] for n in comp.next]
             except KeyError as e:
-                raise ValueError(f"Unknown next‐component name: {e.args[0]!r}")
+                raise ValueError(f"Unknown next-component name: {e.args[0]!r}")
             comp.next_components = next_objs
             for nxt in next_objs:
                 nxt.prev_components.append(comp)

@@ -45,8 +45,8 @@ class TypeConversionReceiver(Receiver):
         """Convert a pandas DataFrame; optionally validate schema."""
         try:
             metrics.lines_received += int(len(dataframe))
-        except Exception:
-            pass
+        except (TypeError, ValueError) as e:
+            metrics.logger.warning(f"Failed to count received lines: {e}")
 
         converted = convert_frame_top_level(dataframe, rules)
 
