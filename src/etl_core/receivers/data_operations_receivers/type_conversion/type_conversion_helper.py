@@ -98,8 +98,14 @@ def _convert_scalar(value: Any, target: DataType) -> Any:
             return None
         if isinstance(value, (bool, np.bool_)):
             return bool(value)
-        if isinstance(value, (int, np.integer, float, np.floating)):
-            return bool(value)
+        if isinstance(value, (int, np.integer)):
+            if value in (0, 1):
+                return bool(value)
+            raise ValueError(f"cannot coerce integer {value} to boolean")
+        if isinstance(value, (float, np.floating)):
+            if value in (0.0, 1.0):
+                return bool(int(value))
+            raise ValueError(f"cannot coerce float {value} to boolean")
         s = str(value).strip().lower()
         if s in _TRUE_STRINGS:
             return True
@@ -338,15 +344,9 @@ def derive_out_schema(in_schema: Schema, rules: Sequence[TypeConversionRule]) ->
 
         target_node = ensure_path(root, tuple(parts[1:])) if len(parts) > 1 else root
 
-        if target_node.data_type not in (
-            DataType.OBJECT,
-            DataType.ARRAY,
-            DataType.ENUM,
-            DataType.PATH,
-        ):
-            target_node.data_type = r.target
-            if r.on_error == OnError.NULL:
-                target_node.nullable = True
+        target_node.data_type = r.target
+        if r.on_error == OnError.NULL:
+            target_node.nullable = True
 
     return Schema(fields=new_fields)
 
