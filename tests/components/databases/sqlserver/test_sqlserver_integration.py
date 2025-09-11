@@ -107,7 +107,15 @@ class TestSQLServerIntegration:
 
         mock_read_receiver = AsyncMock()
 
-        async def read_gen(*, entity_name, metrics, connection_handler, batch_size=1000, query=None, params=None):
+        async def read_gen(
+            *,
+            entity_name,
+            metrics,
+            connection_handler,
+            batch_size=1000,
+            query=None,
+            params=None,
+        ):
             for item in sample_data:
                 yield item
 
@@ -116,7 +124,9 @@ class TestSQLServerIntegration:
 
         mock_write_receiver = AsyncMock()
 
-        async def write_row(*, entity_name, row, metrics, connection_handler, query, table=None):
+        async def write_row(
+            *, entity_name, row, metrics, connection_handler, query, table=None
+        ):
             return {"affected_rows": 1, "row": row}
 
         mock_write_receiver.write_row = write_row
@@ -157,7 +167,15 @@ class TestSQLServerIntegration:
 
         mock_read_receiver = AsyncMock()
 
-        async def gen(*, entity_name, metrics, connection_handler, batch_size=1000, query=None, params=None):
+        async def gen(
+            *,
+            entity_name,
+            metrics,
+            connection_handler,
+            batch_size=1000,
+            query=None,
+            params=None,
+        ):
             for item in sample_data:
                 yield item
 
@@ -260,7 +278,15 @@ class TestSQLServerIntegration:
 
         mock_receiver = AsyncMock()
 
-        async def gen(*, entity_name, metrics, connection_handler, batch_size=1000, query=None, params=None):
+        async def gen(
+            *,
+            entity_name,
+            metrics,
+            connection_handler,
+            batch_size=1000,
+            query=None,
+            params=None,
+        ):
             mock_metrics.set_started()
             yield {"id": 1, "name": "John"}
             mock_metrics.set_completed()

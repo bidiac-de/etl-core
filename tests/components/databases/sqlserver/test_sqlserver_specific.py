@@ -30,7 +30,9 @@ class TestSQLServerSpecificFeatures:
             kwargs["in_port_schemas"] = {"in": self._mk_schema()}
         return SQLServerWrite(**kwargs)
 
-    def test_sqlserver_session_variables_default(self, persisted_mapping_context_id: str):
+    def test_sqlserver_session_variables_default(
+        self, persisted_mapping_context_id: str
+    ):
         with patch(
             "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
         ):
@@ -44,7 +46,9 @@ class TestSQLServerSpecificFeatures:
         assert comp.charset == "utf8"
         assert comp.collation == "SQL_Latin1_General_CP1_CI_AS"
 
-    def test_sqlserver_session_variables_custom(self, persisted_mapping_context_id: str):
+    def test_sqlserver_session_variables_custom(
+        self, persisted_mapping_context_id: str
+    ):
         with patch(
             "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
         ):
@@ -193,14 +197,49 @@ class TestSQLServerSpecificFeatures:
     @pytest.mark.parametrize(
         "test_type,test_values,component_class,expected_attr",
         [
-            ("entity_names", ["users", "dbo.users", "[Users]", "MyTable", "table_123", "user_profiles"], SQLServerRead, "entity_name"),
-            ("queries", ["", "SELECT * FROM users", "UPDATE users SET name = :name WHERE id = :id"], SQLServerRead, "query"),
-            ("if_exists_values", [DatabaseOperation.INSERT, DatabaseOperation.UPSERT, DatabaseOperation.TRUNCATE], SQLServerWrite, "operation"),
+            (
+                "entity_names",
+                [
+                    "users",
+                    "dbo.users",
+                    "[Users]",
+                    "MyTable",
+                    "table_123",
+                    "user_profiles",
+                ],
+                SQLServerRead,
+                "entity_name",
+            ),
+            (
+                "queries",
+                [
+                    "",
+                    "SELECT * FROM users",
+                    "UPDATE users SET name = :name WHERE id = :id",
+                ],
+                SQLServerRead,
+                "query",
+            ),
+            (
+                "if_exists_values",
+                [
+                    DatabaseOperation.INSERT,
+                    DatabaseOperation.UPSERT,
+                    DatabaseOperation.TRUNCATE,
+                ],
+                SQLServerWrite,
+                "operation",
+            ),
             ("chunk_sizes", [1000, 5000, 10000], SQLServerWrite, "bulk_chunk_size"),
         ],
     )
     def test_sqlserver_component_validation_scenarios(
-        self, test_type, test_values, component_class, expected_attr, persisted_mapping_context_id: str
+        self,
+        test_type,
+        test_values,
+        component_class,
+        expected_attr,
+        persisted_mapping_context_id: str,
     ) -> None:
         for value in test_values:
             if component_class == SQLServerRead:
@@ -218,14 +257,26 @@ class TestSQLServerSpecificFeatures:
                     description="Test SQL Server component",
                     comp_type="write_sqlserver",
                     entity_name="test_table",
-                    operation=(value if test_type == "if_exists_values" else DatabaseOperation.INSERT),
+                    operation=(
+                        value
+                        if test_type == "if_exists_values"
+                        else DatabaseOperation.INSERT
+                    ),
                     bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
-                    bigdata_partition_chunk_size=(value * 2 if test_type == "chunk_sizes" else 50000),
+                    bigdata_partition_chunk_size=(
+                        value * 2 if test_type == "chunk_sizes" else 50000
+                    ),
                     context_id=persisted_mapping_context_id,
                 )
-            assert getattr(comp, expected_attr) == value if test_type != "queries" else value == getattr(comp, expected_attr)
+            assert (
+                getattr(comp, expected_attr) == value
+                if test_type != "queries"
+                else value == getattr(comp, expected_attr)
+            )
 
-    def test_sqlserver_component_zero_chunk_sizes(self, persisted_mapping_context_id: str) -> None:
+    def test_sqlserver_component_zero_chunk_sizes(
+        self, persisted_mapping_context_id: str
+    ) -> None:
         comp = self._create_sqlserver_write_with_schema(
             name="test_component",
             description="Test SQL Server component",

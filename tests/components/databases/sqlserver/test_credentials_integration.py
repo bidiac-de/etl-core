@@ -46,6 +46,7 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_creds() -> Tuple[str, str]:
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
+
 def test_credentials_creation(
     persisted_credentials: Credentials, test_creds: Tuple[str, str]
 ) -> None:

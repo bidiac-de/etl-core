@@ -197,7 +197,9 @@ def create_credentials_mapping_context(
                 "Unknown credentials provider_id(s): " + ", ".join(sorted(missing))
             )
 
-        mapping = {env.value: cred_id for env, cred_id in cmc.credentials_ids.items()}
+        mapping = {}
+        for env, cred_id in cmc.credentials_ids.items():
+            mapping[env] = cred_id
 
         ctx_handler.upsert_credentials_mapping_context(
             provider_id=context_id,

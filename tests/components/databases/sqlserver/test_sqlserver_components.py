@@ -6,7 +6,6 @@ All components accept a mapping-context via `context_id` and resolve real creds.
 
 from __future__ import annotations
 
-from typing import Tuple
 from unittest.mock import AsyncMock, Mock, patch
 
 import dask.dataframe as dd
@@ -15,7 +14,6 @@ import pytest
 
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
-from etl_core.components.databases.if_exists_strategy import DatabaseOperation
 from etl_core.components.wiring.column_definition import DataType, FieldDef
 from etl_core.components.wiring.schema import Schema
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -57,7 +55,11 @@ class TestSQLServerComponents:
     @pytest.fixture
     def sample_dataframe(self) -> pd.DataFrame:
         return pd.DataFrame(
-            {"id": [1, 2], "name": ["John", "Jane"], "email": ["john@example.com", "jane@example.com"]}
+            {
+                "id": [1, 2],
+                "name": ["John", "Jane"],
+                "email": ["john@example.com", "jane@example.com"],
+            }
         )
 
     @pytest.fixture
@@ -142,7 +144,15 @@ class TestSQLServerComponents:
 
         mock_receiver = AsyncMock()
 
-        async def gen(*, entity_name, metrics, connection_handler, batch_size=1000, query=None, params=None):
+        async def gen(
+            *,
+            entity_name,
+            metrics,
+            connection_handler,
+            batch_size=1000,
+            query=None,
+            params=None,
+        ):
             for item in sample_data:
                 yield item
 
@@ -230,7 +240,9 @@ class TestSQLServerComponents:
 
         mock_receiver = AsyncMock()
 
-        async def write_row(*, entity_name, row, metrics, connection_handler, query, table=None):
+        async def write_row(
+            *, entity_name, row, metrics, connection_handler, query, table=None
+        ):
             return {"affected_rows": 1, "row": row}
 
         mock_receiver.write_row = write_row

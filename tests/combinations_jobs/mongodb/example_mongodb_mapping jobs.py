@@ -24,16 +24,13 @@ CFG_BULK_JOIN = BASE / "mongo_bulk_join_people_orders.json"
 CONTEXT_ID_TOKEN = "${MONGO_EXAMPLE_CONTEXT_ID}"
 
 
-
-def _persist_credentials_for_env(
-) -> Credentials:
+def _persist_credentials_for_env() -> Credentials:
     """Persist credentials; provider_id == credentials_id to satisfy FK."""
     host = "placeholder_host"
     port = 27017
     database = "placeholder_db"
     user = "placeholder_user"
     password = "placeholder_password"
-
 
     creds = Credentials(
         credentials_id=str(uuid4()),
@@ -98,10 +95,7 @@ def run_job_from_json(cfg_path: Path, env: Environment = Environment.TEST) -> No
     run_info = exec_handler.execute_job(job)
     status = exec_handler.job_info.metrics_handler.get_job_metrics(run_info.id).status
 
-    print(
-        f"Job '{cfg.get('name', cfg_path.name)}' "
-        f"finished with status: {status}"
-    )
+    print(f"Job '{cfg.get('name', cfg_path.name)}' " f"finished with status: {status}")
 
 
 if __name__ == "__main__":
