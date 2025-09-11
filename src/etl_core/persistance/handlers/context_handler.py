@@ -175,7 +175,8 @@ class ContextHandler:
     ) -> Optional[Tuple[CredentialsMappingContext, str]]:
         """
         Return a hydrated CredentialsMappingContext and its provider_id.
-        The mapping uses raw env values (e.g. "TEST") mapped to credentials provider IDs.
+        The mapping uses raw env values (e.g. "TEST") mapped to credentials
+        provider IDs.
         """
         with self._session() as s:
             row = s.exec(
