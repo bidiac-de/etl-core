@@ -1,190 +1,115 @@
 """
-Fixtures for SQL Server component tests.
+Shared fixtures for SQL Server database tests (mapping-context based).
 
-This file provides common fixtures used across SQL Server test files.
+Pattern (matches MariaDB/PostgreSQL tests):
+- Persist Credentials (provider_id == credentials_id)
+- Create a mapping Context (env -> credentials_id) via ContextHandler
+- Build components with context_id (not credentials_id)
 """
 
-import pytest
-from unittest.mock import Mock
+from __future__ import annotations
 
-from etl_core.context.context import Context
+import os
+from typing import Dict, Tuple
+from uuid import uuid4
+from unittest.mock import Mock, patch
+
+import dask.dataframe as dd
+import pandas as pd
+import pytest
+
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.context.context_parameter import ContextParameter
+from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistance.handlers.context_handler import ContextHandler
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
+from etl_core.components.wiring.column_definition import DataType, FieldDef
+from etl_core.components.wiring.schema import Schema
+
+
+@pytest.fixture(autouse=True)
+def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force deterministic env + in-memory secrets during tests."""
+    monkeypatch.setenv("COMP_ENV", Environment.TEST.value)
+    monkeypatch.setenv("SECRET_BACKEND", "memory")
 
 
 @pytest.fixture
-def test_creds():
-    """Provide test credentials for testing."""
-    return ("testuser", "testpassword123")
+def test_creds() -> Tuple[str, str]:
+    # Provide these via env for local runs
+    return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 
 @pytest.fixture
-def sample_credentials(test_creds):
-    """Create sample credentials for testing."""
+def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
+    """
+    Persist a Credentials object. Use the model's credentials_id as provider_id
+    so the context <-> credentials mapping FK is satisfied.
+    """
     user, password = test_creds
-    return Credentials(
-        credentials_id=1,
-        name="test_db_creds",
+    creds = Credentials(
+        credentials_id=str(uuid4()),
+        name="mssql_test_creds",
         user=user,
         host="localhost",
-        port=1433,  # SQL Server default port
+        port=1433,
         database="testdb",
         password=password,
         pool_max_size=10,
         pool_timeout_s=30,
     )
+    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
+    return creds
 
 
 @pytest.fixture
-def sample_context(sample_credentials):
-    """Create sample context with credentials."""
-    context = Context(
-        id=1,
-        name="test_context",
-        environment=Environment.TEST,
-        parameters={
-            "db_host": ContextParameter(
-                id=1, key="db_host", value="localhost", type="string", is_secure=False
-            ),
-            "db_port": ContextParameter(
-                id=2, key="db_port", value="1433", type="string", is_secure=False
-            ),
+def persisted_mapping_context_id(persisted_credentials: Credentials) -> str:
+    """
+    Create/update a mapping context (env -> credentials_id) and return its provider_id.
+    """
+    provider_id = str(uuid4())
+    ContextHandler().upsert_credentials_mapping_context(
+        provider_id=provider_id,
+        name="mssql_test_mapping_ctx",
+        environment=Environment.TEST.value,
+        mapping_env_to_credentials_id={
+            Environment.TEST.value: persisted_credentials.credentials_id
         },
     )
-    context.add_credentials(sample_credentials)
-    return context
+    return provider_id
 
 
 @pytest.fixture
-def mock_context(sample_context):
-    """Create mock context for testing."""
-    return sample_context
-
-
-@pytest.fixture
-def multiple_credentials(test_creds):
-    """Create multiple credentials for testing."""
-    user, password = test_creds
-    creds1 = Credentials(
-        credentials_id=1,
-        name="first_db",
-        user=user,
-        host="localhost",
-        port=1433,
-        database="testdb",
-        password=password,
-        pool_max_size=10,
-        pool_timeout_s=30,
-    )
-    creds2 = Credentials(
-        credentials_id=2,
-        name="second_db",
-        user="user2",
-        host="localhost",
-        port=1433,
-        database="seconddb",
-        password="password2",
-        pool_max_size=15,
-        pool_timeout_s=45,
-    )
-    return [creds1, creds2]
-
-
-@pytest.fixture
-def context_with_multiple_credentials(multiple_credentials):
-    """Create context with multiple credentials."""
-    context = Context(
-        id=2,
-        name="multi_context",
-        environment=Environment.TEST,
-        parameters={},
-    )
-    for creds in multiple_credentials:
-        context.add_credentials(creds)
-    return context
-
-
-@pytest.fixture
-def sqlserver_read_component(sample_context):
-    """Create SQL Server read component for testing."""
-    return SQLServerRead(
-        name="test_read",
-        description="Test read component",
-        comp_type="read_sqlserver",
-        entity_name="users",
-        query="SELECT * FROM users",
-        credentials_id=1,
+def sample_dataframe() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "name": ["John", "Jane", "Bob"],
+            "email": ["john@test.com", "jane@test.com", "bob@test.com"],
+        }
     )
 
 
 @pytest.fixture
-def sqlserver_write_component(sample_context):
-    """Create SQL Server write component for testing."""
-    return SQLServerWrite(
-        name="test_write",
-        description="Test write component",
-        comp_type="write_sqlserver",
-        entity_name="users",
-        credentials_id=1,
+def sample_dask_dataframe() -> dd.DataFrame:
+    df = pd.DataFrame(
+        {
+            "id": [1, 2, 3, 4],
+            "name": ["John", "Jane", "Bob", "Alice"],
+            "email": [
+                "john@test.com",
+                "jane@test.com",
+                "bob@test.com",
+                "alice@test.com",
+            ],
+        }
     )
+    return dd.from_pandas(df, npartitions=2)
 
 
 @pytest.fixture
-def sample_sql_queries():
-    """Provide sample SQL queries for testing."""
-    return [
-        "SELECT * FROM users",
-        "SELECT id, name, email FROM users WHERE active = :active",
-        "INSERT INTO users (name, email) VALUES (:name, :email)",
-        "UPDATE users SET name = :name WHERE id = :id",
-        "DELETE FROM users WHERE id = :id",
-        """
-        SELECT u.id, u.name, u.email, p.phone
-        FROM users u
-        LEFT JOIN profiles p ON u.id = p.user_id
-        WHERE u.active = :active_status
-        """,
-        "SELECT COUNT(*) FROM users WHERE created_date >= :start_date",
-        "SELECT DISTINCT department FROM employees WHERE salary > :min_salary",
-    ]
-
-
-@pytest.fixture
-def sample_query_params():
-    """Provide sample query parameters for testing."""
-    return [
-        {},
-        {"active": 1},
-        {"name": "John Doe", "email": "john@example.com"},
-        {"name": "Jane Smith", "id": 123},
-        {"id": 456},
-        {"active_status": True},
-        {"start_date": "2024-01-01"},
-        {"min_salary": 50000},
-        {"user_id": 789, "status": "active"},
-        {"limit": 100, "offset": 0},
-    ]
-
-
-@pytest.fixture
-def mock_connection_handler():
-    """Create mock connection handler for testing."""
-    handler = Mock()
-    mock_connection = Mock()
-    mock_connection.execute.return_value = Mock()
-    mock_context = Mock()
-    mock_context.__enter__ = Mock(return_value=mock_connection)
-    mock_context.__exit__ = Mock(return_value=None)
-    handler.lease.return_value = mock_context
-    return handler
-
-
-@pytest.fixture
-def mock_metrics():
-    """Create mock metrics for testing."""
+def mock_metrics() -> Mock:
     metrics = Mock()
     metrics.set_started = Mock()
     metrics.set_completed = Mock()
@@ -193,27 +118,75 @@ def mock_metrics():
 
 
 @pytest.fixture
-def sample_data():
-    """Provide sample data for testing."""
-    return [
-        {"id": 1, "name": "John Doe", "email": "john@example.com", "active": True},
-        {"id": 2, "name": "Jane Smith", "email": "jane@example.com", "active": True},
-        {"id": 3, "name": "Bob Johnson", "email": "bob@example.com", "active": False},
-        {"id": 4, "name": "Alice Brown", "email": "alice@example.com", "active": True},
-    ]
+def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead:
+    """Construct SQLServerRead with a persisted mapping context; patch connection."""
+    with patch(
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    ):
+        return SQLServerRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
 
 
 @pytest.fixture
-def sample_dataframe(sample_data):
-    """Create sample pandas DataFrame for testing."""
-    import pandas as pd
-
-    return pd.DataFrame(sample_data)
+def sqlserver_write_component(persisted_mapping_context_id: str) -> SQLServerWrite:
+    """Construct SQLServerWrite with a persisted mapping context; patch connection."""
+    with patch(
+        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+    ):
+        schema = Schema(
+            fields=[
+                FieldDef(name="id", data_type=DataType.INTEGER),
+                FieldDef(name="name", data_type=DataType.STRING),
+                FieldDef(name="email", data_type=DataType.STRING),
+            ]
+        )
+        return SQLServerWrite(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_sqlserver",
+            entity_name="users",
+            in_port_schemas={"in": schema},
+            context_id=persisted_mapping_context_id,
+        )
 
 
 @pytest.fixture
-def sample_dask_dataframe(sample_dataframe):
-    """Create sample Dask DataFrame for testing."""
-    import dask.dataframe as dd
-
-    return dd.from_pandas(sample_dataframe, npartitions=2)
+def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
+    """Build (unpersisted) credential variants for targeted tests."""
+    _, base_pw = test_creds
+    return {
+        "minimal": Credentials(
+            credentials_id=str(uuid4()),
+            name="mssql_minimal",
+            user="minuser",
+            host="localhost",
+            port=1433,
+            database="mindb",
+            password=base_pw,
+        ),
+        "with_pool": Credentials(
+            credentials_id=str(uuid4()),
+            name="mssql_pool",
+            user="pooluser",
+            host="localhost",
+            port=1433,
+            database="pooldb",
+            password=base_pw,
+            pool_max_size=50,
+            pool_timeout_s=60,
+        ),
+        "no_password": Credentials(
+            credentials_id=str(uuid4()),
+            name="mssql_nopass",
+            user="nopassuser",
+            host="localhost",
+            port=1433,
+            database="nopassdb",
+        ),
+    }

@@ -227,6 +227,28 @@ def _set_test_env() -> Tuple[str, str]:
 def test_creds(_set_test_env: Tuple[str, str]) -> Tuple[str, str]:
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
+@pytest.fixture()
+def schema_row_min() -> Dict[str, object]:
+    """
+    Minimal row schema used by most tests.
+    Named to allow adding more schema variants later (e.g., schema_row_with_meta).
+    """
+    return {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
+
+
+@pytest.fixture()
+def schema_row_two_fields() -> Dict[str, object]:
+    """
+    Example extension for future tests: two-field integer schema.
+    Not used by current tests, but here to demonstrate the pattern.
+    """
+    return {
+        "fields": [
+            {"name": "id", "data_type": "integer", "nullable": False},
+            {"name": "value", "data_type": "integer", "nullable": True},
+        ]
+    }
+
 
 @pytest.fixture
 def sample_docs() -> List[Dict[str, Any]]:
