@@ -1,104 +1,127 @@
 # Port Components
 
-Port components provide declarative specifications for component input and output connections.
+Port components provide **declarative specifications** for component input and output connections with comprehensive support for connection constraints and validation.
 
 ## Overview
 
-Port components define how components connect to each other in the ETL pipeline, specifying input and output ports with their characteristics and constraints.
+Port components define how components connect to each other in the ETL pipeline, specifying input and output ports with their characteristics and constraints. They provide **type-safe port definitions** and **connection validation** for robust pipeline construction.
 
 ## Components
 
-### Port Specifications
-- **InPortSpec**: Input port specifications
-- **OutPortSpec**: Output port specifications
-- **EdgeRef**: Edge routing specifications
+### Port Functions
+- **InPortSpec**: Input port specifications with fanin control
+- **OutPortSpec**: Output port specifications with fanout control
+- **EdgeRef**: Edge routing specifications for component connections
+- **Port Validation**: Comprehensive port configuration validation
 
 ## Port Types
 
-### Input Ports (InPortSpec)
+### Input Ports
 Define how components receive data from upstream components.
 
-#### Required Fields
-- `name`: Port name (e.g., 'in', 'left', 'right')
-- `required`: Whether the port must be connected (default: False)
-- `fanin`: Connection constraint ('one' or 'many', default: 'many')
+#### Features
+- **Port Naming**: Descriptive port names (e.g., 'in', 'left', 'right')
+- **Required Ports**: Specify whether ports must be connected
+- **Fanin Control**: Control upstream connection constraints
+- **Connection Validation**: Validate port connections
 
-#### Fanin Options
-- **'one'**: Exactly one upstream connection allowed
-- **'many'**: Multiple upstream connections allowed
-
-### Output Ports (OutPortSpec)
+### Output Ports
 Define how components send data to downstream components.
 
-#### Required Fields
-- `name`: Port name (e.g., 'out', 'pass', 'fail')
-- `required`: Whether the port must be connected (default: False)
-- `fanout`: Connection constraint ('one' or 'many', default: 'many')
+#### Features
+- **Port Naming**: Descriptive port names (e.g., 'out', 'pass', 'fail')
+- **Required Ports**: Specify whether ports must be connected
+- **Fanout Control**: Control downstream connection constraints
+- **Connection Validation**: Validate port connections
 
-#### Fanout Options
-- **'one'**: Exactly one downstream connection allowed
-- **'many'**: Multiple downstream connections allowed
-
-### Edge References (EdgeRef)
+### Edge References
 Define routing from output ports to input ports.
 
-#### Required Fields
-- `to`: Target component name
-- `in_port`: Target input port name (optional if target has only one input port)
+#### Features
+- **Target Specification**: Specify target component names
+- **Port Routing**: Route to specific input ports
+- **Connection Management**: Manage port connections
+- **Routing Validation**: Validate edge routing
 
-## Example Usage
+## JSON Configuration Examples
 
 ### Input Port Specification
-```python
-from etl_core.components.wiring.ports import InPortSpec
 
-# Single required input
-input_port = InPortSpec(
-    name="in",
-    required=True,
-    fanin="one"
-)
+```json
+{
+  "name": "in",
+  "required": true,
+  "fanin": "one"
+}
+```
 
-# Multiple optional inputs
-input_ports = (
-    InPortSpec(name="left", required=True, fanin="one"),
-    InPortSpec(name="right", required=True, fanin="one"),
-    InPortSpec(name="config", required=False, fanin="one")
-)
+### Multiple Input Ports
+
+```json
+{
+  "input_ports": [
+    {
+      "name": "left",
+      "required": true,
+      "fanin": "one"
+    },
+    {
+      "name": "right",
+      "required": true,
+      "fanin": "one"
+    },
+    {
+      "name": "config",
+      "required": false,
+      "fanin": "one"
+    }
+  ]
+}
 ```
 
 ### Output Port Specification
-```python
-from etl_core.components.wiring.ports import OutPortSpec
 
-# Single output
-output_port = OutPortSpec(
-    name="out",
-    required=True,
-    fanout="many"
-)
+```json
+{
+  "name": "out",
+  "required": true,
+  "fanout": "many"
+}
+```
 
-# Multiple outputs
-output_ports = (
-    OutPortSpec(name="pass", required=True, fanout="many"),
-    OutPortSpec(name="fail", required=False, fanout="many")
-)
+### Multiple Output Ports
+
+```json
+{
+  "output_ports": [
+    {
+      "name": "pass",
+      "required": true,
+      "fanout": "many"
+    },
+    {
+      "name": "fail",
+      "required": false,
+      "fanout": "many"
+    }
+  ]
+}
 ```
 
 ### Edge Routing
-```python
-from etl_core.components.wiring.ports import EdgeRef
 
-# Route to specific input port
-edge = EdgeRef(
-    to="filter_component",
-    in_port="in"
-)
-
-# Route to component with single input
-edge = EdgeRef(
-    to="aggregation_component"
-)
+```json
+{
+  "edges": [
+    {
+      "to": "filter_component",
+      "in_port": "in"
+    },
+    {
+      "to": "aggregation_component"
+    }
+  ]
+}
 ```
 
 ## Port Constraints
@@ -114,44 +137,108 @@ edge = EdgeRef(
 - **Fanout 'one'**: Enforces exactly one downstream connection
 - **Fanout 'many'**: Allows multiple downstream connections
 
-## Validation
+## Port Features
 
-### Port Validation
-- **Name Uniqueness**: Port names must be unique within a component
-- **Required Ports**: Required ports must be connected
-- **Connection Limits**: Fanin/fanout constraints are enforced
-- **Port Existence**: Referenced ports must exist
+### Port Registration
+- **Automatic Detection**: Automatic port detection and management
+- **Port Validation**: Ensure proper port configuration
+- **Port Statistics**: Track port usage and performance metrics
+- **Port Management**: Comprehensive port management capabilities
 
-### Edge Validation
-- **Target Existence**: Target components must exist
-- **Port Compatibility**: Input/output port types must match
-- **Connection Limits**: Fanin/fanout constraints are enforced
+### Connection Management
+- **Connection Validation**: Ensure proper port compatibility
+- **Connection Monitoring**: Track connection health and performance
+- **Error Handling**: Handle connection errors gracefully
+- **Connection Recovery**: Implement connection recovery mechanisms
+
+### Edge Routing
+- **Flexible Routing**: Route from output ports to input ports
+- **Routing Validation**: Ensure proper edge configuration
+- **Routing Optimization**: Optimize data flow through pipeline
+- **Connection Management**: Manage port connections efficiently
 
 ## Error Handling
 
 ### Port Errors
-- **Missing Required Ports**: Clear error messages for unconnected required ports
-- **Invalid Port Names**: Error messages for invalid port names
-- **Connection Violations**: Clear messages for fanin/fanout violations
+- **Clear Messages**: Descriptive error messages for port issues
+- **Port Validation**: Path-based error reporting for port problems
+- **Connection Validation**: Detailed connection validation information
+- **Context**: Port and connection context in error messages
 
-### Edge Errors
-- **Missing Targets**: Error messages for non-existent target components
-- **Invalid Ports**: Error messages for non-existent target ports
-- **Connection Conflicts**: Error messages for connection constraint violations
+### Error Types
+- **Missing Required Ports**: Required ports not connected
+- **Invalid Port Names**: Invalid or duplicate port names
+- **Connection Violations**: Fanin/fanout constraint violations
+- **Port Existence**: Referenced ports don't exist
+
+### Error Reporting
+```json
+{
+  "port_error": {
+    "error_type": "missing_required_port",
+    "port_name": "input_port",
+    "component": "filter_component",
+    "message": "Required port 'input_port' not connected"
+  }
+}
+```
+
+## Performance Considerations
+
+### Port Management
+- **Efficient Registration**: Optimize port registration and detection
+- **Connection Pooling**: Use connection pooling for better performance
+- **Port Statistics**: Track port usage and performance metrics
+- **Connection Optimization**: Optimize port connections for performance
+
+### Edge Routing
+- **Routing Efficiency**: Optimize edge routing for data flow
+- **Connection Validation**: Efficient connection validation
+- **Routing Optimization**: Optimize data flow through pipeline
+- **Connection Management**: Efficient connection management
+
+### Validation
+- **Early Validation**: Validate ports and connections early
+- **Efficient Validation**: Optimize validation performance
+- **Error Handling**: Handle validation errors efficiently
+- **Performance**: Balance validation thoroughness with performance
+
+## Configuration
+
+### Port Options
+- **Port Configuration**: Configure port specifications and constraints
+- **Connection Settings**: Set connection parameters and limits
+- **Validation Settings**: Configure validation options
+- **Performance Tuning**: Optimize port performance
+
+### Edge Options
+- **Routing Configuration**: Configure edge routing parameters
+- **Connection Limits**: Set connection limits and constraints
+- **Validation Options**: Configure edge validation settings
+- **Performance Settings**: Optimize edge routing performance
 
 ## Best Practices
 
 ### Port Naming
-- Use descriptive names (e.g., 'data_in', 'error_out')
-- Follow consistent naming conventions
-- Use standard names for common ports ('in', 'out', 'pass', 'fail')
+- **Descriptive Names**: Use descriptive names (e.g., 'data_in', 'error_out')
+- **Consistent Conventions**: Follow consistent naming conventions
+- **Standard Names**: Use standard names for common ports ('in', 'out', 'pass', 'fail')
+- **Documentation**: Document port purposes and constraints
 
 ### Port Design
-- Make ports optional when possible
-- Use 'many' fanin/fanout for flexibility
-- Use 'one' fanin/fanout for strict requirements
+- **Optional Ports**: Make ports optional when possible
+- **Flexible Connections**: Use 'many' fanin/fanout for flexibility
+- **Strict Requirements**: Use 'one' fanin/fanout for strict requirements
+- **Error Handling**: Implement robust error handling
 
 ### Edge Routing
-- Be explicit about target ports
-- Use descriptive component names
-- Validate connections during pipeline construction
+- **Explicit Targets**: Be explicit about target ports
+- **Descriptive Names**: Use descriptive component names
+- **Validation**: Validate connections during pipeline construction
+- **Documentation**: Document edge routing and connections
+
+### Performance
+- **Port Monitoring**: Monitor port usage and performance
+- **Connection Health**: Track connection health and errors
+- **Error Recovery**: Implement graceful error recovery
+- **Optimization**: Optimize port connections for performance

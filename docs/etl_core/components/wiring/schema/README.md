@@ -1,10 +1,16 @@
 # Schema Components
 
-Schema components provide data structure definitions and validation for ETL pipeline data.
+Schema components provide **data structure definitions** and validation for ETL pipeline data with comprehensive support for complex data types and validation rules.
 
 ## Overview
 
-Schema components define the structure and validation rules for data flowing through the ETL pipeline, ensuring data integrity and type safety.
+Schema components define the structure and validation rules for data flowing through the ETL pipeline, ensuring data integrity and type safety. They provide **comprehensive type support** and **validation capabilities** for robust data processing.
+
+### Key Concepts
+- **Schema Definition**: Define data structure and validation rules
+- **Type Safety**: Ensure data types match schema definitions
+- **Validation**: Comprehensive data validation and error handling
+- **Nested Structures**: Support for complex nested data structures
 
 ## Components
 
@@ -13,7 +19,7 @@ Schema components define the structure and validation rules for data flowing thr
 - **FieldDef**: Recursive field definitions with data types
 - **DataType**: Supported data types enumeration
 
-## Data Types
+## Schema Types
 
 ### Primitive Types
 - **STRING**: Text data
@@ -27,165 +33,257 @@ Schema components define the structure and validation rules for data flowing thr
 - **ARRAY**: Array/list data structures
 - **ENUM**: Enumerated values with predefined options
 
-## Schema Structure
+### Features
+- **Type Safety**: Comprehensive type checking and validation
+- **Nested Support**: Recursive field definitions for complex structures
+- **Validation Rules**: Flexible validation with custom rules
+- **Error Handling**: Detailed error messages and context
 
-### Root Schema
-```python
-from etl_core.components.wiring.schema import Schema
-from etl_core.components.wiring.column_definition import FieldDef, DataType
-
-schema = Schema(
-    fields=[
-        FieldDef(
-            name="customer_id",
-            data_type=DataType.INTEGER,
-            nullable=False
-        ),
-        FieldDef(
-            name="customer_name",
-            data_type=DataType.STRING,
-            nullable=False
-        )
-    ]
-)
-```
-
-### Nested Objects
-```python
-# Nested object structure
-address_field = FieldDef(
-    name="address",
-    data_type=DataType.OBJECT,
-    nullable=True,
-    children=[
-        FieldDef(name="street", data_type=DataType.STRING, nullable=False),
-        FieldDef(name="city", data_type=DataType.STRING, nullable=False),
-        FieldDef(name="zip_code", data_type=DataType.STRING, nullable=False)
-    ]
-)
-```
-
-### Arrays
-```python
-# Array of items
-tags_field = FieldDef(
-    name="tags",
-    data_type=DataType.ARRAY,
-    nullable=True,
-    item=FieldDef(
-        name="tag",
-        data_type=DataType.STRING,
-        nullable=False
-    )
-)
-```
-
-### Enums
-```python
-# Enumerated values
-status_field = FieldDef(
-    name="status",
-    data_type=DataType.ENUM,
-    nullable=False,
-    enum_values=["active", "inactive", "pending"]
-)
-```
-
-## Field Definition
-
-### FieldDef Properties
-- **name**: Field name
-- **data_type**: Data type from DataType enum
-- **nullable**: Whether the field can be null (default: False)
-- **enum_values**: Allowed values for ENUM type
-- **children**: Child fields for OBJECT type
-- **item**: Item schema for ARRAY type
-
-### Validation Rules
-- **OBJECT fields**: Must have children defined
-- **ARRAY fields**: Must have item schema defined
-- **ENUM fields**: Must have enum_values defined
-- **Other types**: Cannot have children, item, or enum_values
-
-## Example Usage
+## JSON Configuration Examples
 
 ### Simple Schema
-```python
-from etl_core.components.wiring.schema import Schema
-from etl_core.components.wiring.column_definition import FieldDef, DataType
 
-# Customer schema
-customer_schema = Schema(
-    fields=[
-        FieldDef(name="id", data_type=DataType.INTEGER, nullable=False),
-        FieldDef(name="name", data_type=DataType.STRING, nullable=False),
-        FieldDef(name="email", data_type=DataType.STRING, nullable=True),
-        FieldDef(name="active", data_type=DataType.BOOLEAN, nullable=False)
-    ]
-)
+```json
+{
+  "name": "customer_schema",
+  "fields": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "name",
+      "data_type": "STRING",
+      "nullable": false
+    },
+    {
+      "name": "email",
+      "data_type": "STRING",
+      "nullable": true
+    },
+    {
+      "name": "active",
+      "data_type": "BOOLEAN",
+      "nullable": false
+    }
+  ]
+}
 ```
 
-### Complex Schema
-```python
-# Complex nested schema
-order_schema = Schema(
-    fields=[
-        FieldDef(name="order_id", data_type=DataType.INTEGER, nullable=False),
-        FieldDef(name="customer", data_type=DataType.OBJECT, nullable=False, children=[
-            FieldDef(name="id", data_type=DataType.INTEGER, nullable=False),
-            FieldDef(name="name", data_type=DataType.STRING, nullable=False)
-        ]),
-        FieldDef(name="items", data_type=DataType.ARRAY, nullable=False, item=FieldDef(
-            name="item",
-            data_type=DataType.OBJECT,
-            nullable=False,
-            children=[
-                FieldDef(name="product_id", data_type=DataType.INTEGER, nullable=False),
-                FieldDef(name="quantity", data_type=DataType.INTEGER, nullable=False),
-                FieldDef(name="price", data_type=DataType.FLOAT, nullable=False)
-            ]
-        )),
-        FieldDef(name="status", data_type=DataType.ENUM, nullable=False, 
-                enum_values=["pending", "processing", "shipped", "delivered"])
-    ]
-)
+### Nested Object Schema
+
+```json
+{
+  "name": "order_schema",
+  "fields": [
+    {
+      "name": "order_id",
+      "data_type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "customer",
+      "data_type": "OBJECT",
+      "nullable": false,
+      "children": [
+        {
+          "name": "id",
+          "data_type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "data_type": "STRING",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "items",
+      "data_type": "ARRAY",
+      "nullable": false,
+      "item": {
+        "name": "item",
+        "data_type": "OBJECT",
+        "nullable": false,
+        "children": [
+          {
+            "name": "product_id",
+            "data_type": "INTEGER",
+            "nullable": false
+          },
+          {
+            "name": "quantity",
+            "data_type": "INTEGER",
+            "nullable": false
+          },
+          {
+            "name": "price",
+            "data_type": "FLOAT",
+            "nullable": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "status",
+      "data_type": "ENUM",
+      "nullable": false,
+      "enum_values": ["pending", "processing", "shipped", "delivered"]
+    }
+  ]
+}
 ```
 
-## Schema Validation
+### Array Schema
 
-### Required Fields
-- **Non-nullable fields**: Must be present and not null
-- **Field presence**: All required fields must be present
-- **Type validation**: Fields must match their data types
+```json
+{
+  "name": "product_schema",
+  "fields": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "name",
+      "data_type": "STRING",
+      "nullable": false
+    },
+    {
+      "name": "tags",
+      "data_type": "ARRAY",
+      "nullable": true,
+      "item": {
+        "name": "tag",
+        "data_type": "STRING",
+        "nullable": false
+      }
+    }
+  ]
+}
+```
 
-### Type Validation
-- **Primitive types**: Validate against Python types
-- **OBJECT types**: Validate nested structure
-- **ARRAY types**: Validate array elements
-- **ENUM types**: Validate against allowed values
+### Enum Schema
 
-### Error Handling
-- **Missing fields**: Clear error messages for missing required fields
-- **Type mismatches**: Detailed type error messages
-- **Invalid values**: Clear messages for invalid enum values
-- **Nested errors**: Path-based error messages for nested structures
+```json
+{
+  "name": "user_schema",
+  "fields": [
+    {
+      "name": "id",
+      "data_type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "role",
+      "data_type": "ENUM",
+      "nullable": false,
+      "enum_values": ["admin", "user", "guest"]
+    },
+    {
+      "name": "status",
+      "data_type": "ENUM",
+      "nullable": false,
+      "enum_values": ["active", "inactive", "pending"]
+    }
+  ]
+}
+```
+
+## Schema Features
+
+### Type Safety
+- **Comprehensive Validation**: Ensures data types match schema definitions
+- **Type Coercion**: Automatic type conversion where appropriate
+- **Type Checking**: Strict type compliance validation
+- **Error Messages**: Clear type mismatch error messages
+
+### Nested Structures
+- **Recursive Definitions**: Support for complex nested data structures
+- **Object Validation**: Proper nested object structure validation
+- **Array Validation**: Array elements validated against item schemas
+- **Path-based Errors**: Detailed error reporting for nested structures
+
+### Validation Rules
+- **Flexible Rules**: Comprehensive data validation capabilities
+- **Custom Validation**: Support for custom validation functions
+- **Error Context**: Detailed error information and context
+- **Validation Recovery**: Graceful handling of validation failures
+
+## Error Handling
+
+### Schema Errors
+- **Clear Messages**: Descriptive error messages for schema validation failures
+- **Field Validation**: Path-based error reporting for nested structures
+- **Type Information**: Detailed type mismatch information
+- **Context**: Schema and validation context in error messages
+
+### Error Types
+- **Missing Fields**: Required fields not present in data
+- **Type Mismatches**: Data types incompatible with schema definitions
+- **Invalid Values**: Values not matching enum constraints
+- **Structure Errors**: Invalid nested structure or array format
+
+### Error Reporting
+```json
+{
+  "schema_error": {
+    "field_path": "customer.orders.total",
+    "expected_type": "FLOAT",
+    "actual_type": "STRING",
+    "error_type": "type_mismatch",
+    "message": "Field 'total' expected FLOAT but got STRING"
+  }
+}
+```
+
+## Performance Considerations
+
+### Schema Loading
+- **Lazy Loading**: Load schemas only when needed
+- **Caching**: Cache frequently used schemas
+- **Validation**: Optimize validation performance
+- **Memory**: Minimize memory usage for large schemas
+
+### Validation Performance
+- **Early Validation**: Validate data early in the pipeline
+- **Batch Validation**: Validate data in batches when possible
+- **Error Handling**: Handle validation errors efficiently
+- **Performance**: Balance validation thoroughness with performance
+
+## Configuration
+
+### Schema Options
+- **Schema Definition**: Configure schema structure and validation rules
+- **Type Settings**: Set data type constraints and validation options
+- **Error Handling**: Configure error handling strategies
+- **Performance Tuning**: Optimize schema validation performance
 
 ## Best Practices
 
 ### Schema Design
-- Use descriptive field names
-- Make fields nullable when appropriate
-- Use enums for fixed value sets
-- Design for extensibility
+- **Descriptive Names**: Use descriptive field names
+- **Nullable Fields**: Make fields nullable when appropriate
+- **Enum Usage**: Use enums for fixed value sets
+- **Extensibility**: Design for schema evolution
 
 ### Type Selection
-- Use appropriate data types
-- Consider data size and performance
-- Use enums for categorical data
-- Use objects for complex structures
+- **Appropriate Types**: Use appropriate data types for your use case
+- **Performance**: Consider data size and performance implications
+- **Categorical Data**: Use enums for categorical data
+- **Complex Structures**: Use objects for complex nested structures
 
 ### Validation
-- Validate early in the pipeline
-- Provide clear error messages
-- Handle validation errors gracefully
-- Use schema validation for data quality
+- **Early Validation**: Validate data early in the pipeline
+- **Clear Messages**: Provide clear and descriptive error messages
+- **Error Handling**: Handle validation errors gracefully
+- **Data Quality**: Use schema validation for data quality assurance
+
+### Schema Management
+- **Version Control**: Version your schemas for tracking changes
+- **Documentation**: Document schema requirements and constraints
+- **Testing**: Test schemas with sample data
+- **Evolution**: Plan for schema evolution and migration

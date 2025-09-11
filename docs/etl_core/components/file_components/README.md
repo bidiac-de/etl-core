@@ -1,17 +1,17 @@
 # File Components
 
-This directory contains components for reading and writing various file formats.
+This directory contains components for reading and writing various file formats with comprehensive support for different processing strategies and file types.
 
 ## Components Overview
 
 ### [CSV](./csv/README.md)
-CSV file reading and writing components with configurable delimiters and encoding support.
+CSV file reading and writing components with **configurable delimiters** and encoding support for efficient data processing.
 
 ### [Excel](./excel/README.md)
-Excel file reading and writing components with sheet support and formatting options.
+Excel file reading and writing components with **sheet support** and formatting preservation for complex spreadsheet operations.
 
 ### [JSON](./json/README.md)
-JSON file reading and writing components with streaming support and flexible schema handling.
+JSON file reading and writing components with **streaming support** and flexible schema handling for structured data processing.
 
 ## Common Features
 
@@ -22,13 +22,6 @@ All file components support:
 - **Metrics Integration**: Built-in performance metrics collection
 - **Schema Validation**: Input/output schema validation
 - **Streaming Support**: Efficient streaming for large files
-
-## Base Components
-
-### File Component
-- **FileComponent**: Abstract base class for all file-based components
-- **File Path Management**: Automatic path validation and conversion
-- **Common Interface**: Standardized interface for file operations
 
 ## File Format Support
 

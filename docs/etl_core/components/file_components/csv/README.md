@@ -1,162 +1,257 @@
 # CSV Components
 
-CSV file components provide reading and writing capabilities for Comma-Separated Values files with configurable delimiters and encoding support.
+CSV file components provide **reading and writing capabilities** for Comma-Separated Values files with comprehensive support for different processing strategies and data formats.
 
 ## Overview
 
-CSV components offer comprehensive file operations for CSV format with support for various delimiters, encodings, and processing modes. They handle both reading from and writing to CSV files efficiently.
+CSV components offer comprehensive file operations for CSV format with support for various delimiters, encodings, and processing modes. They handle both reading from and writing to CSV files efficiently with **automatic data type inference** and **header detection**.
 
 ## Components
 
-### CSV Read Component
-- **File**: `read_csv.py`
-- **Purpose**: Read data from CSV files
-- **Features**: Row-by-row streaming, bulk loading, bigdata processing
+### CSV Functions
+- **CSV Read**: Read data from CSV files with various processing strategies
+- **CSV Write**: Write data to CSV files with formatting options
+- **Data Type Inference**: Automatic data type detection and conversion
+- **Header Handling**: Automatic header detection and processing
 
-### CSV Write Component
-- **File**: `write_csv.py`
-- **Purpose**: Write data to CSV files
-- **Features**: Row writing, bulk writing, bigdata writing
-
-### CSV Base Component
-- **File**: `csv_component.py`
-- **Purpose**: Base class with CSV-specific functionality
-- **Features**: Delimiter configuration, common CSV operations
-
-## Features
+## CSV Types
 
 ### Delimiter Support
-- **Comma**: Standard comma delimiter (default)
-- **Semicolon**: Semicolon delimiter for European formats
-- **Tab**: Tab delimiter for TSV files
-- **Custom**: Support for custom delimiters
+Supports various delimiters for different CSV formats.
+
+#### Features
+- **Comma Delimiter**: Standard comma delimiter (default)
+- **Semicolon Delimiter**: Semicolon delimiter for European formats
+- **Tab Delimiter**: Tab delimiter for TSV files
+- **Custom Delimiters**: Support for custom delimiters
 
 ### Processing Modes
+Supports different processing strategies for various file sizes.
+
+#### Features
 - **Row Processing**: Stream data row by row
 - **Bulk Processing**: Load entire file into pandas DataFrame
 - **BigData Processing**: Use Dask for large file processing
+- **Memory Management**: Efficient memory usage for large files
 
 ### Data Handling
+Provides comprehensive data handling capabilities.
+
+#### Features
 - **Header Detection**: Automatic header row detection
 - **Data Type Inference**: Automatic data type detection
 - **Encoding Support**: UTF-8 and other encodings
 - **Quote Handling**: Proper handling of quoted fields
 
-## Configuration
+## JSON Configuration Examples
 
-### Required Fields
-- `filepath`: Path to the CSV file (Path object)
+### Basic Read Configuration
 
-### Optional Fields
-- `separator`: Field separator (default: Delimiter.COMMA)
-- `encoding`: File encoding (default: UTF-8)
-- `header`: Whether file has header row (default: True)
-
-### Delimiter Options
-```python
-from etl_core.components.file_components.csv.csv_component import Delimiter
-
-# Available delimiters
-Delimiter.COMMA      # ","
-Delimiter.SEMICOLON  # ";"
-Delimiter.TAB        # "\t"
+```json
+{
+  "name": "read_customers",
+  "comp_type": "file",
+  "filepath": "data/customers.csv",
+  "separator": "comma",
+  "encoding": "utf-8",
+  "header": true,
+  "strategy_type": "bulk"
+}
 ```
 
-## Example Usage
+### Read with Custom Delimiter
 
-### Read Component
-```python
-from etl_core.components.file_components.csv.read_csv import ReadCSV
-from etl_core.components.file_components.csv.csv_component import Delimiter
-
-# Configure read component
-component = ReadCSV(
-    name="customer_reader",
-    filepath="data/customers.csv",
-    separator=Delimiter.COMMA
-)
+```json
+{
+  "name": "read_european_data",
+  "comp_type": "file",
+  "filepath": "data/european_data.csv",
+  "separator": "semicolon",
+  "encoding": "utf-8",
+  "header": true,
+  "strategy_type": "bulk"
+}
 ```
 
-### Write Component
-```python
-from etl_core.components.file_components.csv.write_csv import WriteCSV
+### Write Configuration
 
-# Configure write component
-component = WriteCSV(
-    name="customer_writer",
-    filepath="output/customers.csv",
-    separator=Delimiter.COMMA
-)
+```json
+{
+  "name": "write_products",
+  "comp_type": "file",
+  "filepath": "output/products.csv",
+  "separator": "comma",
+  "encoding": "utf-8",
+  "header": true,
+  "strategy_type": "bulk"
+}
+```
+
+### BigData Processing
+
+```json
+{
+  "name": "bigdata_csv_reader",
+  "comp_type": "file",
+  "filepath": "data/large_dataset.csv",
+  "separator": "comma",
+  "encoding": "utf-8",
+  "header": true,
+  "strategy_type": "bigdata",
+  "chunk_size": 10000
+}
+```
+
+### Row Processing
+
+```json
+{
+  "name": "stream_csv_reader",
+  "comp_type": "file",
+  "filepath": "data/streaming_data.csv",
+  "separator": "comma",
+  "encoding": "utf-8",
+  "header": true,
+  "strategy_type": "row"
+}
 ```
 
 ## Processing Modes
 
 ### Row Processing
-- **Streaming**: Process one row at a time
-- **Memory Efficient**: Low memory usage
-- **Real-time**: Immediate processing
-- **Use Case**: Large files, real-time processing
+**Row processing** provides **streaming data processing** one row at a time with minimal memory usage. This approach is ideal for **large files** and **real-time processing** scenarios where memory efficiency is critical.
+
+**Use Cases:**
+- Large files, real-time processing
+- Memory-constrained environments
+- Streaming data pipelines
+- Event-driven processing
 
 ### Bulk Processing
-- **DataFrame**: Load entire file into pandas DataFrame
-- **Memory Intensive**: Higher memory usage
-- **Fast Processing**: Efficient for smaller files
-- **Use Case**: Medium-sized files, data analysis
+**Bulk processing** loads **entire files** into pandas DataFrames for efficient batch processing. This approach provides **fastest processing** for smaller files but requires more memory.
+
+**Use Cases:**
+- Medium-sized files, data analysis
+- Batch processing workflows
+- Data transformation operations
+- ETL pipelines
 
 ### BigData Processing
-- **Dask DataFrame**: Use Dask for distributed processing
-- **Scalable**: Handles very large files
-- **Parallel Processing**: Multi-core processing
-- **Use Case**: Very large files, distributed processing
+**BigData processing** uses **Dask DataFrames** for distributed processing of very large files. This approach enables **scalable processing** across multiple cores or machines.
 
-## Performance Considerations
+**Use Cases:**
+- Very large files, distributed processing
+- Big data analytics
+- Scalable data pipelines
+- Memory-efficient large file processing
 
-### Memory Usage
-- **Row Processing**: Minimal memory usage
-- **Bulk Processing**: Memory usage proportional to file size
-- **BigData Processing**: Distributed memory usage
+## CSV Features
 
-### Processing Speed
-- **Row Processing**: Slower but memory efficient
-- **Bulk Processing**: Fastest for smaller files
-- **BigData Processing**: Fastest for very large files
+### Delimiter Support
+- **Comprehensive Support**: Comma, semicolon, tab, and custom delimiters
+- **Automatic Detection**: Identify correct delimiter for different file formats
+- **Delimiter Validation**: Ensure proper data parsing
+- **Format Flexibility**: Support for various CSV formats
 
-### File Size Recommendations
-- **Row Processing**: Any size, memory constrained
-- **Bulk Processing**: < 1GB files
-- **BigData Processing**: > 1GB files
+### Header Handling
+- **Automatic Detection**: Automatic header row detection
+- **Custom Headers**: Specify custom column names
+- **No Header Support**: Handle files without headers
+- **Header Validation**: Ensure proper column identification
+
+### Data Type Inference
+- **Automatic Detection**: Analyze CSV content for data types
+- **Type Conversion**: Convert strings to appropriate types
+- **Error Handling**: Manage type conversion failures gracefully
+- **Type Safety**: Ensure data type consistency
+
+### Encoding Support
+- **Multiple Encodings**: UTF-8, Latin-1, and custom encodings
+- **BOM Handling**: Byte Order Mark detection
+- **Encoding Validation**: Ensure proper character processing
+- **Character Support**: Full Unicode character support
 
 ## Error Handling
 
 ### File Errors
-- **File Not Found**: Clear error messages
-- **Permission Denied**: File access error handling
-- **Invalid Path**: Path validation errors
-
-### Format Errors
-- **Invalid Delimiter**: Delimiter detection errors
-- **Encoding Errors**: Character encoding issues
-- **Malformed CSV**: Invalid CSV format handling
+- **Clear Messages**: Descriptive error messages for file access issues
+- **Path Validation**: Validate file paths and permissions
+- **Format Validation**: Ensure proper CSV format
+- **Encoding Errors**: Handle character encoding issues
 
 ### Data Errors
-- **Type Conversion**: Data type conversion errors
-- **Missing Values**: Handling of missing data
-- **Schema Validation**: Data schema validation errors
+- **Type Conversion Errors**: Handle data type conversion failures
+- **Missing Values**: Manage missing or null values
+- **Schema Validation**: Validate data against expected schemas
+- **Data Quality**: Ensure data quality and consistency
 
-## Advanced Features
+### Error Reporting
+```json
+{
+  "csv_error": {
+    "error_type": "encoding_error",
+    "file_path": "data/input.csv",
+    "message": "Unable to decode file with specified encoding"
+  }
+}
+```
 
-### Header Handling
-- **Automatic Detection**: Detect header row automatically
-- **Custom Headers**: Specify custom column names
-- **No Headers**: Handle files without headers
+## Performance Considerations
 
-### Data Type Inference
-- **Automatic Detection**: Infer data types from content
-- **Type Conversion**: Convert strings to appropriate types
-- **Error Handling**: Handle type conversion errors
+### Row Processing
+- **Immediate Processing**: Processes data as it arrives
+- **Memory Efficient**: Low memory usage for streaming data
+- **Real-time**: Immediate file processing
+- **Streaming**: Efficient for large files
 
-### Encoding Support
-- **UTF-8**: Default encoding
-- **Latin-1**: Legacy encoding support
-- **Custom Encodings**: Support for various encodings
-- **BOM Handling**: Byte Order Mark handling
+### Bulk Processing
+- **Batch Processing**: Processes entire files at once
+- **High Performance**: Optimized for medium-sized files
+- **Memory Management**: Efficient DataFrame handling
+- **Fast Processing**: Fastest for smaller files
+
+### BigData Processing
+- **Distributed Processing**: Handles large files across multiple cores
+- **Lazy Evaluation**: Deferred computation for memory efficiency
+- **Scalable**: Processes files of virtually any size
+- **Memory Efficient**: Distributed memory usage
+
+## Configuration
+
+### CSV Options
+- **Delimiter Settings**: Configure delimiter and separator options
+- **Encoding Settings**: Set character encoding parameters
+- **Header Handling**: Configure header detection and processing
+- **Data Type Settings**: Set data type inference options
+
+### Performance Tuning
+- **Chunk Sizes**: Configure chunk sizes for bigdata processing
+- **Memory Limits**: Set appropriate memory limits
+- **Buffer Sizes**: Optimize buffer sizes for performance
+- **Parallel Processing**: Configure parallel processing options
+
+## Best Practices
+
+### File Management
+- **Path Validation**: Always validate file paths before processing
+- **Encoding Detection**: Use appropriate encoding for your data
+- **Header Handling**: Ensure consistent header handling across files
+- **Error Recovery**: Implement graceful error recovery mechanisms
+
+### Performance
+- **Strategy Selection**: Choose appropriate processing strategy for your data size
+- **Memory Management**: Monitor memory usage during processing
+- **Batch Processing**: Use batch processing for medium-sized files
+- **Streaming**: Use streaming for large files
+
+### Data Quality
+- **Data Validation**: Validate input data before processing
+- **Schema Validation**: Use schema validation for data quality
+- **Error Handling**: Handle data errors gracefully
+- **Logging**: Log processing errors for debugging
+
+### CSV-Specific
+- **Delimiter Selection**: Choose appropriate delimiters for your data
+- **Encoding Management**: Use consistent encoding across files
+- **Header Consistency**: Maintain consistent header formats
+- **Data Type Planning**: Plan data types for optimal performance

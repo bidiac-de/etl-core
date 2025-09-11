@@ -1,10 +1,16 @@
 # API and CLI
 
-This directory contains API endpoints, CLI tools, and HTTP utilities for the ETL system.
+API and CLI components provide **programmatic interfaces**, **command-line tools**, and **HTTP utilities** for ETL pipeline data with comprehensive support for job management and system monitoring.
 
 ## Overview
 
-The API and CLI components provide programmatic and command-line interfaces for managing ETL operations, including job management, execution control, and system monitoring.
+API and CLI components define the structure, interfaces, and tools for managing data flowing through the ETL pipeline, ensuring proper system management and type safety. They provide **comprehensive interface support** and **management capabilities** for robust system operations.
+
+### Key Concepts
+- **API Endpoints**: RESTful API endpoints for system management
+- **CLI Tools**: Command-line interface for system operations
+- **HTTP Utilities**: HTTP error handling and utilities
+- **Dependency Injection**: Service dependency management
 
 ## Components
 
@@ -31,41 +37,7 @@ The API and CLI components provide programmatic and command-line interfaces for 
 ### [Routers](./routers/README.md)
 API route definitions and endpoint implementations.
 
-## CLI Interface
-
-### CLI Commands
-- **Job Management**: Create, update, delete, list jobs
-- **Execution Control**: Start, stop, pause, resume jobs
-- **Monitoring**: View job status, logs, metrics
-- **Configuration**: Manage system configuration
-- **Health Checks**: System health monitoring
-
-### CLI Features
-- **Interactive Mode**: Interactive command interface
-- **Batch Mode**: Batch command execution
-- **Configuration**: CLI configuration management
-- **Help System**: Comprehensive help system
-- **Error Handling**: User-friendly error messages
-
-### CLI Usage
-```bash
-# Job management
-etl-cli job create --config job.json
-etl-cli job list
-etl-cli job start --job-id 123
-
-# Execution control
-etl-cli execution start --job-id 123
-etl-cli execution stop --job-id 123
-etl-cli execution status --job-id 123
-
-# Monitoring
-etl-cli metrics show --job-id 123
-etl-cli logs tail --job-id 123
-etl-cli health check
-```
-
-## API Endpoints
+## API Types
 
 ### Job Management Endpoints
 - **POST /jobs**: Create a new job
@@ -88,7 +60,70 @@ etl-cli health check
 - **GET /system/metrics**: System metrics
 - **GET /system/status**: System status
 
-## HTTP Error Handling
+### Features
+- **RESTful Design**: RESTful API design principles
+- **Error Handling**: Comprehensive HTTP error handling
+- **Dependency Injection**: Service dependency management
+- **Security**: Authentication and authorization
+
+## JSON Configuration Examples
+
+### API Configuration
+```json
+{
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false,
+    "cors": {
+      "allowed_origins": ["*"],
+      "allowed_methods": ["GET", "POST", "PUT", "DELETE"],
+      "allowed_headers": ["*"]
+    },
+    "authentication": {
+      "enabled": true,
+      "type": "bearer_token"
+    }
+  }
+}
+```
+
+### CLI Configuration
+```json
+{
+  "cli": {
+    "output_format": "json",
+    "verbose": false,
+    "config_file": "~/.etl-cli/config.json",
+    "default_endpoint": "http://localhost:8000",
+    "timeout": 30
+  }
+}
+```
+
+## API Features
+
+### CLI Interface
+- **Job Management**: Create, update, delete, list jobs
+- **Execution Control**: Start, stop, pause, resume jobs
+- **Monitoring**: View job status, logs, metrics
+- **Configuration**: Manage system configuration
+- **Health Checks**: System health monitoring
+
+### HTTP Error Handling
+- **Validation Errors**: Request validation errors
+- **Not Found Errors**: Resource not found errors
+- **Authentication Errors**: Authentication failures
+- **Authorization Errors**: Authorization failures
+- **Server Errors**: Internal server errors
+
+## Error Handling
+
+### API Errors
+- **Clear Messages**: Descriptive error messages for API issues
+- **HTTP Status Codes**: Standard HTTP status codes
+- **Error Validation**: Path-based error reporting for request problems
+- **Context**: API and request context in error messages
 
 ### Error Types
 - **Validation Errors**: Request validation errors
@@ -97,109 +132,46 @@ etl-cli health check
 - **Authorization Errors**: Authorization failures
 - **Server Errors**: Internal server errors
 
-### Error Responses
-- **Standardized Format**: Consistent error response format
-- **Error Codes**: HTTP status codes
-- **Error Messages**: Descriptive error messages
-- **Error Details**: Additional error context
-- **Request ID**: Request tracking for debugging
+### Error Reporting
+```json
+{
+  "api_error": {
+    "error_type": "validation_error",
+    "endpoint": "/jobs",
+    "method": "POST",
+    "status_code": 400,
+    "message": "Invalid job configuration: missing required field 'name'"
+  }
+}
+```
 
-## Dependency Injection
+## Performance Considerations
 
-### Service Dependencies
-- **Job Handler**: Job management service
-- **Execution Handler**: Execution management service
-- **Metrics Service**: Metrics collection service
-- **Context Service**: Context management service
-- **Database Service**: Database access service
+### API Performance
+- **Request Processing**: Optimize API request processing
+- **Response Formatting**: Optimize response formatting
+- **Error Handling**: Optimize error handling performance
+- **Authentication**: Optimize authentication performance
 
-### Dependency Features
-- **Service Registration**: Service registration and discovery
-- **Lifecycle Management**: Service lifecycle management
-- **Configuration Injection**: Configuration injection
-- **Error Handling**: Dependency error handling
-- **Testing Support**: Testing dependency injection
-
-## API Utilities
-
-### Helper Functions
-- **Request Validation**: Request data validation
-- **Response Formatting**: Response data formatting
-- **Error Handling**: Common error handling
-- **Logging**: API request/response logging
-- **Authentication**: Authentication utilities
-
-### Common Utilities
-- **Data Serialization**: Data serialization/deserialization
-- **Validation**: Input validation utilities
-- **Formatting**: Data formatting utilities
-- **Conversion**: Data type conversion
-- **Sanitization**: Input sanitization
-
-## Router System
-
-### Router Organization
-- **Context Router**: Context management endpoints
-- **Execution Router**: Execution control endpoints
-- **Jobs Router**: Job management endpoints
-- **Metrics Router**: Metrics and monitoring endpoints
-- **Schemas Router**: Schema management endpoints
-- **Setup Router**: System setup endpoints
-
-### Router Features
-- **Route Registration**: Automatic route registration
-- **Middleware Support**: Middleware integration
-- **Error Handling**: Route-specific error handling
-- **Authentication**: Route authentication
-- **Rate Limiting**: Rate limiting support
+### CLI Performance
+- **Command Execution**: Optimize CLI command execution
+- **Response Processing**: Optimize response processing
+- **Error Handling**: Optimize error handling performance
+- **Resource Usage**: Minimize resource usage
 
 ## Configuration
 
-### API Configuration
-- **Host and Port**: API server configuration
-- **CORS Settings**: Cross-origin resource sharing
-- **Authentication**: Authentication configuration
-- **Rate Limiting**: Rate limiting configuration
-- **Logging**: API logging configuration
+### API Options
+- **Server Configuration**: Configure API server settings
+- **CORS Settings**: Configure CORS settings
+- **Authentication**: Configure authentication settings
+- **Rate Limiting**: Configure rate limiting settings
 
-### CLI Configuration
-- **Command Configuration**: CLI command configuration
-- **Output Format**: Output formatting options
-- **Verbose Mode**: Verbose output configuration
-- **Configuration File**: CLI configuration file
-- **Environment Variables**: Environment variable support
-
-## Security
-
-### API Security
-- **Authentication**: API authentication
-- **Authorization**: API authorization
-- **Rate Limiting**: API rate limiting
-- **Input Validation**: Input validation and sanitization
-- **HTTPS Support**: HTTPS encryption support
-
-### CLI Security
-- **Credential Management**: Secure credential handling
-- **Access Control**: CLI access control
-- **Audit Logging**: CLI operation logging
-- **Secure Communication**: Secure API communication
-- **Configuration Security**: Secure configuration handling
-
-## Monitoring and Logging
-
-### API Monitoring
-- **Request Metrics**: API request metrics
-- **Response Metrics**: API response metrics
-- **Error Metrics**: API error metrics
-- **Performance Metrics**: API performance metrics
-- **Usage Metrics**: API usage metrics
-
-### CLI Monitoring
-- **Command Usage**: CLI command usage tracking
-- **Performance Metrics**: CLI performance metrics
-- **Error Tracking**: CLI error tracking
-- **User Activity**: User activity monitoring
-- **System Health**: System health monitoring
+### CLI Options
+- **Command Configuration**: Configure CLI commands
+- **Output Format**: Configure output formatting
+- **Verbose Mode**: Configure verbose output
+- **Configuration File**: Configure CLI configuration file
 
 ## Best Practices
 
@@ -217,7 +189,7 @@ etl-cli health check
 - **Error Messages**: Clear error messages
 - **Configuration**: Flexible configuration options
 
-### Security Practices
+### Security
 - **Input Validation**: Validate all inputs
 - **Authentication**: Implement proper authentication
 - **Authorization**: Implement proper authorization

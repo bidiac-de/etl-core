@@ -1,10 +1,16 @@
 # Context Management
 
-This directory contains components for managing execution context, credentials, and environment-specific configurations.
+Context management components provide **execution context management**, **credential handling**, and **environment-specific configurations** for ETL pipeline data with comprehensive support for secure credential storage and validation.
 
 ## Overview
 
-Context management provides a centralized system for handling execution context, secure credential management, and environment-specific configurations across the ETL system.
+Context management components define the structure, credentials, and environment-specific configurations for data flowing through the ETL pipeline, ensuring secure credential management and type safety. They provide **comprehensive context support** and **validation capabilities** for robust system management.
+
+### Key Concepts
+- **Context Management**: Centralized execution context and parameter management
+- **Credential Handling**: Secure credential storage and retrieval
+- **Environment Configuration**: Environment-specific configuration handling
+- **Security**: Encrypted storage and access control
 
 ## Components
 
@@ -46,134 +52,141 @@ Secret management providers for secure credential storage.
 - **Purpose**: Context provider interface
 - **Features**: Context provider abstraction, context retrieval interface
 
-## Context System
+## Context Types
 
-### Context Structure
-```python
-class Context(BaseModel, IContextProvider):
-    id: int
-    name: str
-    environment: Environment
-    parameters: Dict[str, ContextParameter]
-    _credentials: Dict[int, Credentials]
-```
-
-### Context Features
-- **Parameter Management**: Store and retrieve context parameters
-- **Credential Storage**: Secure credential storage and retrieval
+### Context Management
+- **Context Storage**: Store and retrieve execution context
+- **Parameter Management**: Manage context parameters and validation
 - **Environment Awareness**: Environment-specific configuration
-- **Validation**: Parameter and credential validation
-- **Security**: Secure handling of sensitive information
+- **Context Registry**: Context registration and discovery
 
-## Credential Management
-
-### Credential Types
+### Credential Management
 - **Database Credentials**: Database connection credentials
 - **API Credentials**: API authentication credentials
 - **File System Credentials**: File system access credentials
 - **Cloud Credentials**: Cloud service credentials
-- **Custom Credentials**: Application-specific credentials
 
-### Credential Security
+### Features
 - **Encryption**: Encrypted credential storage
 - **Access Control**: Controlled access to credentials
 - **Audit Logging**: Credential access logging
-- **Rotation**: Credential rotation support
-- **Validation**: Credential validation and verification
+- **Validation**: Parameter and credential validation
 
-## Environment Management
-
-### Environment Types
-- **Development**: Development environment settings
-- **Testing**: Testing environment settings
-- **Staging**: Staging environment settings
-- **Production**: Production environment settings
-- **Custom**: Custom environment configurations
-
-### Environment Configuration
-- **Environment Detection**: Automatic environment detection
-- **Configuration Loading**: Environment-specific configuration loading
-- **Parameter Override**: Environment-specific parameter overrides
-- **Security Settings**: Environment-specific security settings
-
-## Parameter Management
-
-### Parameter Types
-- **String Parameters**: Text-based parameters
-- **Numeric Parameters**: Numeric parameters
-- **Boolean Parameters**: True/false parameters
-- **List Parameters**: List-based parameters
-- **Object Parameters**: Complex object parameters
-
-### Parameter Validation
-- **Type Validation**: Parameter type validation
-- **Range Validation**: Numeric range validation
-- **Format Validation**: String format validation
-- **Required Validation**: Required parameter validation
-- **Custom Validation**: Custom validation rules
-
-## Secret Management
-
-### Secret Providers
-- **Memory Provider**: In-memory secret storage
-- **Keyring Provider**: System keyring integration
-- **Custom Providers**: Custom secret storage providers
-- **Cloud Providers**: Cloud-based secret management
-
-### Secret Operations
-- **Store Secrets**: Store secrets securely
-- **Retrieve Secrets**: Retrieve secrets when needed
-- **Update Secrets**: Update existing secrets
-- **Delete Secrets**: Remove secrets securely
-- **Rotate Secrets**: Rotate secrets periodically
-
-## Security Features
-
-### Data Protection
-- **Encryption**: Data encryption at rest and in transit
-- **Access Control**: Role-based access control
-- **Audit Logging**: Comprehensive audit logging
-- **Data Masking**: Sensitive data masking
-- **Secure Transmission**: Secure data transmission
-
-### Credential Security
-- **Encrypted Storage**: Encrypted credential storage
-- **Access Tokens**: Secure access token management
-- **Credential Rotation**: Automatic credential rotation
-- **Leak Detection**: Credential leak detection
-- **Compliance**: Security compliance features
-
-## Configuration
+## JSON Configuration Examples
 
 ### Context Configuration
-- **Context ID**: Unique context identifier
-- **Context Name**: Human-readable context name
-- **Environment**: Target environment
-- **Parameters**: Context-specific parameters
-- **Credentials**: Associated credentials
+```json
+{
+  "context": {
+    "id": 1,
+    "name": "production_context",
+    "environment": "production",
+    "parameters": {
+      "database_url": {
+        "type": "string",
+        "value": "postgresql://user:pass@localhost/db",
+        "encrypted": true
+      },
+      "api_key": {
+        "type": "string",
+        "value": "encrypted_api_key",
+        "encrypted": true
+      }
+    }
+  }
+}
+```
 
-### Security Configuration
-- **Encryption Keys**: Encryption key configuration
-- **Access Policies**: Access control policies
-- **Audit Settings**: Audit logging configuration
-- **Compliance Settings**: Compliance requirements
-- **Security Policies**: Security policy configuration
+### Credential Configuration
+```json
+{
+  "credentials": {
+    "database": {
+      "type": "database",
+      "host": "localhost",
+      "port": 5432,
+      "username": "user",
+      "password": "encrypted_password",
+      "database": "etl_db"
+    },
+    "api": {
+      "type": "api",
+      "base_url": "https://api.example.com",
+      "api_key": "encrypted_api_key",
+      "timeout": 30
+    }
+  }
+}
+```
+
+## Context Features
+
+### Context Management
+- **Parameter Management**: Store and retrieve context parameters
+- **Credential Storage**: Secure credential storage and retrieval
+- **Environment Awareness**: Environment-specific configuration
+- **Validation**: Parameter and credential validation
+
+### Security Features
+- **Encryption**: Encrypted credential storage
+- **Access Control**: Controlled access to credentials
+- **Audit Logging**: Credential access logging
+- **Data Protection**: Secure handling of sensitive information
 
 ## Error Handling
 
 ### Context Errors
+- **Clear Messages**: Descriptive error messages for context issues
+- **Parameter Validation**: Path-based error reporting for parameter problems
+- **Credential Validation**: Detailed credential validation information
+- **Context**: Context and validation context in error messages
+
+### Error Types
 - **Missing Context**: Context not found errors
 - **Invalid Parameters**: Invalid parameter errors
 - **Credential Errors**: Credential-related errors
 - **Environment Errors**: Environment configuration errors
 - **Security Errors**: Security-related errors
 
-### Error Recovery
-- **Fallback Context**: Fallback context configuration
-- **Default Parameters**: Default parameter values
-- **Error Logging**: Comprehensive error logging
-- **Recovery Strategies**: Error recovery mechanisms
-- **Notification**: Error notification systems
+### Error Reporting
+```json
+{
+  "context_error": {
+    "error_type": "missing_context",
+    "context_id": 1,
+    "parameter_name": "database_url",
+    "message": "Context 'production_context' not found"
+  }
+}
+```
+
+## Performance Considerations
+
+### Context Management
+- **Efficient Storage**: Optimize context storage and retrieval
+- **Caching**: Cache frequently used contexts
+- **Parameter Resolution**: Optimize parameter resolution
+- **Memory**: Minimize memory usage for large contexts
+
+### Credential Management
+- **Lazy Loading**: Load credentials only when needed
+- **Encryption**: Optimize encryption/decryption performance
+- **Access Control**: Efficient access control checks
+- **Audit Logging**: Optimize audit logging performance
+
+## Configuration
+
+### Context Options
+- **Context Configuration**: Configure context structure and parameters
+- **Credential Settings**: Set credential storage and access settings
+- **Environment Settings**: Configure environment-specific settings
+- **Security Settings**: Configure security and access control
+
+### Security Configuration
+- **Encryption Keys**: Configure encryption keys and algorithms
+- **Access Policies**: Set access control policies
+- **Audit Settings**: Configure audit logging
+- **Compliance**: Configure compliance requirements
 
 ## Best Practices
 
@@ -189,13 +202,7 @@ class Context(BaseModel, IContextProvider):
 - **Secure Storage**: Store credentials securely
 - **Access Monitoring**: Monitor credential access
 
-### Environment Management
-- **Environment Isolation**: Isolate environments properly
-- **Configuration Management**: Manage configurations centrally
-- **Deployment Automation**: Automate environment deployment
-- **Monitoring**: Monitor environment health
-
-### Security Practices
+### Security
 - **Encryption**: Encrypt sensitive data
 - **Access Control**: Implement proper access control
 - **Audit Logging**: Maintain comprehensive audit logs

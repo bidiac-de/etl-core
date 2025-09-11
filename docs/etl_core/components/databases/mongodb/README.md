@@ -1,201 +1,328 @@
-# MongoDB Components Documentation
+# MongoDB Components
+
+The MongoDB components provide **enterprise-grade NoSQL database integration** with MongoDB databases with comprehensive support for different processing strategies and document-based operations.
 
 ## Overview
 
-The MongoDB Components provide comprehensive NoSQL database operations with document-based data storage, flexible schema support, and powerful aggregation capabilities. They offer enterprise-grade MongoDB integration with support for both read and write operations, advanced querying, and real-time data processing.
+The MongoDB components provide enterprise-grade NoSQL database integration with MongoDB, offering **document-based operations**, **advanced query capabilities**, and **enterprise features** for data processing scenarios. They support row, bulk, and bigdata processing strategies with comprehensive NoSQL feature support.
 
-## Core Features
+## Components
 
-### Document-Based Operations
-- **Flexible Schema**: No fixed schema requirements for maximum flexibility
-- **Document Storage**: Native BSON document storage with full type support
-- **Nested Documents**: Support for complex nested data structures
-- **Array Operations**: Advanced array field operations and queries
-- **GridFS Support**: Large file storage and retrieval capabilities
+### Database Functions
+- **MongoDB Read**: Read data from MongoDB collections using queries and aggregation pipelines
+- **MongoDB Write**: Write data to MongoDB collections with various strategies
+- **Connection Management**: Efficient connection pooling and management
+- **Document Validation**: Schema validation for document operations
 
-### Advanced Query Capabilities
+## Database Types
+
+### MongoDB Read
+Reads data from MongoDB collections using queries and aggregation pipelines with support for all processing strategies.
+
+#### Features
 - **Rich Queries**: Complex query expressions with MongoDB's query language
 - **Aggregation Pipelines**: Powerful multi-stage data aggregation
 - **Index Support**: Automatic and manual index utilization
 - **Text Search**: Full-text search capabilities with language support
 - **Geospatial Queries**: Geographic data queries and operations
 
-### Enterprise Features
-- **Connection Pooling**: Efficient connection reuse and management
-- **Replica Set Support**: High availability with automatic failover
-- **Sharding Support**: Horizontal scaling with automatic data distribution
-- **Change Streams**: Real-time data change notifications
-- **Transactions**: ACID transaction support for multi-document operations
+### MongoDB Write
+Writes data to MongoDB collections with various strategies and document validation.
 
-## Components
-
-### MongoDB Read Component
-- **File**: `mongodb_read.py`
-- **Purpose**: Read data from MongoDB collections
-- **Features**: Query execution, aggregation pipelines, result set processing
-
-### MongoDB Write Component
-- **File**: `mongodb_write.py`
-- **Purpose**: Write data to MongoDB collections
-- **Features**: Insert, update, delete operations, bulk operations, document validation
-
-### MongoDB Base Component
-- **File**: `mongodb.py`
-- **Purpose**: Base class with MongoDB-specific functionality
-- **Features**: Connection management, database selection, collection handling
-
-### MongoDB Connection Handler
-- **File**: `mongodb_connection_handler.py`
-- **Purpose**: MongoDB connection management
-- **Features**: Connection pooling, URI building, client configuration
-
-## Features
-
-### Document-Based Operations
-- **Flexible Schema**: No fixed schema requirements
-- **Document Storage**: Native BSON document storage
-- **Nested Documents**: Support for complex nested data structures
-- **Array Operations**: Array field operations and queries
-
-### Query Capabilities
-- **Rich Queries**: Complex query expressions
-- **Aggregation Pipelines**: Powerful data aggregation
-- **Index Support**: Automatic and manual index utilization
-- **Text Search**: Full-text search capabilities
-
-### Connection Management
-- **Connection Pooling**: Efficient connection reuse
-- **Replica Set Support**: High availability with replica sets
-- **Sharding Support**: Horizontal scaling with sharding
-- **Authentication**: Multiple authentication methods
-
-## Configuration
-
-### Required Fields
-- `credentials_id`: ID for database credentials in context
-- `database`: Database name to connect to
-- `collection`: Collection name for operations (write components)
-
-### Optional Fields
-- `auth_db_name`: Authentication database name
-- `pool_size`: Connection pool size
-- `pool_timeout`: Connection timeout settings
-- `read_preference`: Read preference for replica sets
-- `write_concern`: Write concern for data durability
-
-### Connection URI
-Automatically built connection URI with:
-- User authentication
-- Host and port configuration
-- Database specification
-- Connection parameters
-
-## Example Usage
-
-### Read Component
-```python
-from etl_core.components.databases.mongodb.mongodb_read import MongoDBReadComponent
-
-# Configure read component
-component = MongoDBReadComponent(
-    name="customer_reader",
-    credentials_id="mongodb_creds",
-    database="sales_db",
-    collection="customers",
-    query={"region": "North America", "status": "active"}
-)
-```
-
-### Write Component
-```python
-from etl_core.components.databases.mongodb.mongodb_write import MongoDBWriteComponent
-
-# Configure write component
-component = MongoDBWriteComponent(
-    name="customer_writer",
-    credentials_id="mongodb_creds",
-    database="sales_db",
-    collection="customers",
-    if_exists_strategy="append"
-)
-```
-
-## Advanced Features
-
-### Aggregation Pipelines
-- **Pipeline Stages**: $match, $group, $sort, $project, etc.
-- **Complex Aggregations**: Multi-stage aggregation pipelines
-- **Data Transformation**: Real-time data transformation
-- **Analytics**: Built-in analytics functions
-
-### Document Operations
+#### Features
+- **Write Strategies**: Fail, replace, and append strategies
 - **Upsert Operations**: Insert or update documents
 - **Bulk Operations**: Efficient bulk insert/update/delete
 - **Document Validation**: Schema validation rules
 - **Change Streams**: Real-time change notifications
 
-### Index Management
-- **Automatic Indexing**: Automatic index creation
-- **Compound Indexes**: Multi-field indexes
-- **Text Indexes**: Full-text search indexes
-- **Geospatial Indexes**: Geographic data indexes
+### Connection Management
+Manages database connections with pooling and optimization.
 
-## Data Processing
+#### Features
+- **Connection Pooling**: Efficient connection reuse and management
+- **Health Monitoring**: Real-time connection health monitoring
+- **Automatic Retry**: Intelligent retry mechanisms for failures
+- **Credential Security**: Secure credential handling from context
+
+## Processing Strategies
 
 ### Row Processing
-- Individual document operations
-- Real-time processing
-- Immediate results
+Processes individual documents for real-time processing.
+
+**Use Cases:**
+- Real-time data processing
+- Event-driven processing
+- Streaming data pipelines
+- Document-by-document operations
 
 ### Bulk Processing
-- Batch document operations
-- Efficient bulk processing
-- Transaction-like behavior
+Processes documents in batches for efficient processing.
+
+**Use Cases:**
+- Medium-sized datasets
+- Batch processing
+- Data analysis workflows
+- ETL pipelines
 
 ### BigData Processing
-- Large dataset handling
+Processes large datasets using distributed processing.
+
+**Use Cases:**
+- Large datasets (>1GB)
 - Distributed processing
-- Memory-efficient operations
+- Scalable data pipelines
+- Big data analytics
 
-## Performance Optimizations
+## JSON Configuration Examples
 
-### Connection Pooling
-- Reuses database connections efficiently
-- Configurable pool size and timeout
-- Automatic connection cleanup
+### Basic Read Configuration
 
-### Query Optimization
-- **Index Usage**: Automatic index utilization
-- **Query Planning**: MongoDB query planner optimization
-- **Projection**: Field projection for reduced data transfer
-- **Limit/Skip**: Pagination support
+```json
+{
+  "name": "read_products",
+  "comp_type": "database",
+  "credentials_id": 2,
+  "database": "inventory_db",
+  "collection": "products",
+  "query": {
+    "category": "electronics",
+    "in_stock": true
+  },
+  "strategy_type": "bulk"
+}
+```
 
-### Bulk Operations
-- Bulk insert operations for better performance
-- Configurable batch sizes
-- Ordered and unordered bulk operations
-- Error handling for bulk operations
+### Aggregation Pipeline
+
+```json
+{
+  "name": "customer_analytics",
+  "comp_type": "database",
+  "credentials_id": 1,
+  "database": "sales_db",
+  "collection": "orders",
+  "pipeline": [
+    {
+      "$match": {
+        "status": "completed",
+        "date": {
+          "$gte": "2024-01-01"
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": "$customer_id",
+        "total_orders": { "$sum": 1 },
+        "total_amount": { "$sum": "$amount" },
+        "avg_order_value": { "$avg": "$amount" }
+      }
+    },
+    {
+      "$sort": { "total_amount": -1 }
+    }
+  ],
+  "strategy_type": "bulk"
+}
+```
+
+### Text Search Query
+
+```json
+{
+  "name": "search_articles",
+  "comp_type": "database",
+  "credentials_id": 1,
+  "database": "content_db",
+  "collection": "articles",
+  "query": {
+    "$text": {
+      "$search": "database performance optimization"
+    }
+  },
+  "strategy_type": "bulk"
+}
+```
+
+### Geospatial Query
+
+```json
+{
+  "name": "nearby_locations",
+  "comp_type": "database",
+  "credentials_id": 1,
+  "database": "location_db",
+  "collection": "stores",
+  "query": {
+    "location": {
+      "$near": {
+        "$geometry": {
+          "type": "Point",
+          "coordinates": [-74.0059, 40.7128]
+        },
+        "$maxDistance": 1000
+      }
+    }
+  },
+  "strategy_type": "bulk"
+}
+```
+
+### Write with Validation
+
+```json
+{
+  "name": "write_products",
+  "comp_type": "database",
+  "credentials_id": 3,
+  "database": "inventory_db",
+  "collection": "products",
+  "if_exists_strategy": "append",
+  "strategy_type": "bulk",
+  "validation_rules": {
+    "name": { "type": "string", "required": true },
+    "price": { "type": "number", "min": 0 },
+    "category": { "type": "string", "enum": ["electronics", "clothing", "books"] }
+  }
+}
+```
+
+### BigData Processing
+
+```json
+{
+  "name": "bigdata_analytics",
+  "comp_type": "database",
+  "credentials_id": 1,
+  "database": "analytics_db",
+  "collection": "events",
+  "query": {
+    "timestamp": {
+      "$gte": "2024-01-01T00:00:00Z"
+    }
+  },
+  "strategy_type": "bigdata",
+  "chunk_size": 10000
+}
+```
+
+## MongoDB Features
+
+### Document-Based Operations
+- **Flexible Schema**: No fixed schema requirements for maximum flexibility
+- **BSON Storage**: Native support for complex data types
+- **Nested Documents**: Support for complex data structures
+- **Array Operations**: Powerful querying and manipulation capabilities
+
+### Advanced Query Capabilities
+- **Rich Query Language**: Complex query expressions with operators
+- **Aggregation Pipelines**: Multi-stage data processing capabilities
+- **Index Support**: Efficient query performance
+- **Full-Text Search**: Content search with language support
+- **Geospatial Queries**: Geographic data operations
+
+### Enterprise Features
+- **Connection Pooling**: Efficient connection reuse and management
+- **Replica Set Support**: High availability with automatic failover
+- **Sharding Support**: Horizontal scaling with automatic data distribution
+- **Change Streams**: Real-time data change notifications
+- **ACID Transactions**: Data consistency for multi-document operations
 
 ## Error Handling
 
-- **Connection Errors**: Automatic retry with exponential backoff
-- **Query Errors**: Detailed error messages with query context
-- **Write Errors**: Detailed write error information
-- **Validation Errors**: Document validation error details
-- **Network Errors**: Network connectivity error handling
+### Connection Errors
+- **Clear Messages**: Descriptive error messages for connection failures
+- **Retry Logic**: Automatic retry with exponential backoff
+- **Failover Support**: Automatic switching to replica set members
+- **Health Monitoring**: Real-time connection health tracking
 
-## Security Features
+### Query Errors
+- **Query Validation**: Detailed error messages for query issues
+- **Index Errors**: Specific information about index-related problems
+- **Timeout Handling**: Query timeout management
+- **Resource Monitoring**: Resource exhaustion handling
 
-- **Credential Management**: Secure credential handling through context
-- **Authentication**: Multiple authentication methods (SCRAM, LDAP, etc.)
-- **Authorization**: Role-based access control
-- **Encryption**: TLS/SSL encrypted connections
-- **Audit Logging**: Database operation auditing
+### Write Errors
+- **Constraint Violations**: Specific information about document validation failures
+- **Duplicate Key Handling**: Unique constraint violation management
+- **Bulk Operation Errors**: Detailed error information for bulk operations
+- **Validation Errors**: Document validation error handling
 
-## Monitoring and Metrics
+### Error Reporting
+```json
+{
+  "mongodb_error": {
+    "error_type": "query_failure",
+    "error_code": 2,
+    "message": "BadValue: unknown operator: $invalid",
+    "query": {"field": {"$invalid": "value"}}
+  }
+}
+```
 
-- **Connection Metrics**: Pool usage, connection timeouts
-- **Query Metrics**: Execution time, document counts
-- **Error Metrics**: Error rates, retry attempts
-- **Performance Metrics**: Throughput, latency measurements
-- **Index Metrics**: Index usage and performance
+## Performance Considerations
+
+### Row Processing
+- **Immediate Processing**: Processes data as it arrives
+- **Memory Efficient**: Low memory usage for streaming data
+- **Real-time**: Immediate database operations
+- **Connection Pooling**: Efficient connection management
+
+### Bulk Processing
+- **Batch Processing**: Processes entire DataFrames at once
+- **High Performance**: Optimized for medium-sized datasets
+- **Memory Management**: Efficient DataFrame handling
+- **Bulk Operations**: High-performance bulk insert/update/delete
+
+### BigData Processing
+- **Distributed Processing**: Handles large datasets across multiple cores
+- **Lazy Evaluation**: Deferred computation for memory efficiency
+- **Scalable**: Processes datasets of virtually any size
+- **Query Optimization**: Optimized query execution
+
+## Configuration
+
+### Database Options
+- **Connection Settings**: Configure database connection parameters
+- **Query Parameters**: Set query execution parameters
+- **Write Concerns**: Configure data durability settings
+- **Performance Tuning**: Optimize database performance
+
+### Security Settings
+- **Authentication**: Configure authentication methods
+- **Authorization**: Set up access control
+- **Encryption**: Enable data encryption
+- **Audit Logging**: Configure audit logging
+
+## Best Practices
+
+### Document Design
+- **Schema Design**: Design documents for your use case
+- **Embedding vs Referencing**: Choose based on data access patterns
+- **Index Design**: Create appropriate indexes for query performance
+- **Schema Validation**: Use schema validation for data quality
+
+### Query Optimization
+- **Index Usage**: Use appropriate indexes for optimal performance
+- **Field Projection**: Select only necessary fields to reduce data transfer
+- **Query Patterns**: Use efficient query patterns
+- **Aggregation Pipelines**: Optimize aggregation pipelines for performance
+
+### Connection Management
+- **Connection Pooling**: Use connection pooling for efficient resource utilization
+- **Pool Monitoring**: Monitor pool usage and health
+- **Error Handling**: Implement robust connection error handling
+- **Timeout Settings**: Use appropriate timeout settings
+
+### Performance
+- **Monitoring**: Monitor database performance regularly
+- **Strategy Selection**: Choose appropriate processing strategies
+- **Memory Management**: Monitor memory usage during operations
+- **Caching**: Use query caching for frequently executed queries
+
+### MongoDB-Specific
+- **Aggregation Pipelines**: Use aggregation pipelines efficiently
+- **Indexes**: Leverage indexes for optimal query performance
+- **Change Streams**: Use change streams for real-time data processing
+- **GridFS**: Use GridFS for large file storage

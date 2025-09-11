@@ -1,10 +1,16 @@
 # Data Persistence
 
-This directory contains components for data persistence, database models, and data storage management.
+Data persistence components provide **data storage**, **database models**, and **data access management** for ETL pipeline data with comprehensive support for job configurations and execution metadata.
 
 ## Overview
 
-The persistence layer provides data storage and retrieval capabilities for ETL operations, including job configurations, component definitions, and execution metadata.
+Data persistence components define the structure, storage, and access patterns for data flowing through the ETL pipeline, ensuring proper data management and type safety. They provide **comprehensive persistence support** and **data access capabilities** for robust system management.
+
+### Key Concepts
+- **Data Models**: Database model definitions and relationships
+- **Data Access**: Repository patterns and data access handlers
+- **Configuration Management**: Job and component configuration storage
+- **Migration Support**: Database migration and schema management
 
 ## Components
 
@@ -32,146 +38,161 @@ Data access handlers and repository patterns.
 - **Purpose**: Database table definitions
 - **Features**: Table schemas, relationships, constraints
 
-## Data Models
+## Persistence Types
 
-### Base Model Classes
+### Data Models
 - **Component Base**: Base class for component models
 - **Dataclasses Base**: Base class for dataclass models
 - **Job Base**: Base class for job models
+- **SQLModel Integration**: SQLModel-based model definitions
+- **Pydantic Validation**: Pydantic model validation
 
-### Model Features
+### Data Access
+- **Component Handler**: Component data access
+- **Dataclasses Handler**: Dataclass data access
+- **Job Handler**: Job data access
+- **CRUD Operations**: Create, read, update, delete operations
+- **Query Building**: Dynamic query building
+
+### Features
+- **Database Mapping**: Database table mapping
+- **Relationship Management**: Model relationships
+- **Migration Support**: Database migration support
+- **Connection Pooling**: Database connection pooling
+
+## JSON Configuration Examples
+
+### Database Configuration
+```json
+{
+  "database": {
+    "url": "postgresql://user:password@localhost/etl_db",
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_timeout": 30,
+    "pool_recycle": 3600
+  }
+}
+```
+
+### Model Configuration
+```json
+{
+  "models": {
+    "component": {
+      "table_name": "components",
+      "fields": [
+        {
+          "name": "id",
+          "type": "integer",
+          "primary_key": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "nullable": false
+        }
+      ]
+    },
+    "job": {
+      "table_name": "jobs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "integer",
+          "primary_key": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "nullable": false
+        }
+      ]
+    }
+  }
+}
+```
+
+## Persistence Features
+
+### Data Models
 - **SQLModel Integration**: SQLModel-based model definitions
 - **Pydantic Validation**: Pydantic model validation
 - **Database Mapping**: Database table mapping
 - **Relationship Management**: Model relationships
 - **Migration Support**: Database migration support
 
-## Configuration Management
-
-### Job Configuration
-- **Job Definition**: Job configuration storage
-- **Component Configuration**: Component configuration storage
-- **Parameter Management**: Configuration parameter management
-- **Version Control**: Configuration versioning
-- **Validation**: Configuration validation
-
-### Configuration Features
-- **Schema Validation**: Configuration schema validation
-- **Type Safety**: Type-safe configuration handling
-- **Default Values**: Default configuration values
-- **Override Support**: Configuration override support
-- **Environment Support**: Environment-specific configurations
-
-## Data Access Handlers
-
-### Handler Types
-- **Component Handler**: Component data access
-- **Dataclasses Handler**: Dataclass data access
-- **Job Handler**: Job data access
-- **Custom Handlers**: Custom data access handlers
-
-### Handler Features
-- **CRUD Operations**: Create, read, update, delete operations
+### Data Access
+- **Repository Pattern**: Repository pattern implementation
 - **Query Building**: Dynamic query building
 - **Relationship Loading**: Eager and lazy loading
 - **Transaction Support**: Transaction management
 - **Error Handling**: Comprehensive error handling
 
-## Database Management
-
-### Database Features
-- **Connection Pooling**: Database connection pooling
-- **Migration Support**: Database migration support
-- **Schema Management**: Database schema management
-- **Index Management**: Database index management
-- **Backup Support**: Database backup support
-
-### Database Operations
-- **Connection Management**: Database connection management
-- **Transaction Management**: Transaction handling
-- **Query Execution**: Query execution and optimization
-- **Result Processing**: Query result processing
-- **Error Handling**: Database error handling
-
 ## Error Handling
 
 ### Persistence Errors
+- **Clear Messages**: Descriptive error messages for persistence issues
+- **Database Validation**: Path-based error reporting for database problems
+- **Query Errors**: Detailed query error information
+- **Context**: Persistence and database context in error messages
+
+### Error Types
 - **Connection Errors**: Database connection errors
 - **Query Errors**: SQL query errors
 - **Validation Errors**: Data validation errors
 - **Constraint Errors**: Database constraint errors
 - **Transaction Errors**: Transaction-related errors
 
-### Error Recovery
-- **Retry Logic**: Automatic retry mechanisms
-- **Fallback Strategies**: Fallback data access strategies
-- **Error Logging**: Comprehensive error logging
-- **Recovery Procedures**: Data recovery procedures
-- **Notification**: Error notification systems
+### Error Reporting
+```json
+{
+  "persistence_error": {
+    "error_type": "query_error",
+    "table_name": "components",
+    "query": "SELECT * FROM components WHERE id = ?",
+    "message": "Column 'id' not found in table 'components'"
+  }
+}
+```
 
-## Data Relationships
+## Performance Considerations
 
-### Model Relationships
-- **One-to-One**: One-to-one relationships
-- **One-to-Many**: One-to-many relationships
-- **Many-to-Many**: Many-to-many relationships
-- **Self-Referencing**: Self-referencing relationships
-- **Polymorphic**: Polymorphic relationships
+### Database Performance
+- **Connection Pooling**: Optimize database connection pooling
+- **Query Optimization**: Optimize query performance
+- **Index Usage**: Optimize index usage
+- **Caching**: Implement query result caching
 
-### Relationship Management
-- **Lazy Loading**: Lazy relationship loading
-- **Eager Loading**: Eager relationship loading
-- **Cascade Operations**: Cascade delete and update
-- **Relationship Validation**: Relationship validation
-- **Performance Optimization**: Relationship performance optimization
+### Data Access Performance
+- **Repository Pattern**: Optimize repository pattern implementation
+- **Batch Operations**: Optimize batch data operations
+- **Lazy Loading**: Optimize lazy data loading
+- **Memory Usage**: Minimize memory usage for data access
 
-## Migration and Schema Management
+## Configuration
 
-### Migration Features
-- **Version Control**: Database version control
-- **Schema Changes**: Schema change management
-- **Data Migration**: Data migration support
-- **Rollback Support**: Migration rollback support
-- **Validation**: Migration validation
+### Persistence Options
+- **Database Configuration**: Configure database connection and settings
+- **Model Configuration**: Configure data models and relationships
+- **Migration Settings**: Configure database migration settings
+- **Performance Settings**: Configure performance optimization settings
 
-### Schema Management
-- **Table Creation**: Table creation and modification
-- **Index Management**: Index creation and management
-- **Constraint Management**: Constraint management
-- **Schema Validation**: Schema validation
-- **Documentation**: Schema documentation
-
-## Performance Optimization
-
-### Query Optimization
-- **Index Usage**: Optimal index usage
-- **Query Planning**: Query execution planning
-- **Join Optimization**: Join operation optimization
-- **Subquery Optimization**: Subquery optimization
-- **Caching**: Query result caching
-
-### Data Access Optimization
-- **Connection Pooling**: Efficient connection pooling
-- **Batch Operations**: Batch data operations
-- **Lazy Loading**: Lazy data loading
-- **Pagination**: Efficient pagination
-- **Caching**: Data caching strategies
-
-## Security
-
-### Data Security
-- **Access Control**: Data access control
-- **Encryption**: Data encryption at rest
-- **Audit Logging**: Data access audit logging
-- **Data Masking**: Sensitive data masking
-- **Compliance**: Security compliance features
-
-### Database Security
-- **Connection Security**: Secure database connections
-- **Query Security**: SQL injection prevention
-- **Access Management**: Database access management
-- **Audit Trail**: Database audit trail
-- **Backup Security**: Secure backup procedures
+### Security Configuration
+- **Access Control**: Configure data access control
+- **Encryption**: Configure data encryption settings
+- **Audit Logging**: Configure audit logging settings
+- **Compliance**: Configure compliance requirements
 
 ## Best Practices
 

@@ -1,12 +1,18 @@
 # Configuration
 
-This directory contains configuration files and settings for the ETL Core system.
+Configuration components provide **centralized configuration management** and **environment-specific settings** for ETL pipeline data with comprehensive support for API settings and logging configuration.
 
 ## Overview
 
-The configuration directory provides centralized configuration management for the ETL system, including API settings, logging configuration, and environment-specific configurations.
+Configuration components define the structure, settings, and environment-specific configurations for data flowing through the ETL pipeline, ensuring proper system configuration and type safety. They provide **comprehensive configuration support** and **validation capabilities** for robust system management.
 
-## Configuration Files
+### Key Concepts
+- **Configuration Management**: Centralized configuration management and validation
+- **Environment Settings**: Environment-specific configuration handling
+- **API Configuration**: API server and authentication settings
+- **Logging Configuration**: Comprehensive logging system configuration
+
+## Components
 
 ### [API Configuration](./api_config.yaml)
 - **File**: `api_config.yaml`
@@ -18,151 +24,161 @@ The configuration directory provides centralized configuration management for th
 - **Purpose**: Logging system configuration
 - **Features**: Log levels, handlers, formatters, rotation settings
 
-## Configuration Management
+## Configuration Types
 
-### Configuration Loading
+### API Configuration
+- **Server Settings**: Host, port, debug mode, reload settings
+- **CORS Configuration**: Allowed origins, methods, headers, credentials
+- **Authentication**: Authentication methods, token settings, security settings
+- **Security**: Security-related configuration and policies
+
+### Logging Configuration
+- **Log Levels**: Root, component, module, and custom log levels
+- **Log Handlers**: Console, file, rotating, and network handlers
+- **Log Formatters**: Standard, detailed, JSON, and custom formats
+- **Log Rotation**: Size-based, time-based, and hybrid rotation strategies
+
+### Features
+- **YAML Support**: YAML configuration file support
+- **Environment Variables**: Environment variable override support
+- **Validation**: Configuration validation and error handling
+- **Hierarchy**: Configuration hierarchy with overrides
+
+## JSON Configuration Examples
+
+### API Configuration
+```json
+{
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false,
+    "reload": false,
+    "cors": {
+      "allowed_origins": ["*"],
+      "allowed_methods": ["GET", "POST", "PUT", "DELETE"],
+      "allowed_headers": ["*"],
+      "allow_credentials": true
+    }
+  }
+}
+```
+
+### Logging Configuration
+```json
+{
+  "logging": {
+    "version": 1,
+    "disable_existing_loggers": false,
+    "formatters": {
+      "standard": {
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+      }
+    },
+    "handlers": {
+      "console": {
+        "class": "logging.StreamHandler",
+        "level": "INFO",
+        "formatter": "standard"
+      }
+    },
+    "loggers": {
+      "etl_core": {
+        "level": "DEBUG",
+        "handlers": ["console"],
+        "propagate": false
+      }
+    }
+  }
+}
+```
+
+## Configuration Features
+
+### Configuration Management
 - **YAML Support**: YAML configuration file support
 - **Environment Variables**: Environment variable override support
 - **Default Values**: Sensible default configurations
 - **Validation**: Configuration validation and error handling
 
 ### Configuration Hierarchy
-1. **Default Configuration**: Built-in default values
-2. **File Configuration**: Configuration file values
-3. **Environment Variables**: Environment variable overrides
-4. **Runtime Configuration**: Runtime configuration updates
+- **Default Configuration**: Built-in default values
+- **File Configuration**: Configuration file values
+- **Environment Variables**: Environment variable overrides
+- **Runtime Configuration**: Runtime configuration updates
 
-## API Configuration
+## Error Handling
 
-### Server Settings
-- **Host**: Server host configuration
-- **Port**: Server port configuration
-- **Debug Mode**: Debug mode settings
-- **Reload**: Auto-reload settings for development
+### Configuration Errors
+- **Clear Messages**: Descriptive error messages for configuration issues
+- **Validation Errors**: Path-based error reporting for configuration problems
+- **Type Information**: Detailed type mismatch information
+- **Context**: Configuration and validation context in error messages
 
-### CORS Configuration
-- **Allowed Origins**: Allowed CORS origins
-- **Allowed Methods**: Allowed HTTP methods
-- **Allowed Headers**: Allowed request headers
-- **Credentials**: Credential handling settings
+### Error Types
+- **Missing Files**: Required configuration files not found
+- **Invalid Values**: Configuration values outside valid ranges
+- **Type Mismatches**: Configuration types incompatible with schema
+- **Format Errors**: Invalid configuration file formats
 
-### Authentication
-- **Authentication Methods**: Supported authentication methods
-- **Token Settings**: Token configuration
-- **Session Settings**: Session configuration
-- **Security Settings**: Security-related settings
-
-## Logging Configuration
-
-### Log Levels
-- **Root Level**: Root logger level
-- **Component Levels**: Component-specific log levels
-- **Module Levels**: Module-specific log levels
-- **Custom Levels**: Custom log level definitions
-
-### Log Handlers
-- **Console Handler**: Console output configuration
-- **File Handler**: File output configuration
-- **Rotating Handler**: Log rotation configuration
-- **Network Handler**: Network logging configuration
-
-### Log Formatters
-- **Standard Format**: Standard log message format
-- **Detailed Format**: Detailed log message format
-- **JSON Format**: JSON log message format
-- **Custom Format**: Custom log message format
-
-## Environment Configuration
-
-### Environment-Specific Settings
-- **Development**: Development environment settings
-- **Testing**: Testing environment settings
-- **Staging**: Staging environment settings
-- **Production**: Production environment settings
-
-### Environment Variables
-- **ETL_COMPONENT_MODE**: Component registry mode
-- **ETL_LOG_LEVEL**: Logging level
-- **ETL_DB_URL**: Database connection URL
-- **ETL_API_HOST**: API host configuration
-- **ETL_API_PORT**: API port configuration
-
-## Configuration Validation
-
-### Schema Validation
-- **YAML Schema**: YAML configuration schema validation
-- **Type Validation**: Configuration type validation
-- **Range Validation**: Configuration value range validation
-- **Required Fields**: Required configuration field validation
-
-### Error Handling
-- **Validation Errors**: Configuration validation error handling
-- **Missing Files**: Missing configuration file handling
-- **Invalid Values**: Invalid configuration value handling
-- **Format Errors**: Configuration format error handling
-
-## Configuration Examples
-
-### API Configuration Example
-```yaml
-api:
-  host: "0.0.0.0"
-  port: 8000
-  debug: false
-  reload: false
-  cors:
-    allowed_origins: ["*"]
-    allowed_methods: ["GET", "POST", "PUT", "DELETE"]
-    allowed_headers: ["*"]
-    allow_credentials: true
+### Error Reporting
+```json
+{
+  "configuration_error": {
+    "file_path": "api_config.yaml",
+    "field_path": "api.port",
+    "expected_type": "integer",
+    "actual_type": "string",
+    "error_type": "type_mismatch",
+    "message": "Port must be an integer value"
+  }
+}
 ```
 
-### Logging Configuration Example
-```yaml
-logging:
-  version: 1
-  disable_existing_loggers: false
-  formatters:
-    standard:
-      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    detailed:
-      format: "%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s"
-  handlers:
-    console:
-      class: logging.StreamHandler
-      level: INFO
-      formatter: standard
-      stream: ext://sys.stdout
-    file:
-      class: logging.handlers.RotatingFileHandler
-      level: DEBUG
-      formatter: detailed
-      filename: logs/etl_core.log
-      maxBytes: 10485760
-      backupCount: 5
-  loggers:
-    etl_core:
-      level: DEBUG
-      handlers: [console, file]
-      propagate: false
-```
+## Performance Considerations
+
+### Configuration Loading
+- **Lazy Loading**: Load configurations only when needed
+- **Caching**: Cache frequently used configurations
+- **Validation**: Optimize configuration validation performance
+- **Memory**: Minimize memory usage for large configurations
+
+### Environment Management
+- **Environment Detection**: Efficient environment detection
+- **Configuration Override**: Optimize configuration override mechanisms
+- **Variable Resolution**: Efficient environment variable resolution
+- **Performance**: Balance configuration flexibility with performance
+
+## Configuration
+
+### Configuration Options
+- **API Settings**: Configure API server and authentication settings
+- **Logging Settings**: Set logging levels, handlers, and formatters
+- **Environment Settings**: Configure environment-specific settings
+- **Security Settings**: Configure security and access control
+
+### Environment Configuration
+- **Environment Variables**: Set environment-specific variables
+- **Configuration Override**: Override configurations per environment
+- **Validation**: Validate configurations per environment
+- **Performance Tuning**: Optimize configuration performance
 
 ## Best Practices
 
 ### Configuration Design
-- **Centralized Configuration**: Centralize configuration management
+- **Centralized Management**: Centralize configuration management
 - **Environment Separation**: Separate configurations by environment
 - **Default Values**: Provide sensible default values
-- **Validation**: Implement configuration validation
+- **Validation**: Implement comprehensive configuration validation
 
-### Security Considerations
+### Security
 - **Sensitive Data**: Handle sensitive configuration data securely
 - **Access Control**: Control access to configuration files
 - **Encryption**: Encrypt sensitive configuration values
-- **Audit Logging**: Log configuration changes
+- **Audit Logging**: Log configuration changes and access
 
 ### Maintenance
 - **Version Control**: Version control configuration files
-- **Documentation**: Document configuration options
-- **Testing**: Test configuration changes
-- **Monitoring**: Monitor configuration usage
+- **Documentation**: Document configuration options and requirements
+- **Testing**: Test configuration changes thoroughly
+- **Monitoring**: Monitor configuration usage and performance

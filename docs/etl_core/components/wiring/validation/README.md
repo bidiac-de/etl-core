@@ -1,10 +1,10 @@
 # Validation Components
 
-Validation components provide data validation functionality for ensuring data integrity and schema compliance.
+Validation components provide **data validation functionality** for ensuring data integrity and schema compliance with comprehensive support for different data formats and error handling.
 
 ## Overview
 
-Validation components offer comprehensive data validation capabilities for different data formats, ensuring data quality and schema compliance throughout the ETL pipeline.
+Validation components offer comprehensive data validation capabilities for different data formats, ensuring data quality and schema compliance throughout the ETL pipeline. They provide **multi-format support** and **robust error handling** for reliable data processing.
 
 ## Components
 
@@ -26,18 +26,6 @@ Validates individual data rows against schema definitions.
 - **Nested Validation**: Validates nested object structures
 - **Array Validation**: Validates array elements
 
-#### Usage
-```python
-from etl_core.components.wiring.validation import validate_row_against_schema
-
-# Validate a row
-validate_row_against_schema(
-    payload={"id": 1, "name": "John", "age": 30},
-    schema=customer_schema,
-    schema_name="customer"
-)
-```
-
 ### DataFrame Validation
 Validates pandas DataFrames against schema definitions.
 
@@ -47,18 +35,6 @@ Validates pandas DataFrames against schema definitions.
 - **Null Validation**: Checks for null values in non-nullable fields
 - **Enum Validation**: Validates enum values in columns
 - **Flattened Schema**: Works with flattened nested schemas
-
-#### Usage
-```python
-from etl_core.components.wiring.validation import validate_dataframe_against_schema
-
-# Validate a DataFrame
-validate_dataframe_against_schema(
-    df=customer_df,
-    schema=customer_schema,
-    schema_name="customers"
-)
-```
 
 ### Dask DataFrame Validation
 Validates Dask DataFrames against schema definitions.
@@ -70,16 +46,71 @@ Validates Dask DataFrames against schema definitions.
 - **Type Validation**: Validates column data types
 - **Null Validation**: Checks for null values in non-nullable fields
 
-#### Usage
-```python
-from etl_core.components.wiring.validation import validate_dask_dataframe_against_schema
+## JSON Configuration Examples
 
-# Validate a Dask DataFrame
-validate_dask_dataframe_against_schema(
-    ddf=customer_ddf,
-    schema=customer_schema,
-    schema_name="customers"
-)
+### Row Validation
+
+```json
+{
+  "name": "validate_customer_row",
+  "comp_type": "validation",
+  "schema": "customer_schema",
+  "validation_type": "row",
+  "strict_mode": true,
+  "error_handling": "raise"
+}
+```
+
+### DataFrame Validation
+
+```json
+{
+  "name": "validate_customer_df",
+  "comp_type": "validation",
+  "schema": "customer_schema",
+  "validation_type": "dataframe",
+  "strict_mode": true,
+  "error_handling": "log"
+}
+```
+
+### Dask Validation
+
+```json
+{
+  "name": "validate_bigdata_df",
+  "comp_type": "validation",
+  "schema": "customer_schema",
+  "validation_type": "dask",
+  "strict_mode": false,
+  "error_handling": "continue"
+}
+```
+
+### Custom Validation Rules
+
+```json
+{
+  "name": "custom_validation",
+  "comp_type": "validation",
+  "schema": "custom_schema",
+  "validation_type": "row",
+  "custom_rules": [
+    {
+      "field": "email",
+      "rule": "email_format",
+      "message": "Invalid email format"
+    },
+    {
+      "field": "age",
+      "rule": "range",
+      "min": 0,
+      "max": 120,
+      "message": "Age must be between 0 and 120"
+    }
+  ],
+  "error_handling": "raise"
+}
 ```
 
 ## Validation Features
@@ -123,12 +154,15 @@ validate_dask_dataframe_against_schema(
 - **Null Violations**: Null values in non-nullable fields
 
 ### Error Reporting
-```python
-try:
-    validate_row_against_schema(payload, schema)
-except ValueError as e:
-    print(f"Validation error: {e}")
-    # Error message includes field path and expected type
+```json
+{
+  "validation_error": {
+    "field_path": "customer.address.city",
+    "expected_type": "STRING",
+    "actual_type": "INTEGER",
+    "message": "Field 'city' must be a string, got integer"
+  }
+}
 ```
 
 ## Performance Considerations
@@ -181,3 +215,9 @@ except ValueError as e:
 - **Flexible**: Allow for schema evolution
 - **Documented**: Document schema requirements
 - **Tested**: Test schemas with sample data
+
+### Performance
+- **Validation Timing**: Choose appropriate validation timing
+- **Memory Management**: Monitor memory usage during validation
+- **Error Recovery**: Implement efficient error recovery
+- **Monitoring**: Monitor validation performance and errors
