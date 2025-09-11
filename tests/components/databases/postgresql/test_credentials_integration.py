@@ -46,24 +46,6 @@ def test_creds() -> Tuple[str, str]:
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 
-@pytest.fixture
-def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
-    user, password = test_creds
-    creds = Credentials(
-        credentials_id=str(uuid4()),
-        name="pg_test_creds",
-        user=user,
-        host="localhost",
-        port=5432,
-        database="testdb",
-        password=password,
-        pool_max_size=10,
-        pool_timeout_s=30,
-    )
-    # Align provider_id with model id, so the mapping table FK is satisfied
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
-    return creds
-
 
 def test_credentials_creation(
     persisted_credentials: Credentials, test_creds: Tuple[str, str]

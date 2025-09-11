@@ -46,25 +46,6 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_creds() -> Tuple[str, str]:
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
-
-@pytest.fixture
-def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
-    user, password = test_creds
-    creds = Credentials(
-        credentials_id=str(uuid4()),
-        name="mssql_test_creds",
-        user=user,
-        host="localhost",
-        port=1433,
-        database="testdb",
-        password=password,
-        pool_max_size=10,
-        pool_timeout_s=30,
-    )
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
-    return creds
-
-
 def test_credentials_creation(
     persisted_credentials: Credentials, test_creds: Tuple[str, str]
 ) -> None:
