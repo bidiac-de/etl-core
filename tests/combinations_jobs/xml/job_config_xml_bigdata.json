@@ -1,0 +1,42 @@
+{
+  "name": "job_config_xml_bigdata",
+  "strategy_type": "bigdata",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_xml",
+      "description": "XML source (bigdata)",
+      "filepath": "__IN__",
+      "record_tag": "row",
+      "routes": {
+        "out": [{ "to": "writer", "in_port": "in" }]
+      },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_xml",
+      "description": "XML sink (bigdata)",
+      "filepath": "__OUT__",
+      "root_tag": "rows",
+      "record_tag": "row",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "id", "data_type": "string" },
+            { "name": "name", "data_type": "string" }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rows>
+    <row>
+        <id>1</id>
+        <name>Alice</name>
+        <address>
+            <street>Main</street>
+            <city>Lingen</city>
+        </address>
+        <tags>
+            <item>alpha</item>
+            <item>beta</item>
+        </tags>
+    </row>
+    <row>
+        <id>2</id>
+        <name>Bob</name>
+        <address>
+            <street>Side</street>
+            <city>Osnabrück</city>
+        </address>
+        <tags>
+            <item>gamma</item>
+            <item>delta</item>
+        </tags>
+    </row>
+</rows>

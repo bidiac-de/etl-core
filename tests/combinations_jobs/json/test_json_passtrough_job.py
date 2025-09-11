@@ -20,7 +20,7 @@ def test_execute_json_row_job(tmp_path: Path):
 
     out_fp = tmp_path / "out.jsonl"
 
-    cfg_path = Path(__file__).parent / "job_config_row.json"
+    cfg_path = Path(__file__).parent / "job_config_xml_row.json"
     cfg = render_job_cfg_with_filepaths(
         cfg_path,
         {"read_json": in_fp, "write_json": out_fp},
@@ -46,7 +46,7 @@ def test_execute_json_bulk_job(tmp_path: Path):
 
     out_fp = tmp_path / "out_bulk.json"
 
-    cfg_path = Path(__file__).parent / "job_config_bulk.json"
+    cfg_path = Path(__file__).parent / "job_config_xml_bulk.json"
     cfg = render_job_cfg_with_filepaths(
         cfg_path,
         {"read_json": in_fp, "write_json": out_fp},
