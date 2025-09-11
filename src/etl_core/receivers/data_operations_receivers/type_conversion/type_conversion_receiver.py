@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator, Dict, Sequence, Tuple
 
 import dask.dataframe as dd
 import pandas as pd
+import logging
 
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.base_receiver import Receiver
@@ -53,10 +54,14 @@ class TypeConversionReceiver(Receiver):
         if out_schema is not None:
             validate_frame_against_schema(converted, out_schema)
 
+        logger = logging.getLogger(__name__)
         try:
             metrics.lines_forwarded += int(len(converted))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception(
+                "TypeConversionReceiver.process_bulk: failed to count forwarded lines: %s",  # noqa: E501
+                exc,
+            )
 
         yield "out", converted
 

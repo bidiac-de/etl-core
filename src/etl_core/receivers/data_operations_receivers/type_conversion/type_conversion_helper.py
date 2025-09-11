@@ -24,7 +24,21 @@ class OnError(str, Enum):
 
 @dataclass(frozen=True)
 class TypeConversionRule:
-    """Configuration for a type conversion rule."""
+    """
+    Configuration for a type conversion rule.
+
+    column_path:
+        Dotted path using "." as separator. Use "*" to address list elements.
+        Examples:
+            "payload.age"             -> top-level field
+            "payload.items.*.price"   -> price in each element of a list
+
+    OnError semantics:
+        - OnError.RAISE: fail on first unconvertible value.
+        - OnError.NULL:  set unconvertible values to null/NA (nullable dtype).
+        - OnError.SKIP:  keep original values for entries that cannot be
+          converted (results may have mixed dtypes).
+    """
 
     column_path: str
     target: DataType
@@ -80,7 +94,16 @@ def _convert_scalar(value: Any, target: DataType) -> Any:
             raise ValueError(
                 f"non-integer float {value!r} cannot be cast to integer",
             )
-        return int(value)
+        try:
+            return int(value)
+        except Exception as exc_int:
+            try:
+                fval = float(str(value).strip())
+                if fval.is_integer():
+                    return int(fval)
+            except Exception:
+                pass
+            raise ValueError(f"cannot coerce {value!r} to integer") from exc_int
 
     if target == DataType.FLOAT:
         if pd.isna(value):
@@ -218,6 +241,14 @@ def convert_frame_top_level(
 
         if r.target in (DataType.INTEGER, DataType.FLOAT):
             if r.on_error == OnError.SKIP:
+
+                def _elem_skip(v: Any) -> Any:
+                    try:
+                        return _convert_scalar(v, r.target)
+                    except Exception:
+                        return v
+
+                out[col] = s.map(_elem_skip)
                 continue
 
             bool_mask = s.map(lambda v: isinstance(v, (bool, np.bool_)))
@@ -400,8 +431,19 @@ def _validate_scalar_against_field(value: Any, fd: FieldDef, path: str) -> None:
         )
 
     if dt == DataType.BOOLEAN:
+
         if isinstance(value, (bool, np.bool_)):
             return
+
+        if isinstance(value, (int, np.integer)) and value in (0, 1):
+            return
+        if isinstance(value, (float, np.floating)) and float(value) in (0.0, 1.0):
+            return
+
+        if isinstance(value, str):
+            s = value.strip().lower()
+            if s in _TRUE_STRINGS or s in _FALSE_STRINGS or s in _NULL_STRINGS:
+                return
         raise SchemaValidationError(
             f"{path}: expected boolean, got {type(value).__name__}",
         )

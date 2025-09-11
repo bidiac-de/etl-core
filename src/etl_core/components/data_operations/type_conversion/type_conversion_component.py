@@ -23,7 +23,20 @@ from etl_core.receivers.data_operations_receivers.type_conversion.type_conversio
 
 
 class TypeConversionRuleModel(BaseModel):
-    """Schema model for a type conversion rule."""
+    """
+    A single type-conversion rule.
+
+    column_path:
+        Dotted path using "." as separator. Use "*" to address list elements.
+        Examples:
+            "payload.age"                  -> top-level field
+            "payload.items.*.price"        -> price in each element of a list
+        Notes:
+            - OnError.SKIP may keep original values for entries that cannot be
+              converted. This can yield mixed dtypes in the resulting column.
+            - OnError.NULL sets unconvertible values to null/NA (nullable dtype).
+            - OnError.RAISE raises an error on the first unconvertible value.
+    """
 
     column_path: str = Field(..., description="Dot path; use '*' for list items.")
     target: Any = Field(..., description="Logical target data type.")
