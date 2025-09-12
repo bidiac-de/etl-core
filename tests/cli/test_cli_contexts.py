@@ -196,13 +196,19 @@ def test_delete_provider_remote(runner: CliRunner) -> None:
         )
 
 
+# -------------------------
+# Local client path updates
+# -------------------------
+
+
 def test_list_providers_local(runner: CliRunner) -> None:
+    # Handlers now return rows with `id`, not `provider_id`
     ctx_rows = [
-        SimpleNamespace(provider_id="prov-ctx-1", name="ctx1", environment="TEST"),
-        SimpleNamespace(provider_id="prov-ctx-2", name="ctx2", environment="DEV"),
+        SimpleNamespace(id="prov-ctx-1", name="ctx1", environment="TEST"),
+        SimpleNamespace(id="prov-ctx-2", name="ctx2", environment="DEV"),
     ]
     cred_rows = [
-        SimpleNamespace(provider_id="prov-creds-1", name="creds1"),
+        SimpleNamespace(id="prov-creds-1", name="creds1"),
     ]
 
     with (
@@ -223,15 +229,17 @@ def test_get_provider_local_context_branch(runner: CliRunner) -> None:
         patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
         patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
     ):
-        CtxH.return_value.get_by_provider_id.return_value = SimpleNamespace(
-            environment="TEST"
+        # get_by_id now returns (model, id) or None
+        CtxH.return_value.get_by_id.return_value = (
+            SimpleNamespace(environment="TEST"),
+            "prov-ctx-1",
         )
-        CredH.return_value.get_by_provider_id.return_value = None
+        CredH.return_value.get_by_id.return_value = None
 
         res = runner.invoke(app, ["contexts", "get", "prov-ctx-1"])
         assert res.exit_code == 0
         assert '"kind": "context"' in res.stdout
-        CtxH.return_value.get_by_provider_id.assert_called_once_with("prov-ctx-1")
+        CtxH.return_value.get_by_id.assert_called_once_with("prov-ctx-1")
 
 
 def test_get_provider_local_credentials_branch(runner: CliRunner) -> None:
@@ -239,13 +247,16 @@ def test_get_provider_local_credentials_branch(runner: CliRunner) -> None:
         patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
         patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
     ):
-        CtxH.return_value.get_by_provider_id.return_value = None
-        CredH.return_value.get_by_provider_id.return_value = SimpleNamespace()
+        CtxH.return_value.get_by_id.return_value = None
+        CredH.return_value.get_by_id.return_value = (
+            SimpleNamespace(name="creds"),
+            "prov-creds-1",
+        )
 
         res = runner.invoke(app, ["contexts", "get", "prov-creds-1"])
         assert res.exit_code == 0
         assert '"kind": "credentials"' in res.stdout
-        CredH.return_value.get_by_provider_id.assert_called_once_with("prov-creds-1")
+        CredH.return_value.get_by_id.assert_called_once_with("prov-creds-1")
 
 
 def test_get_provider_local_not_found(runner: CliRunner) -> None:
@@ -253,8 +264,8 @@ def test_get_provider_local_not_found(runner: CliRunner) -> None:
         patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
         patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
     ):
-        CtxH.return_value.get_by_provider_id.return_value = None
-        CredH.return_value.get_by_provider_id.return_value = None
+        CtxH.return_value.get_by_id.return_value = None
+        CredH.return_value.get_by_id.return_value = None
 
         res = runner.invoke(app, ["contexts", "get", "missing-id"])
         assert res.exit_code != 0  # Typer exits with non-zero when exception bubbles
@@ -268,5 +279,5 @@ def test_delete_provider_local(runner: CliRunner) -> None:
         res = runner.invoke(app, ["contexts", "delete", "prov-any"])
         assert res.exit_code == 0
         # Best-effort deletion: both handlers are attempted
-        assert CtxH.return_value.delete_by_provider_id.called
-        assert CredH.return_value.delete_by_provider_id.called
+        assert CtxH.return_value.delete_by_id.called
+        assert CredH.return_value.delete_by_id.called

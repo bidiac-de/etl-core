@@ -1,7 +1,6 @@
 import hashlib
 import os
 from typing import Tuple
-from uuid import uuid4
 
 import pytest
 from unittest.mock import Mock, patch
@@ -43,7 +42,6 @@ def test_creds() -> Tuple[str, str]:
 @pytest.fixture
 def sample_context() -> Context:
     return Context(
-        id=str(uuid4()),
         name="test_context",
         environment=Environment.TEST,
         parameters={
@@ -106,27 +104,29 @@ def mariadb_write_component(
 
 
 def test_credentials_creation(
-    persisted_credentials: Credentials, test_creds: Tuple[str, str]
+    persisted_credentials: Tuple[Credentials, str], test_creds: Tuple[str, str]
 ) -> None:
+    creds, credentials_id = persisted_credentials
     user, password = test_creds
-    assert isinstance(persisted_credentials.credentials_id, str)
-    assert persisted_credentials.name == "test_db_creds"
-    assert persisted_credentials.user == user
-    assert persisted_credentials.decrypted_password == password
-    assert persisted_credentials.pool_max_size == 10
-    assert persisted_credentials.pool_timeout_s == 30
+    assert isinstance(credentials_id, str)
+    assert creds.name == "test_db_creds"
+    assert creds.user == user
+    assert creds.decrypted_password == password
+    assert creds.pool_max_size == 10
+    assert creds.pool_timeout_s == 30
 
 
 def test_credentials_get_parameter(
-    persisted_credentials: Credentials, test_creds: Tuple[str, str]
+    persisted_credentials: Tuple[Credentials, str], test_creds: Tuple[str, str]
 ) -> None:
+    creds, _cid = persisted_credentials
     user, _ = test_creds
-    assert persisted_credentials.get_parameter("user") == user
-    assert persisted_credentials.get_parameter("database") == "testdb"
-    assert persisted_credentials.get_parameter("pool_max_size") == 10
-    assert persisted_credentials.get_parameter("pool_timeout_s") == 30
+    assert creds.get_parameter("user") == user
+    assert creds.get_parameter("database") == "testdb"
+    assert creds.get_parameter("pool_max_size") == 10
+    assert creds.get_parameter("pool_timeout_s") == 30
     with pytest.raises(KeyError, match="Unknown parameter key: invalid_key"):
-        persisted_credentials.get_parameter("invalid_key")
+        creds.get_parameter("invalid_key")
 
 
 def test_context_parameter_retrieval(sample_context: Context) -> None:
@@ -164,10 +164,13 @@ def test_mariadb_write_component_with_real_credentials(
     assert creds["database"] == "testdb"
 
 
-def test_credentials_pool_parameters(persisted_credentials: Credentials) -> None:
-    assert persisted_credentials.get_parameter("pool_max_size") == 10
-    assert persisted_credentials.get_parameter("pool_timeout_s") == 30
-    engine_kwargs = build_sql_engine_kwargs(persisted_credentials)
+def test_credentials_pool_parameters(
+    persisted_credentials: Tuple[Credentials, str],
+) -> None:
+    creds, _ = persisted_credentials
+    assert creds.get_parameter("pool_max_size") == 10
+    assert creds.get_parameter("pool_timeout_s") == 30
+    engine_kwargs = build_sql_engine_kwargs(creds)
     assert engine_kwargs["pool_size"] == 10
     assert engine_kwargs["pool_timeout"] == 30
 
@@ -175,7 +178,6 @@ def test_credentials_pool_parameters(persisted_credentials: Credentials) -> None
 def test_credentials_without_pool_settings(test_creds) -> None:
     _, password = test_creds
     creds = Credentials(
-        credentials_id=str(uuid4()),
         name="minimal_creds",
         user="minuser",
         host="localhost",
@@ -183,7 +185,7 @@ def test_credentials_without_pool_settings(test_creds) -> None:
         database="mindb",
         password=password,
     )
-    # Keep provider_id aligned for consistency across tests
+    # Persist for completeness (not strictly required for this assertion)
     CredentialsHandler().upsert(creds)
     assert creds.pool_max_size is None
     assert creds.pool_timeout_s is None
@@ -193,22 +195,19 @@ def test_credentials_without_pool_settings(test_creds) -> None:
 
 def test_credentials_password_handling() -> None:
     creds_no_pass = Credentials(
-        credentials_id=str(uuid4()),
         name="nopass_creds",
         user="nopassuser",
         host="localhost",
         port=3306,
         database="nopassdb",
     )
-    CredentialsHandler().upsert(creds_no_pass
-    )
+    CredentialsHandler().upsert(creds_no_pass)
     assert creds_no_pass.decrypted_password is None
 
 
 def test_credentials_validation(test_creds: Tuple[str, str]) -> None:
     _, base_pw = test_creds
     valid_creds = Credentials(
-        credentials_id=str(uuid4()),
         name="valid_creds",
         user="validuser",
         host="localhost",
@@ -218,7 +217,6 @@ def test_credentials_validation(test_creds: Tuple[str, str]) -> None:
     )
 
     special_creds = Credentials(
-        credentials_id=str(uuid4()),
         name="special_creds_2024",
         user="user@domain",
         host="localhost",
@@ -226,7 +224,6 @@ def test_credentials_validation(test_creds: Tuple[str, str]) -> None:
         database="test-db_123",
         password=derive_test_password(base_pw, "special_chars"),
     )
-    assert isinstance(valid_creds.credentials_id, str)
     assert valid_creds.name == "valid_creds"
     assert special_creds.user == "user@domain"
     assert special_creds.database == "test-db_123"
@@ -236,7 +233,6 @@ def test_credentials_validation(test_creds: Tuple[str, str]) -> None:
 def test_credentials_pool_configuration_validation(test_creds) -> None:
     _, base_pw = test_creds
     valid_pool_creds = Credentials(
-        credentials_id=str(uuid4()),
         name="pool_creds",
         user="pooluser",
         host="localhost",
@@ -248,7 +244,6 @@ def test_credentials_pool_configuration_validation(test_creds) -> None:
     )
 
     min_pool_creds = Credentials(
-        credentials_id=str(uuid4()),
         name="min_pool_creds",
         user="minpooluser",
         host="localhost",

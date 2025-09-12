@@ -68,7 +68,7 @@ class DatabaseComponent(Component, ABC):
             )
 
         # Resolve once at model build so config errors fail early
-        self._credentials, self._cred_id= ctx.resolve_active_credentials()
+        self._credentials, self._cred_id = ctx.resolve_active_credentials()
         return self
 
     def _get_credentials(self) -> Dict[str, Any]:

@@ -72,7 +72,7 @@ class Context(BaseModel, IContextProvider):
     def attach_credentials_repository(self, repo: CredentialsHandler) -> None:
         self._credentials_repo = repo
 
-    def add_credentials(self,cred_id: str, credentials: Credentials) -> None:
+    def add_credentials(self, cred_id: str, credentials: Credentials) -> None:
         """Add credentials to the context."""
         self._credentials[cred_id] = credentials
 

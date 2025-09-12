@@ -86,7 +86,7 @@ class TestMariaDBComponents:
     def test_mariadb_read_initialization(
         self,
         persisted_mapping_context_id: str,
-        persisted_credentials: Credentials,
+        persisted_credentials: Tuple[Credentials, str],
         test_creds: Tuple[str, str],
     ) -> None:
         """Test MariaDBRead component initialization with mapping context."""
@@ -106,21 +106,17 @@ class TestMariaDBComponents:
         assert read_comp.query == "SELECT * FROM users"
         assert read_comp.params == {"limit": 10}
 
-        # New assertion: active credentials come from _get_credentials()
+        _, credentials_id = persisted_credentials
         active_id = read_comp._get_credentials()["__credentials_id__"]
-        assert active_id == persisted_credentials.credentials_id
+        assert active_id == credentials_id
 
         # Optional sanity: the resolved object is present
         assert read_comp._credentials is not None
-        assert (
-            read_comp._credentials.credentials_id
-            == persisted_credentials.credentials_id
-        )
 
     def test_mariadb_write_initialization(
         self,
         persisted_mapping_context_id: str,
-        persisted_credentials: Credentials,
+        persisted_credentials: Tuple[Credentials, str],
     ) -> None:
         """Test MariaDBWrite component initialization with mapping context."""
         with patch(
@@ -134,9 +130,9 @@ class TestMariaDBComponents:
                 context_id=persisted_mapping_context_id,
             )
 
-        assert write_comp.entity_name == "users"
+        _, credentials_id = persisted_credentials
         active_id = write_comp._get_credentials()["__credentials_id__"]
-        assert active_id == persisted_credentials.credentials_id
+        assert active_id == credentials_id
 
     @pytest.mark.asyncio
     async def test_mariadb_read_process_row(

@@ -129,7 +129,7 @@ class LocalContextsClient(ContextsPort):
         creds.password = None
         self.creds_handler.upsert(creds)
         return {
-            "id":creds_id,
+            "id": creds_id,
             "kind": "credentials",
             "environment": None,
             "parameters_registered": 1,

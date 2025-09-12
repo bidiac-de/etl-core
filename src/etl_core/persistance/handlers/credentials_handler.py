@@ -45,22 +45,31 @@ class CredentialsHandler:
     def _password_key(self, credentials_id: str) -> str:
         return f"{credentials_id}/password"
 
-    def upsert(self, creds: Credentials, *, credentials_id: Optional[str] = None) -> str:
+    def upsert(
+        self, creds: Credentials, *, credentials_id: Optional[str] = None
+    ) -> str:
         """
         Insert or update non-secret metadata; store password in secret backend.
-        Returns the `credentials_id` assigned by the system.
-        If `credentials_id` is provided, upsert that row; otherwise a new row is created.
+        Returns the "credentials_id" assigned by the system.
+        If "credentials_id" is provided, upsert that row;
+         otherwise a new row is created.
         """
         with Session(self.engine) as s:
             row: Optional[CredentialsTable] = None
             if credentials_id:
                 row = s.exec(
-                    select(CredentialsTable).where(CredentialsTable.id == credentials_id)
+                    select(CredentialsTable).where(
+                        CredentialsTable.id == credentials_id
+                    )
                 ).first()
 
             if row is None:
                 # create new row; DB default will assign UUID if not provided
-                row = CredentialsTable(id=credentials_id) if credentials_id else CredentialsTable()
+                row = (
+                    CredentialsTable(id=credentials_id)
+                    if credentials_id
+                    else CredentialsTable()
+                )
 
             row.name = creds.name
             row.user = creds.user

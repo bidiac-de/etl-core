@@ -49,7 +49,8 @@ def test_creds() -> Tuple[str, str]:
 def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str]:
     """
     Persist a Credentials object.
-    Returns (Credentials model, credentials_id) where credentials_id is system-generated.
+    Returns (Credentials model, credentials_id) where
+    credentials_id is system-generated.
     """
     user, password = test_creds
     creds = Credentials(
