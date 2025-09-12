@@ -6,6 +6,9 @@ import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
 import re
 
+TEXT = "#text"
+ATTRS = "@attrs"
+
 
 def element_to_nested(element: ET.Element) -> Any:
     """Convert an XML element into a *truly nested* Python structure.
@@ -35,11 +38,11 @@ def element_to_nested(element: ET.Element) -> Any:
 
     node: Dict[str, Any] = {}
     if has_attrs:
-        node["@attrs"] = dict(element.attrib)
+        node[ATTRS] = dict(element.attrib)
 
     if text:
         if has_children:
-            node["#text"] = text
+            node[TEXT] = text
         else:
             return text
 
@@ -64,7 +67,7 @@ def _apply_node(el: ET.Element, data: Any) -> None:
     if isinstance(data, dict):
         _apply_attrs_and_text(el, data)
         for k, v in data.items():
-            if k in ("@attrs", "#text"):
+            if k in (ATTRS, TEXT):
                 continue
             _append_child(el, k, v)
     elif isinstance(data, list):
@@ -75,12 +78,12 @@ def _apply_node(el: ET.Element, data: Any) -> None:
 
 
 def _apply_attrs_and_text(el: ET.Element, data: Dict[str, Any]) -> None:
-    attrs = data.get("@attrs")
+    attrs = data.get(ATTRS)
     if isinstance(attrs, dict):
         for k, v in attrs.items():
             el.set(str(k), str(v))
-    if "#text" in data:
-        text_val = data["#text"]
+    if TEXT in data:
+        text_val = data[TEXT]
         el.text = "" if text_val is None else str(text_val)
 
 
@@ -117,17 +120,17 @@ def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
 
 
 def _flatten_dict(prefix: str, d: Dict[str, Any], out: Dict[str, Any]) -> None:
-    attrs = d.get("@attrs")
+    attrs = d.get(ATTRS)
     if isinstance(attrs, dict):
-        base = _join(prefix, "@attrs")
+        base = _join(prefix, ATTRS)
         for ak, av in attrs.items():
             out[_join(base, ak)] = av
 
-    if "#text" in d:
-        out[_join(prefix, "#text")] = d["#text"]
+    if TEXT in d:
+        out[_join(prefix, TEXT)] = d[TEXT]
 
     for k, v in d.items():
-        if k in ("@attrs", "#text"):
+        if k in (ATTRS, TEXT):
             continue
         _flatten_to_map(_join(prefix, k), v, out)
 
@@ -286,11 +289,11 @@ def _set_path(root: dict, path: str, value):
     for i, (name, idx) in enumerate(parts):
         last = i == last_idx
 
-        if name == "@attrs":
+        if name == ATTRS:
             cur = _step_attrs(cur, parts, i, value)
             return
 
-        if name == "#text":
+        if name == TEXT:
             _step_text(cur, value, last)
             return
 
@@ -304,7 +307,7 @@ def _step_attrs(cur: dict, parts, i: int, value):
     if i == len(parts) - 1:
         return cur
 
-    attrs = _ensure_dict(cur, "@attrs")
+    attrs = _ensure_dict(cur, ATTRS)
     next_name, _ = parts[i + 1]
 
     if i + 1 == len(parts) - 1:
@@ -316,7 +319,7 @@ def _step_attrs(cur: dict, parts, i: int, value):
 
 def _step_text(cur: dict, value, last: bool) -> None:
     if last:
-        cur["#text"] = "" if value is None else str(value)
+        cur[TEXT] = "" if value is None else str(value)
 
 
 def _step_dict(cur: dict, name: str, value, last: bool) -> dict:
