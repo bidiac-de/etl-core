@@ -81,7 +81,7 @@ class JobExecutionHandler:
             try:
                 # build and run worker tasks, storing them for cancellation
                 await self._run_latest_attempt(execution)
-            except ExceptionGroup as eg:
+            except ExceptionGroup as eg:  # noqa: F821
                 # unwrap the error from TaskGroup
                 inner = eg.exceptions[0] if eg.exceptions else eg
                 attempt = execution.latest_attempt()

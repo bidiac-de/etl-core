@@ -1,0 +1,55 @@
+{
+  "name": "JSON Bulk Type Conversion (skip) to JSON",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "bulk",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "JSON array in (bulk)",
+      "filepath": "__IN__",
+      "routes": { "out": [ { "to": "tc", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "tc",
+      "comp_type": "type_conversion",
+      "description": "name->float (skip on invalid, keep originals)",
+      "rules": [
+        { "column_path": "name", "target": "float", "on_error": "skip" }
+      ],
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "out": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_json",
+      "description": "JSON array out",
+      "filepath": "__OUT__",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "string" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    }
+  ]
+}
