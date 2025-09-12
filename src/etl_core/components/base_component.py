@@ -45,10 +45,6 @@ from etl_core.components.strategy_type import StrategyType
 class Component(ComponentBase, ABC):
     """
     Base class for all components in the system.
-
-    Supports both static (class-level) and dynamic (instance-level) ports.
-    - Class-level declarations keep simple components declarative.
-    - Instance-level extras come from config and are merged during validation.
     """
 
     # declarations (overridable in subclasses)
@@ -133,28 +129,17 @@ class Component(ComponentBase, ABC):
         description="in_port -> Schema expected on the port.",
     )
 
-    # dynamic ports supplied via config (merged with class-level ports)
-    extra_output_ports: List[OutPortSpec] = Field(
-        default_factory=list,
-        description="Additional output ports declared by config "
-        "(merged with class-level OUTPUT_PORTS).",
-    )
-    extra_input_ports: List[InPortSpec] = Field(
-        default_factory=list,
-        description="Additional input ports declared by config "
-        "(merged with class-level INPUT_PORTS).",
-    )
+    extra_output_ports: List[OutPortSpec] = Field(default_factory=list)
+    extra_input_ports: List[InPortSpec] = Field(default_factory=list)
     layout: Layout = Field(default_factory=lambda: Layout())
     metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
-
-    # Runtime, set during wiring in Job creation
     _out_routes: Dict[str, List["Component"]] = PrivateAttr(default_factory=dict)
     _out_edges_in_ports: Dict[str, List[str]] = PrivateAttr(default_factory=dict)
 
-    # these need to be created on the concrete component classes
+    # need to be created on the concrete component classes
     _strategy: Optional[ExecutionStrategy] = PrivateAttr(default=None)
     _receiver: Optional[Receiver] = PrivateAttr(default=None)
 
@@ -163,9 +148,6 @@ class Component(ComponentBase, ABC):
     def _coerce_extra_output_ports(
         cls, v: Iterable[OutPortSpec | str | dict] | None
     ) -> List[OutPortSpec]:
-        """
-        Accept List[OutPortSpec] | List[str] | List[dict], cast to List[OutPortSpec].
-        """
         if v is None:
             return []
         result: List[OutPortSpec] = []
@@ -187,9 +169,6 @@ class Component(ComponentBase, ABC):
     def _coerce_extra_input_ports(
         cls, v: Iterable[InPortSpec | str | dict] | None
     ) -> List[InPortSpec]:
-        """
-        Accept List[InPortSpec] | List[str] | List[dict], cast to List[InPortSpec].
-        """
         if v is None:
             return []
         result: List[InPortSpec] = []
@@ -239,12 +218,12 @@ class Component(ComponentBase, ABC):
         if self._resolved_context is not None:
             return self
         if not self.context_id:
-            return self  # not all components require a context
+            return self
         ctx_handler = ContextHandler()
-        loaded = ctx_handler.get_by_provider_id(self.context_id)
+        loaded = ctx_handler.get_by_id(self.context_id)
         if not loaded:
             raise ValueError(f"Context with ID {self.context_id} not found")
-        ctx, _provider_id = loaded
+        ctx, _ctx_id = loaded
         if not isinstance(ctx, Context):
             raise TypeError("Resolved object is not a Context")
         self._resolved_context = ctx
@@ -268,7 +247,7 @@ class Component(ComponentBase, ABC):
     def _build_objects(self) -> "Component":
         """
         After-instantiation hook. Override in subclasses to assign
-        `self._receiver`, then return `self`.
+        "self._receiver", then return "self".
         """
         return self
 

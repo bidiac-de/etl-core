@@ -63,7 +63,7 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
+    CredentialsHandler().upsert(creds)
     return creds
 
 
@@ -71,13 +71,12 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
 def persisted_mapping_context_id(persisted_credentials: Credentials) -> str:
     """
     Create/update a mapping context (env -> credentials_id) and return its provider_id.
-    NOTE: Use upsert_credentials_mapping_context (no `context=` kw).
     """
     provider_id = str(uuid4())
 
-    # Persist the context shell + mapping rows. The handler expects raw env strings.
+    # Persist the context shell and mapping rows
     ContextHandler().upsert_credentials_mapping_context(
-        provider_id=provider_id,
+        context_id=provider_id,
         name="test_mapping_ctx",
         environment=Environment.TEST.value,
         mapping_env_to_credentials_id={

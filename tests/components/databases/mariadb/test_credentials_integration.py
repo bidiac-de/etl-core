@@ -1,4 +1,3 @@
-# tests/components/databases/mariadb/test_credentials_integration.py
 import hashlib
 import os
 from typing import Tuple
@@ -62,33 +61,6 @@ def sample_context() -> Context:
     )
 
 
-@pytest.fixture
-def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
-    """
-    Create domain credentials, persist via handler, and return the model.
-
-    IMPORTANT:
-    We use provider_id == credentials_id so that ContextCredentialsMapTable,
-    whose FK references CredentialsTable.provider_id, can be populated with
-    the model's credentials_id without violating the FK.
-    """
-    user, password = test_creds
-    creds = Credentials(
-        credentials_id=str(uuid4()),
-        name="test_db_creds",
-        user=user,
-        host="localhost",
-        port=3306,
-        database="testdb",
-        password=password,
-        pool_max_size=10,
-        pool_timeout_s=30,
-    )
-    # Align provider_id with the domain model's credentials_id
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
-    return creds
-
-
 @pytest.fixture(autouse=True)
 def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
@@ -100,7 +72,7 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def mariadb_read_component(
-    persisted_mapping_context_id: str,  # provided by conftest.py
+    persisted_mapping_context_id: str,
 ) -> MariaDBRead:
     # Patch during construction because SQLDatabaseComponent connects in model validator
     with patch(
@@ -212,7 +184,7 @@ def test_credentials_without_pool_settings(test_creds) -> None:
         password=password,
     )
     # Keep provider_id aligned for consistency across tests
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
+    CredentialsHandler().upsert(creds)
     assert creds.pool_max_size is None
     assert creds.pool_timeout_s is None
     engine_kwargs = build_sql_engine_kwargs(creds)
@@ -228,8 +200,7 @@ def test_credentials_password_handling() -> None:
         port=3306,
         database="nopassdb",
     )
-    CredentialsHandler().upsert(
-        provider_id=creds_no_pass.credentials_id, creds=creds_no_pass
+    CredentialsHandler().upsert(creds_no_pass
     )
     assert creds_no_pass.decrypted_password is None
 
@@ -311,7 +282,7 @@ def test_mariadb_write_bulk_operations(
 @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
 def test_mariadb_read_query_operations(
     mock_handler_class,
-    persisted_mapping_context_id: str,  # provided by conftest.py
+    persisted_mapping_context_id: str,
     test_creds,
 ) -> None:
     mock_handler = Mock()

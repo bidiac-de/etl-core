@@ -196,13 +196,10 @@ class LayoutTable(LayoutBase, table=True):
 class CredentialsTable(SQLModel, table=True):
     """
     Persist non-secret parts of DB credentials.
-    Secrets (passwords, secure params) stay in keyring under provider_id/*.
+    Secrets (passwords, secure params) stay in secret backend under id/*.
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    provider_id: str = Field(
-        sa_column=Column(String, unique=True, index=True, nullable=False)
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, index=True)
     name: str = Field(nullable=False)
     user: str = Field(nullable=False)
     host: str = Field(nullable=False)
@@ -215,14 +212,12 @@ class CredentialsTable(SQLModel, table=True):
 
 class ContextTable(SQLModel, table=True):
     """
-    Optional: persist context metadata only.
-    Secure params are tracked via ContextParameterTable rows but values live in keyring.
+    Persist context metadata only.
+    Secure params are tracked via ContextParameterTable rows; values live in
+    the secret backend (value empty in DB for secure keys).
     """
 
-    id: int | None = Field(default=None, primary_key=True)
-    provider_id: str = Field(
-        sa_column=Column(String, unique=True, index=True, nullable=False)
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, index=True)
     name: str = Field(nullable=False)
     environment: str = Field(nullable=False)
     created_at: datetime = Field(default_factory=datetime.now, nullable=False)
@@ -246,23 +241,20 @@ class ContextTable(SQLModel, table=True):
 class ContextParameterTable(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
-    context_provider_id: str = Field(
+    context_id: str = Field(
         sa_column=Column(
             String,
-            ForeignKey(_FOREIGN_KEY_CONTEXT_PROVIDER, ondelete="CASCADE"),
+            ForeignKey("contexttable.id", ondelete="CASCADE"),
             index=True,
             nullable=False,
         )
     )
     key: str = Field(index=True, nullable=False)
-    value: str = Field(default="", nullable=False)  # empty for secure keys
+    value: str = Field(default="", nullable=False)
     is_secure: bool = Field(default=False, nullable=False)
 
-    # avoid duplicate keys per context
     __table_args__ = (
-        UniqueConstraint(
-            "context_provider_id", "key", name="uq_contextparam_context_key"
-        ),
+        UniqueConstraint("context_id", "key", name="uq_contextparam_context_key"),
     )
 
     context: ContextTable | None = Relationship(back_populates="parameters")
@@ -271,35 +263,31 @@ class ContextParameterTable(SQLModel, table=True):
 class ContextCredentialsMapTable(SQLModel, table=True):
     """
     Env -> credentials mapping for a context.
-    Rows are non-secret: they reference credentials providers by ID.
+    Rows are non-secret: they reference credentials ids.
     """
 
     id: int | None = Field(default=None, primary_key=True)
 
-    context_provider_id: str = Field(
+    context_id: str = Field(
         sa_column=Column(
             String,
-            ForeignKey(_FOREIGN_KEY_CONTEXT_PROVIDER, ondelete="CASCADE"),
+            ForeignKey("contexttable.id", ondelete="CASCADE"),
             index=True,
             nullable=False,
         )
     )
     environment: str = Field(nullable=False)
-    credentials_provider_id: str = Field(
+    credentials_id: str = Field(
         sa_column=Column(
             String,
-            ForeignKey("credentialstable.provider_id", ondelete="RESTRICT"),
+            ForeignKey("credentialstable.id", ondelete="RESTRICT"),
             index=True,
             nullable=False,
         )
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "context_provider_id",
-            "environment",
-            name="uq_ctxcred_context_env",
-        ),
+        UniqueConstraint("context_id", "environment", name="uq_ctxcred_context_env"),
     )
 
     context: "ContextTable" = Relationship(back_populates="credentials_map")
