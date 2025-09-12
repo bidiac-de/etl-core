@@ -255,6 +255,7 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     filtered = _strip_hidden(full, hidden)
     ordered = _apply_field_ordering(filtered, cls)
     enriched = _attach_class_vars(ordered, cls)
+    enriched["comp-type"] = comp_type  # convenience for GUI
 
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_FORM_CACHE[cache_key] = enriched
