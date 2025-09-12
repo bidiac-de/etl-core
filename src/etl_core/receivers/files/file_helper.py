@@ -30,4 +30,6 @@ def open_file(
     **kwargs: Any,
 ) -> IO:
     """Open a file with consistent defaults and allow extra args like newline."""
+    if "b" in mode:
+        return open(path, mode=mode, **kwargs)
     return open(path, mode=mode, encoding=encoding, newline=newline, **kwargs)
