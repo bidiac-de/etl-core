@@ -11,7 +11,7 @@ from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 from etl_core.persistance.handlers.context_handler import ContextHandler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from tests.helpers import runtime_job_from_config  # noqa: E402
-
+from etl_core.api.helpers import autodiscover_components
 
 BASE = Path(__file__).parent
 
@@ -25,7 +25,7 @@ CONTEXT_ID_TOKEN = "${MONGO_EXAMPLE_CONTEXT_ID}"
 
 
 def _persist_credentials_for_env() -> Credentials:
-    """Persist credentials; provider_id == credentials_id to satisfy FK."""
+    """Persist credentials set to your MongoDB instance"""
     host = "placeholder_host"
     port = 27017
     database = "placeholder_db"
@@ -50,7 +50,7 @@ def _persist_credentials_for_env() -> Credentials:
 def _create_mapping_context(
     *, env: Environment, credentials_id: str, name: str = "mongo_example_ctx"
 ) -> str:
-    """Create a mapping context (env → credentials_id); return its provider_id."""
+    """Create a mapping context (env --> credentials_id)."""
     provider_id = str(uuid4())
     ContextHandler().upsert_credentials_mapping_context(
         provider_id=provider_id,
@@ -83,8 +83,7 @@ def _load_config_with_context(path: Path, context_id: str) -> Dict[str, Any]:
 
 def run_job_from_json(cfg_path: Path, env: Environment = Environment.TEST) -> None:
     """
-    Persist credentials → create mapping context → materialize config → run job.
-    NO legacy rewiring; the JSON must contain the context placeholder.
+    Persist credentials --> create mapping context --> materialize config --> run job.
     """
     creds = _persist_credentials_for_env()
     ctx_id = _create_mapping_context(env=env, credentials_id=creds.credentials_id)
@@ -92,13 +91,14 @@ def run_job_from_json(cfg_path: Path, env: Environment = Environment.TEST) -> No
 
     job = runtime_job_from_config(cfg)
     exec_handler = JobExecutionHandler()
-    run_info = exec_handler.execute_job(job)
+    run_info = exec_handler.execute_job(job, environment=env)
     status = exec_handler.job_info.metrics_handler.get_job_metrics(run_info.id).status
 
-    print(f"Job '{cfg.get('name', cfg_path.name)}' " f"finished with status: {status}")
+    print(f"Job {cfg.get('name', cfg_path.name)}, finished with status: {status}")
 
 
 if __name__ == "__main__":
 
+    autodiscover_components("etl_core.components")
     # Run one of the example jobs with your own MongoDB credentials:
     run_job_from_json(CFG_BULK_FLAT_TO_NESTED_UPSERT)
