@@ -6,6 +6,7 @@ All components accept a mapping-context via `context_id` and resolve real creds.
 
 from __future__ import annotations
 
+from typing import Tuple
 from unittest.mock import AsyncMock, Mock, patch
 
 import dask.dataframe as dd
@@ -81,7 +82,7 @@ class TestSQLServerComponents:
     def test_sqlserver_read_initialization(
         self,
         persisted_mapping_context_id: str,
-        persisted_credentials: Credentials,
+        persisted_credentials: Tuple[Credentials, str],
     ) -> None:
         with patch(
             "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
@@ -99,13 +100,14 @@ class TestSQLServerComponents:
         assert comp.query == "SELECT * FROM users"
         assert comp.params == {"limit": 10}
         active_id = comp._get_credentials()["__credentials_id__"]
-        assert active_id == persisted_credentials.credentials_id
+        _, credentials_id = persisted_credentials
+        assert active_id == credentials_id
         assert comp._credentials is not None
 
     def test_sqlserver_write_initialization(
         self,
         persisted_mapping_context_id: str,
-        persisted_credentials: Credentials,
+        persisted_credentials: Tuple[Credentials, str],
     ) -> None:
         with patch(
             "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
@@ -120,7 +122,8 @@ class TestSQLServerComponents:
 
         assert comp.entity_name == "users"
         active_id = comp._get_credentials()["__credentials_id__"]
-        assert active_id == persisted_credentials.credentials_id
+        _, credentials_id = persisted_credentials
+        assert active_id == credentials_id
 
     @pytest.mark.asyncio
     async def test_sqlserver_read_process_row(

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 from typing import Tuple
-from uuid import uuid4
 from unittest.mock import Mock, patch
 
 import pytest
@@ -48,33 +47,38 @@ def test_creds() -> Tuple[str, str]:
 
 
 def test_credentials_creation(
-    persisted_credentials: Credentials, test_creds: Tuple[str, str]
+    persisted_credentials: Tuple[Credentials, str], test_creds: Tuple[str, str]
 ) -> None:
+    creds, credentials_id = persisted_credentials
     user, password = test_creds
-    assert isinstance(persisted_credentials.credentials_id, str)
-    assert persisted_credentials.name == "mssql_test_creds"
-    assert persisted_credentials.user == user
-    assert persisted_credentials.decrypted_password == password
-    assert persisted_credentials.pool_max_size == 10
-    assert persisted_credentials.pool_timeout_s == 30
+    assert isinstance(credentials_id, str)
+    assert creds.name == "mssql_test_creds"
+    assert creds.user == user
+    assert creds.decrypted_password == password
+    assert creds.pool_max_size == 10
+    assert creds.pool_timeout_s == 30
 
 
 def test_credentials_get_parameter(
-    persisted_credentials: Credentials, test_creds: Tuple[str, str]
+    persisted_credentials: Tuple[Credentials, str], test_creds: Tuple[str, str]
 ) -> None:
+    creds, _cid = persisted_credentials
     user, _ = test_creds
-    assert persisted_credentials.get_parameter("user") == user
-    assert persisted_credentials.get_parameter("database") == "testdb"
-    assert persisted_credentials.get_parameter("pool_max_size") == 10
-    assert persisted_credentials.get_parameter("pool_timeout_s") == 30
+    assert creds.get_parameter("user") == user
+    assert creds.get_parameter("database") == "testdb"
+    assert creds.get_parameter("pool_max_size") == 10
+    assert creds.get_parameter("pool_timeout_s") == 30
     with pytest.raises(KeyError, match="Unknown parameter key: invalid_key"):
-        persisted_credentials.get_parameter("invalid_key")
+        creds.get_parameter("invalid_key")
 
 
-def test_credentials_pool_parameters(persisted_credentials: Credentials) -> None:
-    assert persisted_credentials.get_parameter("pool_max_size") == 10
-    assert persisted_credentials.get_parameter("pool_timeout_s") == 30
-    engine_kwargs = build_sql_engine_kwargs(persisted_credentials)
+def test_credentials_pool_parameters(
+    persisted_credentials: Tuple[Credentials, str],
+) -> None:
+    creds, _ = persisted_credentials
+    assert creds.get_parameter("pool_max_size") == 10
+    assert creds.get_parameter("pool_timeout_s") == 30
+    engine_kwargs = build_sql_engine_kwargs(creds)
     assert engine_kwargs["pool_size"] == 10
     assert engine_kwargs["pool_timeout"] == 30
 
@@ -82,7 +86,6 @@ def test_credentials_pool_parameters(persisted_credentials: Credentials) -> None
 def test_credentials_without_pool_settings(test_creds: Tuple[str, str]) -> None:
     _, password = test_creds
     creds = Credentials(
-        credentials_id=str(uuid4()),
         name="mssql_min_creds",
         user="minuser",
         host="localhost",
@@ -90,7 +93,7 @@ def test_credentials_without_pool_settings(test_creds: Tuple[str, str]) -> None:
         database="mindb",
         password=password,
     )
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
+    CredentialsHandler().upsert(creds)
     assert creds.pool_max_size is None
     assert creds.pool_timeout_s is None
     engine_kwargs = build_sql_engine_kwargs(creds)
@@ -99,7 +102,6 @@ def test_credentials_without_pool_settings(test_creds: Tuple[str, str]) -> None:
 
 def test_credentials_password_handling() -> None:
     creds_no_pass = Credentials(
-        credentials_id=str(uuid4()),
         name="mssql_nopass",
         user="nopassuser",
         host="localhost",
@@ -112,7 +114,7 @@ def test_credentials_password_handling() -> None:
 @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
 def test_sqlserver_read_component_with_real_credentials(
     mock_handler_class: Mock,
-    persisted_credentials: Credentials,
+    persisted_credentials: Tuple[Credentials, str],
     persisted_mapping_context_id: str,
     test_creds: Tuple[str, str],
 ) -> None:
@@ -130,13 +132,14 @@ def test_sqlserver_read_component_with_real_credentials(
     assert creds["user"] == user
     assert creds["password"] == password
     assert creds["database"] == "testdb"
-    assert creds["__credentials_id__"] == persisted_credentials.credentials_id
+    _, credentials_id = persisted_credentials
+    assert creds["__credentials_id__"] == credentials_id
 
 
 @patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
 def test_sqlserver_write_component_with_real_credentials(
     mock_handler_class: Mock,
-    persisted_credentials: Credentials,
+    persisted_credentials: Tuple[Credentials, str],
     persisted_mapping_context_id: str,
     test_creds: Tuple[str, str],
 ) -> None:
@@ -153,4 +156,5 @@ def test_sqlserver_write_component_with_real_credentials(
     user, _ = test_creds
     assert creds["user"] == user
     assert creds["database"] == "testdb"
-    assert creds["__credentials_id__"] == persisted_credentials.credentials_id
+    _, credentials_id = persisted_credentials
+    assert creds["__credentials_id__"] == credentials_id

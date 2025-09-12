@@ -42,14 +42,13 @@ def test_creds() -> Tuple[str, str]:
 
 
 @pytest.fixture
-def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
+def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str]:
     """
     Persist a Credentials object. Use the model's credentials_id as provider_id
     so the context <-> credentials mapping FK is satisfied.
     """
     user, password = test_creds
     creds = Credentials(
-        credentials_id=str(uuid4()),
         name="mssql_test_creds",
         user=user,
         host="localhost",
@@ -59,25 +58,24 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
-    return creds
+    credentials_id = CredentialsHandler().upsert(creds)
+    return creds, credentials_id
 
 
 @pytest.fixture
-def persisted_mapping_context_id(persisted_credentials: Credentials) -> str:
+def persisted_mapping_context_id(persisted_credentials: Tuple[Credentials, str]) -> str:
     """
     Create/update a mapping context (env -> credentials_id) and return its provider_id.
     """
-    provider_id = str(uuid4())
+    _, creds_id = persisted_credentials
+    context_id = str(uuid4())
     ContextHandler().upsert_credentials_mapping_context(
-        provider_id=provider_id,
+        context_id=context_id,
         name="mssql_test_mapping_ctx",
         environment=Environment.TEST.value,
-        mapping_env_to_credentials_id={
-            Environment.TEST.value: persisted_credentials.credentials_id
-        },
+        mapping_env_to_credentials_id={Environment.TEST.value: creds_id},
     )
-    return provider_id
+    return context_id
 
 
 @pytest.fixture
@@ -162,7 +160,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
     _, base_pw = test_creds
     return {
         "minimal": Credentials(
-            credentials_id=str(uuid4()),
             name="mssql_minimal",
             user="minuser",
             host="localhost",
@@ -171,7 +168,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             password=base_pw,
         ),
         "with_pool": Credentials(
-            credentials_id=str(uuid4()),
             name="mssql_pool",
             user="pooluser",
             host="localhost",
@@ -182,7 +178,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             pool_timeout_s=60,
         ),
         "no_password": Credentials(
-            credentials_id=str(uuid4()),
             name="mssql_nopass",
             user="nopassuser",
             host="localhost",

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 from typing import Tuple
-from uuid import uuid4
 from unittest.mock import Mock, patch
 
 import pytest
@@ -73,7 +72,7 @@ def test_credentials_get_parameter(
 
 
 def test_credentials_pool_parameters(
-    persisted_credentials: Tuple[Credentials, str]
+    persisted_credentials: Tuple[Credentials, str],
 ) -> None:
     creds, _ = persisted_credentials
     assert creds.get_parameter("pool_max_size") == 10

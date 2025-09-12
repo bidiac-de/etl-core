@@ -288,10 +288,9 @@ def persisted_mongo_credentials(test_creds: Tuple[str, str]) -> Tuple[Credential
     return creds, credentials_id
 
 
-
 @pytest.fixture()
 def persisted_mongo_context_id(
-    persisted_mongo_credentials: Tuple[Credentials,str],
+    persisted_mongo_credentials: Tuple[Credentials, str],
 ) -> str:
     """
     Create a Credentials-Mapping Context that maps TEST to persisted Mongo creds.
@@ -348,7 +347,7 @@ async def get_all_docs(
 
 @pytest.fixture
 async def mongo_handler(
-    persisted_mongo_credentials: Tuple[Credentials,str],
+    persisted_mongo_credentials: Tuple[Credentials, str],
 ) -> AsyncIterator[Tuple[MongoConnectionHandler, str]]:
     """
     Build a MongoConnectionHandler using the persisted credentials.

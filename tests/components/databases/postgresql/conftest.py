@@ -63,9 +63,7 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str
 
 
 @pytest.fixture
-def persisted_mapping_context_id(
-    persisted_credentials: Tuple[Credentials, str]
-) -> str:
+def persisted_mapping_context_id(persisted_credentials: Tuple[Credentials, str]) -> str:
     """
     Create/update a mapping context (env -> credentials_id) and return its provider_id.
     NOTE: Use upsert_credentials_mapping_context (no `context=` kw).
@@ -76,9 +74,7 @@ def persisted_mapping_context_id(
         context_id=context_id,
         name="pg_test_mapping_ctx",
         environment=Environment.TEST.value,
-        mapping_env_to_credentials_id={
-            Environment.TEST.value: creds_id
-        },
+        mapping_env_to_credentials_id={Environment.TEST.value: creds_id},
     )
     return context_id
 
