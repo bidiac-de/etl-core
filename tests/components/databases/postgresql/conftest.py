@@ -42,14 +42,13 @@ def test_creds() -> Tuple[str, str]:
 
 
 @pytest.fixture
-def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
+def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str]:
     """
     Persist a Credentials object. IMPORTANT: use the model's credentials_id
     as the provider_id so mapping can reference it directly.
     """
     user, password = test_creds
     creds = Credentials(
-        credentials_id=str(uuid4()),
         name="pg_test_creds",
         user=user,
         host="localhost",
@@ -59,26 +58,29 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
-    return creds
+    credentials_id = CredentialsHandler().upsert(creds)
+    return creds, credentials_id
 
 
 @pytest.fixture
-def persisted_mapping_context_id(persisted_credentials: Credentials) -> str:
+def persisted_mapping_context_id(
+    persisted_credentials: Tuple[Credentials, str]
+) -> str:
     """
     Create/update a mapping context (env -> credentials_id) and return its provider_id.
     NOTE: Use upsert_credentials_mapping_context (no `context=` kw).
     """
-    provider_id = str(uuid4())
+    _, creds_id = persisted_credentials
+    context_id = str(uuid4())
     ContextHandler().upsert_credentials_mapping_context(
-        provider_id=provider_id,
+        context_id=context_id,
         name="pg_test_mapping_ctx",
         environment=Environment.TEST.value,
         mapping_env_to_credentials_id={
-            Environment.TEST.value: persisted_credentials.credentials_id
+            Environment.TEST.value: creds_id
         },
     )
-    return provider_id
+    return context_id
 
 
 @pytest.fixture
@@ -171,7 +173,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
     _, base_pw = test_creds
     return {
         "minimal": Credentials(
-            credentials_id=str(uuid4()),
             name="pg_minimal_creds",
             user="minuser",
             host="localhost",
@@ -180,7 +181,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             password=base_pw,
         ),
         "with_pool": Credentials(
-            credentials_id=str(uuid4()),
             name="pg_pool_creds",
             user="pooluser",
             host="localhost",
@@ -191,7 +191,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             pool_timeout_s=60,
         ),
         "no_password": Credentials(
-            credentials_id=str(uuid4()),
             name="pg_no_pass_creds",
             user="nopassuser",
             host="localhost",

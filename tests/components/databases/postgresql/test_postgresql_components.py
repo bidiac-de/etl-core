@@ -7,6 +7,7 @@ Credentials are resolved via a persisted mapping-context; components receive con
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, Mock, patch
+from typing import Tuple
 
 import dask.dataframe as dd
 import pandas as pd
@@ -79,7 +80,7 @@ class TestPostgreSQLComponents:
     def test_postgresql_read_initialization(
         self,
         persisted_mapping_context_id: str,
-        persisted_credentials: Credentials,
+        persisted_credentials: Tuple[Credentials, str],
     ) -> None:
         with patch(
             "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
@@ -98,13 +99,14 @@ class TestPostgreSQLComponents:
         assert comp.params == {"limit": 10}
         # Active credentials id should come from the resolved mapping
         active_id = comp._get_credentials()["__credentials_id__"]
-        assert active_id == persisted_credentials.credentials_id
+        _, credentials_id = persisted_credentials
+        assert active_id == credentials_id
         assert comp._credentials is not None
 
     def test_postgresql_write_initialization(
         self,
         persisted_mapping_context_id: str,
-        persisted_credentials: Credentials,
+        persisted_credentials: Tuple[Credentials, str],
     ) -> None:
         with patch(
             "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
@@ -119,7 +121,8 @@ class TestPostgreSQLComponents:
 
         assert comp.entity_name == "users"
         active_id = comp._get_credentials()["__credentials_id__"]
-        assert active_id == persisted_credentials.credentials_id
+        _, credentials_id = persisted_credentials
+        assert active_id == credentials_id
 
     @pytest.mark.asyncio
     async def test_postgresql_read_process_row(
