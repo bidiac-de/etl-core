@@ -31,8 +31,8 @@ def test_execute_json_row_job(tmp_path: Path):
     execution = handler.execute_job(job)
 
     assert (
-            handler.job_info.metrics_handler.get_job_metrics(execution.id).status
-            == RuntimeState.SUCCESS
+        handler.job_info.metrics_handler.get_job_metrics(execution.id).status
+        == RuntimeState.SUCCESS
     )
     out = pd.read_json(out_fp, lines=True)
     assert list(out["name"]) == ["Nina", "Max"]
@@ -57,8 +57,8 @@ def test_execute_json_bulk_job(tmp_path: Path):
     execution = handler.execute_job(job)
 
     assert (
-            handler.job_info.metrics_handler.get_job_metrics(execution.id).status
-            == RuntimeState.SUCCESS
+        handler.job_info.metrics_handler.get_job_metrics(execution.id).status
+        == RuntimeState.SUCCESS
     )
     out = pd.read_json(out_fp, orient="records").sort_values("id")
     assert list(out["name"]) == ["Omar", "Lina"]
@@ -84,8 +84,8 @@ def test_execute_json_bigdata_job(tmp_path: Path):
     execution = handler.execute_job(job)
 
     assert (
-            handler.job_info.metrics_handler.get_job_metrics(execution.id).status
-            == RuntimeState.SUCCESS
+        handler.job_info.metrics_handler.get_job_metrics(execution.id).status
+        == RuntimeState.SUCCESS
     )
 
     parts = sorted(out_dir.glob("part-*.jsonl"))

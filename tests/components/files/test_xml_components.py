@@ -303,13 +303,13 @@ async def test_read_xml_nested_bulk_flattens(metrics):
         chunks.append(item.payload)
     df_all = pd.concat(chunks, ignore_index=True)
     assert {
-               "id",
-               "name",
-               "address.street",
-               "address.city",
-               "tags.item[0]",
-               "tags.item[1]",
-           } <= set(df_all.columns)
+        "id",
+        "name",
+        "address.street",
+        "address.city",
+        "tags.item[0]",
+        "tags.item[1]",
+    } <= set(df_all.columns)
 
     r0 = df_all.iloc[0]
     assert r0["id"] == "1"
@@ -419,7 +419,7 @@ async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
     assert r2.findtext("id") == "2"
     assert r2.findtext("address/street") == "Second"
     assert r2.findtext("address/city") == "Ville"
-    assert [e.text for e in r2.findall("./tags/item")] == ["u1"]
+    assert [e.text for e in r2.findall("./tags/item")] == ["u1", "nan"]
 
     assert metrics.lines_received == 2
     assert metrics.lines_forwarded == 2

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Any, AsyncIterator, List
+from typing import Dict, Any, AsyncIterator
 import pandas as pd
 import dask.dataframe as dd
 import asyncio
@@ -14,7 +14,8 @@ from etl_core.receivers.files.xml.xml_helper import (
     read_xml_row,
     write_xml_row,
     iter_pdf_chunks_core,
-    render_rows_to_xml_fragment, wrap_with_root,
+    render_rows_to_xml_fragment,
+    wrap_with_root,
 )
 
 
@@ -31,10 +32,10 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
     """
 
     async def read_row(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            record_tag: str = "row",
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        record_tag: str = "row",
     ) -> AsyncIterator[Dict[str, Any]]:
         ensure_file_exists(filepath)
         it = read_xml_row(filepath, record_tag=record_tag)
@@ -46,14 +47,16 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             yield rec
 
     async def read_bulk(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            record_tag: str = "row",
-            chunk_size: int = 10_000,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        record_tag: str = "row",
+        chunk_size: int = 10_000,
     ) -> AsyncIterator[pd.DataFrame]:
         ensure_file_exists(filepath)
-        it = iter_pdf_chunks_core(filepath, record_tag=record_tag, chunk_size=chunk_size)
+        it = iter_pdf_chunks_core(
+            filepath, record_tag=record_tag, chunk_size=chunk_size
+        )
 
         try:
             while True:
@@ -67,16 +70,17 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             if callable(close):
                 close()
 
-
     async def read_bigdata(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            record_tag: str = "row",
-            chunk_size: int = 50_000,
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        record_tag: str = "row",
+        chunk_size: int = 50_000,
     ) -> AsyncIterator[dd.DataFrame]:
         ensure_file_exists(filepath)
-        it = iter_pdf_chunks_core(filepath, record_tag=record_tag, chunk_size=chunk_size)
+        it = iter_pdf_chunks_core(
+            filepath, record_tag=record_tag, chunk_size=chunk_size
+        )
 
         try:
             while True:
@@ -93,12 +97,12 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
                 close()
 
     async def write_row(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            row: Dict[str, Any],
-            root_tag: str = "rows",
-            record_tag: str = "row",
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        row: Dict[str, Any],
+        root_tag: str = "rows",
+        record_tag: str = "row",
     ) -> None:
         metrics.lines_received += 1
         await asyncio.to_thread(
@@ -107,17 +111,19 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
         metrics.lines_forwarded += 1
 
     async def write_bulk(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            data: pd.DataFrame,
-            root_tag: str = "rows",
-            record_tag: str = "row",
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: pd.DataFrame,
+        root_tag: str = "rows",
+        record_tag: str = "row",
     ) -> None:
         n = len(data)
         metrics.lines_received += n
 
-        cnt, frag = await asyncio.to_thread(render_rows_to_xml_fragment, data, record_tag)
+        cnt, frag = await asyncio.to_thread(
+            render_rows_to_xml_fragment, data, record_tag
+        )
         xml_text = wrap_with_root(frag, root_tag)
 
         with open_file(filepath, "w") as f:
@@ -125,21 +131,23 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
 
         metrics.lines_forwarded += cnt
 
-
-
     async def write_bigdata(
-            self,
-            filepath: Path,
-            metrics: ComponentMetrics,
-            data: dd.DataFrame,
-            root_tag: str = "rows",
-            record_tag: str = "row",
+        self,
+        filepath: Path,
+        metrics: ComponentMetrics,
+        data: dd.DataFrame,
+        root_tag: str = "rows",
+        record_tag: str = "row",
     ) -> None:
-        total = await asyncio.to_thread(lambda: int(data.map_partitions(len).sum().compute()))
+        total = await asyncio.to_thread(
+            lambda: int(data.map_partitions(len).sum().compute())
+        )
 
         parts = data.to_delayed()
 
-        tasks = [delayed(render_rows_to_xml_fragment)(part, record_tag) for part in parts]
+        tasks = [
+            delayed(render_rows_to_xml_fragment)(part, record_tag) for part in parts
+        ]
         results = await asyncio.to_thread(lambda: list(compute(*tasks)))
 
         got = sum(cnt for cnt, _ in results)

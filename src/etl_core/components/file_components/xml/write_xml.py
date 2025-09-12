@@ -33,7 +33,7 @@ class WriteXML(XML):
         return self
 
     async def process_row(
-            self, row: Dict[str, Any], metrics: ComponentMetrics
+        self, row: Dict[str, Any], metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         await self._receiver.write_row(
             self.filepath,
@@ -45,7 +45,7 @@ class WriteXML(XML):
         yield Out(port="out", payload=row)
 
     async def process_bulk(
-            self, dataframe: pd.DataFrame, metrics: ComponentMetrics
+        self, dataframe: pd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         await self._receiver.write_bulk(
             self.filepath,
@@ -57,7 +57,7 @@ class WriteXML(XML):
         yield Out(port="out", payload=dataframe)
 
     async def process_bigdata(
-            self, dataframe: dd.DataFrame, metrics: ComponentMetrics
+        self, dataframe: dd.DataFrame, metrics: ComponentMetrics
     ) -> AsyncGenerator[Out, None]:
         await self._receiver.write_bigdata(
             self.filepath,

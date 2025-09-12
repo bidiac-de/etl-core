@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-import dask.dataframe as dd
-import pandas as pd
 import pytest
 
 import etl_core.components.file_components.xml.read_xml  # noqa: F401
@@ -26,7 +24,9 @@ def exec_handler() -> JobExecutionHandler:
     return JobExecutionHandler()
 
 
-def _write_xml_rows(path: Path, rows: list[dict[str, str]], root_tag="rows", record_tag="row") -> None:
+def _write_xml_rows(
+    path: Path, rows: list[dict[str, str]], root_tag="rows", record_tag="row"
+) -> None:
     root = ET.Element(root_tag)
     for r in rows:
         rec_el = ET.SubElement(root, record_tag)
@@ -64,7 +64,9 @@ def test_execute_xml_row_job(tmp_path: Path, exec_handler: JobExecutionHandler) 
     assert rows == [{"id": "1", "name": "Nina"}]
 
 
-def test_execute_xml_bulk_job(tmp_path: Path, exec_handler: JobExecutionHandler) -> None:
+def test_execute_xml_bulk_job(
+    tmp_path: Path, exec_handler: JobExecutionHandler
+) -> None:
     in_fp = tmp_path / "in_bulk.xml"
     out_fp = tmp_path / "out_bulk.xml"
     _write_xml_rows(in_fp, [{"id": "2", "name": "Omar"}, {"id": "3", "name": "Lina"}])
@@ -82,7 +84,9 @@ def test_execute_xml_bulk_job(tmp_path: Path, exec_handler: JobExecutionHandler)
     assert [r["name"] for r in rows] == ["Omar", "Lina"]
 
 
-def test_execute_xml_bigdata_job(tmp_path: Path, exec_handler: JobExecutionHandler) -> None:
+def test_execute_xml_bigdata_job(
+    tmp_path: Path, exec_handler: JobExecutionHandler
+) -> None:
     in_fp = tmp_path / "in_big.xml"
     out_fp = tmp_path / "out_big.xml"
     _write_xml_rows(in_fp, [{"id": "4", "name": "Max"}, {"id": "5", "name": "Gina"}])

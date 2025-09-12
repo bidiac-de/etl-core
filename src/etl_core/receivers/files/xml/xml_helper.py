@@ -1,20 +1,10 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, List, Generator, Iterator
+from typing import Any, Dict, List, Generator, Iterator, Tuple
 import xml.etree.ElementTree as ET
 import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
 import re
-import math
-
-
-def _is_nullish(v: Any) -> bool:
-    if v is None:
-        return True
-    try:
-        return pd.isna(v)
-    except Exception:
-        return isinstance(v, float) and math.isnan(v)
 
 
 def element_to_nested(element: ET.Element) -> Any:
@@ -158,10 +148,10 @@ def _flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def read_xml_bulk_chunks(
-        path: Path,
-        record_tag: str,
-        *,
-        chunk_size: int = 10_000,
+    path: Path,
+    record_tag: str,
+    *,
+    chunk_size: int = 10_000,
 ) -> Generator[pd.DataFrame, None, None]:
     """
     Yield *flat* pandas DataFrame chunks directly from a file.
@@ -194,10 +184,9 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             f"Expected dict payload, got {type(payload).__name__}: {payload}"
         )
 
-    cleaned = {k: v for k, v in payload.items() if not _is_nullish(v)}
-    if _has_flat_paths(cleaned):
-        return unflatten_record(cleaned)
-    return cleaned
+    if _has_flat_paths(payload):
+        return unflatten_record(payload)
+    return payload
 
 
 def _row_to_element(record_tag: str, row: Dict[str, Any]) -> ET.Element:
@@ -215,7 +204,7 @@ def _has_flat_paths(d: Dict[str, Any]) -> bool:
 
 
 def write_xml_bulk(
-        path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str
+    path: Path, data: pd.DataFrame, *, root_tag: str, record_tag: str
 ) -> None:
     path = resolve_file_path(path)
     root = ET.Element(root_tag)
@@ -230,7 +219,7 @@ def write_xml_bulk(
 
 
 def _append_record_to_file(
-        path: Path, root_tag: str, new_record_el: ET.Element
+    path: Path, root_tag: str, new_record_el: ET.Element
 ) -> None:
     new_record_xml = ET.tostring(new_record_el, encoding="unicode")
 
@@ -259,16 +248,14 @@ def _append_record_to_file(
 
 
 def write_xml_row(
-        path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str
+    path: Path, row: Dict[str, Any], *, root_tag: str, record_tag: str
 ) -> None:
     path = resolve_file_path(path)
 
     if not isinstance(row, dict):
         raise TypeError(f"Row mode expects a nested dict, got {type(row).__name__}")
 
-    cleaned = {k: v for k, v in row.items() if not _is_nullish(v)}
-
-    new_record_el = nested_to_element(record_tag, cleaned)
+    new_record_el = nested_to_element(record_tag, row)
     _append_record_to_file(path, root_tag, new_record_el)
 
 
@@ -363,16 +350,15 @@ def unflatten_record(flat: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def iter_pdf_chunks_core(
-        filepath: Path,
-        *,
-        record_tag: str,
-        chunk_size: int,
+    filepath: Path,
+    *,
+    record_tag: str,
+    chunk_size: int,
 ) -> Iterator[pd.DataFrame]:
-    yield from read_xml_bulk_chunks(filepath, record_tag=record_tag, chunk_size=chunk_size)
+    yield from read_xml_bulk_chunks(
+        filepath, record_tag=record_tag, chunk_size=chunk_size
+    )
 
-import xml.etree.ElementTree as ET
-import pandas as pd
-from typing import Tuple, List, Dict, Any
 
 def render_rows_to_xml_fragment(pdf: pd.DataFrame, record_tag: str) -> Tuple[int, str]:
     pieces: List[str] = []
@@ -384,5 +370,10 @@ def render_rows_to_xml_fragment(pdf: pd.DataFrame, record_tag: str) -> Tuple[int
         count += 1
     return count, "".join(pieces)
 
+
 def wrap_with_root(fragment: str, root_tag: str) -> str:
-    return f'<?xml version="1.0" encoding="utf-8"?>\n<{root_tag}>' + fragment + f"</{root_tag}>"
+    return (
+        f'<?xml version="1.0" encoding="utf-8"?>\n<{root_tag}>'
+        + fragment
+        + f"</{root_tag}>"
+    )

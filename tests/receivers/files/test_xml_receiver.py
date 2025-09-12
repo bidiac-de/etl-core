@@ -27,28 +27,28 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_xml_file() -> Path:
     return (
-            Path(__file__).parent.parent.parent
-            / "components"
-            / "data"
-            / "xml"
-            / "test_data.xml"
+        Path(__file__).parent.parent.parent
+        / "components"
+        / "data"
+        / "xml"
+        / "test_data.xml"
     )
 
 
 @pytest.fixture
 def sample_bigdata_file() -> Path:
     return (
-            Path(__file__).parent.parent.parent
-            / "components"
-            / "data"
-            / "xml"
-            / "test_bigdata.xml"
+        Path(__file__).parent.parent.parent
+        / "components"
+        / "data"
+        / "xml"
+        / "test_bigdata.xml"
     )
 
 
 @pytest.mark.asyncio
 async def test_xml_receiver_read_row_streaming(
-        sample_xml_file: Path, metrics: ComponentMetrics
+    sample_xml_file: Path, metrics: ComponentMetrics
 ):
     r = XMLReceiver()
 
@@ -78,7 +78,7 @@ async def test_read_xml_bulk(sample_xml_file: Path, metrics: ComponentMetrics):
     r = XMLReceiver()
     dfs = []
     async for df in r.read_bulk(
-            filepath=sample_xml_file, metrics=metrics, record_tag="row"
+        filepath=sample_xml_file, metrics=metrics, record_tag="row"
     ):
         assert isinstance(df, pd.DataFrame)
         dfs.append(df)
@@ -94,7 +94,7 @@ async def test_read_xml_bigdata(sample_bigdata_file: Path, metrics: ComponentMet
     r = XMLReceiver()
     dfs = []
     async for df in r.read_bigdata(
-            filepath=sample_bigdata_file, metrics=metrics, record_tag="row"
+        filepath=sample_bigdata_file, metrics=metrics, record_tag="row"
     ):
         assert isinstance(df, dd.DataFrame)
         pdf = df.compute()
@@ -201,7 +201,7 @@ async def test_write_xml_bigdata(tmp_path: Path, metrics: ComponentMetrics):
 
 @pytest.mark.asyncio
 async def test_xml_receiver_read_row_missing_file_raises(
-        metrics: ComponentMetrics, tmp_path: Path
+    metrics: ComponentMetrics, tmp_path: Path
 ):
     r = XMLReceiver()
     rows = r.read_row(
