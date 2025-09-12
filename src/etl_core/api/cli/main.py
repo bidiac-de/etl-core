@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import typer
 
-from .commands.contexts import contexts_app
-from .commands.execution import execution_app
-from .commands.jobs import jobs_app
+from etl_core.api.helpers import autodiscover_components
+
+from etl_core.api.cli.commands.contexts import contexts_app
+from etl_core.api.cli.commands.execution import execution_app
+from etl_core.api.cli.commands.jobs import jobs_app
 
 app = typer.Typer(
     help="ETL control CLI to manage jobs, contexts/credentials and executions."
@@ -15,6 +17,7 @@ app.add_typer(contexts_app, name="contexts")
 
 
 def run() -> None:
+    autodiscover_components("etl_core.components")
     app()
 
 
