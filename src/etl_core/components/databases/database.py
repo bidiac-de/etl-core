@@ -50,6 +50,7 @@ class DatabaseComponent(Component, ABC):
     )
 
     _credentials: Optional[Credentials] = None
+    _cred_id = None
     _receiver: Any = None
 
     @model_validator(mode="after")
@@ -67,7 +68,7 @@ class DatabaseComponent(Component, ABC):
             )
 
         # Resolve once at model build so config errors fail early
-        self._credentials = ctx.resolve_active_credentials()
+        self._credentials, self._cred_id= ctx.resolve_active_credentials()
         return self
 
     def _get_credentials(self) -> Dict[str, Any]:
@@ -78,7 +79,7 @@ class DatabaseComponent(Component, ABC):
             # Should not happen after _build_objects, keep a guard for safety
             ctx = self.get_resolved_context()
             assert isinstance(ctx, CredentialsMappingContext)
-            self._credentials = ctx.resolve_active_credentials()
+            self._credentials, self._cred_id = ctx.resolve_active_credentials()
 
         creds = self._credentials
         return {
@@ -89,7 +90,7 @@ class DatabaseComponent(Component, ABC):
             "port": creds.get_parameter("port"),
             "pool_max_size": creds.get_parameter("pool_max_size"),
             "pool_timeout_s": creds.get_parameter("pool_timeout_s"),
-            "__credentials_id__": creds.credentials_id,
+            "__credentials_id__": self._cred_id,
         }
 
     @abstractmethod

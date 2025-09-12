@@ -24,7 +24,6 @@ class Context(BaseModel, IContextProvider):
         validate_assignment=True,
     )
 
-    id: str
     name: str
     environment: Environment
     parameters: Dict[str, ContextParameter] = Field(default_factory=dict)
@@ -73,9 +72,9 @@ class Context(BaseModel, IContextProvider):
     def attach_credentials_repository(self, repo: CredentialsHandler) -> None:
         self._credentials_repo = repo
 
-    def add_credentials(self, credentials: Credentials) -> None:
+    def add_credentials(self,cred_id: str, credentials: Credentials) -> None:
         """Add credentials to the context."""
-        self._credentials[credentials.credentials_id] = credentials
+        self._credentials[cred_id] = credentials
 
     def get_credentials(self, credentials_id: str) -> Credentials:
         cached = self._credentials.get(credentials_id)

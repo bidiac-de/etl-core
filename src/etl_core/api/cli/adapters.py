@@ -88,11 +88,11 @@ class LocalContextsClient(ContextsPort):
         self, context: Dict[str, Any], keyring_service: Optional[str]
     ) -> Dict[str, Any]:
         ctx = Context(**context)
-        provider_id = str(uuid4())
+        context_id = str(uuid4())
 
         store = self._secret_store(keyring_service)
         SecureContextAdapter(
-            provider_id=provider_id,
+            provider_id=context_id,
             secret_store=store,
             context=ctx,
         ).bootstrap_to_store()
@@ -100,14 +100,14 @@ class LocalContextsClient(ContextsPort):
         non_secure = self._non_secure_params(ctx)
         secure_keys = [k for k, p in ctx.parameters.items() if p.is_secure]
         self.ctx_handler.upsert(
-            provider_id=provider_id,
+            context_id=context_id,
             name=ctx.name,
             environment=ctx.environment.value,
             non_secure_params=non_secure,
             secure_param_keys=secure_keys,
         )
         return {
-            "id": provider_id,
+            "id": context_id,
             "kind": "context",
             "environment": ctx.environment.value,
             "parameters_registered": len(secure_keys),
@@ -117,19 +117,19 @@ class LocalContextsClient(ContextsPort):
         self, credentials: Dict[str, Any], keyring_service: Optional[str]
     ) -> Dict[str, Any]:
         creds = Credentials(**credentials)
-        provider_id = str(uuid4())
+        creds_id = str(uuid4())
 
         store = self._secret_store(keyring_service)
         SecureContextAdapter(
-            provider_id=provider_id,
+            provider_id=creds_id,
             secret_store=store,
             credentials=creds,
         ).bootstrap_to_store()
 
         creds.password = None
-        self.creds_handler.upsert(provider_id=provider_id, creds=creds)
+        self.creds_handler.upsert(creds)
         return {
-            "id": provider_id,
+            "id":creds_id,
             "kind": "credentials",
             "environment": None,
             "parameters_registered": 1,
@@ -137,12 +137,12 @@ class LocalContextsClient(ContextsPort):
 
     def create_context_mapping(self, mapping_ctx: Dict[str, Any]) -> Dict[str, Any]:
         cmc = CredentialsMappingContext(**mapping_ctx)
-        provider_id = str(uuid4())
+        context_id = str(uuid4())
 
         unknown = [
             cid
             for cid in cmc.credentials_ids.values()
-            if self.creds_handler.get_by_provider_id(cid) is None
+            if self.creds_handler.get_by_id(cid) is None
         ]
         if unknown:
             raise PersistNotFoundError(
@@ -154,13 +154,13 @@ class LocalContextsClient(ContextsPort):
             mapping[env] = cid
 
         self.ctx_handler.upsert_credentials_mapping_context(
-            provider_id=provider_id,
+            context_id=context_id,
             name=cmc.name,
             environment=cmc.environment.value,
             mapping_env_to_credentials_id=mapping,
         )
         return {
-            "id": provider_id,
+            "id": context_id,
             "kind": "context",
             "environment": cmc.environment.value,
             "parameters_registered": len(mapping),
@@ -177,9 +177,9 @@ class LocalContextsClient(ContextsPort):
         # These handlers are patched in tests, so keep the calls straightforward.
         for row in self.ctx_handler.list_all():
             # rows are SimpleNamespace or ORM rows with .provider_id
-            out.append({"id": row.provider_id, "kind": "context"})
+            out.append({"id": row.id, "kind": "context"})
         for row in self.creds_handler.list_all():
-            out.append({"id": row.provider_id, "kind": "credentials"})
+            out.append({"id": row.id, "kind": "credentials"})
 
         return out
 
@@ -188,7 +188,7 @@ class LocalContextsClient(ContextsPort):
         Lookup a provider: prefer context, else credentials.
         Raise 404-style error if missing.
         """
-        ctx_row = self.ctx_handler.get_by_provider_id(provider_id)
+        ctx_row = self.ctx_handler.get_by_id(provider_id)
         if ctx_row is not None:
             # Provide a minimal response compatible with tests
             return {
@@ -197,7 +197,7 @@ class LocalContextsClient(ContextsPort):
                 "environment": getattr(ctx_row, "environment", None),
             }
 
-        cred_row = self.creds_handler.get_by_provider_id(provider_id)
+        cred_row = self.creds_handler.get_by_id(provider_id)
         if cred_row is not None:
             return {"id": provider_id, "kind": "credentials"}
 
@@ -209,12 +209,12 @@ class LocalContextsClient(ContextsPort):
         Tests assert both are attempted.
         """
         try:
-            self.ctx_handler.delete_by_provider_id(provider_id)
+            self.ctx_handler.delete_by_id(provider_id)
         except PersistNotFoundError:
             pass
 
         try:
-            self.creds_handler.delete_by_provider_id(provider_id)
+            self.creds_handler.delete_by_id(provider_id)
         except PersistNotFoundError:
             pass
 

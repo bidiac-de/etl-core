@@ -1,5 +1,4 @@
-# etl_core/context/credentials_mapping_context.py
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple
 from pydantic import Field, model_validator
 import os
 from etl_core.context.context import Context
@@ -43,7 +42,7 @@ class CredentialsMappingContext(Context):
         self,
         override_env: Optional[Environment] = None,
         repo: Optional[CredentialsHandler] = None,
-    ) -> Credentials:
+    ) -> Tuple[Credentials, str]:
         env = self.determine_active_environment(override_env)
         cred_id = self._lookup_credentials_id(env)
         if cred_id is None:
@@ -56,8 +55,8 @@ class CredentialsMappingContext(Context):
         if not loaded:
             raise ValueError(f"Credentials with ID {cred_id} not found")
         creds, _ = loaded
-        self.add_credentials(creds)
-        return creds
+        self.add_credentials(cred_id, creds)
+        return creds, cred_id
 
     @staticmethod
     def _normalize_env(env: Environment | str) -> Environment:

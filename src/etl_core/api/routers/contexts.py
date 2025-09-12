@@ -145,7 +145,7 @@ def create_context_provider(
         }
         secure_keys = [k for k, p in ctx.parameters.items() if p.is_secure]
         ctx_handler.upsert(
-            provider_id=context_id,
+            context_id=context_id,
             name=ctx.name,
             environment=ctx.environment.value,
             non_secure_params=non_secure,
@@ -190,7 +190,7 @@ def create_credentials_mapping_context(
         # Validate referenced credentials exist
         missing: list[str] = []
         for cred_id in cmc.credentials_ids.values():
-            if creds_handler.get_by_provider_id(cred_id) is None:
+            if creds_handler.get_by_id(cred_id) is None:
                 missing.append(cred_id)
         if missing:
             raise ValueError(
@@ -202,7 +202,7 @@ def create_credentials_mapping_context(
             mapping[env] = cred_id
 
         ctx_handler.upsert_credentials_mapping_context(
-            provider_id=context_id,
+            context_id=context_id,
             name=cmc.name,
             environment=cmc.environment.value,
             mapping_env_to_credentials_id=mapping,
@@ -250,7 +250,7 @@ def create_credentials_provider(
         req.credentials.password = None
 
         # persist non-secret metadata (password stays in keyring)
-        creds_handler.upsert(provider_id=credentials_id, creds=creds)
+        creds_handler.upsert(creds)
 
         # secure_count = 1, password is the only secure parameter
         return ProviderCreateResponse(
@@ -301,15 +301,16 @@ def get_provider(
     ctx_handler: ContextHandler = Depends(get_context_handler),
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
 ) -> ProviderInfoResponse:
-    row_ctx = ctx_handler.get_by_provider_id(id)
+    row_ctx = ctx_handler.get_by_id(id)
+    ctx, _ctx_id = row_ctx
     if row_ctx is not None:
         return ProviderInfoResponse(
             id=id,
             kind="context",
-            environment=Environment(row_ctx.environment),
+            environment=Environment(ctx.environment),
             provider_class="SecureContextAdapter",
         )
-    row_creds = creds_handler.get_by_provider_id(id)
+    row_creds = creds_handler.get_by_id(id)
     if row_creds is not None:
         return ProviderInfoResponse(
             id=id,
@@ -341,11 +342,11 @@ def delete_provider(
             ContextRegistry.unregister(id)
 
     try:
-        creds_handler.delete_by_provider_id(id)
+        creds_handler.delete_by_id(id)
     except Exception:
         pass
     try:
-        ctx_handler.delete_by_provider_id(id)
+        ctx_handler.delete_by_id(id)
     except Exception:
         pass
 

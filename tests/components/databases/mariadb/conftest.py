@@ -46,14 +46,13 @@ def test_creds() -> Tuple[str, str]:
 
 
 @pytest.fixture
-def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
+def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str]:
     """
-    Persist a Credentials object. IMPORTANT: use the model's credentials_id
-    as the provider_id so mapping can reference it directly.
+    Persist a Credentials object.
+    Returns (Credentials model, credentials_id) where credentials_id is system-generated.
     """
     user, password = test_creds
     creds = Credentials(
-        credentials_id=str(uuid4()),
         name="test_db_creds",
         user=user,
         host="localhost",
@@ -63,27 +62,25 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    CredentialsHandler().upsert(creds)
-    return creds
+    credentials_id = CredentialsHandler().upsert(creds)
+    return creds, credentials_id
 
 
 @pytest.fixture
-def persisted_mapping_context_id(persisted_credentials: Credentials) -> str:
+def persisted_mapping_context_id(persisted_credentials: Tuple[Credentials, str]) -> str:
     """
-    Create/update a mapping context (env -> credentials_id) and return its provider_id.
+    Create/update a mapping context (env -> credentials_id) and return its context_id.
     """
-    provider_id = str(uuid4())
+    _, credentials_id = persisted_credentials
+    context_id = str(uuid4())
 
-    # Persist the context shell and mapping rows
     ContextHandler().upsert_credentials_mapping_context(
-        context_id=provider_id,
+        context_id=context_id,
         name="test_mapping_ctx",
         environment=Environment.TEST.value,
-        mapping_env_to_credentials_id={
-            Environment.TEST.value: persisted_credentials.credentials_id
-        },
+        mapping_env_to_credentials_id={Environment.TEST.value: credentials_id},
     )
-    return provider_id
+    return context_id
 
 
 @pytest.fixture
@@ -189,13 +186,12 @@ def mariadb_write_component(persisted_mapping_context_id: str) -> MariaDBWrite:
 @pytest.fixture
 def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
     """
-    Create multiple Credentials models; not persisted unless a test needs it.
+    Create multiple Credentials models (not persisted unless a test needs it).
     """
     _, base_pw = test_creds
 
     return {
         "minimal": Credentials(
-            credentials_id=str(uuid4()),
             name="minimal_creds",
             user="minuser",
             host="localhost",
@@ -204,7 +200,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             password=base_pw,
         ),
         "with_pool": Credentials(
-            credentials_id=str(uuid4()),
             name="pool_creds",
             user="pooluser",
             host="localhost",
@@ -215,7 +210,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             pool_timeout_s=60,
         ),
         "special_chars": Credentials(
-            credentials_id=str(uuid4()),
             name="special_creds",
             user="user@domain",
             host="localhost",
@@ -224,7 +218,6 @@ def multiple_credentials(test_creds: Tuple[str, str]) -> Dict[str, Credentials]:
             password=derive_test_password(base_pw, "special"),
         ),
         "no_password": Credentials(
-            credentials_id=str(uuid4()),
             name="no_pass_creds",
             user="nopassuser",
             host="localhost",
