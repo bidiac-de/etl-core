@@ -348,7 +348,7 @@ def infer_flat_meta(ddf: dd.DataFrame) -> pd.DataFrame:
 
 
 def _write_part_ndjson(pdf: pd.DataFrame, path: str) -> int:
-    """Wird von Dask als delayed Task ausgeführt."""
+    """Executed by Dask as a delayed task."""
     records = [build_payload(r) for r in pdf.to_dict(orient="records")]
     dump_ndjson_records(Path(path), records)
     return len(records)

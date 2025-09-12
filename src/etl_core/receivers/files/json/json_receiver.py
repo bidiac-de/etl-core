@@ -33,9 +33,10 @@ T = TypeVar("T")
 
 
 def _atomic_overwrite(path: Path, writer: Callable[[Path], None]) -> None:
-    """Write to temp file then atomically replace target."""
+    """Write to temp file (preserving suffixes like .jsonl.gz), then atomically replace target."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=str(path.parent)) as tmp:
+    suffix = "".join(path.suffixes)  # e.g. ".jsonl.gz" oder ".json"
+    with tempfile.NamedTemporaryFile("w", delete=False, dir=str(path.parent), suffix=suffix) as tmp:
         tmp_path = Path(tmp.name)
     try:
         writer(tmp_path)
@@ -54,30 +55,20 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
       - write_bulk/bigdata -> accept flat or nested; write nested
     """
 
-    async def read_row(
-        self, filepath: Path, metrics: ComponentMetrics
-    ) -> AsyncIterator[Dict[str, Any]]:
+    async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
         ensure_file_exists(filepath)
 
-        if is_ndjson_path(filepath):
-            from etl_core.receivers.files.json.json_helper import iter_ndjson_lenient
-
-            def _on_error(_: Exception):
-                metrics.error_count += 1
-
-            it = iter_ndjson_lenient(filepath, on_error=_on_error)
-        else:
-            it = read_json_row(filepath)
+        it = iter_ndjson_lenient(filepath, on_error=lambda _: setattr(metrics, "error_count", metrics.error_count + 1)) \
+            if is_ndjson_path(filepath) else read_json_row(filepath)
 
         while True:
             rec = await asyncio.to_thread(next, it, _SENTINEL)
             if rec is _SENTINEL:
                 break
-            if not isinstance(rec, dict):
-                rec = {"_value": rec}
             nested = ensure_nested_for_read(rec)
             metrics.lines_forwarded += 1
             yield nested
+
 
     async def read_bulk(
         self, filepath: Path, metrics: ComponentMetrics
