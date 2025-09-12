@@ -6,7 +6,7 @@ The ETL Core provides a comprehensive framework for building scalable, maintaina
 
 The ETL Core is built around a hierarchical component system that supports three processing strategies:
 - **Row Processing**: Real-time streaming data processing
-- **Bulk Processing**: Medium-sized datasets with pandas DataFrames  
+- **Bulk Processing**: Medium-sized datasets with pandas DataFrames
 - **BigData Processing**: Large-scale distributed processing with Dask DataFrames
 
 ## Component Categories

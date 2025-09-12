@@ -95,11 +95,11 @@ class DataOperationsReceiver(Receiver):
     async def process_row(self, data, **kwargs):
         # Row processing implementation
         pass
-    
+
     async def process_bulk(self, data, **kwargs):
         # Bulk processing implementation
         pass
-    
+
     async def process_bigdata(self, data, **kwargs):
         # BigData processing implementation
         pass
