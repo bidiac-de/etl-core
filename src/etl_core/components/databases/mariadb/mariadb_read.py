@@ -28,7 +28,6 @@ class MariaDBRead(MariaDBComponent):
     @model_validator(mode="after")
     def _build_objects(self) -> "MariaDBRead":
         self._receiver = MariaDBReceiver()
-        super()._build_objects()
         return self
 
     async def process_row(
