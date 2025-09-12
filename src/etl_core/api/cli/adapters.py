@@ -127,7 +127,7 @@ class LocalContextsClient(ContextsPort):
         ).bootstrap_to_store()
 
         creds.password = None
-        self.creds_handler.upsert(creds)
+        self.creds_handler.upsert(creds,credentials_id=creds_id)
         return {
             "id": creds_id,
             "kind": "credentials",
