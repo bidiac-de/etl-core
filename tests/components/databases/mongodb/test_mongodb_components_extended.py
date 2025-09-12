@@ -328,9 +328,9 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
     from etl_core.persistance.handlers.context_handler import ContextHandler
 
     ctx_handler = ContextHandler()
-    loaded = ctx_handler.get_by_provider_id(persisted_mongo_context_id)
+    loaded = ctx_handler.get_by_id(persisted_mongo_context_id)
     ctx, _ = loaded
-    creds = ctx.resolve_active_credentials()
+    creds,_ = ctx.resolve_active_credentials()
 
     uri_admin = MongoConnectionHandler.build_uri(
         user=creds.get_parameter("user"),

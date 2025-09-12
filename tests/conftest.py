@@ -267,7 +267,7 @@ def sample_pdf(sample_docs: List[Dict[str, Any]]) -> pd.DataFrame:
 
 
 @pytest.fixture()
-def persisted_mongo_credentials(test_creds: Tuple[str, str]) -> Credentials:
+def persisted_mongo_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str]:
     """
     Persist real Credentials for Mongo tests (host/port/db are local/mocked).
     provider_id == credentials_id to satisfy FK to mapping table.
@@ -284,28 +284,30 @@ def persisted_mongo_credentials(test_creds: Tuple[str, str]) -> Credentials:
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    CredentialsHandler().upsert(provider_id=creds.credentials_id, creds=creds)
-    return creds
+    credentials_id = CredentialsHandler().upsert(creds)
+    return creds, credentials_id
+
 
 
 @pytest.fixture()
 def persisted_mongo_context_id(
-    persisted_mongo_credentials: Credentials,
+    persisted_mongo_credentials: Tuple[Credentials,str],
 ) -> str:
     """
     Create a Credentials-Mapping Context that maps TEST to persisted Mongo creds.
     Return the context provider_id, which components use as context_id.
     """
-    provider_id = str(uuid4())
+    _, persisted_mongo_creds_id = persisted_mongo_credentials
+    context_id = str(uuid4())
     ContextHandler().upsert_credentials_mapping_context(
-        provider_id=provider_id,
+        context_id=context_id,
         name="mongo_test_context",
         environment=Environment.TEST.value,
         mapping_env_to_credentials_id={
-            Environment.TEST.value: persisted_mongo_credentials.credentials_id
+            Environment.TEST.value: persisted_mongo_creds_id
         },
     )
-    return provider_id
+    return context_id
 
 
 async def seed_docs(
@@ -346,7 +348,7 @@ async def get_all_docs(
 
 @pytest.fixture
 async def mongo_handler(
-    persisted_mongo_credentials: Credentials,
+    persisted_mongo_credentials: Tuple[Credentials,str],
 ) -> AsyncIterator[Tuple[MongoConnectionHandler, str]]:
     """
     Build a MongoConnectionHandler using the persisted credentials.
@@ -354,6 +356,7 @@ async def mongo_handler(
     so components resolve the same database.
     """
     #  Connect using current persisted creds (host/port/user/pass)
+    persisted_mongo_credentials, creds_id = persisted_mongo_credentials
     uri = MongoConnectionHandler.build_uri(
         host=persisted_mongo_credentials.get_parameter("host"),
         port=persisted_mongo_credentials.get_parameter("port"),
@@ -371,7 +374,7 @@ async def mongo_handler(
     dbname = f"testdb_{uuid4().hex}"
     persisted_mongo_credentials.database = dbname
     CredentialsHandler().upsert(
-        provider_id=persisted_mongo_credentials.credentials_id,
+        credentials_id=creds_id,
         creds=persisted_mongo_credentials,
     )
 
