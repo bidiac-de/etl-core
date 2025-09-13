@@ -95,7 +95,6 @@ class JobExecutionHandler:
                     else None
                 )
 
-
     def _persist_attempt_start(self, execution: JobExecution) -> None:
         attempt = execution.latest_attempt()
         try:
@@ -107,7 +106,9 @@ class JobExecutionHandler:
         except Exception:  # pragma: no cover
             self.logger.exception("Failed to persist attempt start")
 
-    def _persist_attempt_finish(self, execution: JobExecution, status: str, error: Optional[str]) -> None:
+    def _persist_attempt_finish(
+        self, execution: JobExecution, status: str, error: Optional[str]
+    ) -> None:
         attempt = execution.latest_attempt()
         try:
             self._exec_records_handler.finish_attempt(
@@ -127,7 +128,9 @@ class JobExecutionHandler:
     def _should_retry(self, execution: JobExecution, attempt_index: int) -> bool:
         return execution.retry_strategy.should_retry(attempt_index)
 
-    async def _maybe_wait_before_retry(self, execution: JobExecution, attempt_index: int) -> None:
+    async def _maybe_wait_before_retry(
+        self, execution: JobExecution, attempt_index: int
+    ) -> None:
         delay = execution.retry_strategy.next_delay(attempt_index)
         if delay > 0:
             await asyncio.sleep(delay)
@@ -171,7 +174,9 @@ class JobExecutionHandler:
                     inner,
                 )
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
-                self._persist_attempt_finish(execution, status="FAILED", error=str(inner))
+                self._persist_attempt_finish(
+                    execution, status="FAILED", error=str(inner)
+                )
 
                 if not self._should_retry(execution, attempt_index):
                     self._finalize_failure(inner, execution, job_metrics)
@@ -328,7 +333,6 @@ class JobExecutionHandler:
                     batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
                 )
 
-
     def _resolve_single_in_port(self, component: Component) -> Optional[str]:
         names = component.expected_in_port_names()
         if len(names) == 1:
@@ -345,14 +349,14 @@ class JobExecutionHandler:
         return False
 
     async def _handle_sentinel_item(
-            self,
-            item: Sentinel,
-            component: Component,
-            metrics: ComponentMetrics,
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-            pred_to_in_port: Dict[str, str],
-            requires_tagged: bool,
-            remaining: Set[str],
+        self,
+        item: Sentinel,
+        component: Component,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        pred_to_in_port: Dict[str, str],
+        requires_tagged: bool,
+        remaining: Set[str],
     ) -> None:
         if item.component_id not in remaining:
             return
@@ -366,12 +370,12 @@ class JobExecutionHandler:
             )
 
     async def _handle_tagged_item(
-            self,
-            item: InTagged,
-            component: Component,
-            metrics: ComponentMetrics,
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-            requires_tagged: bool,
+        self,
+        item: InTagged,
+        component: Component,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        requires_tagged: bool,
     ) -> None:
         if requires_tagged:
             await self._run_component(component, item, metrics, out_edges_by_port)
@@ -382,13 +386,13 @@ class JobExecutionHandler:
         await self._run_component(component, payload, metrics, out_edges_by_port)
 
     async def _handle_untagged_item(
-            self,
-            item: Any,
-            component: Component,
-            metrics: ComponentMetrics,
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-            single_in_port: Optional[str],
-            in_port_names: List[str],
+        self,
+        item: Any,
+        component: Component,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        single_in_port: Optional[str],
+        in_port_names: List[str],
     ) -> None:
         if single_in_port is None:
             raise ValueError(
@@ -399,14 +403,13 @@ class JobExecutionHandler:
         component.validate_in_payload(single_in_port, item)
         await self._run_component(component, item, metrics, out_edges_by_port)
 
-
     async def _consume_and_run(
-            self,
-            component: Component,
-            metrics: ComponentMetrics,
-            in_queues: List[asyncio.Queue],
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-            pred_to_in_port: Dict[str, str],
+        self,
+        component: Component,
+        metrics: ComponentMetrics,
+        in_queues: List[asyncio.Queue],
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        pred_to_in_port: Dict[str, str],
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.

@@ -5,7 +5,7 @@ from typing import Any, Dict, Annotated, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from etl_core.api.dependencies import get_execution_handler, get_job_handler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
@@ -79,7 +79,6 @@ class ExecutionOut(BaseModel):
     error: Optional[str] = None
     started_at: datetime
     finished_at: Optional[datetime] = None
-    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecutionAttemptOut(BaseModel):
@@ -92,15 +91,8 @@ class ExecutionAttemptOut(BaseModel):
     finished_at: Optional[datetime] = None
 
 
-class PageMeta(BaseModel):
-    total: int
-    limit: int
-    offset: int
-
-
 class ExecutionListOut(BaseModel):
     data: list[ExecutionOut]
-    meta: PageMeta
 
 
 class ExecutionDetailOut(BaseModel):
@@ -117,7 +109,6 @@ def _to_exec_out(row) -> ExecutionOut:
         error=row.error,
         started_at=row.started_at,
         finished_at=row.finished_at,
-        meta=row.meta or {},
     )
 
 
@@ -151,7 +142,7 @@ def list_executions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> ExecutionListOut:
-    rows, total = _records.list_executions(
+    rows, _ = _records.list_executions(
         job_id=job_id,
         status=status,
         environment=environment,
@@ -164,7 +155,6 @@ def list_executions(
     )
     return ExecutionListOut(
         data=[_to_exec_out(r) for r in rows],
-        meta=PageMeta(total=total, limit=limit, offset=offset),
     )
 
 

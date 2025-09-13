@@ -82,7 +82,6 @@ class LocalExecutionClient(ExecutionPort):
             "error": row.error,
             "started_at": row.started_at.isoformat(),
             "finished_at": row.finished_at.isoformat() if row.finished_at else None,
-            "meta": row.meta or {},
         }
 
     @staticmethod
@@ -117,7 +116,7 @@ class LocalExecutionClient(ExecutionPort):
         if started_before:
             sb = self._parse_dt(started_before)
 
-        rows, total = self._records.list_executions(
+        rows, _ = self._records.list_executions(
             job_id=job_id,
             status=status,
             environment=environment,
@@ -128,10 +127,7 @@ class LocalExecutionClient(ExecutionPort):
             limit=limit,
             offset=offset,
         )
-        return {
-            "data": [self._row_to_exec_out(r) for r in rows],
-            "meta": {"total": total, "limit": limit, "offset": offset},
-        }
+        return {"data": [self._row_to_exec_out(r) for r in rows]}
 
     def get(self, execution_id: str) -> Dict[str, Any]:
         row, attempts = self._records.get_execution(execution_id)
