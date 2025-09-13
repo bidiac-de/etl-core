@@ -3,6 +3,8 @@ import io
 import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional
+import re
+import pandas as pd
 
 
 def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
@@ -92,10 +94,11 @@ def dump_json_records(
 def dump_records_auto(
     path: Path, records: List[Dict[str, Any]], indent: int = 2
 ) -> None:
-    """Write NDJSON if path indicates NDJSON; else JSON array."""
-    (dump_ndjson_records if is_ndjson_path(path) else dump_json_records)(
-        path, records, indent=indent
-    )
+    """Write NDJSON if path looks like NDJSON; else JSON-Array."""
+    if is_ndjson_path(path):
+        dump_ndjson_records(path, records)
+    else:
+        dump_json_records(path, records, indent=indent)
 
 
 def _coerce_obj_to_record(obj: Any) -> Dict[str, Any]:
@@ -167,28 +170,268 @@ def read_json_row(path: Path, chunk_size: int = 65536) -> Iterator[Dict[str, Any
     """
     Streaming iterator over JSON content.
 
-    Supported inputs:
-      - Single object: { ... }        -> yields the object once
-      - JSON array:    [ {...}, ... ] -> yields per element
-      - Gzipped files are supported via open_text_auto()
-      - Non-dict values are wrapped as {"_value": <value>}
+    Supported:
+      - Single object: { ... }        -> yields once (incremental parse)
+      - JSON array:    [ {...}, ... ] -> yields per element (incremental)
+      - Gzipped files via open_text_auto()
+      - Non-dict values -> {"_value": <value>}
     """
     dec = json.JSONDecoder()
     with open_text_auto(path, "rt") as f:
-        # Load enough to decide on top-level type
         buf = _read_until_nonspace(f, "", chunk_size)
         if not buf:
             return
 
         first = buf[0]
         if first == "{":
-            # Single object
-            obj = json.loads(buf + f.read())
+            # incrementally read until full object parsed
+            while True:
+                try:
+                    obj, end = dec.raw_decode(buf)
+                    break
+                except json.JSONDecodeError:
+                    more = f.read(chunk_size)
+                    if not more:
+                        raise
+                    buf += more
             yield _coerce_obj_to_record(obj)
             return
 
         if first != "[":
             raise ValueError("Top-level JSON must be '[' or '{'.")
 
-        # Stream array elements after the initial [
         yield from _iter_array_stream(f, buf[1:], dec, chunk_size)
+
+
+def _is_nullish(v: Any) -> bool:
+    try:
+        import pandas as _pd  # lazy to avoid hard dep at import-time
+
+        if v is None or _pd.isna(v):
+            return True
+    except Exception:
+        if v is None:
+            return True
+    return False
+
+
+def _is_flat_key(key: str) -> bool:
+    return "." in key or ("[" in key and "]" in key)
+
+
+def _has_flat_paths(d: Dict[str, Any]) -> bool:
+    return any(_is_flat_key(k) for k in d.keys())
+
+
+def _ensure_list(obj, key):
+    if key not in obj or not isinstance(obj[key], list):
+        obj[key] = []
+    return obj[key]
+
+
+def _ensure_dict(obj, key):
+    if key not in obj or not isinstance(obj[key], dict):
+        obj[key] = {}
+    return obj[key]
+
+
+def _set_path(root: dict, path: str, value):
+    parts = _parse_path_escaped(path)
+    cur = root
+    last_idx = len(parts) - 1
+    for i, (name, idx) in enumerate(parts):
+        last = i == last_idx
+        if idx is None:
+            if last:
+                cur[name] = value
+                return
+            cur = _ensure_dict(cur, name)
+        else:
+            lst = _ensure_list(cur, name)
+            j = int(idx)
+            while len(lst) <= j:
+                lst.append({})
+            if last:
+                lst[j] = value
+                return
+            if not isinstance(lst[j], dict):
+                lst[j] = {}
+            cur = lst[j]
+
+
+def unflatten_record(flat: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for k, v in flat.items():
+        if k:
+            _set_path(out, k, v)
+    return out
+
+
+def _join(prefix: str, key: str) -> str:
+    ekey = _escape_key(key)
+    return f"{prefix}.{ekey}" if prefix else ekey
+
+
+def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
+    flat: Dict[str, Any] = {}
+    _flatten_to_map("", rec, flat)
+    return {k.lstrip("."): v for k, v in flat.items()}
+
+
+_LIST_INDEX_RE = re.compile(r"\[\d+\]")  # trifft 'tags[0]', 'items[12]' etc.
+
+
+def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"Expected dict payload, got {type(payload).__name__}: {payload}"
+        )
+
+    if _has_flat_paths(payload):
+        flat: Dict[str, Any] = {}
+        for k, v in payload.items():
+            if _LIST_INDEX_RE.search(k) and _is_nullish(v):
+                continue
+            flat[k] = v
+        data = unflatten_record(flat)
+    else:
+        data = payload
+
+    return data
+
+
+def ensure_nested_for_read(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """For read_row: keep nested shape; if flat keys detected, unflatten."""
+    return unflatten_record(payload) if _has_flat_paths(payload) else payload
+
+
+def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _flatten_to_map(_join(prefix, str(k)), v, out)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            new_prefix = f"{prefix}[{i}]" if prefix else f"[{i}]"
+            _flatten_to_map(new_prefix, item, out)
+    else:
+        out[prefix] = value
+
+
+def _flatten_partition(pdf: pd.DataFrame) -> pd.DataFrame:
+    if pdf.empty:
+        return pdf
+    rows: List[Dict[str, Any]] = []
+    for _, sr in pdf.iterrows():
+        flat: Dict[str, Any] = {}
+        for col, v in sr.items():
+            if isinstance(v, (dict, list)):
+                _flatten_to_map(str(col), v, flat)
+            else:
+                flat[str(col)] = v
+        rows.append(flat)
+    return pd.DataFrame.from_records(rows)
+
+
+def _write_part_ndjson(pdf: pd.DataFrame, path: str) -> int:
+    """Executed by Dask as a delayed task."""
+    records = [build_payload(r) for r in pdf.to_dict(orient="records")]
+    dump_ndjson_records(Path(path), records)
+    return len(records)
+
+
+_SPECIAL_CHARS = {".", "[", "]", "\\"}
+
+
+def _escape_key(key: str) -> str:
+    out = []
+    for ch in str(key):
+        if ch in _SPECIAL_CHARS:
+            out.append("\\" + ch)
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _unescape_key(key: str) -> str:
+    out = []
+    i = 0
+    while i < len(key):
+        if key[i] == "\\" and i + 1 < len(key):
+            out.append(key[i + 1])
+            i += 2
+        else:
+            out.append(key[i])
+            i += 1
+    return "".join(out)
+
+
+def _parse_path_escaped(path: str):
+    parts = []
+    name_buf = []
+    i = 0
+
+    def flush_name():
+        # append name-part if there is content or if parts empty (to anchor)
+        if name_buf or not parts:
+            parts.append([_unescape_key("".join(name_buf)), None])
+            name_buf.clear()
+
+    while i < len(path):
+        c = path[i]
+        if c == "\\" and i + 1 < len(path):
+            # keep escaped literal
+            name_buf.append(path[i + 1])
+            i += 2
+            continue
+
+        if c == ".":
+            flush_name()
+            i += 1
+            continue
+
+        if c == "[":
+            # try parse numeric index
+            j = i + 1
+            k = j
+            while k < len(path) and path[k].isdigit():
+                k += 1
+            if k > j and k < len(path) and path[k] == "]":
+                # finalize current name and set index
+                flush_name()
+                parts[-1][1] = int(path[j:k])
+                i = k + 1
+                continue
+            # else: literal '[' in name
+            name_buf.append("[")
+            i += 1
+            continue
+
+        name_buf.append(c)
+        i += 1
+
+    flush_name()
+    return [(name, idx) for (name, idx) in parts if name != "" or idx is not None]
+
+
+def stream_json_array_to_ndjson(
+    src: Path,
+    dst: Path,
+    on_error: Optional[Callable[[Exception], None]] = None,
+    chunk_size: int = 65536,
+) -> int:
+    count = 0
+    dec = json.JSONDecoder()
+    with open_text_auto(src, "rt") as f:
+        buf = _read_until_nonspace(f, "", chunk_size)
+        if not buf:
+            return 0
+        if buf[0] != "[":
+            raise ValueError("Source is not a JSON array.")
+        for rec in _iter_array_stream(f, buf[1:], dec, chunk_size):
+            try:
+                append_ndjson_record(dst, _coerce_obj_to_record(rec))
+                count += 1
+            except Exception as exc:
+                if on_error:
+                    on_error(exc)
+    return count
