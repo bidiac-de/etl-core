@@ -95,6 +95,46 @@ class JobExecutionHandler:
                     else None
                 )
 
+
+    def _persist_attempt_start(self, execution: JobExecution) -> None:
+        attempt = execution.latest_attempt()
+        try:
+            self._exec_records_handler.start_attempt(
+                attempt_id=attempt.id,
+                execution_id=execution.id,
+                attempt_index=attempt.index,
+            )
+        except Exception:  # pragma: no cover
+            self.logger.exception("Failed to persist attempt start")
+
+    def _persist_attempt_finish(self, execution: JobExecution, status: str, error: Optional[str]) -> None:
+        attempt = execution.latest_attempt()
+        try:
+            self._exec_records_handler.finish_attempt(
+                attempt_id=attempt.id,
+                status=status,
+                error=error,
+            )
+        except Exception:  # pragma: no cover
+            suffix = "SUCCESS" if status == "SUCCESS" else "FAILED"
+            self.logger.exception("Failed to persist attempt finish (%s)", suffix)
+
+    def _extract_exception(self, err: BaseException) -> BaseException:
+        if isinstance(err, ExceptionGroup):
+            return err.exceptions[0] if err.exceptions else err
+        return err
+
+    def _should_retry(self, execution: JobExecution, attempt_index: int) -> bool:
+        return execution.retry_strategy.should_retry(attempt_index)
+
+    async def _maybe_wait_before_retry(self, execution: JobExecution, attempt_index: int) -> None:
+        delay = execution.retry_strategy.next_delay(attempt_index)
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+    async def _run_attempt(self, execution: JobExecution) -> None:
+        await self._run_latest_attempt(execution)
+
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
         Main loop for executing a JobExecution.
@@ -114,24 +154,15 @@ class JobExecutionHandler:
             attempt = execution.latest_attempt()
 
             # record attempt start
-            try:
-                self._exec_records_handler.start_attempt(
-                    attempt_id=attempt.id,
-                    execution_id=execution.id,
-                    attempt_index=attempt.index,
-                )
-            except Exception:  # pragma: no cover
-                self.logger.exception("Failed to persist attempt start")
-
+            self._persist_attempt_start(execution)
             self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
+
             try:
-                # build and run worker tasks, storing them for cancellation
-                await self._run_latest_attempt(execution)
-            except ExceptionGroup as eg:
-                # unwrap the error from TaskGroup
-                inner = eg.exceptions[0] if eg.exceptions else eg
+                await self._run_attempt(execution)
+            except BaseException as err:
+                inner = self._extract_exception(err)
                 attempt.error = str(inner)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
@@ -140,40 +171,20 @@ class JobExecutionHandler:
                     inner,
                 )
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
-                try:
-                    self._exec_records_handler.finish_attempt(
-                        attempt_id=attempt.id,
-                        status="FAILED",
-                        error=str(inner),
-                    )
-                except Exception:  # pragma: no cover
-                    self.logger.exception("Failed to persist attempt finish (FAILED)")
-                # reuse inner for retry/finalize logic
-                exc = inner
+                self._persist_attempt_finish(execution, status="FAILED", error=str(inner))
 
-                # if no retries left, finalize as failure
-                if not execution.retry_strategy.should_retry(attempt_index):
-                    self._finalize_failure(exc, execution, job_metrics)
+                if not self._should_retry(execution, attempt_index):
+                    self._finalize_failure(inner, execution, job_metrics)
                     break
-                # otherwise wait and retry
-                delay = execution.retry_strategy.next_delay(attempt_index)
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                continue
-            else:
-                # success: mark and finalize
-                try:
-                    self._exec_records_handler.finish_attempt(
-                        attempt_id=attempt.id,
-                        status="SUCCESS",
-                        error=None,
-                    )
-                except Exception:  # pragma: no cover
-                    self.logger.exception("Failed to persist attempt finish (SUCCESS)")
 
-                job_metrics.status = RuntimeState.SUCCESS
-                self._finalize_success(execution, job_metrics)
-                break
+                await self._maybe_wait_before_retry(execution, attempt_index)
+                continue
+
+            # success path
+            self._persist_attempt_finish(execution, status="SUCCESS", error=None)
+            job_metrics.status = RuntimeState.SUCCESS
+            self._finalize_success(execution, job_metrics)
+            break
 
         return execution
 
@@ -317,13 +328,85 @@ class JobExecutionHandler:
                     batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
                 )
 
+
+    def _resolve_single_in_port(self, component: Component) -> Optional[str]:
+        names = component.expected_in_port_names()
+        if len(names) == 1:
+            return names[0]
+        return None
+
+    def _requires_tagged_input(self, component: Component) -> bool:
+        meth = getattr(component, "requires_tagged_input", None)
+        if callable(meth):
+            try:
+                return bool(meth())
+            except Exception:
+                return False
+        return False
+
+    async def _handle_sentinel_item(
+            self,
+            item: Sentinel,
+            component: Component,
+            metrics: ComponentMetrics,
+            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+            pred_to_in_port: Dict[str, str],
+            requires_tagged: bool,
+            remaining: Set[str],
+    ) -> None:
+        if item.component_id not in remaining:
+            return
+        remaining.discard(item.component_id)
+        if not requires_tagged:
+            return
+        in_port = pred_to_in_port.get(item.component_id)
+        if in_port:
+            await self._run_component(
+                component, InTagged(in_port, Ellipsis), metrics, out_edges_by_port
+            )
+
+    async def _handle_tagged_item(
+            self,
+            item: InTagged,
+            component: Component,
+            metrics: ComponentMetrics,
+            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+            requires_tagged: bool,
+    ) -> None:
+        if requires_tagged:
+            await self._run_component(component, item, metrics, out_edges_by_port)
+            return
+        dest_port = item.in_port
+        payload = item.payload
+        component.validate_in_payload(dest_port, payload)
+        await self._run_component(component, payload, metrics, out_edges_by_port)
+
+    async def _handle_untagged_item(
+            self,
+            item: Any,
+            component: Component,
+            metrics: ComponentMetrics,
+            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+            single_in_port: Optional[str],
+            in_port_names: List[str],
+    ) -> None:
+        if single_in_port is None:
+            raise ValueError(
+                f"{component.name}: received untagged input but component "
+                f"declares multiple input ports {in_port_names!r}; "
+                "fan-in must use tagged envelopes."
+            )
+        component.validate_in_payload(single_in_port, item)
+        await self._run_component(component, item, metrics, out_edges_by_port)
+
+
     async def _consume_and_run(
-        self,
-        component: Component,
-        metrics: ComponentMetrics,
-        in_queues: List[asyncio.Queue],
-        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-        pred_to_in_port: Dict[str, str],
+            self,
+            component: Component,
+            metrics: ComponentMetrics,
+            in_queues: List[asyncio.Queue],
+            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+            pred_to_in_port: Dict[str, str],
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.
@@ -344,57 +427,42 @@ class JobExecutionHandler:
 
         # Resolve the single expected in-port name if applicable
         in_port_names = component.expected_in_port_names()
-        single_in_port: Optional[str] = None
-        if len(in_port_names) == 1:
-            single_in_port = in_port_names[0]
-
-        requires_tagged = False
-        meth = getattr(component, "requires_tagged_input", None)
-        if callable(meth):
-            try:
-                requires_tagged = bool(meth())
-            except Exception:
-                requires_tagged = False
+        single_in_port = self._resolve_single_in_port(component)
+        requires_tagged = self._requires_tagged_input(component)
 
         while remaining:
             item = await queue.get()
 
-            if isinstance(item, Sentinel) and item.component_id in remaining:
-                remaining.discard(item.component_id)
-                if requires_tagged:
-                    in_port = pred_to_in_port.get(item.component_id)
-                    if in_port:
-                        await self._run_component(
-                            component,
-                            InTagged(in_port, Ellipsis),
-                            metrics,
-                            out_edges_by_port,
-                        )
+            if isinstance(item, Sentinel):
+                await self._handle_sentinel_item(
+                    item=item,
+                    component=component,
+                    metrics=metrics,
+                    out_edges_by_port=out_edges_by_port,
+                    pred_to_in_port=pred_to_in_port,
+                    requires_tagged=requires_tagged,
+                    remaining=remaining,
+                )
                 continue
 
             if isinstance(item, InTagged):
-                if requires_tagged:
-                    await self._run_component(
-                        component, item, metrics, out_edges_by_port
-                    )
-                    continue
-                dest_port = item.in_port
-                payload = item.payload
-                component.validate_in_payload(dest_port, payload)
-                await self._run_component(
-                    component, payload, metrics, out_edges_by_port
+                await self._handle_tagged_item(
+                    item=item,
+                    component=component,
+                    metrics=metrics,
+                    out_edges_by_port=out_edges_by_port,
+                    requires_tagged=requires_tagged,
                 )
                 continue
 
-            # Untagged: only valid for single-input components
-            if single_in_port is None:
-                raise ValueError(
-                    f"{component.name}: received untagged input but component "
-                    f"declares multiple input ports {in_port_names!r}; "
-                    "fan-in must use tagged envelopes."
-                )
-            component.validate_in_payload(single_in_port, item)
-            await self._run_component(component, item, metrics, out_edges_by_port)
+            await self._handle_untagged_item(
+                item=item,
+                component=component,
+                metrics=metrics,
+                out_edges_by_port=out_edges_by_port,
+                single_in_port=single_in_port,
+                in_port_names=in_port_names,
+            )
 
     def _handle_worker_exception(
         self,
