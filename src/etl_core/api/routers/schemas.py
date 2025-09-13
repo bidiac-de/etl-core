@@ -273,9 +273,11 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     enriched["comp-type"] = comp_type  # convenience for GUI
     enriched = _inject_name_default(enriched, cls)
 
+    processed = schema_post_processing(enriched, strip_order=True)
+
     with _CACHE_LOCK:
-        _COMPONENT_SCHEMA_FORM_CACHE[cache_key] = enriched
-    return enriched
+        _COMPONENT_SCHEMA_FORM_CACHE[cache_key] = processed
+    return processed
 
 
 def _cached_component_schema_full(comp_type: str) -> Dict[str, Any]:
