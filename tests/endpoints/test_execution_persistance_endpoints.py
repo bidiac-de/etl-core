@@ -4,10 +4,6 @@ from typing import Iterator, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, create_engine
-
-# Ensure models are registered before create_all
 import etl_core.persistance.table_definitions  # noqa: F401
 
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler

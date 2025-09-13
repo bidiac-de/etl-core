@@ -20,20 +20,17 @@ from src.etl_core.context.secrets.keyring_provider import KeyringSecretProvider
 from src.etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 from src.etl_core.persistance.handlers.context_handler import ContextHandler
 
+from etl_core.api.dependencies import (
+    get_context_handler,
+    get_credentials_handler,
+)
+
 router = APIRouter(prefix="/contexts", tags=["contexts"])
 
 
 def get_secret_provider(service: Optional[str] = None) -> SecretProvider:
     svc = service or "sep-sose-2025/default"
     return KeyringSecretProvider(service=svc)
-
-
-def get_credentials_handler() -> CredentialsHandler:
-    return CredentialsHandler()
-
-
-def get_context_handler() -> ContextHandler:
-    return ContextHandler()
 
 
 class ContextCreateRequest(BaseModel):

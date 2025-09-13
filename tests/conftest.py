@@ -49,8 +49,10 @@ from etl_core.components.databases.pool_args import build_mongo_client_kwargs
 
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
-from etl_core.persistance.handlers.context_handler import ContextHandler
+from etl_core.singletons import (
+    credentials_handler as _crh_singleton,
+    context_handler as _ch_singleton,
+)
 
 
 @pytest.fixture
@@ -284,7 +286,7 @@ def persisted_mongo_credentials(test_creds: Tuple[str, str]) -> Tuple[Credential
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    credentials_id = CredentialsHandler().upsert(creds)
+    credentials_id = _crh_singleton().upsert(creds)
     return creds, credentials_id
 
 
@@ -298,7 +300,7 @@ def persisted_mongo_context_id(
     """
     _, persisted_mongo_creds_id = persisted_mongo_credentials
     context_id = str(uuid4())
-    ContextHandler().upsert_credentials_mapping_context(
+    _ch_singleton().upsert_credentials_mapping_context(
         context_id=context_id,
         name="mongo_test_context",
         environment=Environment.TEST.value,
@@ -372,7 +374,7 @@ async def mongo_handler(
     # Create a fresh database for the test and update the persisted creds
     dbname = f"testdb_{uuid4().hex}"
     persisted_mongo_credentials.database = dbname
-    CredentialsHandler().upsert(
+    _crh_singleton().upsert(
         credentials_id=creds_id,
         creds=persisted_mongo_credentials,
     )

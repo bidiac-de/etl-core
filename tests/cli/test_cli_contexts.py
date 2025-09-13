@@ -212,8 +212,8 @@ def test_list_providers_local(runner: CliRunner) -> None:
     ]
 
     with (
-        patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
-        patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
+        patch("etl_core.api.cli.adapters._ch_singleton") as CtxH,
+        patch("etl_core.api.cli.adapters._crh_singleton") as CredH,
     ):
         CtxH.return_value.list_all.return_value = ctx_rows
         CredH.return_value.list_all.return_value = cred_rows
@@ -226,8 +226,8 @@ def test_list_providers_local(runner: CliRunner) -> None:
 
 def test_get_provider_local_context_branch(runner: CliRunner) -> None:
     with (
-        patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
-        patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
+        patch("etl_core.api.cli.adapters._ch_singleton") as CtxH,
+        patch("etl_core.api.cli.adapters._crh_singleton") as CredH,
     ):
         # get_by_id now returns (model, id) or None
         CtxH.return_value.get_by_id.return_value = (
@@ -244,8 +244,8 @@ def test_get_provider_local_context_branch(runner: CliRunner) -> None:
 
 def test_get_provider_local_credentials_branch(runner: CliRunner) -> None:
     with (
-        patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
-        patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
+        patch("etl_core.api.cli.adapters._ch_singleton") as CtxH,
+        patch("etl_core.api.cli.adapters._crh_singleton") as CredH,
     ):
         CtxH.return_value.get_by_id.return_value = None
         CredH.return_value.get_by_id.return_value = (
@@ -261,8 +261,8 @@ def test_get_provider_local_credentials_branch(runner: CliRunner) -> None:
 
 def test_get_provider_local_not_found(runner: CliRunner) -> None:
     with (
-        patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
-        patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
+        patch("etl_core.api.cli.adapters._ch_singleton") as CtxH,
+        patch("etl_core.api.cli.adapters._crh_singleton") as CredH,
     ):
         CtxH.return_value.get_by_id.return_value = None
         CredH.return_value.get_by_id.return_value = None
@@ -273,8 +273,8 @@ def test_get_provider_local_not_found(runner: CliRunner) -> None:
 
 def test_delete_provider_local(runner: CliRunner) -> None:
     with (
-        patch("etl_core.api.cli.adapters.ContextHandler") as CtxH,
-        patch("etl_core.api.cli.adapters.CredentialsHandler") as CredH,
+        patch("etl_core.api.cli.adapters._ch_singleton") as CtxH,
+        patch("etl_core.api.cli.adapters._crh_singleton") as CredH,
     ):
         res = runner.invoke(app, ["contexts", "delete", "prov-any"])
         assert res.exit_code == 0

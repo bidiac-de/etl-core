@@ -12,12 +12,12 @@ from etl_core.context.environment import Environment
 from etl_core.context.secure_context_adapter import SecureContextAdapter
 from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
 from etl_core.persistance.errors import PersistNotFoundError
-from etl_core.persistance.handlers.context_handler import ContextHandler
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 from etl_core.singletons import (
     job_handler as _jh_singleton,
     execution_handler as _eh_singleton,
     execution_records_handler as _erh_singleton,
+    context_handler as _ch_singleton,
+    credentials_handler as _crh_singleton,
 )
 from etl_core.api.cli.ports import ContextsPort, ExecutionPort, JobsPort
 
@@ -155,8 +155,8 @@ class LocalContextsClient(ContextsPort):
     _DEFAULT_SERVICE = "sep-sose-2025/default"
 
     def __init__(self) -> None:
-        self.ctx_handler = ContextHandler()
-        self.creds_handler = CredentialsHandler()
+        self.ctx_handler = _ch_singleton()
+        self.creds_handler = _crh_singleton()
 
     def _secret_store(self, override: Optional[str]) -> KeyringSecretProvider:
         service = override or self._DEFAULT_SERVICE

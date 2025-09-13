@@ -20,12 +20,14 @@ import pytest
 
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
-from etl_core.persistance.handlers.context_handler import ContextHandler
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
 from etl_core.components.databases.sqlserver.sqlserver_write import SQLServerWrite
 from etl_core.components.wiring.column_definition import DataType, FieldDef
 from etl_core.components.wiring.schema import Schema
+from etl_core.singletons import (
+    credentials_handler as _crh_singleton,
+    context_handler as _ch_singleton,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +60,7 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    credentials_id = CredentialsHandler().upsert(creds)
+    credentials_id = _crh_singleton().upsert(creds)
     return creds, credentials_id
 
 
@@ -69,7 +71,7 @@ def persisted_mapping_context_id(persisted_credentials: Tuple[Credentials, str])
     """
     _, creds_id = persisted_credentials
     context_id = str(uuid4())
-    ContextHandler().upsert_credentials_mapping_context(
+    _ch_singleton().upsert_credentials_mapping_context(
         context_id=context_id,
         name="mssql_test_mapping_ctx",
         environment=Environment.TEST.value,

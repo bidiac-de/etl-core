@@ -38,7 +38,10 @@ class JobExecutionHandler:
     _guard_lock = threading.Lock()
 
     def __init__(self) -> None:
-        from etl_core.singletons import execution_records_handler
+        from etl_core.singletons import (
+            execution_records_handler,
+        )  # avoid circular import
+
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")

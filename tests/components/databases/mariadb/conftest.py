@@ -16,10 +16,12 @@ from unittest.mock import Mock, patch
 
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
-from etl_core.persistance.handlers.context_handler import ContextHandler
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
+from etl_core.singletons import (
+    credentials_handler as _crh_singleton,
+    context_handler as _ch_singleton,
+)
 
 
 def derive_test_password(base_pw: str, purpose: str) -> str:
@@ -63,7 +65,7 @@ def persisted_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str
         pool_max_size=10,
         pool_timeout_s=30,
     )
-    credentials_id = CredentialsHandler().upsert(creds)
+    credentials_id = _crh_singleton().upsert(creds)
     return creds, credentials_id
 
 
@@ -75,7 +77,7 @@ def persisted_mapping_context_id(persisted_credentials: Tuple[Credentials, str])
     _, credentials_id = persisted_credentials
     context_id = str(uuid4())
 
-    ContextHandler().upsert_credentials_mapping_context(
+    _ch_singleton().upsert_credentials_mapping_context(
         context_id=context_id,
         name="test_mapping_ctx",
         environment=Environment.TEST.value,
