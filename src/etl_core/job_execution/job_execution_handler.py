@@ -9,6 +9,9 @@ from etl_core.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.components.base_component import Component
 from etl_core.job_execution.job_information_handler import JobInformationHandler
+from etl_core.persistance.handlers.execution_records_handler import (
+    ExecutionRecordsHandler,
+)
 from etl_core.metrics.system_metrics import SystemMetricsHandler
 from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
@@ -42,6 +45,7 @@ class JobExecutionHandler:
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
+        self._exec_records = ExecutionRecordsHandler()
 
     def execute_job(
         self,
@@ -63,6 +67,15 @@ class JobExecutionHandler:
             # mark as running and create the execution instance
             self._running_jobs.add(job.id)
             execution = JobExecution(job, environment=env_obj)
+
+        try:
+            self._exec_records.create_execution(
+                execution_id=execution.id,
+                job_id=job.id,
+                environment=env_obj.value if env_obj else None,
+            )
+        except Exception:
+            self.logger.exception("Failed to persist execution start")
 
         try:
             return asyncio.run(self._main_loop(execution))
@@ -98,6 +111,18 @@ class JobExecutionHandler:
 
         for attempt_index in range(execution.max_attempts):
             execution.start_attempt()
+            attempt = execution.latest_attempt()
+
+            # record attempt start
+            try:
+                self._exec_records.start_attempt(
+                    attempt_id=attempt.id,
+                    execution_id=execution.id,
+                    attempt_index=attempt.index,
+                )
+            except Exception:  # pragma: no cover
+                self.logger.exception("Failed to persist attempt start")
+
             self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
@@ -107,7 +132,6 @@ class JobExecutionHandler:
             except ExceptionGroup as eg:
                 # unwrap the error from TaskGroup
                 inner = eg.exceptions[0] if eg.exceptions else eg
-                attempt = execution.latest_attempt()
                 attempt.error = str(inner)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
@@ -116,6 +140,14 @@ class JobExecutionHandler:
                     inner,
                 )
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
+                try:
+                    self._exec_records.finish_attempt(
+                        attempt_id=attempt.id,
+                        status="FAILED",
+                        error=str(inner),
+                    )
+                except Exception:  # pragma: no cover
+                    self.logger.exception("Failed to persist attempt finish (FAILED)")
                 # reuse inner for retry/finalize logic
                 exc = inner
 
@@ -130,6 +162,15 @@ class JobExecutionHandler:
                 continue
             else:
                 # success: mark and finalize
+                try:
+                    self._exec_records.finish_attempt(
+                        attempt_id=attempt.id,
+                        status="SUCCESS",
+                        error=None,
+                    )
+                except Exception:  # pragma: no cover
+                    self.logger.exception("Failed to persist attempt finish (SUCCESS)")
+
                 job_metrics.status = RuntimeState.SUCCESS
                 self._finalize_success(execution, job_metrics)
                 break
@@ -445,6 +486,15 @@ class JobExecutionHandler:
             )
             self.job_info.logging_handler.log(cm)
 
+        try:
+            self._exec_records.finalize_execution(
+                execution_id=execution.id,
+                status="SUCCESS",
+                error=None,
+            )
+        except Exception:  # pragma: no cover
+            self.logger.exception("Failed to persist execution finalize (SUCCESS)")
+
         # cleanup
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
@@ -457,6 +507,14 @@ class JobExecutionHandler:
         attempt = execution.latest_attempt()
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
+        try:
+            self._exec_records.finalize_execution(
+                execution_id=execution.id,
+                status="FAILED",
+                error=str(exc),
+            )
+        except Exception:  # pragma: no cover
+            self.logger.exception("Failed to persist execution finalize (FAILED)")
         # cleanup
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",

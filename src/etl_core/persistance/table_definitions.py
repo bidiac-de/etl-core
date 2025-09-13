@@ -291,3 +291,43 @@ class ContextCredentialsMapTable(SQLModel, table=True):
     )
 
     context: "ContextTable" = Relationship(back_populates="credentials_map")
+
+
+class ExecutionTable(SQLModel, table=True):
+    """
+    One persisted job execution (a run). Attempts are tracked separately.
+    """
+
+    id: str = Field(primary_key=True)  # we store the runtime execution.id here
+    job_id: str = Field(
+        sa_column=Column(
+            ForeignKey("jobtable.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    environment: Optional[str] = Field(default=None, nullable=True, index=True)
+    status: str = Field(default="RUNNING", nullable=False, index=True)
+    error: Optional[str] = Field(default=None, nullable=True)
+    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    finished_at: Optional[datetime] = Field(default=None, nullable=True)
+
+
+class ExecutionAttemptTable(SQLModel, table=True):
+    """
+    A single attempt within an execution.
+    """
+
+    id: str = Field(primary_key=True)
+    execution_id: str = Field(
+        sa_column=Column(
+            ForeignKey("executiontable.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    attempt_index: int = Field(nullable=False)
+    status: str = Field(default="RUNNING", nullable=False, index=True)
+    error: Optional[str] = Field(default=None, nullable=True)
+    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    finished_at: Optional[datetime] = Field(default=None, nullable=True)
