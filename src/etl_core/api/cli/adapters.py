@@ -168,15 +168,14 @@ class LocalContextsClient(ContextsPort):
 
     def list_providers(self) -> List[Dict[str, Any]]:
         """
-        Return a combined list of all provider IDs (contexts + credentials).
-        Shape mirrors the HTTP client:
+        Return a combined list of all IDs (contexts + credentials).
         [{"id": "...","kind": "context"|"credentials"}, ...]
         """
         out: List[Dict[str, Any]] = []
 
         # These handlers are patched in tests, so keep the calls straightforward.
         for row in self.ctx_handler.list_all():
-            # rows are SimpleNamespace or ORM rows with .provider_id
+            # rows are SimpleNamespace or ORM rows with .id
             out.append({"id": row.id, "kind": "context"})
         for row in self.creds_handler.list_all():
             out.append({"id": row.id, "kind": "credentials"})
@@ -190,7 +189,6 @@ class LocalContextsClient(ContextsPort):
         """
         ctx_row = self.ctx_handler.get_by_id(provider_id)
         if ctx_row is not None:
-            # Provide a minimal response compatible with tests
             return {
                 "id": provider_id,
                 "kind": "context",

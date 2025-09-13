@@ -280,13 +280,13 @@ def list_providers(
     for row in ctx_handler.list_all():
         _append_item(
             items,
-            row.provider_id,
+            row.id,
             "context",
             row.name,
             Environment(row.environment),
         )
     for row in creds_handler.list_all():
-        _append_item(items, row.provider_id, "credentials", row.name, None)
+        _append_item(items, row.id, "credentials", row.name, None)
 
     return _dedupe(items)
 
