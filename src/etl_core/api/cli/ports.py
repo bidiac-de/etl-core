@@ -22,6 +22,24 @@ class ExecutionPort(Protocol):
         self, job_id: str, environment: Optional[Environment] = None
     ) -> Dict[str, Any]: ...
 
+    def list_executions(
+        self,
+        *,
+        job_id: Optional[str] = None,
+        status: Optional[str] = None,
+        environment: Optional[str] = None,
+        started_after: Optional[str] = None,
+        started_before: Optional[str] = None,
+        sort_by: str = "started_at",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]: ...
+
+    def get(self, execution_id: str) -> Dict[str, Any]: ...
+
+    def attempts(self, execution_id: str) -> List[Dict[str, Any]]: ...
+
 
 class ContextsPort(Protocol):
     def create_context(

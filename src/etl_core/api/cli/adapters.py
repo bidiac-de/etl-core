@@ -19,6 +19,9 @@ from etl_core.singletons import (
     execution_handler as _eh_singleton,
 )
 from etl_core.api.cli.ports import ContextsPort, ExecutionPort, JobsPort
+from etl_core.persistance.handlers.execution_records_handler import (
+    ExecutionRecordsHandler,
+)
 
 
 class LocalJobsClient(JobsPort):
@@ -54,6 +57,7 @@ class LocalExecutionClient(ExecutionPort):
     def __init__(self) -> None:
         self.exec_handler = _eh_singleton()
         self.jobs = LocalJobsClient()
+        self._records = ExecutionRecordsHandler()
 
     def start(
         self, job_id: str, environment: Optional[Environment] = None
@@ -67,6 +71,90 @@ class LocalExecutionClient(ExecutionPort):
             "max_attempts": execution.max_attempts,
             "environment": environment.value if environment else None,
         }
+
+    @staticmethod
+    def _row_to_exec_out(row: Any) -> Dict[str, Any]:
+        return {
+            "id": row.id,
+            "job_id": row.job_id,
+            "environment": row.environment,
+            "status": row.status,
+            "error": row.error,
+            "started_at": row.started_at.isoformat(),
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+            "meta": row.meta or {},
+        }
+
+    @staticmethod
+    def _row_to_attempt_out(row: Any) -> Dict[str, Any]:
+        return {
+            "id": row.id,
+            "execution_id": row.execution_id,
+            "attempt_index": row.attempt_index,
+            "status": row.status,
+            "error": row.error,
+            "started_at": row.started_at.isoformat(),
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+        }
+
+    def list_executions(
+        self,
+        *,
+        job_id: Optional[str] = None,
+        status: Optional[str] = None,
+        environment: Optional[str] = None,
+        started_after: Optional[str] = None,
+        started_before: Optional[str] = None,
+        sort_by: str = "started_at",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        sa = None
+        sb = None
+        if started_after:
+            sa = self._parse_dt(started_after)
+        if started_before:
+            sb = self._parse_dt(started_before)
+
+        rows, total = self._records.list_executions(
+            job_id=job_id,
+            status=status,
+            environment=environment,
+            started_after=sa,
+            started_before=sb,
+            sort_by=sort_by,
+            order=order,
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "data": [self._row_to_exec_out(r) for r in rows],
+            "meta": {"total": total, "limit": limit, "offset": offset},
+        }
+
+    def get(self, execution_id: str) -> Dict[str, Any]:
+        row, attempts = self._records.get_execution(execution_id)
+        if row is None:
+            raise PersistNotFoundError(f"Execution {execution_id!r} not found")
+        return {
+            "execution": self._row_to_exec_out(row),
+            "attempts": [self._row_to_attempt_out(a) for a in attempts],
+        }
+
+    def attempts(self, execution_id: str) -> List[Dict[str, Any]]:
+        row, _ = self._records.get_execution(execution_id)
+        if row is None:
+            raise PersistNotFoundError(f"Execution {execution_id!r} not found")
+        rows = self._records.list_attempts(execution_id)
+        return [self._row_to_attempt_out(r) for r in rows]
+
+    # keep tiny and readable; no heavy parsing here
+    @staticmethod
+    def _parse_dt(value: str):
+        from datetime import datetime
+
+        return datetime.fromisoformat(value)
 
 
 class LocalContextsClient(ContextsPort):
@@ -278,6 +366,61 @@ class HttpExecutionClient(ExecutionPort):
         r = requests.post(f"{self.base_url}/execution/{job_id}", json=body, timeout=30)
         if r.status_code == 404:
             raise PersistNotFoundError(f"Job {job_id!r} not found")
+        r.raise_for_status()
+        return r.json()
+
+    def list_executions(
+        self,
+        *,
+        job_id: Optional[str] = None,
+        status: Optional[str] = None,
+        environment: Optional[str] = None,
+        started_after: Optional[str] = None,
+        started_before: Optional[str] = None,
+        sort_by: str = "started_at",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "sort_by": sort_by,
+            "order": order,
+            "limit": limit,
+            "offset": offset,
+        }
+        if job_id:
+            params["job_id"] = job_id
+        if status:
+            params["status"] = status
+        if environment:
+            params["environment"] = environment
+        if started_after:
+            params["started_after"] = started_after
+        if started_before:
+            params["started_before"] = started_before
+
+        r = requests.get(
+            f"{self.base_url}/execution/executions", params=params, timeout=30
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def get(self, execution_id: str) -> Dict[str, Any]:
+        r = requests.get(
+            f"{self.base_url}/execution/executions/{execution_id}", timeout=30
+        )
+        if r.status_code == 404:
+            raise PersistNotFoundError(f"Execution {execution_id!r} not found")
+        r.raise_for_status()
+        return r.json()
+
+    def attempts(self, execution_id: str) -> List[Dict[str, Any]]:
+        r = requests.get(
+            f"{self.base_url}/execution/executions/{execution_id}/attempts",
+            timeout=30,
+        )
+        if r.status_code == 404:
+            raise PersistNotFoundError(f"Execution {execution_id!r} not found")
         r.raise_for_status()
         return r.json()
 
