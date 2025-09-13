@@ -183,7 +183,10 @@ def _attach_class_vars(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str
     enriched["x-class"] = _class_vars_payload(cls)
     return enriched
 
-def _inject_name_default(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str, Any]:
+
+def _inject_name_default(
+    schema: Dict[str, Any], cls: Type[Component]
+) -> Dict[str, Any]:
     """
     Add a per-class JSON Schema default for the 'name' field so the UI form
     shows the concrete class name (e.g. 'FilterComponent') as default.
