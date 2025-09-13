@@ -45,7 +45,7 @@ class JobExecutionHandler:
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
-        self._exec_records = ExecutionRecordsHandler()
+        self._exec_records_handler = ExecutionRecordsHandler()
 
     def execute_job(
         self,
@@ -69,7 +69,7 @@ class JobExecutionHandler:
             execution = JobExecution(job, environment=env_obj)
 
         try:
-            self._exec_records.create_execution(
+            self._exec_records_handler.create_execution(
                 execution_id=execution.id,
                 job_id=job.id,
                 environment=env_obj.value if env_obj else None,
@@ -115,7 +115,7 @@ class JobExecutionHandler:
 
             # record attempt start
             try:
-                self._exec_records.start_attempt(
+                self._exec_records_handler.start_attempt(
                     attempt_id=attempt.id,
                     execution_id=execution.id,
                     attempt_index=attempt.index,
@@ -141,7 +141,7 @@ class JobExecutionHandler:
                 )
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
                 try:
-                    self._exec_records.finish_attempt(
+                    self._exec_records_handler.finish_attempt(
                         attempt_id=attempt.id,
                         status="FAILED",
                         error=str(inner),
@@ -163,7 +163,7 @@ class JobExecutionHandler:
             else:
                 # success: mark and finalize
                 try:
-                    self._exec_records.finish_attempt(
+                    self._exec_records_handler.finish_attempt(
                         attempt_id=attempt.id,
                         status="SUCCESS",
                         error=None,
@@ -487,7 +487,7 @@ class JobExecutionHandler:
             self.job_info.logging_handler.log(cm)
 
         try:
-            self._exec_records.finalize_execution(
+            self._exec_records_handler.finalize_execution(
                 execution_id=execution.id,
                 status="SUCCESS",
                 error=None,
@@ -508,7 +508,7 @@ class JobExecutionHandler:
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
         try:
-            self._exec_records.finalize_execution(
+            self._exec_records_handler.finalize_execution(
                 execution_id=execution.id,
                 status="FAILED",
                 error=str(exc),
