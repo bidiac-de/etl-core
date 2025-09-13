@@ -26,6 +26,9 @@ from etl_core.receivers.files.json.json_helper import (
     flatten_record,
     iter_ndjson_lenient,
     _write_part_ndjson,
+    stream_json_array_to_ndjson,
+    _flatten_partition,
+    _has_flat_paths,
 )
 
 _SENTINEL: Any = object()
@@ -33,10 +36,12 @@ T = TypeVar("T")
 
 
 def _atomic_overwrite(path: Path, writer: Callable[[Path], None]) -> None:
-    """Write to temp file (preserving suffixes like .jsonl.gz), then atomically replace target."""
+    """Write to temp file, then atomically replace target."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = "".join(path.suffixes)  # e.g. ".jsonl.gz" oder ".json"
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=str(path.parent), suffix=suffix) as tmp:
+    suffix = "".join(path.suffixes)
+    with tempfile.NamedTemporaryFile(
+        "w", delete=False, dir=str(path.parent), suffix=suffix
+    ) as tmp:
         tmp_path = Path(tmp.name)
     try:
         writer(tmp_path)
@@ -55,11 +60,21 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
       - write_bulk/bigdata -> accept flat or nested; write nested
     """
 
-    async def read_row(self, filepath: Path, metrics: ComponentMetrics) -> AsyncIterator[Dict[str, Any]]:
+    async def read_row(
+        self, filepath: Path, metrics: ComponentMetrics
+    ) -> AsyncIterator[Dict[str, Any]]:
         ensure_file_exists(filepath)
 
-        it = iter_ndjson_lenient(filepath, on_error=lambda _: setattr(metrics, "error_count", metrics.error_count + 1)) \
-            if is_ndjson_path(filepath) else read_json_row(filepath)
+        it = (
+            iter_ndjson_lenient(
+                filepath,
+                on_error=lambda _: setattr(
+                    metrics, "error_count", metrics.error_count + 1
+                ),
+            )
+            if is_ndjson_path(filepath)
+            else read_json_row(filepath)
+        )
 
         while True:
             rec = await asyncio.to_thread(next, it, _SENTINEL)
@@ -69,14 +84,11 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             metrics.lines_forwarded += 1
             yield nested
 
-
     async def read_bulk(
         self, filepath: Path, metrics: ComponentMetrics
     ) -> pd.DataFrame:
-        """Return a FLAT DataFrame (columns are dot / [i] paths), matching XML bulk."""
         ensure_file_exists(filepath)
         try:
-            # Load as list of dicts (robust to NDJSON / JSON array / single object)
             if is_ndjson_path(filepath):
                 from etl_core.receivers.files.json.json_helper import (
                     iter_ndjson_lenient,
@@ -92,7 +104,6 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             else:
                 records = await asyncio.to_thread(load_json_records, filepath)
 
-            # Normalize to nested & then flatten -> stable flat schema
             flat_records = [
                 flatten_record(
                     ensure_nested_for_read(r if isinstance(r, dict) else {"_value": r})
@@ -112,34 +123,89 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         filepath: Path,
         metrics: ComponentMetrics,
         *,
-        chunk_size: int = 50_000,
+        blocksize: str | None = "64MB",
     ) -> dd.DataFrame:
         ensure_file_exists(filepath)
 
         try:
-            if is_ndjson_path(filepath):
-                it = iter_ndjson_lenient(filepath)
+            if filepath.is_dir():
+                read_target = str(filepath / "*.json*")
+                is_single_file = False
             else:
-                it = read_json_row(filepath)
+                is_single_file = True
+                if is_ndjson_path(filepath):
+                    read_target = str(filepath)
+                else:
+                    import tempfile
 
-            records: List[Dict[str, Any]] = []
-            for rec in it:
-                d = rec if isinstance(rec, dict) else {"_value": rec}
-                nested = ensure_nested_for_read(d)
-                flat = flatten_record(nested)
-                records.append(flat)
+                    tmpdir = tempfile.mkdtemp(prefix="etl_json_to_ndjson_")
+                    ndjson_path = Path(tmpdir) / (
+                        filepath.stem
+                        + ".jsonl"
+                        + (".gz" if str(filepath).lower().endswith(".gz") else "")
+                    )
 
-            pdf = pd.DataFrame.from_records(records)
+                    def _on_conv_err(_: Exception):
+                        metrics.error_count += 1
+
+                    await asyncio.to_thread(
+                        stream_json_array_to_ndjson, filepath, ndjson_path, _on_conv_err
+                    )
+                    read_target = str(ndjson_path)
+
+            if is_single_file:
+                import tempfile as _tf
+
+                def _preflatten_ndjson(src: Path, dst: Path) -> int:
+                    count = 0
+
+                    def _on_flat_err(_: Exception):
+                        metrics.error_count += 1
+
+                    for rec in iter_ndjson_lenient(src, on_error=_on_flat_err):
+                        flat = flatten_record(
+                            ensure_nested_for_read(
+                                rec if isinstance(rec, dict) else {"_value": rec}
+                            )
+                        )
+                        append_ndjson_record(dst, flat)
+                        count += 1
+                    return count
+
+                flat_dir = Path(_tf.mkdtemp(prefix="etl_flatten_ndjson_"))
+                flat_path = flat_dir / "flattened.jsonl"
+                await asyncio.to_thread(
+                    _preflatten_ndjson, Path(read_target), flat_path
+                )
+                read_target = str(flat_path)
+
+                use_blocksize = blocksize
+                ddf = dd.read_json(read_target, lines=True, blocksize=use_blocksize)
+
+            else:
+                use_blocksize = None if str(read_target).endswith(".gz") else blocksize
+                ddf_raw = dd.read_json(read_target, lines=True, blocksize=use_blocksize)
+
+                ddf = ddf_raw.map_partitions(_flatten_partition)
+
+            def _compute_row_count() -> int:
+                try:
+                    counts = ddf.map_partitions(lambda pdf: len(pdf)).compute()
+                    try:
+                        return int(getattr(counts, "sum")())
+                    except Exception:
+                        return int(sum(counts))
+                except Exception:
+                    return 0
+
+            total_rows = await asyncio.to_thread(_compute_row_count)
+            metrics.lines_forwarded += total_rows
+
+            return ddf
 
         except Exception as exc:
+            metrics.error_count += 1
             raise FileReceiverError(f"Failed to read JSON bigdata: {exc}") from exc
-
-        metrics.lines_forwarded += len(pdf)
-
-        nparts = 1 if len(pdf) <= chunk_size else max(2, min(8, len(pdf) // chunk_size))
-        ddf = dd.from_pandas(pdf, npartitions=nparts)
-
-        return ddf
 
     async def write_row(
         self, filepath: Path, metrics: ComponentMetrics, row: Dict[str, Any]
@@ -147,6 +213,12 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         if not isinstance(row, dict):
             raise TypeError(
                 f"Row mode expects a dict payload, got {type(row).__name__}"
+            )
+
+        if _has_flat_paths(row):
+            raise FileReceiverError(
+                "Row mode expects a nested dict (no dotted or [i] keys). "
+                "Use write_bulk/write_bigdata for flattened input or unflatten first."
             )
 
         try:
@@ -163,6 +235,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
                 await asyncio.to_thread(_rmw)
         except Exception as exc:
+            metrics.error_count += 1
             raise FileReceiverError(f"Failed to write JSON row: {exc}") from exc
 
         metrics.lines_received += 1
@@ -171,7 +244,6 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     async def write_bulk(
         self, filepath: Path, metrics: ComponentMetrics, data: pd.DataFrame
     ) -> None:
-        # Build nested records first (flat → unflatten; drop nullish)
         records = []
         for _, r in data.iterrows():
             nested = build_payload(r.to_dict())
@@ -192,22 +264,34 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     async def write_bigdata(
         self, filepath: Path, metrics: ComponentMetrics, data: dd.DataFrame
     ) -> None:
-        if (not filepath.suffix) or filepath.is_dir():
-            out_dir = filepath if filepath.is_dir() else filepath
+        try:
+            path_lower = str(filepath).lower()
+            out_dir = (
+                filepath
+                if not filepath.suffix
+                else filepath.parent / f"{filepath.stem}_parts"
+            )
             out_dir.mkdir(parents=True, exist_ok=True)
 
             parts = data.to_delayed()
+            use_gz = path_lower.endswith(".gz")
+            ext = ".jsonl.gz" if use_gz else ".jsonl"
+
             tasks = []
             for i, dpart in enumerate(parts):
-                part_path = str(out_dir / f"part-{i:05d}.jsonl")
+                part_path = str(out_dir / f"part-{i:05d}{ext}")
                 tasks.append(delayed(_write_part_ndjson)(dpart, part_path))
 
-            counts = await asyncio.to_thread(lambda: dask.compute(*tasks))
-            total = int(sum(counts))
+            try:
+                counts = await asyncio.to_thread(lambda: dask.compute(*tasks))
+            except Exception as exc:
+                metrics.error_count += 1
+                raise FileReceiverError(f"Failed to write JSON bigdata: {exc}") from exc
 
+            total = int(sum(counts))
             metrics.lines_received += total
             metrics.lines_forwarded += total
-            return
 
-        pdf = await asyncio.to_thread(lambda: data.compute())
-        await self.write_bulk(filepath, metrics, pdf)
+        except Exception as exc:
+            metrics.error_count += 1
+            raise FileReceiverError(f"Failed to write JSON bigdata: {exc}") from exc

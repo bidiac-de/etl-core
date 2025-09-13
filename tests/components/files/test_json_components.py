@@ -571,15 +571,13 @@ async def test_write_json_bulk_unflattens_from_flat_df(metrics, tmp_path: Path) 
 
 
 @pytest.mark.asyncio
-async def test_write_json_bigdata_like_bulk_single_file(
-    metrics, tmp_path: Path
-) -> None:
-    out = tmp_path / "bigdata.json"
+async def test_write_json_bigdata_partitioned_ndjson(metrics, tmp_path: Path) -> None:
+    out_dir = tmp_path / "bigdata_out"
     comp = WriteJSON(
-        name="write_bigdata_single_file",
-        description="bigdata single file nested",
+        name="write_bigdata_partitioned",
+        description="bigdata partitioned ndjson",
         comp_type="write_json",
-        filepath=out,
+        filepath=out_dir,
     )
     comp.strategy = BigDataExecutionStrategy()
 
@@ -594,8 +592,21 @@ async def test_write_json_bigdata_like_bulk_single_file(
     yielded = await anext(comp.execute(payload=ddf, metrics=metrics))
     assert isinstance(yielded, Out) and yielded.port == "out"
 
-    data = json.loads(out.read_text(encoding="utf-8"))
-    assert data == [
+    parts = sorted(out_dir.glob("part-*.jsonl*"))
+    assert parts, "no NDJSON part files written"
+
+    rows = []
+    for p in parts:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if s:
+                rows.append(json.loads(s))
+
+    assert rows == [
         {"id": 10, "addr": {"street": "Alpha", "city": "A-Town"}},
         {"id": 11, "addr": {"street": "Beta", "city": "B-City"}},
     ]
+
+    assert metrics.error_count == 0
+    assert metrics.lines_received == 2
+    assert metrics.lines_forwarded == 2

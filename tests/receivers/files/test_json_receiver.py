@@ -396,7 +396,7 @@ async def test_write_bulk_unflattens_and_readback(
 
 
 @pytest.mark.asyncio
-async def test_write_bigdata_single_file_nested(
+async def test_write_bigdata_partitioned_nested(
     tmp_path: Path, metrics: ComponentMetrics
 ):
     path = tmp_path / "big.json"
@@ -412,8 +412,18 @@ async def test_write_bigdata_single_file_nested(
 
     await r.write_bigdata(filepath=path, metrics=metrics, data=ddf)
 
-    data = json.loads(path.read_text(encoding="utf-8"))
-    assert data == [
+    out_dir = path.parent / f"{path.stem}_parts"
+    parts = sorted(out_dir.glob("part-*.jsonl*"))
+    assert parts, "no NDJSON part files written"
+
+    rows = []
+    for p in parts:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if s:
+                rows.append(json.loads(s))
+
+    assert rows == [
         {"id": 20, "addr": {"street": "S1", "city": "C1"}},
         {"id": 21, "addr": {"street": "S2", "city": "C2"}},
     ]
