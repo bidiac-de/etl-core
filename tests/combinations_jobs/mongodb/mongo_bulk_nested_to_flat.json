@@ -7,7 +7,7 @@
       "name": "read_people",
       "description": "Read nested docs",
       "entity_name": "people_src",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "routes": { "out": [ { "to": "map_flatten", "in_port": "in" } ] },
       "out_port_schemas": {
         "out": {
@@ -70,7 +70,7 @@
       "name": "write_flat",
       "description": "Write flattened docs",
       "entity_name": "people_out_flat",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "operation": "insert",
       "in_port_schemas": {
         "in": {

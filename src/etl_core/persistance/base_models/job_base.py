@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field
 from pydantic import ConfigDict
-from etl_core.components.base_component import StrategyType
+from etl_core.components.strategy_type import StrategyType
 
 
 class JobBase(SQLModel):

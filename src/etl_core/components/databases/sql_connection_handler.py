@@ -42,6 +42,8 @@ class SQLConnectionHandler:
             "write_mysql": "mysql+mysqlconnector",
             "read_sqlite": "sqlite",
             "write_sqlite": "sqlite",
+            "read_sqlserver": "mssql+pyodbc",
+            "write_sqlserver": "mssql+pyodbc",
         }
 
         # Use the mapped driver or fall back to the original db_type

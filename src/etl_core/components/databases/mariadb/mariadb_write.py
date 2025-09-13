@@ -79,7 +79,6 @@ class MariaDBWrite(MariaDBComponent, DatabaseOperationMixin):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build MariaDB-specific objects after validation."""
-        super()._build_objects()
         self._receiver = MariaDBReceiver()
         schema = self.in_port_schemas["in"]
         columns = [field.name for field in schema.fields]

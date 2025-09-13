@@ -7,7 +7,7 @@
       "name": "read_people",
       "description": "People master data",
       "entity_name": "people_src",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "routes": { "out": [ { "to": "map_join", "in_port": "A" } ] },
       "out_port_schemas": {
         "out": {
@@ -30,7 +30,7 @@
       "name": "read_orders",
       "description": "Orders keyed by user_id",
       "entity_name": "orders_src",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "routes": { "out": [ { "to": "map_join", "in_port": "B" } ] },
       "out_port_schemas": {
         "out": {
@@ -109,7 +109,7 @@
       "name": "write_joined",
       "description": "Write joined rows",
       "entity_name": "people_orders_out",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "operation": "insert",
       "in_port_schemas": {
         "in": {

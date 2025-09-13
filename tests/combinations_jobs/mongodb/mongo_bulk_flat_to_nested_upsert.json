@@ -7,7 +7,7 @@
       "name": "read_flat_src",
       "description": "Read flat docs (e.g., from an upstream process)",
       "entity_name": "people_src_flat",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "routes": { "out": [ { "to": "map_to_nested", "in_port": "in" } ] },
       "out_port_schemas": {
         "out": {
@@ -68,7 +68,7 @@
       "name": "write_nested_upsert",
       "description": "Upsert into nested target on ext_id",
       "entity_name": "people_out_nested",
-      "credentials_id": 9001,
+      "context_id": "${MONGO_EXAMPLE_CONTEXT_ID}",
       "operation": "upsert",
       "key_fields": ["ext_id"],
         "in_port_schemas": {

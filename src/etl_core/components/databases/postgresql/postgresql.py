@@ -29,6 +29,4 @@ class PostgreSQLComponent(SQLDatabaseComponent):
     def _build_objects(self):
         """Build PostgreSQL-specific objects after validation."""
         super()._build_objects()
-        # Set session variables after connection is established
-        self._setup_session_variables()
         return self

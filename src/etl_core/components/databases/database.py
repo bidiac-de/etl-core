@@ -1,25 +1,29 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
-import pandas as pd
 import dask.dataframe as dd
+import pandas as pd
 from pydantic import Field, model_validator
 
 from etl_core.components.base_component import Component
-from etl_core.context.context import Context
+from etl_core.context.credentials import Credentials
+from etl_core.context.credentials_mapping_context import CredentialsMappingContext
 
 
 class DatabaseComponent(Component, ABC):
     """
     Base class for database components (Mongo, SQL, ...).
 
-    Shared, engine-agnostic tuning knobs live here so all receivers/components
-    can use them consistently.
-    """
+    Enforces multiple-credentials-by-environment:
+      - The active environment is chosen in this order:
+      - Exactly one credential is resolved for the active env.
 
-    credentials_id: int = Field(..., description="ID of credentials to use")
+    Reusability:
+      - credentials_id values are provider IDs from persistence, so the same
+        credentials object can be referenced by many components.
+    """
 
     entity_name: str = Field(
         default="",
@@ -45,41 +49,48 @@ class DatabaseComponent(Component, ABC):
         ),
     )
 
-    _context: Context = None
+    _credentials: Optional[Credentials] = None
+    _cred_id = None
     _receiver: Any = None
 
     @model_validator(mode="after")
-    def _build_objects(self):
-        """Build database-specific objects after validation."""
-        self._receiver = None
+    def _build_objects(self) -> "DatabaseComponent":
+        ctx = self.get_resolved_context()
+        if ctx is None:
+            raise ValueError(
+                f"{self.name}: Database components require a context_id referencing "
+                "a CredentialsMappingContext."
+            )
+        if not isinstance(ctx, CredentialsMappingContext):
+            raise TypeError(
+                f"{self.name}: context must be a CredentialsMappingContext; got "
+                f"{type(ctx).__name__}."
+            )
+
+        # Resolve once at model build so config errors fail early
+        self._credentials, self._cred_id = ctx.resolve_active_credentials()
         return self
 
-    @property
-    def context(self) -> Context:
-        return self._context
-
-    @context.setter
-    def context(self, value: Context):
-        if hasattr(value, "get_credentials"):
-            self._context = value
-        else:
-            raise TypeError("context must have get_credentials method")
-
     def _get_credentials(self) -> Dict[str, Any]:
-        """Get credentials from context."""
-        if not self._context:
-            raise ValueError("Context not set for database component")
+        """
+        Provide a stable mapping for receivers, using the already resolved creds.
+        """
+        if self._credentials is None:
+            # Should not happen after _build_objects, keep a guard for safety
+            ctx = self.get_resolved_context()
+            assert isinstance(ctx, CredentialsMappingContext)
+            self._credentials, self._cred_id = ctx.resolve_active_credentials()
 
-        credentials = self._context.get_credentials(self.credentials_id)
-        if not credentials:
-            raise ValueError(f"Credentials with ID {self.credentials_id} not found")
-
+        creds = self._credentials
         return {
-            "user": credentials.get_parameter("user"),
-            "password": credentials.decrypted_password,
-            "database": credentials.get_parameter("database"),
-            "host": credentials.get_parameter("host"),
-            "port": credentials.get_parameter("port"),
+            "user": creds.get_parameter("user"),
+            "password": creds.decrypted_password,
+            "database": creds.get_parameter("database"),
+            "host": creds.get_parameter("host"),
+            "port": creds.get_parameter("port"),
+            "pool_max_size": creds.get_parameter("pool_max_size"),
+            "pool_timeout_s": creds.get_parameter("pool_timeout_s"),
+            "__credentials_id__": self._cred_id,
         }
 
     @abstractmethod
