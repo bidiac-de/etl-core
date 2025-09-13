@@ -268,11 +268,10 @@ class TestSQLServerSpecificFeatures:
                     ),
                     context_id=persisted_mapping_context_id,
                 )
-            assert (
-                getattr(comp, expected_attr) == value
-                if test_type != "queries"
-                else value == getattr(comp, expected_attr)
-            )
+            if test_type == "queries":
+                assert value == getattr(comp, expected_attr)
+            else:
+                assert getattr(comp, expected_attr) == value
 
     def test_sqlserver_component_zero_chunk_sizes(
         self, persisted_mapping_context_id: str

@@ -298,9 +298,7 @@ async def test_write_bigdata_insert_nested_column(
                 return None
         return None
 
-    import itertools as _it
-
-    cities = {_extract_city(r.get("attrs")) for r in _it.islice(all_rows, 0, 10)}
+    cities = {_extract_city(r.get("attrs")) for r in all_rows[:10]}
     cities.discard(None)
     assert cities <= {"Berlin", "Hamburg"}
 

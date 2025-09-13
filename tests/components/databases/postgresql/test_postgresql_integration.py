@@ -207,7 +207,12 @@ class TestPostgreSQLIntegration:
 
         async def exec_gen(component, payload, metrics):
             gen = read_comp.process_bigdata(payload, metrics)
-            out = await anext(gen)
+            try:
+                out = await anext(gen)
+            except StopAsyncIteration:
+                raise AssertionError(
+                    "Generator was empty: no output yielded from process_bigdata"
+                )
             yield out
 
         strategy.execute = exec_gen
