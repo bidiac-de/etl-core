@@ -17,11 +17,9 @@ from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
 from etl_core.singletons import (
     job_handler as _jh_singleton,
     execution_handler as _eh_singleton,
+    execution_records_handler as _erh_singleton,
 )
 from etl_core.api.cli.ports import ContextsPort, ExecutionPort, JobsPort
-from etl_core.persistance.handlers.execution_records_handler import (
-    ExecutionRecordsHandler,
-)
 
 
 class LocalJobsClient(JobsPort):
@@ -57,7 +55,7 @@ class LocalExecutionClient(ExecutionPort):
     def __init__(self) -> None:
         self.exec_handler = _eh_singleton()
         self.jobs = LocalJobsClient()
-        self._records = ExecutionRecordsHandler()
+        self._records = _erh_singleton()
 
     def start(
         self, job_id: str, environment: Optional[Environment] = None

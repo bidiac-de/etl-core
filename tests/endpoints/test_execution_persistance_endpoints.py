@@ -15,6 +15,7 @@ from etl_core.persistance.configs.job_config import JobConfig
 from etl_core.persistance.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
+from etl_core.singletons import execution_records_handler
 from etl_core.api.routers import execution as execution_router
 from etl_core.api.dependencies import get_execution_handler
 
@@ -78,14 +79,8 @@ def patched_records_and_exec_handler() -> (
     Shared in-memory engine (StaticPool) so router queries and execution writes
     see the same tables/data.
     """
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
 
-    records = ExecutionRecordsHandler(engine_=engine)
+    records = execution_records_handler()
     exec_handler = JobExecutionHandler()
     exec_handler._exec_records_handler = records  # type: ignore[attr-defined]
 

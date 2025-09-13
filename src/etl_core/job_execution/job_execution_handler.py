@@ -9,9 +9,6 @@ from etl_core.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.components.base_component import Component
 from etl_core.job_execution.job_information_handler import JobInformationHandler
-from etl_core.persistance.handlers.execution_records_handler import (
-    ExecutionRecordsHandler,
-)
 from etl_core.metrics.system_metrics import SystemMetricsHandler
 from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
@@ -41,11 +38,12 @@ class JobExecutionHandler:
     _guard_lock = threading.Lock()
 
     def __init__(self) -> None:
+        from etl_core.singletons import execution_records_handler
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
-        self._exec_records_handler = ExecutionRecordsHandler()
+        self._exec_records_handler = execution_records_handler()
 
     def execute_job(
         self,

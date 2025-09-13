@@ -7,18 +7,21 @@ from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from etl_core.api.dependencies import get_execution_handler, get_job_handler
+from etl_core.api.dependencies import (
+    get_execution_handler,
+    get_job_handler,
+    get_execution_records_handler,
+)
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from etl_core.persistance.errors import PersistNotFoundError
-from etl_core.persistance.handlers.job_handler import JobHandler
-from etl_core.api.helpers import _error_payload, _exc_meta
-from etl_core.context.environment import Environment
 from etl_core.persistance.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
+from etl_core.persistance.handlers.job_handler import JobHandler
+from etl_core.api.helpers import _error_payload, _exc_meta
+from etl_core.context.environment import Environment
 
 router = APIRouter(prefix="/execution", tags=["execution"])
-_records = ExecutionRecordsHandler()
 
 
 class StartExecutionBody(BaseModel):
@@ -130,6 +133,9 @@ def _to_attempt_out(row) -> ExecutionAttemptOut:
     summary="List executions with filters",
 )
 def list_executions(
+    _records: Annotated[
+        ExecutionRecordsHandler, Depends(get_execution_records_handler)
+    ],
     job_id: Optional[str] = None,
     status: Optional[str] = None,
     environment: Optional[str] = None,
@@ -163,7 +169,12 @@ def list_executions(
     response_model=ExecutionDetailOut,
     summary="Get one execution (with attempts)",
 )
-def get_execution(execution_id: str) -> ExecutionDetailOut:
+def get_execution(
+    execution_id: str,
+    _records: Annotated[
+        ExecutionRecordsHandler, Depends(get_execution_records_handler)
+    ],
+) -> ExecutionDetailOut:
     row, attempts = _records.get_execution(execution_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Execution not found")
@@ -178,7 +189,12 @@ def get_execution(execution_id: str) -> ExecutionDetailOut:
     response_model=list[ExecutionAttemptOut],
     summary="List attempts for one execution",
 )
-def list_attempts(execution_id: str) -> list[ExecutionAttemptOut]:
+def list_attempts(
+    execution_id: str,
+    _records: Annotated[
+        ExecutionRecordsHandler, Depends(get_execution_records_handler)
+    ],
+) -> list[ExecutionAttemptOut]:
     exec_row, _ = _records.get_execution(execution_id)
     if exec_row is None:
         raise HTTPException(status_code=404, detail="Execution not found")
