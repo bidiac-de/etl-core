@@ -31,7 +31,7 @@ from etl_core.components.wiring.schema import Schema
 @pytest.fixture(autouse=True)
 def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure deterministic env selection & in-memory secret store for tests."""
-    monkeypatch.setenv("COMP_ENV", Environment.TEST.value)
+    monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
 
 

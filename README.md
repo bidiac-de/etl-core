@@ -82,6 +82,9 @@ Key features include:
     ```plaintext
     Create a `.env` file in the root, filling in values for the placeholder values found in:
     etl-core/.env_example
+   ETL_COMPONENT_MODE excluding certain Components only used for testing
+   EXECUTION_ENV setting a default Environment for resolving the Components Context configurations
+    ```
 
 ### Starting the Core
 - **Run the ETL Core Engine:**

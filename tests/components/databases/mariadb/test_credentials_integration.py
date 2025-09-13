@@ -64,7 +64,7 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Ensure env-based credential selection is deterministic across tests.
     """
-    monkeypatch.setenv("COMP_ENV", Environment.TEST.value)
+    monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
 
 

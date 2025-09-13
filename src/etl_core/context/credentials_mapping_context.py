@@ -69,7 +69,7 @@ class CredentialsMappingContext(Context):
     ) -> Environment:
         if override is not None:
             return self._normalize_env(override)
-        env_from_os = os.getenv("COMP_ENV")
+        env_from_os = os.getenv("EXECUTION_ENV")
         if env_from_os:
             return self._normalize_env(env_from_os)
         return self.environment

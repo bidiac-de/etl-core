@@ -450,5 +450,5 @@ def _force_test_env_and_memory_secret_backend() -> None:
     This prevents Windows CredWrite / win32ctypes errors by ensuring we never
     hit the OS credential manager during tests.
     """
-    os.environ["COMP_ENV"] = Environment.TEST.value
+    os.environ["EXECUTION_ENV"] = Environment.TEST.value
     os.environ["SECRET_BACKEND"] = "memory"

@@ -36,7 +36,7 @@ def _mk_schema() -> Schema:
 
 @pytest.fixture(autouse=True)
 def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("COMP_ENV", Environment.TEST.value)
+    monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
 
 
