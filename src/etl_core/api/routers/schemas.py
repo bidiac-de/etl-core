@@ -183,6 +183,18 @@ def _attach_class_vars(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str
     enriched["x-class"] = _class_vars_payload(cls)
     return enriched
 
+def _inject_name_default(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str, Any]:
+    """
+    Add a per-class JSON Schema default for the 'name' field so the UI form
+    shows the concrete class name (e.g. 'FilterComponent') as default.
+    """
+    out = dict(schema)
+    props = out.get("properties")
+    if isinstance(props, dict) and "name" in props and isinstance(props["name"], dict):
+        # keep whatever Type/Title/Description are already there, add default
+        props["name"]["default"] = cls.__name__
+    return out
+
 
 def _resolve_component_class(comp_type: str) -> Type[Component]:
     mode = get_registry_mode()
@@ -256,6 +268,7 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     ordered = _apply_field_ordering(filtered, cls)
     enriched = _attach_class_vars(ordered, cls)
     enriched["comp-type"] = comp_type  # convenience for GUI
+    enriched = _inject_name_default(enriched, cls)
 
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_FORM_CACHE[cache_key] = enriched
