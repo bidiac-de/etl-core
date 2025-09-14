@@ -52,13 +52,7 @@ def _atomic_overwrite(path: Path, writer: Callable[[Path], None]) -> None:
 
 
 class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
-    """Receiver for JSON / NDJSON with Pandas (bulk) and Dask (bigdata).
-    Nested handling mirrors XML semantics:
-      - read_row -> yields nested dicts (unflattens if needed)
-      - read_bulk -> returns Pandas DF with FLAT columns (dot / [i] paths)
-      - write_row -> expects nested (rejects flat paths)
-      - write_bulk/bigdata -> accept flat or nested; write nested
-    """
+    """Receiver for JSON / NDJSON with Pandas (bulk) and Dask (bigdata)."""
 
     async def read_row(
         self, filepath: Path, metrics: ComponentMetrics
