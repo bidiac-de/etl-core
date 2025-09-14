@@ -8,8 +8,6 @@ import typer
 from etl_core.persistance.errors import PersistNotFoundError
 from etl_core.api.cli.wiring import pick_clients
 
-BASE_URL = "http://127.0.0.1:8000"
-
 contexts_app = typer.Typer(help="Manage contexts and credentials providers.")
 
 
@@ -19,10 +17,8 @@ def create_context(
     keyring_service: Optional[str] = typer.Option(
         None, help="Override keyring service (defaults to API/endpoint default)."
     ),
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(BASE_URL),
 ) -> None:
-    _, __, ctxs = pick_clients(remote, base_url)
+    _, __, ctxs = pick_clients()
     payload = json.load(open(path, encoding="utf-8"))
     resp = ctxs.create_context(payload, keyring_service)
     typer.echo(json.dumps(resp, indent=2))
@@ -34,10 +30,8 @@ def create_credentials(
     keyring_service: Optional[str] = typer.Option(
         None, help="Override keyring service (defaults to API/endpoint default)."
     ),
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(BASE_URL),
 ) -> None:
-    _, __, ctxs = pick_clients(remote, base_url)
+    _, __, ctxs = pick_clients()
     payload = json.load(open(path, encoding="utf-8"))
     resp = ctxs.create_credentials(payload, keyring_service)
     typer.echo(json.dumps(resp, indent=2))
@@ -46,10 +40,8 @@ def create_credentials(
 @contexts_app.command("create-context-mapping")
 def create_context_mapping(
     path: str = typer.Argument(..., help="JSON file for CredentialsMappingContext."),
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(BASE_URL),
 ) -> None:
-    _, __, ctxs = pick_clients(remote, base_url)
+    _, __, ctxs = pick_clients()
     payload = json.load(open(path, encoding="utf-8"))
     try:
         resp = ctxs.create_context_mapping(payload)
@@ -60,21 +52,14 @@ def create_context_mapping(
 
 
 @contexts_app.command("list")
-def list_providers(
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(BASE_URL),
-) -> None:
-    _, __, ctxs = pick_clients(remote, base_url)
+def list_providers() -> None:
+    _, __, ctxs = pick_clients()
     typer.echo(json.dumps(ctxs.list_providers(), indent=2))
 
 
 @contexts_app.command("get")
-def get_provider(
-    provider_id: str,
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(BASE_URL),
-) -> None:
-    _, __, ctxs = pick_clients(remote, base_url)
+def get_provider(provider_id: str) -> None:
+    _, __, ctxs = pick_clients()
     try:
         info = ctxs.get_provider(provider_id)
     except PersistNotFoundError:
@@ -84,12 +69,8 @@ def get_provider(
 
 
 @contexts_app.command("delete")
-def delete_provider(
-    provider_id: str,
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(BASE_URL),
-) -> None:
-    _, __, ctxs = pick_clients(remote, base_url)
+def delete_provider(provider_id: str) -> None:
+    _, __, ctxs = pick_clients()
     try:
         ctxs.delete_provider(provider_id)
     except PersistNotFoundError:

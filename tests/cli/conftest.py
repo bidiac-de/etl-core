@@ -48,19 +48,6 @@ def mock_execution_handler():
 
 
 @pytest.fixture
-def mock_requests():
-    with patch("etl_core.api.cli.adapters.requests") as mreq:
-        resp = Mock()
-        resp.json.return_value = {"id": "test-job-id-123"}
-        resp.raise_for_status.return_value = None
-        mreq.post.return_value = resp
-        mreq.get.return_value = resp
-        mreq.put.return_value = resp
-        mreq.delete.return_value = resp
-        yield mreq
-
-
-@pytest.fixture
 def mock_singletons():
     with (
         patch("etl_core.api.cli.adapters._jh_singleton") as jh,

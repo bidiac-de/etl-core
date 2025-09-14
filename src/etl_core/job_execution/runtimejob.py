@@ -1,6 +1,5 @@
-from typing import List, Dict, Tuple, Any, Set, Self
+from typing import List, Dict, Tuple, Any, Set, Self, Optional
 
-from bokeh.core.property.struct import Optional
 
 from etl_core.components.dataclasses import MetaData
 from pydantic import (

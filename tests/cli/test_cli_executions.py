@@ -5,25 +5,19 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from etl_core.context.environment import Environment
 from etl_core.persistance.errors import PersistNotFoundError
 from etl_core.api.cli.main import app
+from contextlib import contextmanager
 
 
-@pytest.fixture
 def runner() -> CliRunner:
     return CliRunner(mix_stderr=False)
 
 
 class _FakeExecClient:
-    """
-    Minimal fake execution client. We capture forwarded flags and
-    return predictable payloads shaped like the real adapters.
-    """
-
     def __init__(self) -> None:
         self.last_list_kwargs: Dict[str, Any] = {}
         self.started: List[Dict[str, Any]] = []
@@ -31,7 +25,6 @@ class _FakeExecClient:
     def start(
         self, job_id: str, environment: Optional[Environment] = None
     ) -> Dict[str, Any]:
-        # Pretend the job exists and an execution was started
         payload = {
             "job_id": job_id,
             "status": "started",
@@ -122,113 +115,102 @@ class _FakeExecClient:
         ]
 
 
-@pytest.fixture
-def patched_pick_exec():
-    """
-    Patch the *symbol used inside the CLI module* so all CLI commands
-    use our fake client instead of real wiring.
-    """
+@contextmanager
+def patched_pick_exec() -> _FakeExecClient:
     with patch("etl_core.api.cli.commands.execution.pick_clients") as pick:
         fake = _FakeExecClient()
-        pick.side_effect = lambda remote, base_url: (
-            SimpleNamespace(),
-            fake,
-            SimpleNamespace(),
+        pick.side_effect = lambda: (SimpleNamespace(), fake, SimpleNamespace())
+        try:
+            yield fake
+        finally:
+            pass
+
+
+def test_cli_execution_list_success_forwards_filters() -> None:
+    with patched_pick_exec() as fake:
+        res = runner().invoke(
+            app,
+            [
+                "execution",
+                "list",
+                "--status",
+                "SUCCESS",
+                "--environment",
+                "TEST",
+                "--started-after",
+                "2025-09-13T12:00:00",
+                "--started-before",
+                "2025-09-13T13:00:00",
+                "--sort-by",
+                "started_at",
+                "--order",
+                "asc",
+                "--limit",
+                "10",
+                "--offset",
+                "5",
+            ],
         )
-        yield fake
+        assert res.exit_code == 0, res.stdout
+
+        payload = json.loads(res.stdout)
+        assert list(payload.keys()) == ["data"]
+        assert payload["data"][0]["id"] == "exec-ok-1"
+
+        assert fake.last_list_kwargs == {
+            "job_id": None,
+            "status": "SUCCESS",
+            "environment": "TEST",
+            "started_after": "2025-09-13T12:00:00",
+            "started_before": "2025-09-13T13:00:00",
+            "sort_by": "started_at",
+            "order": "asc",
+            "limit": 10,
+            "offset": 5,
+        }
 
 
-def test_cli_execution_list_success_forwards_filters(
-    runner: CliRunner, patched_pick_exec: _FakeExecClient
-) -> None:
-    res = runner.invoke(
-        app,
-        [
-            "execution",
-            "list",
-            "--status",
-            "SUCCESS",
-            "--environment",
-            "TEST",
-            "--started-after",
-            "2025-09-13T12:00:00",
-            "--started-before",
-            "2025-09-13T13:00:00",
-            "--sort-by",
-            "started_at",
-            "--order",
-            "asc",
-            "--limit",
-            "10",
-            "--offset",
-            "5",
-        ],
-    )
-    assert res.exit_code == 0, res.stdout
+def test_cli_execution_get_detail() -> None:
+    with patched_pick_exec():
+        res = runner().invoke(app, ["execution", "get", "exec-123"])
+        assert res.exit_code == 0, res.stdout
 
-    payload = json.loads(res.stdout)
-    assert list(payload.keys()) == ["data"]
-    assert payload["data"][0]["id"] == "exec-ok-1"
+        body = json.loads(res.stdout)
+        assert "execution" in body and "attempts" in body
+        assert body["execution"]["id"] == "exec-123"
+        assert body["attempts"][0]["attempt_index"] == 1
 
-    # Ensure flags were forwarded exactly
-    assert patched_pick_exec.last_list_kwargs == {
-        "job_id": None,
-        "status": "SUCCESS",
-        "environment": "TEST",
-        "started_after": "2025-09-13T12:00:00",
-        "started_before": "2025-09-13T13:00:00",
-        "sort_by": "started_at",
-        "order": "asc",
-        "limit": 10,
-        "offset": 5,
-    }
+        res_missing = runner().invoke(app, ["execution", "get", "missing"])
+        assert res_missing.exit_code == 1
+        assert "Execution with ID missing not found" in res_missing.stdout
 
 
-def test_cli_execution_get_detail(
-    runner: CliRunner, patched_pick_exec: _FakeExecClient
-) -> None:
-    res = runner.invoke(app, ["execution", "get", "exec-123"])
-    assert res.exit_code == 0, res.stdout
+def test_cli_execution_attempts() -> None:
+    with patched_pick_exec():
+        res = runner().invoke(app, ["execution", "attempts", "exec-xyz"])
+        assert res.exit_code == 0, res.stdout
 
-    body = json.loads(res.stdout)
-    assert "execution" in body and "attempts" in body
-    assert body["execution"]["id"] == "exec-123"
-    assert body["attempts"][0]["attempt_index"] == 1
+        rows = json.loads(res.stdout)
+        assert isinstance(rows, list) and rows
+        assert rows[0]["execution_id"] == "exec-xyz"
 
-    # not found --> code 1
-    res_missing = runner.invoke(app, ["execution", "get", "missing"])
-    assert res_missing.exit_code == 1
-    assert "Execution with ID missing not found" in res_missing.stdout
+        res_missing = runner().invoke(app, ["execution", "attempts", "missing"])
+        assert res_missing.exit_code == 1
+        assert "Execution with ID missing not found" in res_missing.stdout
 
 
-def test_cli_execution_attempts(
-    runner: CliRunner, patched_pick_exec: _FakeExecClient
-) -> None:
-    res = runner.invoke(app, ["execution", "attempts", "exec-xyz"])
-    assert res.exit_code == 0, res.stdout
+def test_cli_execution_start_with_and_without_environment() -> None:
+    with patched_pick_exec():
+        res1 = runner().invoke(app, ["execution", "start", "job-1"])
+        assert res1.exit_code == 0, res1.stdout
+        payload1 = json.loads(res1.stdout)
+        assert payload1["status"] == "started"
+        assert payload1["environment"] is None
 
-    rows = json.loads(res.stdout)
-    assert isinstance(rows, list) and rows
-    assert rows[0]["execution_id"] == "exec-xyz"
-
-    res_missing = runner.invoke(app, ["execution", "attempts", "missing"])
-    assert res_missing.exit_code == 1
-    assert "Execution with ID missing not found" in res_missing.stdout
-
-
-def test_cli_execution_start_with_and_without_environment(
-    runner: CliRunner, patched_pick_exec: _FakeExecClient
-) -> None:
-    # Start without env
-    res1 = runner.invoke(app, ["execution", "start", "job-1"])
-    assert res1.exit_code == 0, res1.stdout
-    payload1 = json.loads(res1.stdout)
-    assert payload1["status"] == "started"
-    assert payload1["environment"] is None
-
-    # Start with env
-    res2 = runner.invoke(app, ["execution", "start", "job-1", "--environment", "test"])
-    assert res2.exit_code == 0, res2.stdout
-    payload2 = json.loads(res2.stdout)
-    assert payload2["status"] == "started"
-    assert payload2["environment"] == "TEST"
+        res2 = runner().invoke(
+            app, ["execution", "start", "job-1", "--environment", "test"]
+        )
+        assert res2.exit_code == 0, res2.stdout
+        payload2 = json.loads(res2.stdout)
+        assert payload2["status"] == "started"
+        assert payload2["environment"] == "TEST"

@@ -10,7 +10,6 @@ from etl_core.persistance.errors import PersistNotFoundError
 from etl_core.api.cli.wiring import pick_clients
 
 execution_app = typer.Typer(help="Start and control executions.")
-LOCALHOST = "http://127.0.0.1:8000"
 
 
 @execution_app.command("start")
@@ -21,10 +20,8 @@ def start_execution(
         case_sensitive=False,
         help="Optional environment (e.g. TEST, DEV, PROD).",
     ),
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(LOCALHOST),
 ) -> None:
-    _, execs, _ = pick_clients(remote, base_url)
+    _, execs, _ = pick_clients()
     try:
         info = execs.start(job_id, environment)
     except PersistNotFoundError:
@@ -52,10 +49,8 @@ def list_executions(
     order: str = typer.Option("desc", help="asc | desc."),
     limit: int = typer.Option(50, min=1, max=200),
     offset: int = typer.Option(0, min=0),
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(LOCALHOST),
 ) -> None:
-    _, execs, _ = pick_clients(remote, base_url)
+    _, execs, _ = pick_clients()
     payload = execs.list_executions(
         job_id=job_id,
         status=status,
@@ -71,12 +66,8 @@ def list_executions(
 
 
 @execution_app.command("get")
-def get_execution(
-    execution_id: str,
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(LOCALHOST),
-) -> None:
-    _, execs, _ = pick_clients(remote, base_url)
+def get_execution(execution_id: str) -> None:
+    _, execs, _ = pick_clients()
     try:
         detail = execs.get(execution_id)
     except PersistNotFoundError:
@@ -86,12 +77,8 @@ def get_execution(
 
 
 @execution_app.command("attempts")
-def list_attempts(
-    execution_id: str,
-    remote: bool = typer.Option(False),
-    base_url: str = typer.Option(LOCALHOST),
-) -> None:
-    _, execs, _ = pick_clients(remote, base_url)
+def list_attempts(execution_id: str) -> None:
+    _, execs, _ = pick_clients()
     try:
         rows = execs.attempts(execution_id)
     except PersistNotFoundError:

@@ -16,7 +16,7 @@ from etl_core.persistance.handlers.execution_records_handler import (
 from etl_core.persistance.table_definitions import ExecutionTable, ExecutionAttemptTable
 from tests.helpers import runtime_job_from_config
 
-# Ensure tests can build the "test" component by name like in your existing suite
+# Ensure tests can build the "test" component by name
 runtimejob_module.TestComponent = StubComponent
 
 
@@ -24,9 +24,8 @@ runtimejob_module.TestComponent = StubComponent
 def mem_engine():
     """
     Dedicated in-memory SQLite engine with tables created fresh for every test.
-    We deliberately do NOT enable foreign key enforcement to keep the setup
-    lightweight; ExecutionTable.job_id references JobTable, but we don't need
-    to insert JobTable rows for these persistence-focused tests.
+    Deliberately does NOT enable foreign key enforcement to keep the setup
+    lightweight..
     """
     eng = create_engine("sqlite://")
     SQLModel.metadata.create_all(eng)
@@ -35,7 +34,7 @@ def mem_engine():
 
 @pytest.fixture()
 def records_handler(mem_engine) -> ExecutionRecordsHandler:
-    # Inject our engine into handler so it uses the test DB
+    # Inject engine into handler so it uses the test DB
     return ExecutionRecordsHandler(engine_=mem_engine)
 
 
