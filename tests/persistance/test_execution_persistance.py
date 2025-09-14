@@ -25,7 +25,7 @@ def mem_engine():
     """
     Dedicated in-memory SQLite engine with tables created fresh for every test.
     Deliberately does NOT enable foreign key enforcement to keep the setup
-    lightweight..
+    lightweight.
     """
     eng = create_engine("sqlite://")
     SQLModel.metadata.create_all(eng)

@@ -69,7 +69,15 @@ def data_ops_metrics() -> DataOperationsMetrics:
 
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
-    """Remove modules so re-import picks up env overrides cleanly."""
+    """
+    Remove modules from sys.modules whose names match or start with any of the given prefixes.
+
+    This allows re-importing those modules to pick up environment overrides cleanly.
+
+    Args:
+        prefixes: An iterable of string prefixes. Any module whose name is equal to a prefix
+            or starts with a prefix followed by a dot will be removed from sys.modules.
+    """
     keys = list(sys.modules.keys())
     to_delete = [
         name
