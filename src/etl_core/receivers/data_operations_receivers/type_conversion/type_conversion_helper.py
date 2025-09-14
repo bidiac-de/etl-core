@@ -70,16 +70,24 @@ def _pd_dtype(target: DataType) -> Optional[str]:
     return _PD_DTYPES.get(target)
 
 
+def _na_for_target(target: DataType) -> Any:
+    """Return a pandas-style NA scalar appropriate for the target dtype."""
+    if target == DataType.FLOAT:
+        return np.nan
+    return pd.NA
+
+
 def _convert_scalar(value: Any, target: DataType) -> Any:
     """Convert a single scalar value to the target type."""
     if value is None:
         return None
 
-    if isinstance(value, str) and value.strip().lower() in _NULL_STRINGS:
-        return None
+    if target != DataType.STRING and isinstance(value, str):
+        if value.strip().lower() in _NULL_STRINGS:
+            return None
 
     if target == DataType.STRING:
-        return None if pd.isna(value) else str(value)
+        return pd.NA if pd.isna(value) else str(value)
 
     if target == DataType.INTEGER:
         if pd.isna(value):
@@ -151,7 +159,7 @@ def _apply_on_error_row(
             raise
         if policy == OnError.NULL:
             return True, None
-        return True, value
+        return False, value
 
 
 def _walk_and_convert(
@@ -172,19 +180,21 @@ def _walk_and_convert(
     if head == _ITEM:
         if isinstance(obj, list):
             new_items: List[Any] = []
+            keep_all = True
             for item in obj:
-                _, new_item = _walk_and_convert(item, tuple(rest), target, policy)
+                k, new_item = _walk_and_convert(item, tuple(rest), target, policy)
+                keep_all = keep_all and k
                 new_items.append(new_item)
-            return True, new_items
+            return keep_all, new_items
         return True, obj
 
     if isinstance(obj, dict):
         if head not in obj:
             return True, obj
-        _, new_val = _walk_and_convert(obj[head], tuple(rest), target, policy)
+        k, new_val = _walk_and_convert(obj[head], tuple(rest), target, policy)
         cloned = dict(obj)
         cloned[head] = new_val
-        return True, cloned
+        return k, cloned
 
     return True, obj
 
@@ -195,12 +205,14 @@ def convert_row_nested(
 ) -> Tuple[bool, Dict[str, Any]]:
     """Apply rules with dotted paths to a single nested row."""
     out = dict(row)
+    keep_all = True
     for r in rules:
         parts = _parse_path(r.column_path)
-        _, mutated = _walk_and_convert(out, parts, r.target, r.on_error)
+        k, mutated = _walk_and_convert(out, parts, r.target, r.on_error)
+        keep_all = keep_all and k
         if isinstance(mutated, dict):
             out = mutated
-    return True, out
+    return keep_all, out
 
 
 def _safe_bool(v: Any) -> Optional[bool]:
@@ -209,6 +221,14 @@ def _safe_bool(v: Any) -> Optional[bool]:
         return _convert_scalar(v, DataType.BOOLEAN)
     except Exception:
         return None
+
+
+def _safe_bool_na(v: Any) -> Any:
+    """Return bool or <NA> if conversion fails."""
+    try:
+        return _convert_scalar(v, DataType.BOOLEAN)
+    except Exception:
+        return pd.NA
 
 
 def convert_frame_top_level(
@@ -249,6 +269,11 @@ def convert_frame_top_level(
                         return v
 
                 out[col] = s.map(_elem_skip)
+                if dtype:
+                    try:
+                        out[col] = out[col].astype(dtype)
+                    except (TypeError, ValueError):
+                        pass
                 continue
 
             bool_mask = s.map(lambda v: isinstance(v, (bool, np.bool_)))
@@ -293,9 +318,11 @@ def convert_frame_top_level(
 
         if r.target == DataType.BOOLEAN:
             if r.on_error == OnError.RAISE:
-                out[col] = s.map(lambda v: _convert_scalar(v, DataType.BOOLEAN))
+                out[col] = s.map(lambda v: _convert_scalar(v, DataType.BOOLEAN)).astype(
+                    "boolean"
+                )
             elif r.on_error == OnError.NULL:
-                out[col] = s.map(_safe_bool)
+                out[col] = s.map(_safe_bool_na).astype("boolean")
             else:
 
                 def _safe_or_orig(v: Any) -> Any:
@@ -303,6 +330,10 @@ def convert_frame_top_level(
                     return v if b is None else b
 
                 out[col] = s.map(_safe_or_orig)
+                try:
+                    out[col] = out[col].astype("boolean")
+                except (TypeError, ValueError):
+                    pass
             continue
 
         def elem(v: Any) -> Any:
@@ -310,12 +341,19 @@ def convert_frame_top_level(
                 return _convert_scalar(v, r.target)
             except Exception:
                 if r.on_error == OnError.NULL:
-                    return None
+                    return _na_for_target(r.target)
                 if r.on_error == OnError.SKIP:
                     return v
                 raise
 
         out[col] = s.map(elem)
+
+        dtype = _pd_dtype(r.target)
+        if dtype:
+            try:
+                out[col] = out[col].astype(dtype)
+            except (TypeError, ValueError):
+                pass
 
     return out
 
