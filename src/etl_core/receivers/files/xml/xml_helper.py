@@ -200,7 +200,7 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         flat: Dict[str, Any] = {}
         for k, v in payload.items():
             if _LIST_INDEX_RE.search(k) and _is_nullish(v):
-                continue  # <-- exakt wie im JSON-Helper
+                continue
             flat[k] = v
         return unflatten_record(flat)
     return payload
