@@ -4,8 +4,8 @@ from typing import Any, Dict, Union
 
 from sqlmodel import Session
 
-from etl_core.persistance.errors import PersistNotFoundError
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.errors import PersistNotFoundError
+from etl_core.persistence.table_definitions import (
     ComponentTable,
     JobTable,
     LayoutTable,

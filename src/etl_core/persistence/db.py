@@ -6,15 +6,26 @@ from sqlalchemy import event
 from sqlmodel import SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.table_definitions import (
     JobTable,
     ComponentTable,
     MetaDataTable,
     LayoutTable,
+    ComponentLinkTable,
+    CredentialsTable,
+    ContextTable,
+    ContextParameterTable,
+    ContextCredentialsMapTable,
 )
 
 # Ensure model classes are imported
-_, _, _, _ = JobTable, ComponentTable, MetaDataTable, LayoutTable
+_, _, _, _, _ = JobTable, ComponentTable, MetaDataTable, LayoutTable, ComponentLinkTable
+_, _, _, _ = (
+    CredentialsTable,
+    ContextTable,
+    ContextParameterTable,
+    ContextCredentialsMapTable,
+)
 
 load_dotenv()
 db_path = os.getenv("DB_PATH")

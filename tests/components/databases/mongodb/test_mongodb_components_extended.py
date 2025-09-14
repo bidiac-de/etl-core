@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 from typing import Any, Dict, List
 
 import dask.dataframe as dd
@@ -24,42 +23,37 @@ from tests.conftest import (
 )  # noqa: F401
 
 
-def _mk_writer(mongo_context, **kwargs) -> MongoDBWrite:
+def _mk_writer(context_id: str, **kwargs) -> MongoDBWrite:
     base = {
         "name": "w",
         "description": "w",
         "comp_type": "write_mongodb",
         "entity_name": "people_ext",
-        "credentials_id": 101,
+        "context_id": context_id,
     }
     base.update(kwargs)
-    w = MongoDBWrite(**base)
-    w.context = mongo_context
-    return w
+    return MongoDBWrite(**base)
 
 
-def _mk_reader(mongo_context, **kwargs) -> MongoDBRead:
+def _mk_reader(context_id: str, **kwargs) -> MongoDBRead:
     base = {
         "name": "r",
         "description": "r",
         "comp_type": "read_mongodb",
         "entity_name": "people_ext",
-        "credentials_id": 101,
+        "context_id": context_id,
     }
-    # Default, minimal schema so callers don’t have to pass it for simple cases
     base.setdefault(
         "out_port_schemas",
         {"out": Schema(fields=[FieldDef(name="_id", data_type=DataType.INTEGER)])},
     )
     base.update(kwargs)
-    r = MongoDBRead(**base)
-    r.context = mongo_context
-    return r
+    return MongoDBRead(**base)
 
 
 @pytest.mark.asyncio
 async def test_read_row_nested_projection_and_sort(
-    mongo_context, mongo_handler, metrics
+    persisted_mongo_context_id: str, mongo_handler, metrics
 ):
     handler, dbname = mongo_handler
     docs = [
@@ -70,7 +64,7 @@ async def test_read_row_nested_projection_and_sort(
     await seed_docs(handler, dbname, "people_ext", docs)
 
     reader = _mk_reader(
-        mongo_context,
+        persisted_mongo_context_id,
         query_filter={"address.city": "Berlin"},
         sort=[("name", 1)],
         limit=2,
@@ -104,7 +98,9 @@ async def test_read_row_nested_projection_and_sort(
 
 
 @pytest.mark.asyncio
-async def test_read_bulk_nested_with_limit_skip(mongo_context, mongo_handler, metrics):
+async def test_read_bulk_nested_with_limit_skip(
+    persisted_mongo_context_id: str, mongo_handler, metrics
+):
     handler, dbname = mongo_handler
     docs = [
         {
@@ -117,7 +113,7 @@ async def test_read_bulk_nested_with_limit_skip(mongo_context, mongo_handler, me
     await seed_docs(handler, dbname, "people_ext", docs)
 
     reader = _mk_reader(
-        mongo_context,
+        persisted_mongo_context_id,
         query_filter={"grp": "A"},
         sort=[("_id", 1)],
         limit=3,
@@ -151,7 +147,9 @@ async def test_read_bulk_nested_with_limit_skip(mongo_context, mongo_handler, me
 
 
 @pytest.mark.asyncio
-async def test_read_bigdata_filter_on_nested(mongo_context, mongo_handler, metrics):
+async def test_read_bigdata_filter_on_nested(
+    persisted_mongo_context_id: str, mongo_handler, metrics
+):
     handler, dbname = mongo_handler
     docs = [
         {
@@ -164,7 +162,7 @@ async def test_read_bigdata_filter_on_nested(mongo_context, mongo_handler, metri
     await seed_docs(handler, dbname, "people_ext", docs)
 
     reader = _mk_reader(
-        mongo_context,
+        persisted_mongo_context_id,
         query_filter={"address.city": "Berlin"},
         bigdata_partition_chunk_size=7,
     )
@@ -181,28 +179,27 @@ async def test_read_bigdata_filter_on_nested(mongo_context, mongo_handler, metri
 
 @pytest.mark.asyncio
 async def test_write_row_nested_insert_then_match_filter_update(
-    mongo_context, mongo_handler, metrics
+    persisted_mongo_context_id: str, mongo_handler, metrics
 ):
     handler, dbname = mongo_handler
 
-    writer = _mk_writer(mongo_context, operation=DatabaseOperation.INSERT)
+    writer = _mk_writer(persisted_mongo_context_id, operation=DatabaseOperation.INSERT)
     collected = []
     async for env in writer.process_row(
         {"_id": 100, "name": "Neo", "profile": {"lvl": 1, "skills": ["python", "db"]}},
         metrics,
     ):
         collected.append(env)
-    assert collected  # ensure loop body executed
+    assert collected
 
     seeded = await get_all_docs(handler, dbname, "people_ext", flt={"_id": 100})
     assert seeded[0]["profile"]["lvl"] == 1
 
-    # reset metrics before update phase
     metrics.lines_forwarded = 0
     metrics.lines_received = 0
 
     updater = _mk_writer(
-        mongo_context,
+        persisted_mongo_context_id,
         operation=DatabaseOperation.UPDATE,
         match_filter={"_id": 100},
         update_fields={"profile"},
@@ -220,7 +217,7 @@ async def test_write_row_nested_insert_then_match_filter_update(
 
 @pytest.mark.asyncio
 async def test_write_bulk_upsert_composite_keys_and_subset_update(
-    mongo_context, mongo_handler, metrics
+    persisted_mongo_context_id: str, mongo_handler, metrics
 ):
     handler, dbname = mongo_handler
 
@@ -235,7 +232,7 @@ async def test_write_bulk_upsert_composite_keys_and_subset_update(
     )
 
     writer = _mk_writer(
-        mongo_context,
+        persisted_mongo_context_id,
         operation=DatabaseOperation.UPSERT,
         key_fields=["tenant", "_id"],
         update_fields={"name"},
@@ -260,7 +257,7 @@ async def test_write_bulk_upsert_composite_keys_and_subset_update(
 
 @pytest.mark.asyncio
 async def test_write_bigdata_insert_nested_column(
-    mongo_context, mongo_handler, metrics
+    persisted_mongo_context_id: str, mongo_handler, metrics
 ):
     handler, dbname = mongo_handler
 
@@ -276,7 +273,7 @@ async def test_write_bigdata_insert_nested_column(
     )
     ddf = dd.from_pandas(base, npartitions=6)
 
-    writer = _mk_writer(mongo_context, operation=DatabaseOperation.INSERT)
+    writer = _mk_writer(persisted_mongo_context_id, operation=DatabaseOperation.INSERT)
 
     emissions = []
     async for env in writer.process_bigdata(ddf=ddf, metrics=metrics):
@@ -301,14 +298,14 @@ async def test_write_bigdata_insert_nested_column(
                 return None
         return None
 
-    cities = {_extract_city(r.get("attrs")) for r in itertools.islice(all_rows, 0, 10)}
+    cities = {_extract_city(r.get("attrs")) for r in all_rows[:10]}
     cities.discard(None)
     assert cities <= {"Berlin", "Hamburg"}
 
 
 @pytest.mark.asyncio
 async def test_write_then_read_roundtrip_with_auth_db_name(
-    mongo_context, mongo_handler, metrics
+    persisted_mongo_context_id: str, mongo_handler, metrics
 ):
     _, dbname = mongo_handler
 
@@ -317,17 +314,22 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
         description="",
         comp_type="write_mongodb",
         entity_name="auth_people",
-        credentials_id=101,
+        context_id=persisted_mongo_context_id,
         operation=DatabaseOperation.INSERT,
         auth_db_name="admin",
     )
-    writer.context = mongo_context
     wrote = []
     async for env in writer.process_row({"_id": 777, "name": "Authy"}, metrics):
         wrote.append(env)
     assert wrote
 
-    creds = mongo_context.get_credentials(101)
+    from etl_core.persistence.handlers.context_handler import ContextHandler
+
+    ctx_handler = ContextHandler()
+    loaded = ctx_handler.get_by_id(persisted_mongo_context_id)
+    ctx, _ = loaded
+    creds, _ = ctx.resolve_active_credentials()
+
     uri_admin = MongoConnectionHandler.build_uri(
         user=creds.get_parameter("user"),
         password=creds.decrypted_password,
@@ -343,7 +345,6 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
     rows = await get_all_docs(h_admin, dbname, "auth_people", flt={"_id": 777})
     assert len(rows) == 1
 
-    # reset metrics before read phase
     metrics.lines_forwarded = 0
     metrics.lines_received = 0
 
@@ -352,7 +353,7 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
         description="",
         comp_type="read_mongodb",
         entity_name="auth_people",
-        credentials_id=101,
+        context_id=persisted_mongo_context_id,
         auth_db_name="admin",
         query_filter={"_id": 777},
         out_port_schemas={
@@ -364,7 +365,6 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
             )
         },
     )
-    reader.context = mongo_context
     out = []
     async for env in reader.process_row(None, metrics):
         out.append(env.payload)

@@ -4,14 +4,16 @@ from uuid import uuid4
 from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer, String
 from sqlalchemy.types import JSON
 from sqlmodel import Field, Relationship, SQLModel
+from datetime import datetime
 
-from etl_core.persistance.base_models.component_base import ComponentBase
-from etl_core.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
-from etl_core.persistance.base_models.job_base import JobBase
+from etl_core.persistence.base_models.component_base import ComponentBase
+from etl_core.persistence.base_models.dataclasses_base import LayoutBase, MetaDataBase
+from etl_core.persistence.base_models.job_base import JobBase
 
 _FOREIGN_KEY_COMPONENT_TABLE = "componenttable.id"
 _FOREIGN_KEY_JOB_TABLE = "jobtable.id"
 _CASCADE_ALL = "all, delete-orphan"
+_FOREIGN_KEY_CONTEXT_PROVIDER = "contexttable.provider_id"
 
 
 class JobTable(JobBase, table=True):
@@ -189,3 +191,143 @@ class LayoutTable(LayoutBase, table=True):
         ),
     )
     component: "ComponentTable" = Relationship(back_populates="layout")
+
+
+class CredentialsTable(SQLModel, table=True):
+    """
+    Persist non-secret parts of DB credentials.
+    Secrets (passwords, secure params) stay in secret backend under id/*.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, index=True)
+    name: str = Field(nullable=False)
+    user: str = Field(nullable=False)
+    host: str = Field(nullable=False)
+    port: int = Field(nullable=False)
+    database: str = Field(nullable=False)
+    pool_max_size: Optional[int] = None
+    pool_timeout_s: Optional[int] = None
+    created_at: datetime = Field(default_factory=datetime.now, nullable=False)
+
+
+class ContextTable(SQLModel, table=True):
+    """
+    Persist context metadata only.
+    Secure params are tracked via ContextParameterTable rows; values live in
+    the secret backend (value empty in DB for secure keys).
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, index=True)
+    name: str = Field(nullable=False)
+    environment: str = Field(nullable=False)
+    created_at: datetime = Field(default_factory=datetime.now, nullable=False)
+
+    parameters: list["ContextParameterTable"] = Relationship(
+        back_populates="context",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
+    )
+    credentials_map: list["ContextCredentialsMapTable"] = Relationship(
+        back_populates="context",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
+    )
+
+
+class ContextParameterTable(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+
+    context_id: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey("contexttable.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
+    key: str = Field(index=True, nullable=False)
+    value: str = Field(default="", nullable=False)
+    is_secure: bool = Field(default=False, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("context_id", "key", name="uq_contextparam_context_key"),
+    )
+
+    context: ContextTable | None = Relationship(back_populates="parameters")
+
+
+class ContextCredentialsMapTable(SQLModel, table=True):
+    """
+    Env -> credentials mapping for a context.
+    Rows are non-secret: they reference credentials ids.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+
+    context_id: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey("contexttable.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
+    environment: str = Field(nullable=False)
+    credentials_id: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey("credentialstable.id", ondelete="RESTRICT"),
+            index=True,
+            nullable=False,
+        )
+    )
+
+    __table_args__ = (
+        UniqueConstraint("context_id", "environment", name="uq_ctxcred_context_env"),
+    )
+
+    context: "ContextTable" = Relationship(back_populates="credentials_map")
+
+
+class ExecutionTable(SQLModel, table=True):
+    """
+    One persisted job execution (a run). Attempts are tracked separately.
+    """
+
+    id: str = Field(primary_key=True)  # we store the runtime execution.id here
+    job_id: str = Field(
+        sa_column=Column(
+            ForeignKey("jobtable.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    environment: Optional[str] = Field(default=None, nullable=True, index=True)
+    status: str = Field(default="RUNNING", nullable=False, index=True)
+    error: Optional[str] = Field(default=None, nullable=True)
+    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    finished_at: Optional[datetime] = Field(default=None, nullable=True)
+
+
+class ExecutionAttemptTable(SQLModel, table=True):
+    """
+    A single attempt within an execution.
+    """
+
+    id: str = Field(primary_key=True)
+    execution_id: str = Field(
+        sa_column=Column(
+            ForeignKey("executiontable.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    attempt_index: int = Field(nullable=False)
+    status: str = Field(default="RUNNING", nullable=False, index=True)
+    error: Optional[str] = Field(default=None, nullable=True)
+    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    finished_at: Optional[datetime] = Field(default=None, nullable=True)

@@ -14,7 +14,7 @@ from etl_core.components.component_registry import (
     get_registry_mode,
     public_component_types,
 )
-from etl_core.persistance.base_models.job_base import JobBase
+from etl_core.persistence.base_models.job_base import JobBase
 
 router = APIRouter(prefix="/configs", tags=["configs"])
 

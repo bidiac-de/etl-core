@@ -4,7 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 from etl_core.job_execution.runtimejob import RuntimeJob
-from etl_core.persistance.configs.job_config import JobConfig
+from etl_core.persistence.configs.job_config import JobConfig
 from etl_core.utils.common_helpers import (  # noqa: F401
     get_component_by_name,
     normalize_df,

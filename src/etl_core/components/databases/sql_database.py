@@ -41,14 +41,12 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
     def _setup_connection(self):
         """Setup the SQL database connection with credentials and specific settings."""
-        if not self._context:
-            return
 
         creds = self._get_credentials()
 
         self._connection_handler = SQLConnectionHandler()
 
-        # Use comp_type directly instead of calling non-existent method
+        # Use comp_type directly
         url = SQLConnectionHandler.build_url(
             comp_type=self.comp_type,
             user=creds["user"],
@@ -58,8 +56,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
             database=creds["database"],
         )
 
-        credentials_obj = self._context.get_credentials(self.credentials_id)
-        engine_kwargs = build_sql_engine_kwargs(credentials_obj)
+        engine_kwargs = build_sql_engine_kwargs(self._credentials)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
 

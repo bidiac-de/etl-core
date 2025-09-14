@@ -96,7 +96,6 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build SQL Server-specific objects after validation."""
-        super()._build_objects()
         self._receiver = SQLServerReceiver()
         schema = self.in_port_schemas["in"]
         columns = [field.name for field in schema.fields]

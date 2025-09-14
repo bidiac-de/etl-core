@@ -13,6 +13,7 @@ from etl_core.metrics.system_metrics import SystemMetricsHandler
 from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
 from etl_core.components.envelopes import InTagged, Out
+from etl_core.context.environment import Environment
 
 
 class ExecutionAlreadyRunning(Exception):
@@ -37,15 +38,27 @@ class JobExecutionHandler:
     _guard_lock = threading.Lock()
 
     def __init__(self) -> None:
+        from etl_core.singletons import (
+            execution_records_handler,
+        )  # avoid circular import
+
         self.logger = logging.getLogger("job.ExecutionHandler")
         self._file_logger = logging.getLogger("job.FileLogger")
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
+        self._exec_records_handler = execution_records_handler()
 
-    def execute_job(self, job: RuntimeJob) -> JobExecution:
+    def execute_job(
+        self,
+        job: RuntimeJob,
+        environment: Optional[Environment | str] = None,  # NEW
+    ) -> JobExecution:
         """
         Top-level method to execute a Job, managing its execution lifecycle.
         """
+        env_obj: Optional[Environment] = (
+            Environment(environment) if isinstance(environment, str) else environment
+        )
         with self._guard_lock:
             if job.id in self._running_jobs:
                 self.logger.warning("Job '%s' is already running", job.name)
@@ -54,7 +67,16 @@ class JobExecutionHandler:
                 )
             # mark as running and create the execution instance
             self._running_jobs.add(job.id)
-            execution = JobExecution(job)
+            execution = JobExecution(job, environment=env_obj)
+
+        try:
+            self._exec_records_handler.create_execution(
+                execution_id=execution.id,
+                job_id=job.id,
+                environment=env_obj.value if env_obj else None,
+            )
+        except Exception:
+            self.logger.exception("Failed to persist execution start")
 
         try:
             return asyncio.run(self._main_loop(execution))
@@ -62,6 +84,60 @@ class JobExecutionHandler:
             # cleanup in both success/failure paths
             with self._guard_lock:
                 self._running_jobs.discard(job.id)
+
+    def _prepare_comps_for_execution(
+        self, job: RuntimeJob, environment: Optional[Environment] = None
+    ) -> None:
+        if environment is not None:
+            for comp in job.components:
+                (
+                    comp.prepare_for_execution(environment)
+                    if hasattr(comp, "prepare_for_execution")
+                    else None
+                )
+
+    def _persist_attempt_start(self, execution: JobExecution) -> None:
+        attempt = execution.latest_attempt()
+        try:
+            self._exec_records_handler.start_attempt(
+                attempt_id=attempt.id,
+                execution_id=execution.id,
+                attempt_index=attempt.index,
+            )
+        except Exception:  # pragma: no cover
+            self.logger.exception("Failed to persist attempt start")
+
+    def _persist_attempt_finish(
+        self, execution: JobExecution, status: str, error: Optional[str]
+    ) -> None:
+        attempt = execution.latest_attempt()
+        try:
+            self._exec_records_handler.finish_attempt(
+                attempt_id=attempt.id,
+                status=status,
+                error=error,
+            )
+        except Exception:  # pragma: no cover
+            suffix = "SUCCESS" if status == "SUCCESS" else "FAILED"
+            self.logger.exception("Failed to persist attempt finish (%s)", suffix)
+
+    def _extract_exception(self, err: BaseException) -> BaseException:
+        if isinstance(err, ExceptionGroup):
+            return err.exceptions[0] if err.exceptions else err
+        return err
+
+    def _should_retry(self, execution: JobExecution, attempt_index: int) -> bool:
+        return execution.retry_strategy.should_retry(attempt_index)
+
+    async def _maybe_wait_before_retry(
+        self, execution: JobExecution, attempt_index: int
+    ) -> None:
+        delay = execution.retry_strategy.next_delay(attempt_index)
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+    async def _run_attempt(self, execution: JobExecution) -> None:
+        await self._run_latest_attempt(execution)
 
     async def _main_loop(self, execution: JobExecution) -> JobExecution:
         """
@@ -71,20 +147,26 @@ class JobExecutionHandler:
         self.job_info.logging_handler.update_job_name(job.name)
         self.logger.info("Starting execution of '%s'", job.name)
 
+        self._prepare_comps_for_execution(
+            job, execution.environment if execution.environment else None
+        )
+
         job_metrics = self.job_info.metrics_handler.create_job_metrics(execution.id)
 
         for attempt_index in range(execution.max_attempts):
             execution.start_attempt()
+            attempt = execution.latest_attempt()
+
+            # record attempt start
+            self._persist_attempt_start(execution)
             self._file_logger.debug(
                 "Attempt %d for job '%s'", attempt_index + 1, job.name
             )
+
             try:
-                # build and run worker tasks, storing them for cancellation
-                await self._run_latest_attempt(execution)
-            except ExceptionGroup as eg:  # noqa: F821
-                # unwrap the error from TaskGroup
-                inner = eg.exceptions[0] if eg.exceptions else eg
-                attempt = execution.latest_attempt()
+                await self._run_attempt(execution)
+            except BaseException as err:
+                inner = self._extract_exception(err)
                 attempt.error = str(inner)
                 self.logger.warning(
                     "Attempt %d failed for job '%s': %s",
@@ -93,23 +175,22 @@ class JobExecutionHandler:
                     inner,
                 )
                 self._file_logger.warning("Attempt %d failed: %s", attempt.index, inner)
-                # reuse inner for retry/finalize logic
-                exc = inner
+                self._persist_attempt_finish(
+                    execution, status="FAILED", error=str(inner)
+                )
 
-                # if no retries left, finalize as failure
-                if not execution.retry_strategy.should_retry(attempt_index):
-                    self._finalize_failure(exc, execution, job_metrics)
+                if not self._should_retry(execution, attempt_index):
+                    self._finalize_failure(inner, execution, job_metrics)
                     break
-                # otherwise wait and retry
-                delay = execution.retry_strategy.next_delay(attempt_index)
-                if delay > 0:
-                    await asyncio.sleep(delay)
+
+                await self._maybe_wait_before_retry(execution, attempt_index)
                 continue
-            else:
-                # success: mark and finalize
-                job_metrics.status = RuntimeState.SUCCESS
-                self._finalize_success(execution, job_metrics)
-                break
+
+            # success path
+            self._persist_attempt_finish(execution, status="SUCCESS", error=None)
+            job_metrics.status = RuntimeState.SUCCESS
+            self._finalize_success(execution, job_metrics)
+            break
 
         return execution
 
@@ -253,6 +334,76 @@ class JobExecutionHandler:
                     batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
                 )
 
+    def _resolve_single_in_port(self, component: Component) -> Optional[str]:
+        names = component.expected_in_port_names()
+        if len(names) == 1:
+            return names[0]
+        return None
+
+    def _requires_tagged_input(self, component: Component) -> bool:
+        meth = getattr(component, "requires_tagged_input", None)
+        if callable(meth):
+            try:
+                return bool(meth())
+            except Exception:
+                return False
+        return False
+
+    async def _handle_sentinel_item(
+        self,
+        item: Sentinel,
+        component: Component,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        pred_to_in_port: Dict[str, str],
+        requires_tagged: bool,
+        remaining: Set[str],
+    ) -> None:
+        if item.component_id not in remaining:
+            return
+        remaining.discard(item.component_id)
+        if not requires_tagged:
+            return
+        in_port = pred_to_in_port.get(item.component_id)
+        if in_port:
+            await self._run_component(
+                component, InTagged(in_port, Ellipsis), metrics, out_edges_by_port
+            )
+
+    async def _handle_tagged_item(
+        self,
+        item: InTagged,
+        component: Component,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        requires_tagged: bool,
+    ) -> None:
+        if requires_tagged:
+            await self._run_component(component, item, metrics, out_edges_by_port)
+            return
+        dest_port = item.in_port
+        payload = item.payload
+        component.validate_in_payload(dest_port, payload)
+        await self._run_component(component, payload, metrics, out_edges_by_port)
+
+    async def _handle_untagged_item(
+        self,
+        item: Any,
+        component: Component,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        single_in_port: Optional[str],
+        in_port_names: List[str],
+    ) -> None:
+        if single_in_port is None:
+            raise ValueError(
+                f"{component.name}: received untagged input but component "
+                f"declares multiple input ports {in_port_names!r}; "
+                "fan-in must use tagged envelopes."
+            )
+        component.validate_in_payload(single_in_port, item)
+        await self._run_component(component, item, metrics, out_edges_by_port)
+
     async def _consume_and_run(
         self,
         component: Component,
@@ -280,57 +431,42 @@ class JobExecutionHandler:
 
         # Resolve the single expected in-port name if applicable
         in_port_names = component.expected_in_port_names()
-        single_in_port: Optional[str] = None
-        if len(in_port_names) == 1:
-            single_in_port = in_port_names[0]
-
-        requires_tagged = False
-        meth = getattr(component, "requires_tagged_input", None)
-        if callable(meth):
-            try:
-                requires_tagged = bool(meth())
-            except Exception:
-                requires_tagged = False
+        single_in_port = self._resolve_single_in_port(component)
+        requires_tagged = self._requires_tagged_input(component)
 
         while remaining:
             item = await queue.get()
 
-            if isinstance(item, Sentinel) and item.component_id in remaining:
-                remaining.discard(item.component_id)
-                if requires_tagged:
-                    in_port = pred_to_in_port.get(item.component_id)
-                    if in_port:
-                        await self._run_component(
-                            component,
-                            InTagged(in_port, Ellipsis),
-                            metrics,
-                            out_edges_by_port,
-                        )
+            if isinstance(item, Sentinel):
+                await self._handle_sentinel_item(
+                    item=item,
+                    component=component,
+                    metrics=metrics,
+                    out_edges_by_port=out_edges_by_port,
+                    pred_to_in_port=pred_to_in_port,
+                    requires_tagged=requires_tagged,
+                    remaining=remaining,
+                )
                 continue
 
             if isinstance(item, InTagged):
-                if requires_tagged:
-                    await self._run_component(
-                        component, item, metrics, out_edges_by_port
-                    )
-                    continue
-                dest_port = item.in_port
-                payload = item.payload
-                component.validate_in_payload(dest_port, payload)
-                await self._run_component(
-                    component, payload, metrics, out_edges_by_port
+                await self._handle_tagged_item(
+                    item=item,
+                    component=component,
+                    metrics=metrics,
+                    out_edges_by_port=out_edges_by_port,
+                    requires_tagged=requires_tagged,
                 )
                 continue
 
-            # Untagged: only valid for single-input components
-            if single_in_port is None:
-                raise ValueError(
-                    f"{component.name}: received untagged input but component "
-                    f"declares multiple input ports {in_port_names!r}; "
-                    "fan-in must use tagged envelopes."
-                )
-            component.validate_in_payload(single_in_port, item)
-            await self._run_component(component, item, metrics, out_edges_by_port)
+            await self._handle_untagged_item(
+                item=item,
+                component=component,
+                metrics=metrics,
+                out_edges_by_port=out_edges_by_port,
+                single_in_port=single_in_port,
+                in_port_names=in_port_names,
+            )
 
     def _handle_worker_exception(
         self,
@@ -422,6 +558,15 @@ class JobExecutionHandler:
             )
             self.job_info.logging_handler.log(cm)
 
+        try:
+            self._exec_records_handler.finalize_execution(
+                execution_id=execution.id,
+                status="SUCCESS",
+                error=None,
+            )
+        except Exception:  # pragma: no cover
+            self.logger.exception("Failed to persist execution finalize (SUCCESS)")
+
         # cleanup
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
@@ -434,6 +579,14 @@ class JobExecutionHandler:
         attempt = execution.latest_attempt()
         job_metrics.status = RuntimeState.FAILED
         attempt.error = str(exc)
+        try:
+            self._exec_records_handler.finalize_execution(
+                execution_id=execution.id,
+                status="FAILED",
+                error=str(exc),
+            )
+        except Exception:  # pragma: no cover
+            self.logger.exception("Failed to persist execution finalize (FAILED)")
         # cleanup
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",
