@@ -16,7 +16,7 @@ from etl_core.context.secrets.secret_provider import SecretProvider
 _MEMORY_PROVIDER_SINGLETON: Optional[InMemorySecretProvider] = None
 
 
-def _make_secret_provider() -> SecretProvider:
+def _create_secret_provider() -> SecretProvider:
     """
     Decide the secret backend at runtime.
       - SECRET_BACKEND: "memory" (default) or "keyring"
@@ -40,7 +40,7 @@ class CredentialsHandler:
 
     def __init__(self, engine_=engine) -> None:
         self.engine = engine_
-        self.secret_store = _make_secret_provider()
+        self.secret_store = _create_secret_provider()
 
     def _password_key(self, credentials_id: str) -> str:
         return f"{credentials_id}/password"
