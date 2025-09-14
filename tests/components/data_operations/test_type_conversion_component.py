@@ -114,8 +114,10 @@ async def test_process_bulk__on_error_null__bad_to_na() -> None:
     expected = pd.DataFrame({"age": [pd.NA, 2]}).astype({"age": "Int64"})
     got = out_df.astype({"age": "Int64"})
     assert_frame_equal(
-        got.reset_index(drop=True), expected.reset_index(drop=True), check_dtype=False
-    )  # noqa: E501
+        got.reset_index(drop=True),
+        expected.reset_index(drop=True),
+        check_dtype=False,  # noqa: E501
+    )
 
     assert metrics.lines_received == 2
     assert metrics.lines_forwarded == 2

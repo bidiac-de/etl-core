@@ -25,8 +25,11 @@ async def test_receiver_process_row__simple_dict() -> None:
     rules = [TypeConversionRule(column_path="age", target=DataType.INTEGER)]
     metrics = ComponentMetrics()
 
-    outs = [  # noqa: E501
-        item async for item in recv.process_row(row=row, rules=rules, metrics=metrics)
+    outs = [
+        item
+        async for item in recv.process_row(
+            row=row, rules=rules, metrics=metrics
+        )  # noqa: E501
     ]
     assert len(outs) == 1
     port, out_row = outs[0]
@@ -42,7 +45,7 @@ async def test_receiver_process_bulk__pandas_df__int_cast() -> None:
     recv = TypeConversionReceiver()
     df = pd.DataFrame({"x": ["1", "2", None]})
     rules = [TypeConversionRule(column_path="x", target=DataType.INTEGER)]
-    metrics = ComponentMetrics()  # noqa: E501
+    metrics = ComponentMetrics()
 
     outs = [
         item
@@ -68,7 +71,7 @@ async def test_receiver_process_bulk__on_error_skip() -> None:
     df = pd.DataFrame({"flag": ["true", "x"]})
     rules = [
         TypeConversionRule(
-            column_path="flag",  # noqa: E501
+            column_path="flag",
             target=DataType.BOOLEAN,
             on_error=OnError.SKIP,
         )

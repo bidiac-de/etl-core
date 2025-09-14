@@ -124,7 +124,6 @@ def test_json_bulk_typeconv_to_json__onerror_skip_keeps_originals(
     )
 
     out = read_output("write_json", cfg["strategy_type"], out_fp)
-    # SKIP: name bleibt String (keine Zahl in den Testdaten)
     assert out["name"].map(lambda v: isinstance(v, str)).all()
 
 

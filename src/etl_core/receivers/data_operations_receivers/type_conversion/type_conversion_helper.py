@@ -159,7 +159,7 @@ def _apply_on_error_row(
             raise
         if policy == OnError.NULL:
             return True, None
-        return False, value
+        return True, value
 
 
 def _walk_and_convert(
