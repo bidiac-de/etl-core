@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from etl_core.persistance.handlers.execution_records_handler import (
+from etl_core.persistence.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
-from etl_core.persistance.handlers.job_handler import JobHandler
+from etl_core.persistence.handlers.job_handler import JobHandler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
-from etl_core.persistance.handlers.context_handler import ContextHandler
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.context_handler import ContextHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 
 
 _job_handler_singleton: Optional[JobHandler] = None

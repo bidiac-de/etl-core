@@ -5,8 +5,8 @@ from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from sqlmodel import Session, select
 
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.db import engine
+from etl_core.persistence.table_definitions import (
     ContextParameterTable,
     ContextTable,
     ContextCredentialsMapTable,

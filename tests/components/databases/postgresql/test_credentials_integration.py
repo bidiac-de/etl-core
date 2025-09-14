@@ -21,7 +21,7 @@ from etl_core.components.wiring.column_definition import DataType, FieldDef
 from etl_core.components.wiring.schema import Schema
 from etl_core.context.credentials import Credentials
 from etl_core.context.environment import Environment
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 
 
 def _mk_schema() -> Schema:

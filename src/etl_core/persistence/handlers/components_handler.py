@@ -7,8 +7,8 @@ from sqlmodel import Session
 from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
 from etl_core.components.wiring.ports import EdgeRef
-from etl_core.persistance.handlers.dataclasses_handler import DataClassHandler
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.handlers.dataclasses_handler import DataClassHandler
+from etl_core.persistence.table_definitions import (
     ComponentTable,
     JobTable,
     ComponentLinkTable,

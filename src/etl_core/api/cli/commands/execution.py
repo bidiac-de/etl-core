@@ -6,7 +6,7 @@ from typing import Optional
 import typer
 
 from etl_core.context.environment import Environment
-from etl_core.persistance.errors import PersistNotFoundError
+from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.api.cli.wiring import pick_clients
 
 execution_app = typer.Typer(help="Start and control executions.")

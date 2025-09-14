@@ -4,7 +4,7 @@ import os
 from etl_core.context.context import Context
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 
 
 class CredentialsMappingContext(Context):

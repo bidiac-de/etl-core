@@ -6,7 +6,7 @@ from sqlalchemy import event
 from sqlmodel import SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.table_definitions import (
     JobTable,
     ComponentTable,
     MetaDataTable,

@@ -6,9 +6,9 @@ from sqlalchemy.types import JSON
 from sqlmodel import Field, Relationship, SQLModel
 from datetime import datetime
 
-from etl_core.persistance.base_models.component_base import ComponentBase
-from etl_core.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
-from etl_core.persistance.base_models.job_base import JobBase
+from etl_core.persistence.base_models.component_base import ComponentBase
+from etl_core.persistence.base_models.dataclasses_base import LayoutBase, MetaDataBase
+from etl_core.persistence.base_models.job_base import JobBase
 
 _FOREIGN_KEY_COMPONENT_TABLE = "componenttable.id"
 _FOREIGN_KEY_JOB_TABLE = "jobtable.id"

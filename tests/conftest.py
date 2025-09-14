@@ -32,8 +32,8 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.db import engine
+from etl_core.persistence.table_definitions import (
     ComponentTable,
     JobTable,
     LayoutTable,

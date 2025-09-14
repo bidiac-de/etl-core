@@ -6,7 +6,7 @@ import pytest
 
 from etl_core.api.cli.ports import JobsPort, ExecutionPort
 from etl_core.api.cli.adapters import LocalJobsClient, LocalExecutionClient
-from etl_core.persistance.errors import PersistNotFoundError
+from etl_core.persistence.errors import PersistNotFoundError
 
 
 class TestProtocolCompliance:

@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 
 from sqlmodel import Session
 
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import JobTable
+from etl_core.persistence.db import engine
+from etl_core.persistence.table_definitions import JobTable
 
 
 def test_list_jobs_empty(client: TestClient) -> None:

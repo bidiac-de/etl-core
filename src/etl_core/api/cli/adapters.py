@@ -9,7 +9,7 @@ from etl_core.context.credentials_mapping_context import CredentialsMappingConte
 from etl_core.context.environment import Environment
 from etl_core.context.secure_context_adapter import SecureContextAdapter
 from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
-from etl_core.persistance.errors import PersistNotFoundError
+from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.singletons import (
     job_handler as _jh_singleton,
     execution_handler as _eh_singleton,
@@ -25,7 +25,7 @@ class LocalJobsClient(JobsPort):
         self.job_handler = _jh_singleton()
 
     def create(self, cfg: Dict[str, Any]) -> str:
-        from etl_core.persistance.configs.job_config import JobConfig
+        from etl_core.persistence.configs.job_config import JobConfig
 
         row = self.job_handler.create_job_entry(JobConfig(**cfg))
         return row.id
@@ -37,7 +37,7 @@ class LocalJobsClient(JobsPort):
         return data
 
     def update(self, job_id: str, cfg: Dict[str, Any]) -> str:
-        from etl_core.persistance.configs.job_config import JobConfig
+        from etl_core.persistence.configs.job_config import JobConfig
 
         row = self.job_handler.update(job_id, JobConfig(**cfg))
         return row.id

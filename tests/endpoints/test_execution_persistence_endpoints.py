@@ -4,11 +4,11 @@ from typing import Iterator, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
-import etl_core.persistance.table_definitions  # noqa: F401
+import etl_core.persistence.table_definitions  # noqa: F401
 
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
-from etl_core.persistance.configs.job_config import JobConfig
-from etl_core.persistance.handlers.execution_records_handler import (
+from etl_core.persistence.configs.job_config import JobConfig
+from etl_core.persistence.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
 from etl_core.singletons import execution_records_handler

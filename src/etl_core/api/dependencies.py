@@ -7,9 +7,9 @@ from etl_core.singletons import (
     context_handler as _ch_singleton,
     credentials_handler as _crh_singleton,
 )
-from etl_core.persistance.handlers.job_handler import JobHandler
+from etl_core.persistence.handlers.job_handler import JobHandler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
-from etl_core.persistance.handlers.execution_records_handler import (
+from etl_core.persistence.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
 

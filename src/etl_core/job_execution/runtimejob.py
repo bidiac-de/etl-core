@@ -12,7 +12,7 @@ import asyncio
 
 from etl_core.components.base_component import Component, get_strategy
 from etl_core.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
-from etl_core.persistance.base_models.job_base import JobBase
+from etl_core.persistence.base_models.job_base import JobBase
 from etl_core.components.wiring.ports import EdgeRef
 from etl_core.utils.common_helpers import assert_unique
 from etl_core.context.environment import Environment

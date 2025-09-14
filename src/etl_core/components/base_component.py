@@ -28,8 +28,8 @@ from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
-from etl_core.persistance.base_models.component_base import ComponentBase
-from etl_core.persistance.handlers.context_handler import ContextHandler
+from etl_core.persistence.base_models.component_base import ComponentBase
+from etl_core.persistence.handlers.context_handler import ContextHandler
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec, EdgeRef

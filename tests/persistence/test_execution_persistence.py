@@ -10,10 +10,10 @@ import etl_core.job_execution.runtimejob as runtimejob_module
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.components.stubcomponents import StubComponent
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
-from etl_core.persistance.handlers.execution_records_handler import (
+from etl_core.persistence.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
-from etl_core.persistance.table_definitions import ExecutionTable, ExecutionAttemptTable
+from etl_core.persistence.table_definitions import ExecutionTable, ExecutionAttemptTable
 from tests.helpers import runtime_job_from_config
 
 # Ensure tests can build the "test" component by name

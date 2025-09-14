@@ -17,8 +17,8 @@ from src.etl_core.context.secure_context_adapter import SecureContextAdapter
 from src.etl_core.context.secrets.secret_provider import SecretProvider
 from src.etl_core.context.secrets.keyring_provider import KeyringSecretProvider
 
-from src.etl_core.persistance.handlers.credentials_handler import CredentialsHandler
-from src.etl_core.persistance.handlers.context_handler import ContextHandler
+from src.etl_core.persistence.handlers.credentials_handler import CredentialsHandler
+from src.etl_core.persistence.handlers.context_handler import ContextHandler
 
 from etl_core.api.dependencies import (
     get_context_handler,

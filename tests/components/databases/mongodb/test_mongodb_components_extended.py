@@ -323,7 +323,7 @@ async def test_write_then_read_roundtrip_with_auth_db_name(
         wrote.append(env)
     assert wrote
 
-    from etl_core.persistance.handlers.context_handler import ContextHandler
+    from etl_core.persistence.handlers.context_handler import ContextHandler
 
     ctx_handler = ContextHandler()
     loaded = ctx_handler.get_by_id(persisted_mongo_context_id)

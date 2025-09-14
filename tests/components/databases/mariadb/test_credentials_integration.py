@@ -14,7 +14,7 @@ from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 
 
 def derive_test_password(base_pw: str, purpose: str) -> str:

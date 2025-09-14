@@ -4,7 +4,7 @@ from typing import Dict
 
 from fastapi.testclient import TestClient
 
-from etl_core.persistance.configs.job_config import JobConfig
+from etl_core.persistence.configs.job_config import JobConfig
 from tests.helpers import detail_message
 
 

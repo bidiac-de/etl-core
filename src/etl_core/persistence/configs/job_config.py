@@ -3,8 +3,8 @@ from collections import Counter
 
 from pydantic import ConfigDict, Field, NonNegativeInt, field_validator, model_validator
 
-from etl_core.persistance.base_models.job_base import JobBase
-from etl_core.persistance.base_models.dataclasses_base import MetaDataBase
+from etl_core.persistence.base_models.job_base import JobBase
+from etl_core.persistence.base_models.dataclasses_base import MetaDataBase
 from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
 from etl_core.components.wiring.ports import EdgeRef

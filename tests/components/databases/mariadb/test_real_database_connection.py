@@ -17,7 +17,7 @@ import pytest
 
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 from etl_core.context.credentials import Credentials
 
 

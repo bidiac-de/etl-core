@@ -13,11 +13,11 @@ from etl_core.api.dependencies import (
     get_execution_records_handler,
 )
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
-from etl_core.persistance.errors import PersistNotFoundError
-from etl_core.persistance.handlers.execution_records_handler import (
+from etl_core.persistence.errors import PersistNotFoundError
+from etl_core.persistence.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
-from etl_core.persistance.handlers.job_handler import JobHandler
+from etl_core.persistence.handlers.job_handler import JobHandler
 from etl_core.api.helpers import _error_payload, _exc_meta
 from etl_core.context.environment import Environment
 

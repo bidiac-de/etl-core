@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import typer
 
-from etl_core.persistance.errors import PersistNotFoundError
+from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.api.cli.wiring import pick_clients
 
 jobs_app = typer.Typer(help="Manage jobs.")

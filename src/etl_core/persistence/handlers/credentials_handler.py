@@ -5,8 +5,8 @@ from typing import Optional, Tuple, List
 
 from sqlmodel import Session, select
 
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import CredentialsTable
+from etl_core.persistence.db import engine
+from etl_core.persistence.table_definitions import CredentialsTable
 from etl_core.context.credentials import Credentials
 from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
 from etl_core.context.secrets.memory_provider import InMemorySecretProvider

@@ -7,8 +7,8 @@ from uuid import uuid4
 
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
-from etl_core.persistance.handlers.credentials_handler import CredentialsHandler
-from etl_core.persistance.handlers.context_handler import ContextHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.context_handler import ContextHandler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from tests.helpers import runtime_job_from_config  # noqa: E402
 from etl_core.api.helpers import autodiscover_components

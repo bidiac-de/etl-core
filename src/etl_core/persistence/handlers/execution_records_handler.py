@@ -6,8 +6,8 @@ from typing import Optional, Iterable
 
 from sqlmodel import Session, select, asc, desc
 
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import (
+from etl_core.persistence.db import engine
+from etl_core.persistence.table_definitions import (
     ExecutionAttemptTable,
     ExecutionTable,
 )
