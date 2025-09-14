@@ -83,9 +83,8 @@ class TestRealDatabaseConnection:
             # Try to connect
             with handler.lease() as connection:
                 # Execute a simple query to verify connection
-                from sqlalchemy import text as _text
 
-                result = connection.execute(_text("SELECT 1 as test"))
+                result = connection.execute(text("SELECT 1 as test"))
                 row = result.fetchone()
                 assert row[0] == 1
                 print("Successfully connected to MariaDB!")
