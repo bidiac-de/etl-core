@@ -64,6 +64,9 @@ class Component(ComponentBase, ABC):
     INPUT_PORTS: ClassVar[Sequence[InPortSpec]] = ()
     ALLOW_NO_INPUTS: ClassVar[bool] = False
 
+    # hint for UI
+    ICON: ClassVar[Optional[str]] = None
+
     _schema_path_separator: ClassVar[str] = "."
 
     def _validate_payload_against(

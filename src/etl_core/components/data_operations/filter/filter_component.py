@@ -35,6 +35,7 @@ class FilterComponent(Component):
         OutPortSpec(name="pass", required=True, fanout="many"),
         OutPortSpec(name="fail", required=False, fanout="many"),
     )
+    ICON = "ti ti-filter"
 
     rule: ComparisonRule = Field(..., description="Filter rule expression.")
 

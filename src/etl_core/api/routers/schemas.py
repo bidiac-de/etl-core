@@ -199,6 +199,16 @@ def _inject_name_default(
     return out
 
 
+def _inject_icon_hint(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str, Any]:
+    """
+    Add a per-class Icon hint to the schema, read from the class Variable.
+    """
+    icon = getattr(cls, "ICON", None)
+    if isinstance(icon, str) and icon.strip():
+        schema["icon"] = icon.strip()
+    return schema
+
+
 def _resolve_component_class(comp_type: str) -> Type[Component]:
     mode = get_registry_mode()
     mode_key = getattr(mode, "value", str(mode))
@@ -272,8 +282,9 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     enriched = _attach_class_vars(ordered, cls)
     enriched["comp-type"] = comp_type  # convenience for GUI
     enriched = _inject_name_default(enriched, cls)
+    with_icon = _inject_icon_hint(enriched, cls)
 
-    processed = schema_post_processing(enriched, strip_order=True)
+    processed = schema_post_processing(with_icon, strip_order=True)
 
     with _CACHE_LOCK:
         _COMPONENT_SCHEMA_FORM_CACHE[cache_key] = processed
