@@ -139,33 +139,30 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
         root_tag: str = "rows",
         record_tag: str = "row",
     ) -> None:
-        total = await asyncio.to_thread(
-            lambda: int(data.map_partitions(len).sum().compute())
-        )
+        if filepath.is_dir() or not filepath.suffix:
+            raise ValueError(
+                "write_bigdata requires a *file* path with extension (e.g. out.xml). "
+                "Directory paths or paths without filename are not allowed."
+            )
+
+        filepath.parent.mkdir(parents=True, exist_ok=True)
 
         parts = data.to_delayed()
 
-        tasks = [
-            delayed(render_rows_to_xml_fragment)(part, record_tag) for part in parts
-        ]
-        results = await asyncio.to_thread(lambda: list(compute(*tasks)))
+        total_cnt = 0
+        with open_file(filepath, "w") as f:
+            f.write(f'<?xml version="1.0" encoding="utf-8"?>\n<{root_tag}>')
 
-        got = sum(cnt for cnt, _ in results)
+            for part in parts:
+                cnt, frag = await asyncio.to_thread(
+                    lambda p=part: compute(
+                        delayed(render_rows_to_xml_fragment)(p, record_tag)
+                    )[0]
+                )
+                f.write(frag)
+                total_cnt += cnt
 
-        if (not filepath.suffix) or filepath.is_dir():
-            out_dir = filepath if filepath.is_dir() else filepath
-            out_dir.mkdir(parents=True, exist_ok=True)
+            f.write(f"</{root_tag}>")
 
-            for i, (cnt, frag) in enumerate(results):
-                part_path = out_dir / f"part-{i:05d}.xml"
-                xml_text = wrap_with_root(frag, root_tag)
-                with open_file(part_path, "w") as f:
-                    f.write(xml_text)
-        else:
-            full_fragment = "".join(frag for _, frag in results)
-            xml_text = wrap_with_root(full_fragment, root_tag)
-            with open_file(filepath, "w") as f:
-                f.write(xml_text)
-
-        metrics.lines_received += total
-        metrics.lines_forwarded += got
+        metrics.lines_received += total_cnt
+        metrics.lines_forwarded += total_cnt

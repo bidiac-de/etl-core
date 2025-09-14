@@ -41,10 +41,7 @@ def element_to_nested(element: ET.Element) -> Any:
         node[ATTRS] = dict(element.attrib)
 
     if text:
-        if has_children:
-            node[TEXT] = text
-        else:
-            return text
+        node[TEXT] = text
 
     for child in children:
         _merge_child(node, child.tag, element_to_nested(child))
@@ -224,7 +221,9 @@ def write_xml_bulk(
 def _append_record_to_file(
     path: Path, root_tag: str, new_record_el: ET.Element
 ) -> None:
-    new_record_xml = ET.tostring(new_record_el, encoding="unicode")
+    path = resolve_file_path(path)
+    closing_bytes = f"</{root_tag}>".encode("utf-8")
+    new_record_xml_bytes = ET.tostring(new_record_el, encoding="utf-8")
 
     if not path.exists() or path.stat().st_size == 0:
         root = ET.Element(root_tag)
@@ -233,21 +232,62 @@ def _append_record_to_file(
             ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
         return
 
-    with open_file(path, "r") as f:
-        content = f.read()
+    try:
+        import fcntl  # Unix/macOS
 
-    closing = f"</{root_tag}>"
-    idx = content.rfind(closing)
-    if idx == -1:
-        root = ET.Element(root_tag)
-        root.append(new_record_el)
-        with open_file(path, "wb") as f:
-            ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
-        return
+        _has_flock = True
+    except Exception:
+        _has_flock = False
 
-    new_content = content[:idx] + new_record_xml + content[idx:]
-    with open_file(path, "w") as f:
-        f.write(new_content)
+    with open_file(path, "rb+") as f:
+        if _has_flock:
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            except Exception:
+                pass
+        try:
+            f.seek(0, 2)
+            file_size = f.tell()
+            chunk = 64 * 1024
+            pos = file_size
+            remainder = b""
+            found_at = -1
+
+            while pos > 0 and found_at == -1:
+                read_size = min(chunk, pos)
+                pos -= read_size
+                f.seek(pos)
+                data = f.read(read_size)
+                buf = data + remainder
+                idx = buf.rfind(closing_bytes)
+                if idx != -1:
+                    found_at = pos + idx
+                    break
+                remainder = buf[: len(closing_bytes) - 1]
+
+            if found_at == -1:
+                f.seek(0)
+                try:
+                    tree = ET.parse(f)
+                    root = tree.getroot()
+                except ET.ParseError:
+                    root = ET.Element(root_tag)
+                root.append(new_record_el)
+                f.seek(0)
+                f.truncate()
+                ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
+                return
+
+            f.seek(found_at)
+            f.truncate(found_at)
+            f.write(new_record_xml_bytes)
+            f.write(closing_bytes)
+        finally:
+            if _has_flock:
+                try:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                except Exception:
+                    pass
 
 
 def write_xml_row(
@@ -257,6 +297,12 @@ def write_xml_row(
 
     if not isinstance(row, dict):
         raise TypeError(f"Row mode expects a nested dict, got {type(row).__name__}")
+
+    if _has_flat_paths(row):
+        raise ValueError(
+            "Row mode expects a *nested* dict (no dotted/indexed keys). "
+            "Use bulk/bigdata for flat records."
+        )
 
     new_record_el = nested_to_element(record_tag, row)
     _append_record_to_file(path, root_tag, new_record_el)
@@ -380,3 +426,12 @@ def wrap_with_root(fragment: str, root_tag: str) -> str:
         + fragment
         + f"</{root_tag}>"
     )
+
+
+def resolve_bigdata_parts_dir(filepath: Path) -> Path:
+    if filepath.is_dir() or not filepath.suffix:
+        raise ValueError(
+            "write_bigdata requires a *file* path with extension (e.g. out.xml). "
+            "Directory paths or paths without filename are not allowed."
+        )
+    return filepath.parent / f"{filepath.stem}.parts"
