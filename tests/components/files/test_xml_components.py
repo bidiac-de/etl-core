@@ -419,7 +419,7 @@ async def test_write_xml_bulk_from_flat_df(tmp_path: Path, metrics):
     assert r2.findtext("id") == "2"
     assert r2.findtext("address/street") == "Second"
     assert r2.findtext("address/city") == "Ville"
-    assert [e.text for e in r2.findall("./tags/item")] == ["u1", "nan"]
+    assert [e.text for e in r2.findall("./tags/item")] == ["u1"]
 
     assert metrics.lines_received == 2
     assert metrics.lines_forwarded == 2

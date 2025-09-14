@@ -172,12 +172,24 @@ def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
+_LIST_INDEX_RE = re.compile(r"\[\d+\]")
+
+def _is_nullish(v: Any) -> bool:
+    try:
+        return v is None or pd.isna(v)
+    except Exception:
+        return v is None
+
+
 def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Accepts either:
       - flat dict with dotted / [i] keys  -> unflatten_record(...)
       - nested dict                       -> passthrough
-    Nulls (None/NaN/pd.NA) are dropped.
+
+    Drop policy (aligned with JSON helper):
+      - Drop list-indexed keys (e.g. 'tags[1]') if their value is "nullish"
+        (None or pandas-missing via pd.isna). Non-list keys are kept as-is.
     """
     if not isinstance(payload, dict):
         raise TypeError(
@@ -185,8 +197,14 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     if _has_flat_paths(payload):
-        return unflatten_record(payload)
+        flat: Dict[str, Any] = {}
+        for k, v in payload.items():
+            if _LIST_INDEX_RE.search(k) and _is_nullish(v):
+                continue  # <-- exakt wie im JSON-Helper
+            flat[k] = v
+        return unflatten_record(flat)
     return payload
+
 
 
 def _row_to_element(record_tag: str, row: Dict[str, Any]) -> ET.Element:
