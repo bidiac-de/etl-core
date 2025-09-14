@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from etl_core.context.environment import Environment
 from etl_core.persistance.errors import PersistNotFoundError
-from etl_core.api.cli.main import app
+from etl_core.api.cli.cli_app import app
 from contextlib import contextmanager
 
 

@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from typer.testing import CliRunner
 
-from etl_core.api.cli.main import app
+from etl_core.api.cli.cli_app import app
 
 
 class TestCLIErrorHandling:
