@@ -51,7 +51,7 @@ class JobExecutionHandler:
     def execute_job(
         self,
         job: RuntimeJob,
-        environment: Optional[Environment | str] = None,  # NEW
+        environment: Optional[Environment | str] = None,
     ) -> JobExecution:
         """
         Top-level method to execute a Job, managing its execution lifecycle.
