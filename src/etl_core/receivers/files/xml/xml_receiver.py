@@ -16,6 +16,8 @@ from etl_core.receivers.files.xml.xml_helper import (
     iter_pdf_chunks_core,
     render_rows_to_xml_fragment,
     wrap_with_root,
+    DEFAULT_XML_ENCODING,
+    XML_DECL_BYTES,
 )
 
 
@@ -125,9 +127,8 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
             render_rows_to_xml_fragment, data, record_tag
         )
         xml_text = wrap_with_root(frag, root_tag)
-
-        with open_file(filepath, "w") as f:
-            f.write(xml_text)
+        with open_file(filepath, "wb") as f:
+            f.write(xml_text.encode(DEFAULT_XML_ENCODING))
 
         metrics.lines_forwarded += cnt
 
@@ -150,8 +151,9 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
         parts = data.to_delayed()
 
         total_cnt = 0
-        with open_file(filepath, "w") as f:
-            f.write(f'<?xml version="1.0" encoding="utf-8"?>\n<{root_tag}>')
+        with open_file(filepath, "wb") as f:
+            f.write(XML_DECL_BYTES)
+            f.write(b"<" + root_tag.encode(DEFAULT_XML_ENCODING) + b">")
 
             for part in parts:
                 cnt, frag = await asyncio.to_thread(
@@ -159,10 +161,10 @@ class XMLReceiver(ReadFileReceiver, WriteFileReceiver):
                         delayed(render_rows_to_xml_fragment)(p, record_tag)
                     )[0]
                 )
-                f.write(frag)
+                f.write(frag.encode(DEFAULT_XML_ENCODING))
                 total_cnt += cnt
 
-            f.write(f"</{root_tag}>")
+            f.write(b"</" + root_tag.encode(DEFAULT_XML_ENCODING) + b">")
 
         metrics.lines_received += total_cnt
         metrics.lines_forwarded += total_cnt

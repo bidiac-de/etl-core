@@ -1,13 +1,74 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, List, Generator, Iterator, Tuple
+from typing import Any, Dict, List, Generator, Iterator, Tuple, Optional
 import xml.etree.ElementTree as ET
 import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
 import re
+import os
+import contextlib
+import tempfile
 
 TEXT = "#text"
 ATTRS = "@attrs"
+
+DEFAULT_XML_ENCODING = "utf-8"
+XML_DECL_BYTES = b'<?xml version="1.0" encoding="utf-8"?>\n'
+
+
+@contextlib.contextmanager
+def _exclusive_lock(f):
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            f.seek(0, os.SEEK_SET)
+            msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 0x7FFFFFFF)
+        except OSError:
+            pass
+        try:
+            yield
+        finally:
+            try:
+                f.seek(0, os.SEEK_SET)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 0x7FFFFFFF)
+            except OSError:
+                pass
+    else:
+        try:
+            import fcntl
+
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            pass
+        try:
+            yield
+        finally:
+            try:
+                import fcntl
+
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+
+
+_ROOT_START_RE = re.compile(rb"<([A-Za-z_][\w\.\-:]*)\b")
+_XML_DECL_RE = re.compile(rb"<\?xml\b[^>]*\?>", re.DOTALL)
+
+
+def _detect_root_qname_bytes(path: Path) -> bytes | None:
+    """Read a small head chunk and return the QName of the first start tag."""
+    path = resolve_file_path(path)
+    with open_file(path, "rb") as f:
+        head = f.read(128 * 1024)
+    head = _XML_DECL_RE.sub(b"", head, count=1)
+    m = _ROOT_START_RE.search(head)
+    return m.group(1) if m else None
+
+
+def _closing_tag_bytes_for(path: Path, fallback_root_tag: str) -> bytes:
+    qname = _detect_root_qname_bytes(path)
+    return b"</" + (qname if qname else fallback_root_tag.encode("utf-8")) + b">"
 
 
 def element_to_nested(element: ET.Element) -> Any:
@@ -174,6 +235,7 @@ def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
 
 _LIST_INDEX_RE = re.compile(r"\[\d+\]")
 
+
 def _is_nullish(v: Any) -> bool:
     try:
         return v is None or pd.isna(v)
@@ -206,7 +268,6 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
-
 def _row_to_element(record_tag: str, row: Dict[str, Any]) -> ET.Element:
     payload = build_payload(row)
     return nested_to_element(record_tag, payload)
@@ -233,45 +294,37 @@ def write_xml_bulk(
 
     tree = ET.ElementTree(root)
     with open_file(path, "wb") as f:
-        tree.write(f, encoding="utf-8", xml_declaration=True)
+        tree.write(f, encoding=DEFAULT_XML_ENCODING, xml_declaration=True)
 
 
 def _append_record_to_file(
     path: Path, root_tag: str, new_record_el: ET.Element
 ) -> None:
     path = resolve_file_path(path)
-    closing_bytes = f"</{root_tag}>".encode("utf-8")
-    new_record_xml_bytes = ET.tostring(new_record_el, encoding="utf-8")
+    new_record_xml_bytes = ET.tostring(new_record_el, encoding=DEFAULT_XML_ENCODING)
 
     if not path.exists() or path.stat().st_size == 0:
+        path.parent.mkdir(parents=True, exist_ok=True)
         root = ET.Element(root_tag)
         root.append(new_record_el)
         with open_file(path, "wb") as f:
-            ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
+            ET.ElementTree(root).write(
+                f, encoding=DEFAULT_XML_ENCODING, xml_declaration=True
+            )
         return
 
-    try:
-        import fcntl  # Unix/macOS
-
-        _has_flock = True
-    except Exception:
-        _has_flock = False
+    closing_bytes = _closing_tag_bytes_for(path, root_tag)
 
     with open_file(path, "rb+") as f:
-        if _has_flock:
-            try:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            except Exception:
-                pass
-        try:
+        with _exclusive_lock(f):
             f.seek(0, 2)
             file_size = f.tell()
             chunk = 64 * 1024
             pos = file_size
             remainder = b""
-            found_at = -1
+            closing_pos: Optional[int] = None
 
-            while pos > 0 and found_at == -1:
+            while pos > 0 and closing_pos is None:
                 read_size = min(chunk, pos)
                 pos -= read_size
                 f.seek(pos)
@@ -279,33 +332,31 @@ def _append_record_to_file(
                 buf = data + remainder
                 idx = buf.rfind(closing_bytes)
                 if idx != -1:
-                    found_at = pos + idx
+                    closing_pos = pos + idx
                     break
-                remainder = buf[: len(closing_bytes) - 1]
+                overlap = max(0, len(closing_bytes) - 1)
+                remainder = buf[:overlap]
 
-            if found_at == -1:
+            if closing_pos is None:
                 f.seek(0)
-                try:
-                    tree = ET.parse(f)
-                    root = tree.getroot()
-                except ET.ParseError:
-                    root = ET.Element(root_tag)
-                root.append(new_record_el)
-                f.seek(0)
-                f.truncate()
-                ET.ElementTree(root).write(f, encoding="utf-8", xml_declaration=True)
+                tree = ET.parse(f)
+                root = tree.getroot()
+
+                with tempfile.NamedTemporaryFile(
+                    delete=False, dir=str(path.parent), suffix=path.suffix
+                ) as tmp:
+                    root.append(new_record_el)
+                    ET.ElementTree(root).write(
+                        tmp, encoding=DEFAULT_XML_ENCODING, xml_declaration=True
+                    )
+                    tmp_path = Path(tmp.name)
+                os.replace(tmp_path, path)
                 return
 
-            f.seek(found_at)
-            f.truncate(found_at)
+            f.seek(closing_pos)
+            f.truncate(closing_pos)
             f.write(new_record_xml_bytes)
             f.write(closing_bytes)
-        finally:
-            if _has_flock:
-                try:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-                except Exception:
-                    pass
 
 
 def write_xml_row(
@@ -440,7 +491,7 @@ def render_rows_to_xml_fragment(pdf: pd.DataFrame, record_tag: str) -> Tuple[int
 
 def wrap_with_root(fragment: str, root_tag: str) -> str:
     return (
-        f'<?xml version="1.0" encoding="utf-8"?>\n<{root_tag}>'
+        f'<?xml version="1.0" encoding="{DEFAULT_XML_ENCODING}"?>\n<{root_tag}>'
         + fragment
         + f"</{root_tag}>"
     )
