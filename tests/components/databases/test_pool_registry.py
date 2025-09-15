@@ -5,6 +5,8 @@ import pytest
 from sqlalchemy.engine import Engine
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from tests.async_mongomock import AsyncMongoMockClient
+
 from src.etl_core.components.databases.pool_registry import (
     ConnectionPoolRegistry,
     PoolKey,
@@ -188,7 +190,7 @@ class TestConnectionPoolRegistry:
         key, client = registry.get_mongo_client(uri="mongodb://localhost:27017")
         assert isinstance(key, PoolKey)
         assert key.kind == "mongo"
-        assert isinstance(client, AsyncIOMotorClient)
+        assert isinstance(client, (AsyncIOMotorClient, AsyncMongoMockClient))
 
     def test_get_mongo_client_existing_connection(self) -> None:
         registry = ConnectionPoolRegistry()

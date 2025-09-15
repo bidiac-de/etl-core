@@ -70,13 +70,15 @@ def data_ops_metrics() -> DataOperationsMetrics:
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
     """
-    Remove modules from sys.modules whose names match or start with any of the given prefixes.
+    Remove modules from sys.modules whose names match or start with any of
+    the given prefixes.
 
-    This allows re-importing those modules to pick up environment overrides cleanly.
+    This allows re-importing those modules to pick up environment overrides
+    cleanly.
 
     Args:
-        prefixes: An iterable of string prefixes. Any module whose name is equal to a prefix
-            or starts with a prefix followed by a dot will be removed from sys.modules.
+        prefixes: Iterable of string prefixes. Any module whose name equals a
+            prefix or starts with a prefix followed by a dot will be removed.
     """
     keys = list(sys.modules.keys())
     to_delete = [
@@ -366,26 +368,25 @@ async def mongo_handler(
     """
     #  Connect using current persisted creds (host/port/user/pass)
     persisted_mongo_credentials, creds_id = persisted_mongo_credentials
-    uri = MongoConnectionHandler.build_uri(
-        host=persisted_mongo_credentials.get_parameter("host"),
-        port=persisted_mongo_credentials.get_parameter("port"),
-        user=persisted_mongo_credentials.get_parameter("user"),
-        password=persisted_mongo_credentials.decrypted_password,
-        auth_db=None,
-        params=None,
-    )
-    client_kwargs = build_mongo_client_kwargs(persisted_mongo_credentials)
-
-    handler = MongoConnectionHandler()
-    handler.connect(uri=uri, client_kwargs=client_kwargs)
-
-    # Create a fresh database for the test and update the persisted creds
     dbname = f"testdb_{uuid4().hex}"
     persisted_mongo_credentials.database = dbname
     _crh_singleton().upsert(
         credentials_id=creds_id,
         creds=persisted_mongo_credentials,
     )
+
+    uri = MongoConnectionHandler.build_uri(
+        host=persisted_mongo_credentials.get_parameter("host"),
+        port=persisted_mongo_credentials.get_parameter("port"),
+        user=persisted_mongo_credentials.get_parameter("user"),
+        password=persisted_mongo_credentials.decrypted_password,
+        auth_db=dbname,
+        params=None,
+    )
+    client_kwargs = build_mongo_client_kwargs(persisted_mongo_credentials)
+
+    handler = MongoConnectionHandler()
+    handler.connect(uri=uri, client_kwargs=client_kwargs)
 
     try:
         yield handler, dbname
@@ -407,6 +408,8 @@ def _force_mongomock_no_auth() -> Generator[None, None, None]:
     Patch the URI builder and pool args to avoid injecting username/password.
     """
     mp = MonkeyPatch()
+
+    from tests.async_mongomock import AsyncMongoMockClient
 
     def _build_uri_no_auth(
         *,
@@ -445,6 +448,16 @@ def _force_mongomock_no_auth() -> Generator[None, None, None]:
         return kw
 
     mp.setattr(pool_args, "build_mongo_client_kwargs", _kwargs_no_auth, raising=True)
+
+    # Ensure async Mongo connections use an in-memory mongomock client
+    from etl_core.components.databases import pool_registry
+
+    mp.setattr(
+        pool_registry,
+        "AsyncIOMotorClient",
+        AsyncMongoMockClient,
+        raising=False,
+    )
 
     try:
         yield

@@ -86,6 +86,11 @@ class JobHandler:
         with self._session() as session:
             return list(session.exec(select(JobTable)).all())
 
+    def get_by_name(self, name: str) -> Optional[JobTable]:
+        with self._session() as session:
+            stmt = select(JobTable).where(JobTable.name == name)
+            return session.exec(stmt).first()
+
     def _build_runtime_from_record(self, rec: JobTable) -> RuntimeJob:
         """
         Build RuntimeJob and assign components. RuntimeJob wires via `routes`.

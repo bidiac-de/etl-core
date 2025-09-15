@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
+from urllib.parse import urlencode
 
 from etl_core.context.context import Context
 from etl_core.context.credentials import Credentials
@@ -18,6 +20,7 @@ from etl_core.singletons import (
     credentials_handler as _crh_singleton,
 )
 from etl_core.api.cli.ports import ContextsPort, ExecutionPort, JobsPort
+import requests
 
 
 class LocalJobsClient(JobsPort):
@@ -307,3 +310,147 @@ def _dedupe(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen.add(pid)
         out.append(it)
     return out
+
+
+def api_base_url() -> Optional[str]:
+    """
+    Resolve API base URL for CLI to talk to a running server.
+
+    Reads ETL_API_BASE_URL; returns a sanitized base (no trailing slash).
+    Returns None if not configured, signaling use of local clients.
+    """
+    raw = os.getenv("ETL_API_BASE_URL")
+    if not raw:
+        return None
+    return raw.rstrip("/")
+
+
+class _RestBase:
+    def __init__(self, base_url: str) -> None:
+        self.base = base_url.rstrip("/")
+        self.session = requests.Session()
+
+    def _raise_for_status(self, resp: requests.Response) -> None:
+        if resp.status_code == 404:
+            raise PersistNotFoundError("Resource not found")
+        resp.raise_for_status()
+
+
+class RemoteJobsClient(_RestBase, JobsPort):
+    def create(self, cfg: Dict[str, Any]) -> str:
+        r = self.session.post(f"{self.base}/jobs/", json=cfg)
+        self._raise_for_status(r)
+        return r.json()
+
+    def get(self, job_id: str) -> Dict[str, Any]:
+        r = self.session.get(f"{self.base}/jobs/{job_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def update(self, job_id: str, cfg: Dict[str, Any]) -> str:
+        r = self.session.put(f"{self.base}/jobs/{job_id}", json=cfg)
+        self._raise_for_status(r)
+        return r.json()
+
+    def delete(self, job_id: str) -> None:
+        r = self.session.delete(f"{self.base}/jobs/{job_id}")
+        self._raise_for_status(r)
+
+    def list_brief(self) -> List[Dict[str, Any]]:
+        r = self.session.get(f"{self.base}/jobs/")
+        self._raise_for_status(r)
+        return r.json()
+
+
+class RemoteExecutionClient(_RestBase, ExecutionPort):
+    def start(
+        self, job_id: str, environment: Optional[Environment] = None
+    ) -> Dict[str, Any]:
+        body = {"environment": environment.value} if environment else None
+        r = self.session.post(f"{self.base}/execution/{job_id}", json=body)
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_executions(
+        self,
+        *,
+        job_id: Optional[str] = None,
+        status: Optional[str] = None,
+        environment: Optional[str] = None,
+        started_after: Optional[str] = None,
+        started_before: Optional[str] = None,
+        sort_by: str = "started_at",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "sort_by": sort_by,
+            "order": order,
+            "limit": limit,
+            "offset": offset,
+        }
+        if job_id:
+            params["job_id"] = job_id
+        if status:
+            params["status"] = status
+        if environment:
+            params["environment"] = environment
+        if started_after:
+            params["started_after"] = started_after
+        if started_before:
+            params["started_before"] = started_before
+        query = urlencode(params)
+        r = self.session.get(f"{self.base}/execution/executions?{query}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def get(self, execution_id: str) -> Dict[str, Any]:
+        r = self.session.get(f"{self.base}/execution/executions/{execution_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def attempts(self, execution_id: str) -> List[Dict[str, Any]]:
+        r = self.session.get(
+            f"{self.base}/execution/executions/{execution_id}/attempts"
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+
+class RemoteContextsClient(_RestBase, ContextsPort):
+    def create_context(
+        self, context: Dict[str, Any], keyring_service: Optional[str]
+    ) -> Dict[str, Any]:
+        payload = {"context": context, "keyring_service": keyring_service}
+        r = self.session.post(f"{self.base}/contexts/context", json=payload)
+        self._raise_for_status(r)
+        return r.json()
+
+    def create_credentials(
+        self, credentials: Dict[str, Any], keyring_service: Optional[str]
+    ) -> Dict[str, Any]:
+        payload = {"credentials": credentials, "keyring_service": keyring_service}
+        r = self.session.post(f"{self.base}/contexts/credentials", json=payload)
+        self._raise_for_status(r)
+        return r.json()
+
+    def create_context_mapping(self, mapping_ctx: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {"context": mapping_ctx}
+        r = self.session.post(f"{self.base}/contexts/context-mapping", json=payload)
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_providers(self) -> List[Dict[str, Any]]:
+        r = self.session.get(f"{self.base}/contexts/")
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_provider(self, provider_id: str) -> Dict[str, Any]:
+        r = self.session.get(f"{self.base}/contexts/{provider_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def delete_provider(self, provider_id: str) -> None:
+        r = self.session.delete(f"{self.base}/contexts/{provider_id}")
+        self._raise_for_status(r)
