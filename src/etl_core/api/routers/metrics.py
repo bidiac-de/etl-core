@@ -1,8 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from etl_core.security.dependencies import require_authorized_client
 
 router = APIRouter(
     prefix="/ws/jobs/metrics",
-    tags=["metrics"],
+    tags=["Metrics"],
+    dependencies=[Depends(require_authorized_client)],
 )
 
 

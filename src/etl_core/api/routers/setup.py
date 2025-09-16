@@ -1,26 +1,24 @@
-from typing import Final
+from fastapi import APIRouter, Depends
 
-from fastapi import APIRouter
+from etl_core.security.dependencies import require_authorized_client
 
 router = APIRouter(
     prefix="/setup",
-    tags=["setup"],
+    tags=["Setup"],
+    dependencies=[Depends(require_authorized_client)],
 )
-
-# ToDo: IMPLEMENT VALIDATION LOGIC AND REPLACE VALID_KEY WITH
-#  A REAL VALIDATION MECHANISM
-VALID_KEY: Final[str] = "VALID_KEY"
 
 
 @router.get(
     "",
     response_model=bool,
-    summary="Validate GUI setup key",
-    description="Return true if the provided key matches the preset valid key.",
+    summary="Validate secured setup access",
+    description=(
+        "Returns true when the caller is authenticated using the OAuth2 client "
+        "credentials flow."
+    ),
 )
-def validate_key(key: str) -> bool:
-    """
-    Dummy endpoint for GUI setup: checks if the incoming key
-    matches the VALID_KEY constant.
-    """
-    return key == VALID_KEY
+def validate_setup() -> bool:
+    """Confirm that the caller holds a valid machine-to-machine access token."""
+
+    return True

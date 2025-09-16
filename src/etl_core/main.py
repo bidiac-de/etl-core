@@ -9,15 +9,26 @@ from fastapi import FastAPI
 
 from pathlib import Path
 from .logger.logging_setup import setup_logging
-from .api.routers import schemas, setup, jobs, execution, contexts, schedules
+from .api.routers import (
+    auth,
+    schemas,
+    setup,
+    jobs,
+    execution,
+    contexts,
+    schedules,
+    health,
+)
 from .api.helpers import autodiscover_components
 from .components.component_registry import (
     RegistryMode,
     set_registry_mode,
 )
 from .scheduling.scheduler_service import SchedulerService
+from .security import configure_security
 
 config = Config(".env")  # loads env and .env file if present
+configure_security(config)
 
 
 def _resolve_registry_mode() -> RegistryMode:
@@ -57,12 +68,14 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth.router)
 app.include_router(schemas.router)
 app.include_router(setup.router)
 app.include_router(jobs.router)
 app.include_router(execution.router)
 app.include_router(contexts.router)
 app.include_router(schedules.router)
+app.include_router(health.router)
 
 
 if __name__ == "__main__":

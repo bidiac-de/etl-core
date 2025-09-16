@@ -24,8 +24,13 @@ from etl_core.api.dependencies import (
     get_context_handler,
     get_credentials_handler,
 )
+from etl_core.security.dependencies import require_authorized_client
 
-router = APIRouter(prefix="/contexts", tags=["contexts"])
+router = APIRouter(
+    prefix="/contexts",
+    tags=["Contexts"],
+    dependencies=[Depends(require_authorized_client)],
+)
 
 
 def get_secret_provider(service: Optional[str] = None) -> SecretProvider:

@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from etl_core.persistence.handlers.schedule_handler import (
-    ScheduleHandler,
-    ScheduleNotFoundError,
-)
+from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
 from etl_core.persistence.table_definitions import TriggerType, ScheduleTable
 from etl_core.scheduling.scheduler_service import SchedulerService
 

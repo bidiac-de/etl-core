@@ -46,7 +46,11 @@ def create(
             name=name,
             job_id=job_id,
             context=context,
-            trigger_type=trigger_type.value if hasattr(trigger_type, "value") else str(trigger_type),
+            trigger_type=(
+                trigger_type.value
+                if hasattr(trigger_type, "value")
+                else str(trigger_type)
+            ),
             trigger_args=_parse_json(trigger_args),
             paused=paused,
         )
@@ -74,13 +78,16 @@ def list_cmd():
         rows = r.json()
         for rj in rows:
             typer.echo(
-                f"{rj['id']}\t{rj['name']}\t{rj['job_id']}\t{rj['context']}\t{rj['trigger_type']}\tpaused={rj['is_paused']}"
+                f"{rj['id']}\t{rj['name']}\t{rj['job_id']}\t"
+                f"{rj['context']}\t{rj['trigger_type']}\t"
+                f"paused={rj['is_paused']}"
             )
         return
     rows = ScheduleHandler().list()
     for r in rows:
         typer.echo(
-            f"{r.id}\t{r.name}\t{r.job_id}\t{r.context}\t{r.trigger_type}\tpaused={r.is_paused}"
+            "\t".join(map(str, [r.id, r.name, r.job_id, r.context, r.trigger_type]))
+            + f"\tpaused={r.is_paused}"
         )
 
 
@@ -97,15 +104,20 @@ def get_cmd(schedule_id: str):
     r = ScheduleHandler().get(schedule_id)
     if r is None:
         raise typer.Exit(code=1)
-    typer.echo(json.dumps({
-        "id": r.id,
-        "name": r.name,
-        "job_id": r.job_id,
-        "context": r.context,
-        "trigger_type": r.trigger_type,
-        "trigger_args": r.trigger_args,
-        "is_paused": r.is_paused,
-    }, indent=2))
+    typer.echo(
+        json.dumps(
+            {
+                "id": r.id,
+                "name": r.name,
+                "job_id": r.job_id,
+                "context": r.context,
+                "trigger_type": r.trigger_type,
+                "trigger_args": r.trigger_args,
+                "is_paused": r.is_paused,
+            },
+            indent=2,
+        )
+    )
 
 
 @schedules_app.command("update")
@@ -128,7 +140,11 @@ def update_cmd(
         if context is not None:
             payload["context"] = context
         if trigger_type is not None:
-            payload["trigger_type"] = trigger_type.value if hasattr(trigger_type, "value") else str(trigger_type)
+            payload["trigger_type"] = (
+                trigger_type.value
+                if hasattr(trigger_type, "value")
+                else str(trigger_type)
+            )
         if trigger_args is not None:
             payload["trigger_args"] = _parse_json(trigger_args)
         if paused is not None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from etl_core.persistence.handlers.schedule_handler import (
@@ -18,9 +18,13 @@ from etl_core.scheduling.commands import (
     ResumeScheduleCommand,
     RunNowScheduleCommand,
 )
+from etl_core.security.dependencies import require_authorized_client
 
-
-router = APIRouter(prefix="/schedules", tags=["schedules"])
+router = APIRouter(
+    prefix="/schedules",
+    tags=["Schedules"],
+    dependencies=[Depends(require_authorized_client)],
+)
 
 
 class ScheduleIn(BaseModel):

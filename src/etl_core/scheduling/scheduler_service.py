@@ -16,10 +16,7 @@ from etl_core.job_execution.job_execution_handler import (
     ExecutionAlreadyRunning,
 )
 from etl_core.persistence.handlers.job_handler import JobHandler
-from etl_core.persistence.handlers.schedule_handler import (
-    ScheduleHandler,
-    ScheduleNotFoundError,
-)
+from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
 from etl_core.persistence.table_definitions import ScheduleTable, TriggerType
 
 
@@ -54,19 +51,19 @@ class SchedulerService:
     def __init__(self, deps: Optional[_Deps] = None) -> None:
         self._log = logging.getLogger("etl_core.scheduler")
         self._deps = deps or _Deps(
-            schedules=ScheduleHandler(), jobs=JobHandler(), executor=JobExecutionHandler()
+            schedules=ScheduleHandler(),
+            jobs=JobHandler(),
+            executor=JobExecutionHandler(),
         )
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._started = False
 
-    # ----- Singleton -----
     @classmethod
     def instance(cls) -> "SchedulerService":
         if cls._instance is None:
             cls._instance = SchedulerService()
         return cls._instance
 
-    # ----- Lifecycle -----
     def start(self, sync_seconds: Any = _NOT_SET) -> None:
         """
         Start the scheduler and optionally enable periodic DB -> APS sync.
@@ -124,7 +121,6 @@ class SchedulerService:
         self._started = False
         self._log.info("Scheduler fully shut down")
 
-    # ----- DB <-> APS sync -----
     def sync_from_db(self) -> None:
         scheduler = self._scheduler
         if scheduler is None:
@@ -230,7 +226,6 @@ class SchedulerService:
             return
         self._log.info("Finished scheduled job id '%s'", sch.job_id)
 
-    # ----- Public operations used by API/CLI -----
     def add_schedule(self, sch: ScheduleTable) -> None:
         self._upsert_aps_job(sch)
 

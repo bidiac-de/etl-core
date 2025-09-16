@@ -39,6 +39,7 @@ click
 rich
 psutil
 xlrd
+PyJWT
 
 # Type Checking
 mypy
