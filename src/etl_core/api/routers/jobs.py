@@ -15,13 +15,8 @@ from etl_core.persistence.errors import (
 )
 from etl_core.persistence.configs.job_config import JobConfig
 from etl_core.persistence.handlers.job_handler import JobHandler
-from etl_core.security.dependencies import require_authorized_client
 
-router = APIRouter(
-    prefix="/jobs",
-    tags=["Jobs"],
-    dependencies=[Depends(require_authorized_client)],
-)
+router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 _JOB_BY_ID_CACHE: Dict[str, Dict[str, Any]] = {}
 _JOB_LIST_CACHE: Optional[List[Dict[str, Any]]] = None

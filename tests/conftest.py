@@ -25,6 +25,7 @@ from fastapi.requests import Request
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from sqlmodel import Session, delete
+
 from etl_core.main import app
 from etl_core.api.dependencies import get_execution_handler, get_job_handler
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -52,10 +53,6 @@ from etl_core.singletons import (
     credentials_handler as _crh_singleton,
     context_handler as _ch_singleton,
 )
-
-os.environ.setdefault("ETL_AUTH_CLIENT_ID", "etl-core-client")
-os.environ.setdefault("ETL_AUTH_CLIENT_SECRET", "DevOnly_ClientSecret!234567890ABCdef")
-os.environ.setdefault("ETL_AUTH_SIGNING_KEY", "DevSigningKey#1234567890ABCdefGH!")
 
 
 @pytest.fixture
@@ -93,25 +90,6 @@ def _purge_modules(prefixes: Iterable[str]) -> None:
         sys.modules.pop(name, None)
 
 
-def _authorize_test_client(client: TestClient) -> None:
-    client_id = os.environ.get("ETL_AUTH_CLIENT_ID", "etl-core-client")
-    client_secret = os.environ["ETL_AUTH_CLIENT_SECRET"]
-    response = client.post(
-        "/auth/token",
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
-    )
-    if response.status_code != 200:
-        raise AssertionError(
-            f"Failed to obtain access token for tests: {response.text}"
-        )
-    token = response.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {token}"})
-
-
 @pytest.fixture
 def fresh_client(
     monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
@@ -135,7 +113,6 @@ def fresh_client(
 
         client = TestClient(main.app)
         client.__enter__()  # run lifespan
-        _authorize_test_client(client)
         request.addfinalizer(lambda: client.__exit__(None, None, None))
         return client
 
@@ -149,7 +126,6 @@ def client() -> Generator[TestClient, None, None]:
     which creates the shared handlers on app.state.
     """
     with TestClient(app) as c:
-        _authorize_test_client(c)
         yield c
 
 
@@ -170,9 +146,6 @@ def enable_stub_components() -> None:
     Ensure component mode is 'test' for the suite unless explicitly overridden.
     """
     os.environ["ETL_COMPONENT_MODE"] = "test"
-    os.environ.setdefault("ETL_AUTH_CLIENT_ID", "etl-core-client")
-    os.environ["ETL_AUTH_CLIENT_SECRET"] = "DevOnly_ClientSecret!234567890ABCdef"
-    os.environ["ETL_AUTH_SIGNING_KEY"] = "DevSigningKey#1234567890ABCdefGH!"
     if "etl_core.main" in sys.modules:
         import etl_core.main
 

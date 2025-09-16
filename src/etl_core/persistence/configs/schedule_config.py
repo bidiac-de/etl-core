@@ -3,14 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Iterable, Optional
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationError,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from etl_core.context.environment import Environment
 from etl_core.persistence.table_definitions import TriggerType
@@ -69,9 +62,8 @@ class ScheduleConfig(BaseModel):
         try:
             Environment(val)
         except Exception as e:
-            raise ValueError(
-                f"context must be one of DEV/TEST/PROD; got {val!r}"
-            ) from e
+            valid = ", ".join([e.value for e in Environment]) if hasattr(Environment, "__iter__") else "DEV, TEST, PROD"
+            raise ValueError(f"context must be one of DEV/TEST/PROD; got {val!r}") from e
         return val
 
     @staticmethod
@@ -121,19 +113,16 @@ class ScheduleConfig(BaseModel):
         ]
         _ensure_allowed_keys(args, allowed)
         # should specify at least one time field
-        if not any(
-            k in args
-            for k in [
-                "year",
-                "month",
-                "day",
-                "week",
-                "day_of_week",
-                "hour",
-                "minute",
-                "second",
-            ]
-        ):
+        if not any(k in args for k in [
+            "year",
+            "month",
+            "day",
+            "week",
+            "day_of_week",
+            "hour",
+            "minute",
+            "second",
+        ]):
             raise ValueError("cron trigger requires at least one scheduling field")
 
         # Light type checks: allow int/str/list[int|str]
@@ -218,9 +207,7 @@ class SchedulePatchConfig(BaseModel):
         try:
             Environment(val)
         except Exception as e:
-            raise ValueError(
-                f"context must be one of DEV/TEST/PROD; got {val!r}"
-            ) from e
+            raise ValueError(f"context must be one of DEV/TEST/PROD; got {val!r}") from e
         return val
 
     @model_validator(mode="after")
@@ -239,3 +226,4 @@ class SchedulePatchConfig(BaseModel):
             except ValidationError as e:  # re-raise as ValueError for uniformity
                 raise ValueError(str(e))
         return self
+

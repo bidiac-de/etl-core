@@ -20,13 +20,8 @@ from etl_core.persistence.handlers.execution_records_handler import (
 from etl_core.persistence.handlers.job_handler import JobHandler
 from etl_core.api.helpers import _error_payload, _exc_meta
 from etl_core.context.environment import Environment
-from etl_core.security.dependencies import require_authorized_client
 
-router = APIRouter(
-    prefix="/execution",
-    tags=["Execution"],
-    dependencies=[Depends(require_authorized_client)],
-)
+router = APIRouter(prefix="/execution", tags=["execution"])
 
 
 class StartExecutionBody(BaseModel):

@@ -11,8 +11,6 @@ The ETL Core Engine is a modular Python-based tool that interprets JSON configur
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Development Setup](#development-setup)
-- [Security](#security)
-- [Scheduling](#scheduling)
 - [Contributions](#contributions)
 - [License](#license)
 
@@ -99,22 +97,12 @@ Key features include:
 
     This command starts the ETL Core Engine in development mode, allowing for hot-reloading of code changes.
 
-## Security
+### Scheduler Sync Configuration
 
-- The FastAPI server uses an OAuth2 client-credentials flow and issues JWT bearer tokens signed with the symmetric key defined in the environment.
-- Call `POST /auth/token` with the configured client ID and secret to obtain a token, then provide it via the `Authorization: Bearer <token>` header (or the Swagger UI Authorize button).
-- Configure secrets via `ETL_AUTH_CLIENT_SECRET` and `ETL_AUTH_SIGNING_KEY`; both must contain at least 32 characters, mix case, digits, and symbols. Additional tunables include `ETL_AUTH_CLIENT_ID`, `ETL_AUTH_TOKEN_EXPIRES_IN`, `ETL_AUTH_TOKEN_ISSUER`, and `ETL_AUTH_TOKEN_AUDIENCE`.
-- Every router, including the health and scheduling endpoints, depends on the bearer token validator (`require_authorized_client`), so unauthenticated calls receive HTTP 401.
-- See `docs/documentation.md` for a deeper walkthrough of the authentication service and secret policy.
+- The in-process scheduler refreshes persisted schedules every 30 seconds by default.
+- Set `ETL_SCHEDULES_SYNC_SECONDS` in your `.env` file or environment to change the cadence.
+- Use values like `off`, `false`, or `0` to disable the periodic sync entirely when external control is preferred.
 
-## Scheduling
-
-- `SchedulerService` wraps APScheduler's `AsyncIOScheduler` to mirror persisted schedules from the database and execute jobs via `JobExecutionHandler`.
-- Schedules can be created, listed, updated, paused/resumed, deleted, or triggered immediately through the `/schedules` endpoints (all bearer-protected).
-- Schedule definitions support `interval`, `cron`, and `date` triggers by passing compatible `trigger_args` that APScheduler understands.
-- The periodic database sync keeps in-memory jobs up to date. Override the interval with `ETL_SCHEDULES_SYNC_SECONDS` (default `30` seconds) or disable it using values such as `off`, `false`, or `0`.
-- During shutdown the service pauses schedules and waits for running jobs, ensuring graceful termination.
-- Refer to `docs/documentation.md` for extended usage notes and trigger examples.
 
 ## Contributions
 

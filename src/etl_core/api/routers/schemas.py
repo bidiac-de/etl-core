@@ -3,7 +3,7 @@ from __future__ import annotations
 from threading import RLock
 from typing import Any, Dict, List, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import ValidationError
 
 from etl_core.api.helpers import _error_payload, _exc_meta, inline_defs
@@ -15,13 +15,8 @@ from etl_core.components.component_registry import (
     public_component_types,
 )
 from etl_core.persistence.base_models.job_base import JobBase
-from etl_core.security.dependencies import require_authorized_client
 
-router = APIRouter(
-    prefix="/configs",
-    tags=["Configs"],
-    dependencies=[Depends(require_authorized_client)],
-)
+router = APIRouter(prefix="/configs", tags=["configs"])
 
 # Simple, thread-safe in-process caches
 # Keys include registry mode so switches don't leak
