@@ -1,0 +1,7 @@
+{
+  "name": "mongo_context_mapping",
+  "environment": "TEST",
+  "credentials_ids": {
+    "TEST": "a45491ff-8372-4665-b158-5edff354d2de"
+  }
+}
