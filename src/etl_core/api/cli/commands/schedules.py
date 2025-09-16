@@ -8,7 +8,6 @@ import requests
 
 from etl_core.api.cli.adapters import api_base_url
 
-from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
 from etl_core.persistence.table_definitions import TriggerType
 from etl_core.scheduling.commands import (
     CreateScheduleCommand,
@@ -18,6 +17,7 @@ from etl_core.scheduling.commands import (
     ResumeScheduleCommand,
     RunNowScheduleCommand,
 )
+from etl_core.singletons import schedule_handler as _schedule_handler_singleton
 
 
 schedules_app = typer.Typer(help="Manage job schedules")
@@ -46,7 +46,11 @@ def create(
             name=name,
             job_id=job_id,
             context=context,
-            trigger_type=trigger_type.value if hasattr(trigger_type, "value") else str(trigger_type),
+            trigger_type=(
+                trigger_type.value
+                if hasattr(trigger_type, "value")
+                else str(trigger_type)
+            ),
             trigger_args=_parse_json(trigger_args),
             paused=paused,
         )
@@ -74,13 +78,31 @@ def list_cmd():
         rows = r.json()
         for rj in rows:
             typer.echo(
-                f"{rj['id']}\t{rj['name']}\t{rj['job_id']}\t{rj['context']}\t{rj['trigger_type']}\tpaused={rj['is_paused']}"
+                "\t".join(
+                    [
+                        rj["id"],
+                        rj["name"],
+                        rj["job_id"],
+                        rj["context"],
+                        rj["trigger_type"],
+                    ]
+                )
+                + f"\tpaused={rj['is_paused']}"
             )
         return
-    rows = ScheduleHandler().list()
+    rows = _schedule_handler_singleton().list()
     for r in rows:
         typer.echo(
-            f"{r.id}\t{r.name}\t{r.job_id}\t{r.context}\t{r.trigger_type}\tpaused={r.is_paused}"
+            "\t".join(
+                [
+                    r.id,
+                    r.name,
+                    r.job_id,
+                    r.context,
+                    r.trigger_type,
+                    f"paused={r.is_paused}",
+                ]
+            )
         )
 
 
@@ -94,18 +116,23 @@ def get_cmd(schedule_id: str):
         r.raise_for_status()
         typer.echo(json.dumps(r.json(), indent=2))
         return
-    r = ScheduleHandler().get(schedule_id)
+    r = _schedule_handler_singleton().get(schedule_id)
     if r is None:
         raise typer.Exit(code=1)
-    typer.echo(json.dumps({
-        "id": r.id,
-        "name": r.name,
-        "job_id": r.job_id,
-        "context": r.context,
-        "trigger_type": r.trigger_type,
-        "trigger_args": r.trigger_args,
-        "is_paused": r.is_paused,
-    }, indent=2))
+    typer.echo(
+        json.dumps(
+            {
+                "id": r.id,
+                "name": r.name,
+                "job_id": r.job_id,
+                "context": r.context,
+                "trigger_type": r.trigger_type,
+                "trigger_args": r.trigger_args,
+                "is_paused": r.is_paused,
+            },
+            indent=2,
+        )
+    )
 
 
 @schedules_app.command("update")
@@ -128,7 +155,11 @@ def update_cmd(
         if context is not None:
             payload["context"] = context
         if trigger_type is not None:
-            payload["trigger_type"] = trigger_type.value if hasattr(trigger_type, "value") else str(trigger_type)
+            payload["trigger_type"] = (
+                trigger_type.value
+                if hasattr(trigger_type, "value")
+                else str(trigger_type)
+            )
         if trigger_args is not None:
             payload["trigger_args"] = _parse_json(trigger_args)
         if paused is not None:
@@ -203,7 +234,6 @@ def run_now_cmd(schedule_id: str):
         r.raise_for_status()
         typer.echo(json.dumps(r.json(), indent=2))
         return
-    # run asynchronous part in a nested event loop
     import asyncio
 
     async def _run():

@@ -5,10 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from etl_core.persistence.handlers.schedule_handler import (
-    ScheduleHandler,
-    ScheduleNotFoundError,
-)
+from etl_core.persistence.handlers.schedule_handler import ScheduleNotFoundError
 from etl_core.persistence.table_definitions import ScheduleTable, TriggerType
 from etl_core.scheduling.commands import (
     CreateScheduleCommand,
@@ -18,6 +15,7 @@ from etl_core.scheduling.commands import (
     ResumeScheduleCommand,
     RunNowScheduleCommand,
 )
+from etl_core.singletons import schedule_handler as _schedule_handler_singleton
 
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
@@ -79,13 +77,13 @@ def create_schedule(body: ScheduleIn) -> str:
 
 @router.get("/", response_model=List[ScheduleOut])
 def list_schedules() -> List[ScheduleOut]:
-    rows = ScheduleHandler().list()
+    rows = _schedule_handler_singleton().list()
     return [ScheduleOut.from_row(r) for r in rows]
 
 
 @router.get("/{schedule_id}", response_model=ScheduleOut)
 def get_schedule(schedule_id: str) -> ScheduleOut:
-    row = ScheduleHandler().get(schedule_id)
+    row = _schedule_handler_singleton().get(schedule_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
     return ScheduleOut.from_row(row)

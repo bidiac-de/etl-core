@@ -9,6 +9,7 @@ from etl_core.persistence.handlers.job_handler import JobHandler
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from etl_core.persistence.handlers.context_handler import ContextHandler
 from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
 from etl_core.scheduling.scheduler_service import SchedulerService
 
 
@@ -18,6 +19,7 @@ _execution_handler_singleton: Optional[JobExecutionHandler] = None
 _context_handler_singleton: Optional[ContextHandler] = None
 _credentials_handler_singleton: Optional[CredentialsHandler] = None
 _scheduler_handler_singleton: Optional[SchedulerService] = None
+_schedule_handler_singleton: Optional[ScheduleHandler] = None
 
 
 def execution_records_handler() -> ExecutionRecordsHandler:
@@ -60,3 +62,10 @@ def scheduler_handler() -> SchedulerService:
     if _scheduler_handler_singleton is None:
         _scheduler_handler_singleton = SchedulerService.instance()
     return _scheduler_handler_singleton
+
+
+def schedule_handler() -> ScheduleHandler:
+    global _schedule_handler_singleton
+    if _schedule_handler_singleton is None:
+        _schedule_handler_singleton = ScheduleHandler()
+    return _schedule_handler_singleton

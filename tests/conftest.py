@@ -18,6 +18,9 @@ import importlib
 import os
 import secrets
 import sys
+import shutil
+import tempfile
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -54,6 +57,9 @@ from etl_core.singletons import (
     context_handler as _ch_singleton,
 )
 
+_TEST_LOG_DIR = Path(tempfile.mkdtemp(prefix="etl-core-logs-")).resolve()
+os.environ.setdefault("LOG_DIR", str(_TEST_LOG_DIR))
+
 
 @pytest.fixture
 def data_ops_metrics() -> DataOperationsMetrics:
@@ -88,6 +94,16 @@ def _purge_modules(prefixes: Iterable[str]) -> None:
     ]
     for name in to_delete:
         sys.modules.pop(name, None)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _cleanup_test_logs() -> Generator[None, None, None]:
+    """Ensure temporary log directory does not leak between runs."""
+
+    try:
+        yield
+    finally:
+        shutil.rmtree(_TEST_LOG_DIR, ignore_errors=True)
 
 
 @pytest.fixture

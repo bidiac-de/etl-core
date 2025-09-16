@@ -3,12 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from etl_core.persistence.handlers.schedule_handler import (
-    ScheduleHandler,
-    ScheduleNotFoundError,
-)
+from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
 from etl_core.persistence.table_definitions import TriggerType, ScheduleTable
 from etl_core.scheduling.scheduler_service import SchedulerService
+from etl_core.singletons import schedule_handler as _schedule_handler_singleton
 
 
 class Command:
@@ -24,8 +22,7 @@ class CreateScheduleCommand(Command):
     trigger_type: TriggerType
     trigger_args: Dict[str, Any]
     paused: bool = False
-    # Use factories to avoid creating services at import time
-    schedules: ScheduleHandler = field(default_factory=ScheduleHandler)
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
     scheduler: SchedulerService = field(default_factory=SchedulerService.instance)
 
     def execute(self) -> ScheduleTable:
@@ -50,7 +47,7 @@ class UpdateScheduleCommand(Command):
     trigger_type: Optional[TriggerType] = None
     trigger_args: Optional[Dict[str, Any]] = None
     paused: Optional[bool] = None
-    schedules: ScheduleHandler = field(default_factory=ScheduleHandler)
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
     scheduler: SchedulerService = field(default_factory=SchedulerService.instance)
 
     def execute(self) -> ScheduleTable:
@@ -70,7 +67,7 @@ class UpdateScheduleCommand(Command):
 @dataclass
 class DeleteScheduleCommand(Command):
     schedule_id: str
-    schedules: ScheduleHandler = field(default_factory=ScheduleHandler)
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
     scheduler: SchedulerService = field(default_factory=SchedulerService.instance)
 
     def execute(self) -> None:
@@ -81,7 +78,7 @@ class DeleteScheduleCommand(Command):
 @dataclass
 class PauseScheduleCommand(Command):
     schedule_id: str
-    schedules: ScheduleHandler = field(default_factory=ScheduleHandler)
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
     scheduler: SchedulerService = field(default_factory=SchedulerService.instance)
 
     def execute(self) -> ScheduleTable:
@@ -93,7 +90,7 @@ class PauseScheduleCommand(Command):
 @dataclass
 class ResumeScheduleCommand(Command):
     schedule_id: str
-    schedules: ScheduleHandler = field(default_factory=ScheduleHandler)
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
     scheduler: SchedulerService = field(default_factory=SchedulerService.instance)
 
     def execute(self) -> ScheduleTable:

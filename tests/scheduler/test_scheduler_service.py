@@ -68,11 +68,11 @@ class FakeScheduler:
         return None
 
 
-def _make_service(monkeypatch: pytest.MonkeyPatch) -> Tuple[scheduler_service.SchedulerService, FakeScheduler, Dict[str, Any]]:
+def _make_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Tuple[scheduler_service.SchedulerService, FakeScheduler, Dict[str, Any]]:
     fake_scheduler = FakeScheduler()
-    monkeypatch.setattr(
-        scheduler_service, "AsyncIOScheduler", lambda: fake_scheduler
-    )
+    monkeypatch.setattr(scheduler_service, "AsyncIOScheduler", lambda: fake_scheduler)
 
     captured: Dict[str, Any] = {}
 
@@ -80,9 +80,7 @@ def _make_service(monkeypatch: pytest.MonkeyPatch) -> Tuple[scheduler_service.Sc
         def __init__(self, **kwargs: Any) -> None:
             captured["kwargs"] = kwargs
 
-    monkeypatch.setattr(
-        scheduler_service, "IntervalTrigger", CaptureIntervalTrigger
-    )
+    monkeypatch.setattr(scheduler_service, "IntervalTrigger", CaptureIntervalTrigger)
 
     deps = scheduler_service._Deps(
         schedules=DummyScheduleHandler(),

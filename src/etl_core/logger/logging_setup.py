@@ -5,6 +5,19 @@ import logging.config
 from pathlib import Path
 
 
+def resolve_log_dir() -> Path:
+    """Resolve the directory used for log files.
+
+    Prefers `LOG_DIR`, then `ETL_LOG_DIR`, falling back to ``./logs``.
+    """
+
+    candidates = (os.getenv("LOG_DIR"), os.getenv("ETL_LOG_DIR"))
+    for raw in candidates:
+        if raw:
+            return Path(raw).expanduser().resolve()
+    return Path("logs").resolve()
+
+
 def setup_logging(
     default_path="logging_config.yaml",
     default_level=logging.INFO,
@@ -18,8 +31,7 @@ def setup_logging(
         with open(path, "rt", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
-        # Resolve file handler path to configured log directory
-        log_dir = Path(os.getenv(" ", "logs")).expanduser().resolve()
+        log_dir = resolve_log_dir()
         log_dir.mkdir(parents=True, exist_ok=True)
         handlers = config.get("handlers", {})
         file_handler = handlers.get("file")

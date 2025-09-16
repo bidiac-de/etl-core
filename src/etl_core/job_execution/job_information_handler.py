@@ -1,9 +1,11 @@
-import logging
-from etl_core.metrics.execution_metrics import ExecutionMetrics
 import datetime
+import logging
 from pathlib import Path
-from typing import Dict, Tuple, Type
+from typing import Dict, Tuple, Type, Union
+
+from etl_core.logger.logging_setup import resolve_log_dir
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.metrics.execution_metrics import ExecutionMetrics
 
 
 class JobInformationHandler:
@@ -33,9 +35,7 @@ class MetricsHandler:
     """
 
     def __init__(self) -> None:
-        # execution_id -> JobMetrics
         self._job_metrics: Dict[str, ExecutionMetrics] = {}
-        # (execution_id, attempt_id, component_id) -> ComponentMetrics
         self._component_metrics: Dict[Tuple[str, str, str], ComponentMetrics] = {}
 
     def create_job_metrics(self, execution_id: str) -> ExecutionMetrics:
@@ -105,23 +105,30 @@ class LoggingHandler:
     def __init__(
         self,
         job_name: str,
-        base_log_dir: Path = Path("logs"),
+        base_log_dir: Union[Path, str, None] = None,
     ):
-        self._base_log_dir = base_log_dir
+        resolved_base = (
+            resolve_log_dir()
+            if base_log_dir is None
+            else Path(base_log_dir).expanduser()
+        )
+        self._base_log_dir = resolved_base
         self._job_name = job_name
         self._logger = logging.getLogger(f"job.{job_name}")
         self._logger.setLevel(logging.DEBUG)
-        self._configure_handler()
+        self._handler_configured = False
+
+    def _ensure_configured(self) -> None:
+        if not self._handler_configured:
+            self._configure_handler()
 
     def _configure_handler(self) -> None:
         """
         (Re)configure the FileHandler for current execution
         """
-        # ensure base/job directory exists
         job_dir = self._base_log_dir / self.job_name
         job_dir.mkdir(parents=True, exist_ok=True)
 
-        # timestamped logfile so each run is separate
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_path = job_dir / f"{ts}.log"
 
@@ -130,16 +137,17 @@ class LoggingHandler:
         fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
         fh.setFormatter(fmt)
 
-        # clear out old handlers so we don't double-log
         for h in self._logger.handlers:
             self._logger.removeHandler(h)
 
         self._logger.addHandler(fh)
+        self._handler_configured = True
 
     def log(self, information) -> None:
         """
         Log a metric object at INFO level
         """
+        self._ensure_configured()
         self._logger.info("%r", information)
 
     def update_job_name(self, new_job_name: str) -> None:
@@ -149,6 +157,7 @@ class LoggingHandler:
         self._job_name = new_job_name
         self._logger = logging.getLogger(f"job.{new_job_name}")
         self._logger.setLevel(logging.DEBUG)
+        self._handler_configured = False
         self._configure_handler()
 
     @property
@@ -156,10 +165,9 @@ class LoggingHandler:
         return self._base_log_dir
 
     @base_log_dir.setter
-    def base_log_dir(self, value: Path) -> None:
-        if not isinstance(value, Path):
-            raise ValueError("base_log_dir must be a Path object")
-        self._base_log_dir = value
+    def base_log_dir(self, value: Union[Path, str]) -> None:
+        self._base_log_dir = Path(value).expanduser()
+        self._handler_configured = False
         self._configure_handler()
 
     @property

@@ -334,9 +334,6 @@ class ExecutionAttemptTable(SQLModel, table=True):
     finished_at: Optional[datetime] = Field(default=None, nullable=True)
 
 
-# ---- Scheduling ----
-
-
 class TriggerType(str, Enum):
     INTERVAL = "interval"
     CRON = "cron"
