@@ -1,9 +1,8 @@
 import asyncio
 import logging
 import threading
-from datetime import datetime
-from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 from collections import deque
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
@@ -309,9 +308,7 @@ class JobExecutionHandler:
             if metrics.status != RuntimeState.CANCELLED:
                 metrics.status = RuntimeState.SUCCESS
         finally:
-            started_at = metrics.started_at
-            if started_at is not None:
-                metrics.processing_time = datetime.now() - started_at
+            metrics.update_processing_time()
             await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
 
     async def _broadcast_to_next_inputs(

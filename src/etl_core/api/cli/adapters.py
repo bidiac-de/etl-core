@@ -355,9 +355,7 @@ class _RestBase:
             raise PersistNotFoundError(f"Resource not found: {method} {sanitized_url}")
         try:
             resp.raise_for_status()
-        except (
-            requests.HTTPError
-        ) as exc:  # pragma: no cover - network errors rarely hit
+        except requests.HTTPError as exc:
             message = (
                 f"{resp.status_code} {resp.reason} " f"for {method} {sanitized_url}"
             )
