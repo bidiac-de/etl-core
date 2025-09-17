@@ -331,7 +331,7 @@ class _RestBase:
         self.session = requests.Session()
 
     @staticmethod
-    def _sanitize_url(raw_url: str | None) -> str:
+    def _sanitize_url(raw_url: Optional[str]) -> str:
         if not raw_url:
             return "<unknown>"
         try:
