@@ -17,7 +17,7 @@ from etl_core.components.wiring.ports import EdgeRef
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from tests.helpers import get_component_by_name, runtime_job_from_config
 
-# Swap runtime job component references to deterministic test doubles for these tests.
+# swap runtime job component references to deterministic test doubles for these tests.
 runtimejob_module.MultiSourceComponent = MultiSource
 runtimejob_module.MultiEchoComponent = MultiEcho
 
