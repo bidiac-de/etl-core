@@ -10,6 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.jobstores.base import JobLookupError
 
 from etl_core.job_execution.job_execution_handler import (
     JobExecutionHandler,
@@ -31,6 +32,10 @@ _DISABLE_SENTINELS = {
     "no",
 }
 _NOT_SET = object()
+
+# Reserve IDs for internal/housekeeping jobs that should never be removed by DB sync.
+_SYNC_JOB_ID = "__schedules_sync__"
+_INTERNAL_JOB_IDS = {_SYNC_JOB_ID}
 
 
 @dataclass
@@ -78,29 +83,31 @@ class SchedulerService:
         Set to 0 or one of: off,false,disable,disabled to disable the sync job.
         Default is 30 seconds if not provided.
         """
-        if not self._started:
-            self._log.info("Starting AsyncIOScheduler")
-            scheduler = self._ensure_scheduler()
-            scheduler.start()
-            self._started = True
-            self.sync_from_db()
-            try:
-                interval = _resolve_sync_interval_seconds(sync_seconds)
-                if interval is not None:
-                    scheduler.add_job(
-                        self.sync_from_db,
-                        trigger=IntervalTrigger(seconds=interval),
-                        id="__schedules_sync__",
-                        replace_existing=True,
-                        coalesce=True,
-                    )
-                    self._log.info(
-                        "Scheduled periodic DB sync every %s seconds", interval
-                    )
-                else:
-                    self._log.info("Periodic DB sync disabled")
-            except Exception:
-                self._log.exception("Failed to schedule periodic DB sync")
+        if self._started:
+            return
+        self._log.info("Starting AsyncIOScheduler")
+        scheduler = self._ensure_scheduler()
+        scheduler.start()
+        self._started = True
+
+        # Initial sync before scheduling the periodic sync task.
+        self.sync_from_db()
+        try:
+            interval = _resolve_sync_interval_seconds(sync_seconds)
+            if interval is not None:
+                scheduler.add_job(
+                    self.sync_from_db,
+                    trigger=IntervalTrigger(seconds=interval),
+                    id=_SYNC_JOB_ID,
+                    replace_existing=True,
+                    coalesce=True,
+                    max_instances=1,
+                )
+                self._log.info("Scheduled periodic DB sync every %s seconds", interval)
+            else:
+                self._log.info("Periodic DB sync disabled")
+        except Exception:
+            self._log.exception("Failed to schedule periodic DB sync")
 
     def pause_all(self) -> None:
         scheduler = self._scheduler
@@ -109,7 +116,11 @@ class SchedulerService:
         for job in scheduler.get_jobs() or []:
             try:
                 scheduler.pause_job(job.id)
-            except Exception:  # noqa: BLE001
+            except JobLookupError:
+                self._log.warning(
+                    "Job %s disappeared before it could be paused", job.id
+                )
+            except Exception:
                 self._log.exception("Failed to pause job %s", job.id)
 
     async def shutdown_gracefully(self) -> None:
@@ -119,6 +130,7 @@ class SchedulerService:
         self._log.info("Graceful shutdown: pausing schedules and waiting for jobs")
         self.pause_all()
         if self._scheduler is not None:
+            # Wait=True to let running jobs finish.
             await asyncio.to_thread(self._scheduler.shutdown, True)
         self._scheduler = None
         self._started = False
@@ -133,11 +145,21 @@ class SchedulerService:
         schedules = self._deps.schedules.list()
         existing_ids = {s.id for s in schedules}
 
+        # Remove APS jobs that no longer exist in DB (but never touch internal jobs)
         for job in scheduler.get_jobs() or []:
+            if job.id in _INTERNAL_JOB_IDS:
+                continue
             if job.id not in existing_ids:
                 self._log.info("Removing stale scheduled job %s", job.id)
-                scheduler.remove_job(job.id)
+                try:
+                    scheduler.remove_job(job.id)
+                except JobLookupError:
+                    # Job removed concurrently; safe to continue
+                    self._log.debug("Job %s already removed", job.id)
+                except Exception:
+                    self._log.exception("Failed to remove stale job %s", job.id)
 
+        # Upsert all schedules from DB
         for sch in schedules:
             self._upsert_aps_job(sch)
 
@@ -147,23 +169,35 @@ class SchedulerService:
             self._log.debug("Skipping upsert; scheduler not initialized")
             return
 
-        trigger = self._to_trigger(sch.trigger_type, sch.trigger_args)
+        try:
+            trigger = self._to_trigger(sch.trigger_type, sch.trigger_args)
+        except Exception:
+            self._log.exception(
+                "Invalid trigger for schedule %s (type=%s, args=%s)",
+                sch.id,
+                sch.trigger_type,
+                sch.trigger_args,
+            )
+            return
+
         fn = self._job_callable(sch.id)
-        replace_existing = True
-        kwargs: Dict[str, Any] = {}
         try:
             scheduler.add_job(
                 fn,
                 trigger=trigger,
                 id=sch.id,
                 name=f"{sch.name}:{sch.job_id}",
-                replace_existing=replace_existing,
-                kwargs=kwargs,
+                replace_existing=True,
                 coalesce=True,
                 max_instances=1,
             )
             if sch.is_paused:
-                scheduler.pause_job(sch.id)
+                try:
+                    scheduler.pause_job(sch.id)
+                except JobLookupError:
+                    self._log.warning(
+                        "Job %s just created but not found to pause", sch.id
+                    )
             self._log.info(
                 "Scheduled '%s' (job_id=%s) with %s trigger (paused=%s)",
                 sch.name,
@@ -171,7 +205,7 @@ class SchedulerService:
                 sch.trigger_type,
                 sch.is_paused,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._log.exception("Failed to upsert APS job for schedule %s", sch.id)
 
     def _to_trigger(self, ttype: TriggerType, args: Dict[str, Any]):
@@ -197,16 +231,20 @@ class SchedulerService:
                 scheduler = self._scheduler
                 if scheduler is not None:
                     scheduler.remove_job(schedule_id)
-            except Exception:  # noqa: BLE001
+            except JobLookupError:
                 pass
+            except Exception:
+                self._log.exception(
+                    "Failed to remove missing schedule %s from APS", schedule_id
+                )
             return
 
-        # run the job in a thread to avoid blocking the loop
+        # Run in a thread to avoid blocking the loop
         try:
             runtime_job = await asyncio.to_thread(
                 self._deps.jobs.load_runtime_job, sch.job_id
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._log.exception(
                 "Failed to load job id '%s' for schedule %s: %s",
                 sch.job_id,
@@ -223,8 +261,10 @@ class SchedulerService:
             self._log.warning(
                 "Scheduled job id '%s' already running; skipping trigger", sch.job_id
             )
-            return
-        self._log.info("Finished scheduled job id '%s'", sch.job_id)
+        except Exception:
+            self._log.exception("Scheduled job id '%s' failed", sch.job_id)
+        else:
+            self._log.info("Finished scheduled job id '%s'", sch.job_id)
 
     def add_schedule(self, sch: ScheduleTable) -> None:
         self._upsert_aps_job(sch)
@@ -235,7 +275,9 @@ class SchedulerService:
             return
         try:
             scheduler.remove_job(schedule_id)
-        except Exception:  # noqa: BLE001
+        except JobLookupError:
+            self._log.debug("Attempted to remove missing job %s", schedule_id)
+        except Exception:
             self._log.exception("Failed to remove schedule %s from APS", schedule_id)
 
     def pause_schedule(self, schedule_id: str) -> None:
@@ -244,7 +286,9 @@ class SchedulerService:
             return
         try:
             scheduler.pause_job(schedule_id)
-        except Exception:  # noqa: BLE001
+        except JobLookupError:
+            self._log.debug("Attempted to pause missing job %s", schedule_id)
+        except Exception:
             self._log.exception("Failed to pause schedule %s", schedule_id)
 
     def resume_schedule(self, schedule_id: str) -> None:
@@ -253,7 +297,9 @@ class SchedulerService:
             return
         try:
             scheduler.resume_job(schedule_id)
-        except Exception:  # noqa: BLE001
+        except JobLookupError:
+            self._log.debug("Attempted to resume missing job %s", schedule_id)
+        except Exception:
             self._log.exception("Failed to resume schedule %s", schedule_id)
 
     async def run_now(self, schedule_id: str) -> None:
@@ -263,7 +309,10 @@ class SchedulerService:
         scheduler = self._scheduler
         if scheduler is not None:
             scheduler_loop = getattr(scheduler, "_eventloop", None)
-            if scheduler_loop is None or scheduler_loop.is_closed():
+            if (
+                scheduler_loop is None
+                or getattr(scheduler_loop, "is_closed", lambda: True)()
+            ):
                 scheduler = None
         if scheduler is None:
             scheduler = AsyncIOScheduler()
