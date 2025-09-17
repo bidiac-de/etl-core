@@ -222,6 +222,7 @@ class SchedulerService:
         raise ValueError(f"Unsupported trigger type: {ttype}")
 
     def _job_callable(self, schedule_id: str):
+        """Create an async wrapper for schedule execution so APScheduler runs it correctly."""
         async def _runner():
             await self._run_schedule(schedule_id)
 

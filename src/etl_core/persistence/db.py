@@ -102,9 +102,13 @@ def _column_exists(table: str, column: str) -> bool:
 
 
 def _migrate_schedules_add_job_id() -> None:
-    """
-    Earlier versions stored schedule -> job via 'job_name'. New schema uses 'job_id'.
-    Add 'job_id' column if missing and backfill values by joining on job.name.
+    """Ensure schedules reference jobs by id instead of name.
+
+    The migration runs as soon as this module is imported so the schema is
+    up-to-date before any handlers use it. If ``job_id`` already exists the
+    function exits without touching the table. When ``job_name`` is present we
+    backfill values by matching on the legacy name column; the SQL statements
+    simply no-op when no schedules require migration.
     """
     if _column_exists("scheduletable", "job_id"):
         return
