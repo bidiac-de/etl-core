@@ -5,6 +5,8 @@ import etl_core.job_execution.runtimejob as runtimejob_module
 from etl_core.job_execution.runtimejob import RuntimeJob
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.components.stubcomponents import MultiSource, MultiEcho
+from etl_core.components.data_operations.filter.filter_component import FilterComponent
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
 from etl_core.components.data_operations.schema_mapping.schema_mapping_component import (  # noqa: E501
     SchemaMappingComponent,
 )
@@ -253,6 +255,84 @@ def test_single_predecessor_multi_port_join(schema_row_min):
     sink_comp = get_component_by_name(runtime_job, "sink")
     sink_metrics = mh.get_comp_metrics(execution.id, attempt.id, sink_comp.id)
     assert sink_metrics.lines_received == source.count
+
+
+def test_filter_component_pipeline(schema_row_min):
+    handler = JobExecutionHandler()
+
+    source = MultiSource(
+        name="source",
+        comp_type="multi_source",
+        description="emits test rows",
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": [EdgeRef(to="filter", in_port="in")]},
+        count=4,
+    )
+
+    filter_component = FilterComponent(
+        name="filter",
+        comp_type="filter",
+        description="passes ids >= 2",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"pass": schema_row_min, "fail": schema_row_min},
+        routes={
+            "pass": [EdgeRef(to="pass_sink", in_port="in")],
+            "fail": [EdgeRef(to="fail_sink", in_port="in")],
+        },
+        rule=ComparisonRule(column="id", operator=">=", value=2),
+    )
+
+    pass_sink = MultiEcho(
+        name="pass_sink",
+        comp_type="multi_echo",
+        description="captures passing rows",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": []},
+    )
+
+    fail_sink = MultiEcho(
+        name="fail_sink",
+        comp_type="multi_echo",
+        description="captures failing rows",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": []},
+    )
+
+    runtime_job = RuntimeJob(
+        name="FilterPipeline",
+        num_of_retries=0,
+        file_logging=False,
+        strategy_type="row",
+        components=[source, filter_component, pass_sink, fail_sink],
+        metadata={},
+    )
+
+    execution = handler.execute_job(runtime_job)
+    attempt = execution.attempts[0]
+    mh = handler.job_info.metrics_handler
+
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
+
+    filter_comp = get_component_by_name(runtime_job, "filter")
+    pass_comp = get_component_by_name(runtime_job, "pass_sink")
+    fail_comp = get_component_by_name(runtime_job, "fail_sink")
+
+    filter_metrics = mh.get_comp_metrics(execution.id, attempt.id, filter_comp.id)
+    pass_metrics = mh.get_comp_metrics(execution.id, attempt.id, pass_comp.id)
+    fail_metrics = mh.get_comp_metrics(execution.id, attempt.id, fail_comp.id)
+
+    total_rows = source.count
+    expected_pass = sum(1 for i in range(total_rows) if i >= 2)
+    expected_fail = total_rows - expected_pass
+
+    assert filter_metrics.lines_received == total_rows
+    assert filter_metrics.lines_forwarded == expected_pass
+    assert filter_metrics.lines_dismissed == expected_fail
+
+    assert pass_metrics.lines_received == expected_pass
+    assert fail_metrics.lines_received == expected_fail
 
 
 class SlowSource(MultiSource):
