@@ -213,8 +213,8 @@ class JobExecutionHandler:
         out_edges: Dict[str, Dict[str, List[Tuple[asyncio.Queue, str, bool]]]] = {}
 
         # Destination-side helper:
-        # pred_to_in_port_by_component: dst_comp_name -> {pred_comp_id: deque[in_port]}
-        pred_to_in_port_by_component: Dict[str, Dict[str, Deque[str]]] = {
+        # pred_to_in_ports_by_component: dst_comp_name -> {pred_comp_id: Deque[in_port]}
+        pred_to_in_ports_by_component: Dict[str, Dict[str, Deque[str]]] = {
             comp.name: {} for comp in job.components
         }
 
@@ -228,9 +228,9 @@ class JobExecutionHandler:
                     multi_in = len(dst.expected_in_port_names()) > 1
                     triples.append((in_queues[dst.name], in_port, multi_in))
                     # remember every destination in_port this predecessor feeds
-                    pred_map = pred_to_in_port_by_component.setdefault(dst.name, {})
-                    port_queue = pred_map.setdefault(comp.id, deque())
-                    port_queue.append(in_port)
+                    pred_map = pred_to_in_ports_by_component.setdefault(dst.name, {})
+                    in_ports_queue = pred_map.setdefault(comp.id, deque())
+                    in_ports_queue.append(in_port)
                 by_port[outp] = triples
             out_edges[comp.name] = by_port
 
@@ -246,7 +246,7 @@ class JobExecutionHandler:
                 )
                 pred_map = {
                     pred_id: deque(ports)
-                    for pred_id, ports in pred_to_in_port_by_component.get(
+                    for pred_id, ports in pred_to_in_ports_by_component.get(
                         comp.name, {}
                     ).items()
                 }
@@ -272,7 +272,7 @@ class JobExecutionHandler:
         in_queues: List[asyncio.Queue],
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
         metrics: ComponentMetrics,
-        pred_to_in_port: Dict[str, Deque[str]],
+        pred_to_in_ports: Dict[str, Deque[str]],
     ) -> None:
         """
         Async worker loop per component.
@@ -290,7 +290,7 @@ class JobExecutionHandler:
                 await self._run_component(component, None, metrics, out_edges_by_port)
             else:
                 await self._consume_and_run(
-                    component, metrics, in_queues, out_edges_by_port, pred_to_in_port
+                    component, metrics, in_queues, out_edges_by_port, pred_to_in_ports
                 )
         except asyncio.CancelledError:
             # mark cancelled in metrics, then re-raise
@@ -377,7 +377,7 @@ class JobExecutionHandler:
         component: Component,
         metrics: ComponentMetrics,
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-        pred_to_in_port: Dict[str, Deque[str]],
+        pred_to_in_ports: Dict[str, Deque[str]],
         requires_tagged: bool,
         remaining_counts: Dict[str, int],
     ) -> None:
@@ -385,11 +385,11 @@ class JobExecutionHandler:
         if pred_id not in remaining_counts:
             return
 
-        port_queue = pred_to_in_port.get(pred_id)
+        in_ports_queue = pred_to_in_ports.get(pred_id)
         in_port: Optional[str] = None
-        if port_queue:
+        if in_ports_queue:
             try:
-                in_port = port_queue.popleft()
+                in_port = in_ports_queue.popleft()
             except IndexError:
                 in_port = None
 
@@ -444,11 +444,11 @@ class JobExecutionHandler:
     def _initial_remaining_counts(
         self,
         component: Component,
-        pred_to_in_port: Dict[str, Deque[str]],
+        pred_to_in_ports: Dict[str, Deque[str]],
     ) -> Dict[str, int]:
         counts: Dict[str, int] = {}
         for pred in component.prev_components:
-            ports = pred_to_in_port.get(pred.id)
+            ports = pred_to_in_ports.get(pred.id)
             if ports:
                 counts[pred.id] = len(ports)
             else:
@@ -461,7 +461,7 @@ class JobExecutionHandler:
         metrics: ComponentMetrics,
         in_queues: List[asyncio.Queue],
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-        pred_to_in_port: Dict[str, Deque[str]],
+        pred_to_in_ports: Dict[str, Deque[str]],
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.
@@ -478,7 +478,7 @@ class JobExecutionHandler:
           * Otherwise we just account for the closing predecessor.
         """
         queue = in_queues[0]
-        remaining = self._initial_remaining_counts(component, pred_to_in_port)
+        remaining = self._initial_remaining_counts(component, pred_to_in_ports)
 
         # Resolve the single expected in-port name if applicable
         in_port_names = component.expected_in_port_names()
@@ -494,7 +494,7 @@ class JobExecutionHandler:
                     component=component,
                     metrics=metrics,
                     out_edges_by_port=out_edges_by_port,
-                    pred_to_in_port=pred_to_in_port,
+                    pred_to_in_ports=pred_to_in_ports,
                     requires_tagged=requires_tagged,
                     remaining_counts=remaining,
                 )

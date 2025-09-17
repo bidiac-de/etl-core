@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch
@@ -14,11 +15,12 @@ from contextlib import contextmanager
 
 
 def runner() -> CliRunner:
-    try:
+    # Feature-detect instead of catching TypeError: safer and clearer.
+    init_params = inspect.signature(CliRunner.__init__).parameters
+    if "mix_stderr" in init_params:
         return CliRunner(mix_stderr=False)
-    except TypeError:
-        # Older Click versions (<8.1) do not support mix_stderr
-        return CliRunner()
+    # Older Click versions (<8.1) do not support mix_stderr
+    return CliRunner()
 
 
 class _FakeExecClient:

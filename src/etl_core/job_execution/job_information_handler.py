@@ -1,7 +1,7 @@
 import datetime
 import logging
 from pathlib import Path
-from typing import Dict, Tuple, Type, Union
+from typing import Dict, Tuple, Type, Union, Optional
 
 from etl_core.logger.logging_setup import resolve_log_dir
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
@@ -105,7 +105,7 @@ class LoggingHandler:
     def __init__(
         self,
         job_name: str,
-        base_log_dir: Union[Path, str, None] = None,
+        base_log_dir: Optional[Union[Path, str]] = None,
     ):
         resolved_base = (
             resolve_log_dir()
