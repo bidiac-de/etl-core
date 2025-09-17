@@ -236,7 +236,4 @@ def run_now_cmd(schedule_id: str):
         return
     import asyncio
 
-    async def _run():
-        await RunNowScheduleCommand(schedule_id).execute()
-
-    asyncio.run(_run())
+    asyncio.run(RunNowScheduleCommand(schedule_id).execute())
