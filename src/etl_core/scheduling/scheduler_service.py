@@ -222,7 +222,8 @@ class SchedulerService:
         raise ValueError(f"Unsupported trigger type: {ttype}")
 
     def _job_callable(self, schedule_id: str):
-        """Create an async wrapper for schedule execution so APScheduler runs it correctly."""
+        """Create an async wrapper for schedule execution so APScheduler runs it correctly."""  # NoQA E501
+
         async def _runner():
             await self._run_schedule(schedule_id)
 
@@ -260,9 +261,7 @@ class SchedulerService:
 
         env = sch.context
         safe_env = self._context_for_log(env)
-        self._log.info(
-            "Executing scheduled job id '%s' (env=%s)", sch.job_id, safe_env
-        )
+        self._log.info("Executing scheduled job id '%s' (env=%s)", sch.job_id, safe_env)
         try:
             await asyncio.to_thread(self._deps.executor.execute_job, runtime_job, env)
         except ExecutionAlreadyRunning:

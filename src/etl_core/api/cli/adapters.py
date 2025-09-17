@@ -352,15 +352,14 @@ class _RestBase:
         method = getattr(resp.request, "method", "UNKNOWN")
 
         if resp.status_code == 404:
-            raise PersistNotFoundError(
-                f"Resource not found: {method} {sanitized_url}"
-            )
+            raise PersistNotFoundError(f"Resource not found: {method} {sanitized_url}")
         try:
             resp.raise_for_status()
-        except requests.HTTPError as exc:  # pragma: no cover - network errors rarely hit
+        except (
+            requests.HTTPError
+        ) as exc:  # pragma: no cover - network errors rarely hit
             message = (
-                f"{resp.status_code} {resp.reason} "
-                f"for {method} {sanitized_url}"
+                f"{resp.status_code} {resp.reason} " f"for {method} {sanitized_url}"
             )
             raise requests.HTTPError(
                 message,
