@@ -4,6 +4,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 import os
+import re
 from typing import Any, Dict, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -92,24 +93,25 @@ class SchedulerService:
 
         # Initial sync before scheduling the periodic sync task.
         self.sync_from_db()
+        interval = _resolve_sync_interval_seconds(sync_seconds)
+        if interval is None:
+            self._log.info("Periodic DB sync disabled")
+            return
+
         try:
-            interval = _resolve_sync_interval_seconds(sync_seconds)
-            if interval is not None:
-                scheduler.add_job(
-                    self.sync_from_db,
-                    trigger=IntervalTrigger(seconds=interval),
-                    id=_SYNC_JOB_ID,
-                    replace_existing=True,
-                    coalesce=True,
-                    max_instances=1,
-                )
-                self._log.info("Scheduled periodic DB sync every %s seconds", interval)
-            else:
-                self._log.info("Periodic DB sync disabled")
-        except Exception as exc:
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
+            scheduler.add_job(
+                self.sync_from_db,
+                trigger=IntervalTrigger(seconds=interval),
+                id=_SYNC_JOB_ID,
+                replace_existing=True,
+                coalesce=True,
+                max_instances=1,
+            )
+        except Exception:
             self._log.exception("Failed to schedule periodic DB sync")
+            raise
+
+        self._log.info("Scheduled periodic DB sync every %s seconds", interval)
 
     def pause_all(self) -> None:
         scheduler = self._scheduler
@@ -256,7 +258,10 @@ class SchedulerService:
             return
 
         env = sch.context
-        self._log.info("Executing scheduled job id '%s' (env=%s)", sch.job_id, env)
+        safe_env = self._context_for_log(env)
+        self._log.info(
+            "Executing scheduled job id '%s' (env=%s)", sch.job_id, safe_env
+        )
         try:
             await asyncio.to_thread(self._deps.executor.execute_job, runtime_job, env)
         except ExecutionAlreadyRunning:
@@ -267,6 +272,16 @@ class SchedulerService:
             self._log.exception("Scheduled job id '%s' failed", sch.job_id)
         else:
             self._log.info("Finished scheduled job id '%s'", sch.job_id)
+
+    @staticmethod
+    def _context_for_log(value: Optional[str]) -> str:
+        if not value:
+            return "<none>"
+        if value.upper() in {"DEV", "TEST", "PROD"}:
+            return value.upper()
+        if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", value):
+            return value
+        return "<masked>"
 
     def add_schedule(self, sch: ScheduleTable) -> None:
         self._upsert_aps_job(sch)

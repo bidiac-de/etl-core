@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from etl_core.context.context import Context
 from etl_core.context.credentials import Credentials
@@ -330,12 +330,43 @@ class _RestBase:
         self.base = base_url.rstrip("/")
         self.session = requests.Session()
 
+    @staticmethod
+    def _sanitize_url(raw_url: str | None) -> str:
+        if not raw_url:
+            return "<unknown>"
+        try:
+            parsed = urlsplit(raw_url)
+        except ValueError:
+            return "<invalid-url>"
+
+        netloc = parsed.netloc
+        if "@" in netloc:
+            host = netloc.split("@", 1)[1]
+            netloc = f"***@{host}"
+
+        sanitized = parsed._replace(netloc=netloc, query="", fragment="")
+        return urlunsplit(sanitized)
+
     def _raise_for_status(self, resp: requests.Response) -> None:
+        sanitized_url = self._sanitize_url(getattr(resp.request, "url", None))
+        method = getattr(resp.request, "method", "UNKNOWN")
+
         if resp.status_code == 404:
             raise PersistNotFoundError(
-                f"Resource not found: {resp.request.method} {resp.request.url}"
+                f"Resource not found: {method} {sanitized_url}"
             )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:  # pragma: no cover - network errors rarely hit
+            message = (
+                f"{resp.status_code} {resp.reason} "
+                f"for {method} {sanitized_url}"
+            )
+            raise requests.HTTPError(
+                message,
+                response=resp,
+                request=resp.request,
+            ) from exc
 
 
 class RemoteJobsClient(_RestBase, JobsPort):

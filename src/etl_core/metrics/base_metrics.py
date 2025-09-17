@@ -1,5 +1,6 @@
 from abc import ABC
 from datetime import datetime, timedelta
+from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, PrivateAttr
 from etl_core.components.runtime_state import RuntimeState
@@ -13,8 +14,8 @@ class Metrics(BaseModel, ABC):
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     _status: str = RuntimeState.PENDING.value
     _created_at: datetime = datetime.now()
-    _started_at: datetime
-    _processing_time: timedelta
+    _started_at: Optional[datetime] = PrivateAttr(default=None)
+    _processing_time: timedelta = PrivateAttr(default=timedelta(0))
     _error_count: int = 0
 
     def set_started(self):
@@ -47,7 +48,7 @@ class Metrics(BaseModel, ABC):
         return self._created_at
 
     @property
-    def started_at(self) -> datetime:
+    def started_at(self) -> Optional[datetime]:
         return self._started_at
 
     @started_at.setter
