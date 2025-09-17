@@ -5,7 +5,7 @@ from typing import Optional, Tuple, List
 
 from sqlmodel import Session, select
 
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import CredentialsTable
 from etl_core.context.credentials import Credentials
 from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
@@ -39,6 +39,7 @@ class CredentialsHandler:
     """
 
     def __init__(self, engine_=engine) -> None:
+        ensure_schema()
         self.engine = engine_
         self.secret_store = _create_secret_provider()
 

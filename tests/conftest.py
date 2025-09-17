@@ -35,7 +35,7 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import (
     ComponentTable,
     JobTable,
@@ -59,6 +59,9 @@ from etl_core.singletons import (
 
 _TEST_LOG_DIR = Path(tempfile.mkdtemp(prefix="etl-core-logs-")).resolve()
 os.environ.setdefault("LOG_DIR", str(_TEST_LOG_DIR))
+
+
+ensure_schema()
 
 
 @pytest.fixture

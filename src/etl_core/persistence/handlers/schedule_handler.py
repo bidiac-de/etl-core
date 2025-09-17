@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlmodel import Session, select
 
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import ScheduleTable, TriggerType
 
 
@@ -16,6 +16,7 @@ class ScheduleNotFoundError(Exception):
 
 class ScheduleHandler:
     def __init__(self, engine_=engine) -> None:
+        ensure_schema()
         self.engine = engine_
 
     @contextmanager

@@ -16,6 +16,7 @@ from .components.component_registry import (
     set_registry_mode,
 )
 from .scheduling.scheduler_service import SchedulerService
+from etl_core.persistence.db import ensure_schema
 
 config = Config(".env")  # loads env and .env file if present
 
@@ -40,6 +41,8 @@ async def lifespan(_app: FastAPI):
             Path(__file__).with_name("config").joinpath("logging_config.yaml")
         )
     )
+
+    ensure_schema()
 
     set_registry_mode(_resolve_registry_mode())
 

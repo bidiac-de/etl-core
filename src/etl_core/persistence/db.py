@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 from typing import Any
 
 from dotenv import load_dotenv
@@ -59,7 +60,8 @@ def _set_sqlite_pragmas(dbapi_conn: Any, _: Any) -> None:
         cur.close()
 
 
-SQLModel.metadata.create_all(engine)
+_SCHEMA_LOCK = threading.Lock()
+_SCHEMA_READY = False
 
 # --- Known tables cache ---
 _KNOWN_TABLES = {t.lower() for t in SQLModel.metadata.tables.keys()}
@@ -104,11 +106,11 @@ def _column_exists(table: str, column: str) -> bool:
 def _migrate_schedules_add_job_id() -> None:
     """Ensure schedules reference jobs by id instead of name.
 
-    The migration runs as soon as this module is imported so the schema is
-    up-to-date before any handlers use it. If ``job_id`` already exists the
-    function exits without touching the table. When ``job_name`` is present we
-    backfill values by matching on the legacy name column; the SQL statements
-    simply no-op when no schedules require migration.
+    Triggered via ``ensure_schema`` so the schema is up-to-date before any
+    handlers rely on it. If ``job_id`` already exists the function exits without
+    touching the table. When ``job_name`` is present we backfill values by
+    matching on the legacy name column; the SQL statements simply no-op when no
+    schedules require migration.
     """
     if _column_exists("scheduletable", "job_id"):
         return
@@ -135,4 +137,21 @@ def _migrate_schedules_add_job_id() -> None:
         )
 
 
-_migrate_schedules_add_job_id()
+def ensure_schema() -> None:
+    """Create core tables and run lightweight migrations on first use."""
+
+    global _SCHEMA_READY, _KNOWN_TABLES
+    if _SCHEMA_READY:
+        return
+
+    with _SCHEMA_LOCK:
+        if _SCHEMA_READY:
+            return
+
+        SQLModel.metadata.create_all(engine)
+        _migrate_schedules_add_job_id()
+
+        # Refresh known table cache in case metadata gained new tables.
+        _KNOWN_TABLES = {t.lower() for t in SQLModel.metadata.tables.keys()}
+
+        _SCHEMA_READY = True

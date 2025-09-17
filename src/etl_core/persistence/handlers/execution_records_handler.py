@@ -6,7 +6,7 @@ from typing import Optional, Iterable
 
 from sqlmodel import Session, select, asc, desc
 
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import (
     ExecutionAttemptTable,
     ExecutionTable,
@@ -19,6 +19,7 @@ class ExecutionRecordsHandler:
     """
 
     def __init__(self, engine_=engine) -> None:
+        ensure_schema()
         self.engine = engine_
 
     @contextmanager

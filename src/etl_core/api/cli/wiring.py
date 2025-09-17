@@ -12,6 +12,7 @@ from etl_core.api.cli.adapters import (
     api_base_url,
 )
 from etl_core.api.cli.ports import ContextsPort, ExecutionPort, JobsPort
+from etl_core.persistence.db import ensure_schema
 
 
 def pick_clients() -> Tuple[JobsPort, ExecutionPort, ContextsPort]:
@@ -22,4 +23,5 @@ def pick_clients() -> Tuple[JobsPort, ExecutionPort, ContextsPort]:
             RemoteExecutionClient(base),
             RemoteContextsClient(base),
         )
+    ensure_schema()
     return LocalJobsClient(), LocalExecutionClient(), LocalContextsClient()

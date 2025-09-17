@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from etl_core.job_execution.runtimejob import RuntimeJob
 from etl_core.persistence.configs.job_config import JobConfig
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.persistence.handlers.components_handler import ComponentHandler
 from etl_core.persistence.handlers.dataclasses_handler import DataClassHandler
@@ -22,6 +22,7 @@ from etl_core.persistence.table_definitions import (
 
 class JobHandler:
     def __init__(self, engine_=engine) -> None:
+        ensure_schema()
         self.engine = engine_
         self.dc = DataClassHandler()
         self.ch = ComponentHandler(self.dc)
