@@ -332,7 +332,9 @@ class _RestBase:
 
     def _raise_for_status(self, resp: requests.Response) -> None:
         if resp.status_code == 404:
-            raise PersistNotFoundError("Resource not found")
+            raise PersistNotFoundError(
+                f"Resource not found: {resp.request.method} {resp.request.url}"
+            )
         resp.raise_for_status()
 
 
