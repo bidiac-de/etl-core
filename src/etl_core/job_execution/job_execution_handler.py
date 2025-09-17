@@ -452,7 +452,11 @@ class JobExecutionHandler:
             if ports:
                 counts[pred.id] = len(ports)
             else:
-                counts[pred.id] = 1
+                pred_name = getattr(pred, "name", pred.id)
+                raise RuntimeError(
+                    f"Wiring invariant violated: component '{component.name}' "
+                    f"missing in-port mapping from predecessor '{pred_name}'."
+                )
         return counts
 
     async def _consume_and_run(
