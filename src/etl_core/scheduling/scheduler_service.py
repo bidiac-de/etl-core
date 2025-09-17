@@ -106,7 +106,9 @@ class SchedulerService:
                 self._log.info("Scheduled periodic DB sync every %s seconds", interval)
             else:
                 self._log.info("Periodic DB sync disabled")
-        except Exception:
+        except Exception as exc:
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
             self._log.exception("Failed to schedule periodic DB sync")
 
     def pause_all(self) -> None:
