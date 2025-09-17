@@ -306,7 +306,7 @@ class JobExecutionHandler:
         finally:
             started_at = getattr(metrics, "started_at", None)
             if started_at is not None:
-                metrics.processing_time = datetime.now() - metrics.started_at
+                metrics.processing_time = datetime.now() - started_at
             await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
 
     async def _broadcast_to_next_inputs(
