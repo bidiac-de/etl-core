@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
-from types import SimpleNamespace
+import asyncio
+import functools
+from types import MethodType, SimpleNamespace
 from typing import Any, Dict, Tuple
 
 import pytest
@@ -190,3 +192,78 @@ async def test_run_schedule_logs_when_job_already_running(
 
     assert "already running; skipping trigger" in caplog.text
     assert deps.executor.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_shutdown_gracefully_waits_for_scheduler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loop = asyncio.get_running_loop()
+    completion = asyncio.Future()
+
+    class StubScheduler:
+        def __init__(self) -> None:
+            self._eventloop = loop
+            self.shutdown_calls: list[bool] = []
+
+            def actual_shutdown(self, wait: bool = True) -> None:
+                self.shutdown_calls.append(wait)
+                loop.call_soon(completion.set_result, True)
+
+            @functools.wraps(actual_shutdown)
+            def wrapper(self, wait: bool = True) -> None:
+                actual_shutdown(self, wait)
+
+            self.shutdown = MethodType(wrapper, self)
+
+        def get_jobs(self) -> list:
+            return []
+
+    deps = scheduler_service._Deps(
+        schedules=DummyScheduleHandler(),
+        jobs=DummyJobHandler(),
+        executor=DummyExecutor(),
+    )
+    service = scheduler_service.SchedulerService(deps=deps)
+    stub_scheduler = StubScheduler()
+    service._scheduler = stub_scheduler
+    service._started = True
+
+    await service.shutdown_gracefully()
+
+    assert stub_scheduler.shutdown_calls == [True]
+    assert completion.done() is True
+    assert service._scheduler is None
+    assert service._started is False
+
+
+@pytest.mark.asyncio
+async def test_shutdown_gracefully_without_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class StubScheduler:
+        def __init__(self) -> None:
+            self._eventloop = None
+            self.shutdown_calls: list[bool] = []
+
+        def shutdown(self, wait: bool = True) -> None:
+            self.shutdown_calls.append(wait)
+
+        def get_jobs(self) -> list:
+            return []
+
+    deps = scheduler_service._Deps(
+        schedules=DummyScheduleHandler(),
+        jobs=DummyJobHandler(),
+        executor=DummyExecutor(),
+    )
+    service = scheduler_service.SchedulerService(deps=deps)
+    stub_scheduler = StubScheduler()
+    service._scheduler = stub_scheduler
+    service._started = True
+
+    await service.shutdown_gracefully()
+
+    assert stub_scheduler.shutdown_calls == [True]
+    assert service._scheduler is None
+    assert service._started is False

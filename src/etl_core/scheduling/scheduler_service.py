@@ -142,13 +142,42 @@ class SchedulerService:
         """
         self._log.info("Graceful shutdown: pausing schedules and waiting for jobs")
         self.pause_all()
-        if self._scheduler is not None:
+        scheduler = self._scheduler
+        if scheduler is not None:
             # Wait=True to let running jobs finish.
-            await asyncio.to_thread(self._scheduler.shutdown, True)
+            await self._shutdown_scheduler(scheduler)
         self._scheduler = None
         with self._state_lock:
             self._started = False
         self._log.info("Scheduler fully shut down")
+
+    async def _shutdown_scheduler(self, scheduler: AsyncIOScheduler) -> None:
+        loop = getattr(scheduler, "_eventloop", None)
+        if loop is None or not getattr(loop, "is_running", lambda: False)():
+            scheduler.shutdown(wait=True)
+            return
+
+        current_loop = asyncio.get_running_loop()
+        completion = current_loop.create_future()
+
+        shutdown_impl = getattr(scheduler.shutdown, "__wrapped__", None)
+
+        def invoke_shutdown() -> None:
+            if shutdown_impl is not None:
+                shutdown_impl(scheduler, True)  # type: ignore[misc]
+            else:
+                scheduler.shutdown(True)
+
+        def _run_shutdown() -> None:
+            try:
+                invoke_shutdown()
+            except Exception as exc:  # pragma: no cover - defensive
+                current_loop.call_soon_threadsafe(completion.set_exception, exc)
+            else:
+                current_loop.call_soon_threadsafe(completion.set_result, None)
+
+        loop.call_soon_threadsafe(_run_shutdown)
+        await completion
 
     def sync_from_db(self) -> None:
         scheduler = self._scheduler
