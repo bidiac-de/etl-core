@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 import os
 import re
+import threading
 from typing import Any, Dict, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -69,6 +70,7 @@ class SchedulerService:
         self._deps = deps
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._started = False
+        self._state_lock = threading.Lock()
 
     @classmethod
     def instance(cls) -> "SchedulerService":
@@ -84,12 +86,19 @@ class SchedulerService:
         Set to 0 or one of: off,false,disable,disabled to disable the sync job.
         Default is 30 seconds if not provided.
         """
-        if self._started:
-            return
-        self._log.info("Starting AsyncIOScheduler")
-        scheduler = self._ensure_scheduler()
-        scheduler.start()
-        self._started = True
+        with self._state_lock:
+            if self._started:
+                return
+            self._started = True
+
+        try:
+            self._log.info("Starting AsyncIOScheduler")
+            scheduler = self._ensure_scheduler()
+            scheduler.start()
+        except Exception:
+            with self._state_lock:
+                self._started = False
+            raise
 
         # Initial sync before scheduling the periodic sync task.
         self.sync_from_db()
@@ -137,7 +146,8 @@ class SchedulerService:
             # Wait=True to let running jobs finish.
             await asyncio.to_thread(self._scheduler.shutdown, True)
         self._scheduler = None
-        self._started = False
+        with self._state_lock:
+            self._started = False
         self._log.info("Scheduler fully shut down")
 
     def sync_from_db(self) -> None:

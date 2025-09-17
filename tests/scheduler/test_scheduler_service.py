@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any, Dict, Tuple
 
@@ -132,3 +133,60 @@ def test_start_uses_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert fake_scheduler.started is True
     assert captured["kwargs"]["seconds"] == 12
+
+
+@pytest.mark.asyncio
+async def test_run_schedule_logs_when_job_already_running(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    schedule = SimpleNamespace(
+        id="schedule-1",
+        name="Demo",
+        job_id="job-1",
+        context="dev",
+        trigger_type=None,
+        trigger_args={"seconds": 10},
+        is_paused=False,
+    )
+
+    runtime_job = SimpleNamespace(id="job-1", name="demo-job")
+
+    class BlockingScheduleHandler:
+        def list(self) -> list:
+            return [schedule]
+
+        def get(self, schedule_id: str) -> SimpleNamespace:
+            assert schedule_id == schedule.id
+            return schedule
+
+    class RuntimeJobHandler:
+        def load_runtime_job(self, job_id: str) -> SimpleNamespace:
+            assert job_id == runtime_job.id
+            return runtime_job
+
+    class BusyExecutor:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def execute_job(self, job: SimpleNamespace, env: str | None = None) -> None:
+            self.calls += 1
+            raise scheduler_service.ExecutionAlreadyRunning("already running")
+
+    deps = scheduler_service._Deps(
+        schedules=BlockingScheduleHandler(),
+        jobs=RuntimeJobHandler(),
+        executor=BusyExecutor(),
+    )
+    service = scheduler_service.SchedulerService(deps=deps)
+
+    async def immediate_to_thread(func: Any, *args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(scheduler_service.asyncio, "to_thread", immediate_to_thread)
+
+    caplog.set_level(logging.WARNING, logger="etl_core.scheduler")
+
+    await service._run_schedule(schedule.id)
+
+    assert "already running; skipping trigger" in caplog.text
+    assert deps.executor.calls == 1
