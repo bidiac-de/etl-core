@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from uuid import uuid4
 from typing import Optional, Literal, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from src.etl_core.context.context import Context
 from src.etl_core.context.environment import Environment
@@ -15,7 +16,7 @@ from src.etl_core.context.context_registry import ContextRegistry
 from src.etl_core.context.secure_context_adapter import SecureContextAdapter
 
 from src.etl_core.context.secrets.secret_provider import SecretProvider
-from src.etl_core.context.secrets.keyring_provider import KeyringSecretProvider
+from src.etl_core.context.secrets.secret_utils import create_secret_provider
 
 from src.etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 from src.etl_core.persistence.handlers.context_handler import ContextHandler
@@ -28,25 +29,27 @@ from etl_core.api.dependencies import (
 router = APIRouter(prefix="/contexts", tags=["contexts"])
 
 
-def get_secret_provider(service: Optional[str] = None) -> SecretProvider:
-    svc = service or "sep-sose-2025/default"
-    return KeyringSecretProvider(service=svc)
+def get_secret_provider() -> SecretProvider:
+    """
+    Resolve the configured secret provider (memory or keyring).
+    We only fail if initialization itself errors out.
+    """
+    try:
+        provider = create_secret_provider()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"failed to initialize secret provider: {exc}",
+        ) from exc
+    return provider
 
 
 class ContextCreateRequest(BaseModel):
     context: Context
-    keyring_service: Optional[str] = Field(
-        default=None,
-        description="Override secret storage service name for this registration.",
-    )
 
 
 class CredentialsCreateRequest(BaseModel):
     credentials: Credentials
-    keyring_service: Optional[str] = Field(
-        default=None,
-        description="Override secret storage service name for this registration.",
-    )
 
 
 class CredentialsMappingContextCreateRequest(BaseModel):
@@ -77,17 +80,6 @@ class ProviderListItem(BaseModel):
     kind: Literal["context", "credentials"]
     name: Optional[str] = None
     environment: Optional[Environment] = None
-
-
-def _choose_secret_store(
-    default_provider: SecretProvider,
-    override_service: Optional[str],
-) -> SecretProvider:
-    return (
-        default_provider
-        if override_service is None
-        else get_secret_provider(override_service)
-    )
 
 
 def _append_item(
@@ -125,11 +117,9 @@ def create_context_provider(
         ctx = req.context
         context_id = str(uuid4())
 
-        secret_store = _choose_secret_store(default_provider, req.keyring_service)
-
         adapter = SecureContextAdapter(
             provider_id=context_id,
-            secret_store=secret_store,
+            secret_store=default_provider,
             context=ctx,
         )
 
@@ -154,7 +144,7 @@ def create_context_provider(
         return ProviderCreateResponse(
             id=context_id,
             kind="context",
-            environment=ctx.environment,
+            environment=ctx.environment.value,
             parameters_registered=secure_count,
         )
     except Exception as exc:  # noqa: BLE001
@@ -208,7 +198,7 @@ def create_credentials_mapping_context(
         return ProviderCreateResponse(
             id=context_id,
             kind="context",
-            environment=cmc.environment,
+            environment=cmc.environment.value,
             parameters_registered=len(mapping),
         )
     except Exception as exc:  # noqa: BLE001
@@ -232,26 +222,28 @@ def create_credentials_provider(
         creds = req.credentials
         credentials_id = str(uuid4())
 
-        secret_store = _choose_secret_store(default_provider, req.keyring_service)
-
         adapter = SecureContextAdapter(
             provider_id=credentials_id,
-            secret_store=secret_store,
+            secret_store=default_provider,
             credentials=creds,
         )
 
-        # Store password securely in secret store
-        adapter.bootstrap_to_store()
+        # Store password in keyring
+        result = adapter.bootstrap_to_store()
+        if result.errors:
+            problems = ", ".join(f"{k}: {v}" for k, v in result.errors.items())
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to store credentials securely ({problems})",
+            )
 
-        # reduce in-memory exposure of password
+        saved_id = creds_handler.upsert(creds, credentials_id=credentials_id)
+
+        # Reduce in-memory exposure only after successful persistence
         req.credentials.password = None
 
-        # persist non-secret metadata (password stays in keyring)
-        creds_handler.upsert(creds)
-
-        # secure_count = 1, password is the only secure parameter
         return ProviderCreateResponse(
-            id=credentials_id,
+            id=saved_id,
             kind="credentials",
             environment=None,
             parameters_registered=1,
@@ -304,7 +296,7 @@ def get_provider(
         return ProviderInfoResponse(
             id=id,
             kind="context",
-            environment=Environment(ctx.environment),
+            environment=str(ctx.environment),
             provider_class="SecureContextAdapter",
         )
     row_creds = creds_handler.get_by_id(id)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Optional, Tuple, List
 
 from sqlmodel import Session, select
@@ -8,28 +7,7 @@ from sqlmodel import Session, select
 from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import CredentialsTable
 from etl_core.context.credentials import Credentials
-from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
-from etl_core.context.secrets.memory_provider import InMemorySecretProvider
-from etl_core.context.secrets.secret_provider import SecretProvider
-
-
-_MEMORY_PROVIDER_SINGLETON: Optional[InMemorySecretProvider] = None
-
-
-def _create_secret_provider() -> SecretProvider:
-    """
-    Decide the secret backend at runtime.
-      - SECRET_BACKEND: "memory" (default) or "keyring"
-    """
-    backend = os.getenv("SECRET_BACKEND", "memory").strip().lower()
-    if backend == "memory":
-        global _MEMORY_PROVIDER_SINGLETON
-        if _MEMORY_PROVIDER_SINGLETON is None:
-            _MEMORY_PROVIDER_SINGLETON = InMemorySecretProvider()
-        return _MEMORY_PROVIDER_SINGLETON
-    if backend == "keyring":
-        return KeyringSecretProvider(service="etl_core")
-    raise ValueError(f"Unsupported SECRET_BACKEND={backend!r}")
+from etl_core.context.secrets.secret_utils import create_secret_provider
 
 
 class CredentialsHandler:
@@ -41,7 +19,7 @@ class CredentialsHandler:
     def __init__(self, engine_=engine) -> None:
         ensure_schema()
         self.engine = engine_
-        self.secret_store = _create_secret_provider()
+        self.secret_store = create_secret_provider()
 
     def _password_key(self, credentials_id: str) -> str:
         return f"{credentials_id}/password"
