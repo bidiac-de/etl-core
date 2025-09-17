@@ -2,7 +2,8 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from sqlalchemy import event
+from sqlalchemy import event, inspect
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
@@ -57,13 +58,30 @@ def _set_sqlite_pragmas(dbapi_conn: Any, _: Any) -> None:
 
 SQLModel.metadata.create_all(engine)
 
+_KNOWN_TABLES = {t.lower() for t in SQLModel.metadata.tables.keys()}
+
 
 def _column_exists(table: str, column: str) -> bool:
+    """
+    Return True if `column` exists in `table`.
+
+    Security:
+      - Validate `table` against known table names acquired from SQLModel.metadata.
+      - Use SQLAlchemy Inspector.get_columns() to avoid manual SQL string construction.
+    """
+    if not isinstance(table, str) or not isinstance(column, str):
+        return False
+
+    table_l = table.lower()
+    if table_l not in _KNOWN_TABLES:
+        # table not recognized — reject instead of interpolating into SQL
+        return False
+
     try:
-        with engine.connect() as conn:
-            rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
-            return any(r[1] == column for r in rows)
-    except Exception:
+        inspector = inspect(engine)
+        cols = inspector.get_columns(table)
+        return any(c.get("name") == column for c in cols)
+    except SQLAlchemyError:
         return False
 
 
