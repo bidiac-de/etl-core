@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import inspect
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch
@@ -15,17 +14,11 @@ from contextlib import contextmanager
 
 
 def runner() -> CliRunner:
-    # Prefer feature detection of CliRunner.__init__ signature.
-    # Be defensive in case inspect.signature() fails or Click changes internals.
+    # Try the newer Click keyword first; older versions raise TypeError.
     try:
-        init_params = inspect.signature(CliRunner.__init__).parameters
-        if "mix_stderr" in init_params:
-            return CliRunner(mix_stderr=False)
-    except (ValueError, TypeError, AttributeError):
-        # Fall back to baseline behavior if introspection fails.
-        pass
-    # Older Click versions (<8.1) do not support mix_stderr
-    return CliRunner()
+        return CliRunner(mix_stderr=False)
+    except TypeError:
+        return CliRunner()
 
 
 class _FakeExecClient:

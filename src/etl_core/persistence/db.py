@@ -109,19 +109,22 @@ def _migrate_schedules_add_job_id() -> None:
     if _column_exists("scheduletable", "job_id"):
         return
 
+    has_job_name = _column_exists("scheduletable", "job_name")
+
     with engine.begin() as conn:
         conn.exec_driver_sql("ALTER TABLE scheduletable ADD COLUMN job_id VARCHAR")
-        conn.exec_driver_sql(
-            """
-            UPDATE scheduletable
-            SET job_id = (
-                SELECT jobtable.id
-                FROM jobtable
-                WHERE jobtable.name = scheduletable.job_name
-                LIMIT 1
+        if has_job_name:
+            conn.exec_driver_sql(
+                """
+                UPDATE scheduletable
+                SET job_id = (
+                    SELECT jobtable.id
+                    FROM jobtable
+                    WHERE jobtable.name = scheduletable.job_name
+                    LIMIT 1
+                )
+                """
             )
-            """
-        )
         conn.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_scheduletable_job_id "
             "ON scheduletable (job_id)"
