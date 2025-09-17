@@ -276,6 +276,11 @@ class JobExecutionHandler:
     ) -> None:
         """
         Async worker loop per component.
+
+        Args:
+            pred_to_in_ports: Maps predecessor component IDs to a deque of
+                destination in-port names they feed, preserving routing order
+                for components that expect multiple inputs.
         """
         attempt = execution.latest_attempt()
         sentinel = execution.sentinels[component.id]
