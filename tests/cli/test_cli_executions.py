@@ -15,10 +15,15 @@ from contextlib import contextmanager
 
 
 def runner() -> CliRunner:
-    # Feature-detect instead of catching TypeError: safer and clearer.
-    init_params = inspect.signature(CliRunner.__init__).parameters
-    if "mix_stderr" in init_params:
-        return CliRunner(mix_stderr=False)
+    # Prefer feature detection of CliRunner.__init__ signature.
+    # Be defensive in case inspect.signature() fails or Click changes internals.
+    try:
+        init_params = inspect.signature(CliRunner.__init__).parameters
+        if "mix_stderr" in init_params:
+            return CliRunner(mix_stderr=False)
+    except (ValueError, TypeError, AttributeError):
+        # Fall back to baseline behavior if introspection fails.
+        pass
     # Older Click versions (<8.1) do not support mix_stderr
     return CliRunner()
 

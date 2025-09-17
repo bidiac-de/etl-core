@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any
 
 from dotenv import load_dotenv
@@ -20,6 +21,7 @@ from etl_core.persistence.table_definitions import (
     ScheduleTable,
 )
 
+# Force imports so tables get registered
 _, _, _, _, _ = JobTable, ComponentTable, MetaDataTable, LayoutTable, ComponentLinkTable
 _, _, _, _ = (
     CredentialsTable,
@@ -29,6 +31,7 @@ _, _, _, _ = (
 )
 _ = ScheduleTable
 
+# --- Database setup ---
 load_dotenv()
 db_path = os.getenv("DB_PATH")
 
@@ -58,7 +61,10 @@ def _set_sqlite_pragmas(dbapi_conn: Any, _: Any) -> None:
 
 SQLModel.metadata.create_all(engine)
 
+# --- Known tables cache ---
 _KNOWN_TABLES = {t.lower() for t in SQLModel.metadata.tables.keys()}
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _column_exists(table: str, column: str) -> bool:
@@ -66,21 +72,31 @@ def _column_exists(table: str, column: str) -> bool:
     Return True if `column` exists in `table`.
 
     Security:
-      - Validate `table` against known table names acquired from SQLModel.metadata.
-      - Use SQLAlchemy Inspector.get_columns() to avoid manual SQL string construction.
+      - Table validated against known table names from SQLModel.metadata.
+      - No SQL string construction (uses SQLAlchemy Inspector.get_columns).
+    Robustness:
+      - Validate `column` is a simple identifier to fail fast on junk input.
+      - Case-insensitive column comparison to avoid casing mismatches.
     """
     if not isinstance(table, str) or not isinstance(column, str):
         return False
 
-    table_l = table.lower()
+    table_l = table.strip().lower()
+    column_l = column.strip().lower()
+
+    if not table_l or not column_l:
+        return False
+
     if table_l not in _KNOWN_TABLES:
-        # table not recognized — reject instead of interpolating into SQL
+        return False
+
+    if not _IDENTIFIER_RE.match(column):
         return False
 
     try:
         inspector = inspect(engine)
-        cols = inspector.get_columns(table)
-        return any(c.get("name") == column for c in cols)
+        cols = inspector.get_columns(table_l)
+        return any((c.get("name") or "").lower() == column_l for c in cols)
     except SQLAlchemyError:
         return False
 
@@ -92,6 +108,7 @@ def _migrate_schedules_add_job_id() -> None:
     """
     if _column_exists("scheduletable", "job_id"):
         return
+
     with engine.begin() as conn:
         conn.exec_driver_sql("ALTER TABLE scheduletable ADD COLUMN job_id VARCHAR")
         conn.exec_driver_sql(
