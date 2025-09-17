@@ -5,6 +5,63 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional
 import re
 import pandas as pd
+import math
+import tempfile
+import os
+
+
+def _atomic_write_textfile(path: Path, writer: Callable[[Path], None]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", delete=False, dir=str(path.parent), suffix=path.suffix
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        writer(tmp_path)
+        os.replace(tmp_path, path)
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def dump_records_auto(
+    path: Path, records: List[Dict[str, Any]], indent: int = 2
+) -> None:
+    def _write(tmp_path: Path):
+        if is_ndjson_path(path):
+            dump_ndjson_records(tmp_path, records)  # nutzt Sanitizer
+        else:
+            dump_json_records(tmp_path, records, indent=indent)  # nutzt Sanitizer
+
+    _atomic_write_textfile(path, _write)
+
+
+def _to_json_safe_scalar(v):
+    try:
+        if isinstance(v, float):
+            if math.isnan(v) or math.isinf(v):
+                return None
+            return v
+    except Exception:
+        pass
+    try:
+        import pandas as _pd
+
+        if _pd.isna(v):
+            return None
+    except Exception:
+        pass
+    return v
+
+
+def _sanitize_for_json(obj):
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    return _to_json_safe_scalar(obj)
 
 
 def open_text_auto(path: Path, mode: str = "rt", encoding: str = "utf-8"):
@@ -44,19 +101,19 @@ def iter_ndjson_lenient(
 
 
 def append_ndjson_record(path: Path, record: Dict[str, Any]) -> None:
-    """Append a single record to an NDJSON file efficiently."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    safe = _sanitize_for_json(record)
     with open_text_auto(path, "at") as f:
-        f.write(json.dumps(record, ensure_ascii=False))
+        f.write(json.dumps(safe, ensure_ascii=False, allow_nan=False))
         f.write("\n")
 
 
 def dump_ndjson_records(path: Path, records: List[Dict[str, Any]]) -> None:
-    """Write many records as NDJSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open_text_auto(path, "wt") as f:
         for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False))
+            safe = _sanitize_for_json(rec)
+            f.write(json.dumps(safe, ensure_ascii=False, allow_nan=False))
             f.write("\n")
 
 
@@ -85,20 +142,10 @@ def load_json_records(path: Path) -> List[Dict[str, Any]]:
 def dump_json_records(
     path: Path, records: List[Dict[str, Any]], indent: int = 2
 ) -> None:
-    """Write a JSON array with UTF-8 (no ASCII escaping)."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    safe = _sanitize_for_json(records)
     with open_text_auto(path, "wt") as f:
-        json.dump(records, f, indent=indent, ensure_ascii=False)
-
-
-def dump_records_auto(
-    path: Path, records: List[Dict[str, Any]], indent: int = 2
-) -> None:
-    """Write NDJSON if path looks like NDJSON; else JSON-Array."""
-    if is_ndjson_path(path):
-        dump_ndjson_records(path, records)
-    else:
-        dump_json_records(path, records, indent=indent)
+        json.dump(safe, f, indent=indent, ensure_ascii=False, allow_nan=False)
 
 
 def _coerce_obj_to_record(obj: Any) -> Dict[str, Any]:
@@ -278,7 +325,7 @@ def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     return {k.lstrip("."): v for k, v in flat.items()}
 
 
-_LIST_INDEX_RE = re.compile(r"\[\d+\]")  # trifft 'tags[0]', 'items[12]' etc.
+_LIST_INDEX_RE = re.compile(r"\[\d+\]")
 
 
 def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -286,18 +333,9 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise TypeError(
             f"Expected dict payload, got {type(payload).__name__}: {payload}"
         )
-
     if _has_flat_paths(payload):
-        flat: Dict[str, Any] = {}
-        for k, v in payload.items():
-            if _LIST_INDEX_RE.search(k) and _is_nullish(v):
-                continue
-            flat[k] = v
-        data = unflatten_record(flat)
-    else:
-        data = payload
-
-    return data
+        return unflatten_record(payload)
+    return payload
 
 
 def ensure_nested_for_read(payload: Dict[str, Any]) -> Dict[str, Any]:

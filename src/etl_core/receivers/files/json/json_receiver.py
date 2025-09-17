@@ -9,6 +9,8 @@ import dask.dataframe as dd
 import dask
 from dask import delayed
 import pandas as pd
+import atexit
+import shutil
 
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.receivers.files.file_helper import FileReceiverError, ensure_file_exists
@@ -34,11 +36,26 @@ from etl_core.receivers.files.json.json_helper import (
 _SENTINEL: Any = object()
 T = TypeVar("T")
 
+_TEMP_DIRS: set[Path] = set()
+
+
+def _register_temp_dir(p: Path) -> None:
+    _TEMP_DIRS.add(p)
+
+
+def _cleanup_temp_dirs():
+    for p in list(_TEMP_DIRS):
+        shutil.rmtree(p, ignore_errors=True)
+        _TEMP_DIRS.discard(p)
+
+
+atexit.register(_cleanup_temp_dirs)
+
 
 def _atomic_overwrite(path: Path, writer: Callable[[Path], None]) -> None:
     """Write to temp file, then atomically replace target."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = "".join(path.suffixes)
+    suffix = path.suffix
     with tempfile.NamedTemporaryFile(
         "w", delete=False, dir=str(path.parent), suffix=suffix
     ) as tmp:
@@ -59,12 +76,13 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     ) -> AsyncIterator[Dict[str, Any]]:
         ensure_file_exists(filepath)
 
+        def _on_error(_: Exception):
+            metrics.error_count += 1
+
         it = (
             iter_ndjson_lenient(
                 filepath,
-                on_error=lambda _: setattr(
-                    metrics, "error_count", metrics.error_count + 1
-                ),
+                on_error=_on_error,
             )
             if is_ndjson_path(filepath)
             else read_json_row(filepath)
@@ -129,11 +147,11 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                 is_single_file = True
                 if is_ndjson_path(filepath):
                     read_target = str(filepath)
-                else:
-                    import tempfile
 
-                    tmpdir = tempfile.mkdtemp(prefix="etl_json_to_ndjson_")
-                    ndjson_path = Path(tmpdir) / (
+                else:
+                    tmpdir = Path(tempfile.mkdtemp(prefix="etl_json_to_ndjson_"))
+                    _register_temp_dir(tmpdir)  # <-- HIER
+                    ndjson_path = tmpdir / (
                         filepath.stem
                         + ".jsonl"
                         + (".gz" if str(filepath).lower().endswith(".gz") else "")
@@ -148,7 +166,6 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                     read_target = str(ndjson_path)
 
             if is_single_file:
-                import tempfile as _tf
 
                 def _preflatten_ndjson(src: Path, dst: Path) -> int:
                     count = 0
@@ -166,7 +183,8 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                         count += 1
                     return count
 
-                flat_dir = Path(_tf.mkdtemp(prefix="etl_flatten_ndjson_"))
+                flat_dir = Path(tempfile.mkdtemp(prefix="etl_flatten_ndjson_"))
+                _register_temp_dir(flat_dir)
                 flat_path = flat_dir / "flattened.jsonl"
                 await asyncio.to_thread(
                     _preflatten_ndjson, Path(read_target), flat_path

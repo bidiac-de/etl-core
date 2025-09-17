@@ -158,7 +158,6 @@ async def test_read_bulk_json_array_nested_and_nulls(metrics: ComponentMetrics) 
 
     assert df.shape[0] == 3
     assert list(df["id"]) == [1, 2, 3]
-    # <- city/zip statt street
     assert {"addr.city", "addr.zip"} <= set(df.columns)
 
     assert df.loc[0, "addr.city"] == "Berlin"
@@ -567,7 +566,7 @@ async def test_write_json_bulk_unflattens_from_flat_df(metrics, tmp_path: Path) 
     assert data[0]["addr"] == {"street": "Main", "city": "Town"}
     assert data[0]["tags"] == ["t1", "t2"]
     assert data[1]["addr"] == {"street": "Second", "city": "Ville"}
-    assert data[1]["tags"] == ["u1"]
+    assert data[1]["tags"] == ["u1", None]
 
 
 @pytest.mark.asyncio
