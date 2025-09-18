@@ -52,7 +52,9 @@ def _resolve_mongo_client_config() -> Tuple[Optional[str], Dict[str, Any]]:
     return uri, kwargs
 
 
-def _resolve_example_job_settings() -> Tuple[Optional[int], Optional[str], Optional[str]]:
+def _resolve_example_job_settings() -> (
+    Tuple[Optional[int], Optional[str], Optional[str]]
+):
     interval = config("ETL_MONGO_EXAMPLE_INTERVAL_SECONDS", cast=int, default=None)
     db_name = config("ETL_MONGO_EXAMPLE_DB", default=None)
     coll_name = config("ETL_MONGO_EXAMPLE_COLLECTION", default=None)

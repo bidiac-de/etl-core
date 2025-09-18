@@ -35,5 +35,4 @@ class SQLServerComponent(SQLDatabaseComponent):
 
     def _build_objects(self):
         """Build SQL Server-specific objects after validation."""
-        super()._build_objects()
         return self

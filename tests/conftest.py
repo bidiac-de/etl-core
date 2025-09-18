@@ -400,7 +400,7 @@ async def mongo_handler(
         port=persisted_mongo_credentials.get_parameter("port"),
         user=persisted_mongo_credentials.get_parameter("user"),
         password=persisted_mongo_credentials.decrypted_password,
-        auth_db=dbname,
+        auth_db="admin",
         params=None,
     )
     client_kwargs = build_mongo_client_kwargs(persisted_mongo_credentials)
@@ -435,21 +435,19 @@ def _force_mongomock_no_auth() -> Generator[None, None, None]:
         *,
         host: str,
         port: int,
-        user: str | None = None,
-        password: str | None = None,
+        user: str | None = None,  # noqa: ARG001
+        password: str | None = None,  # noqa: ARG001
         auth_db: str | None = None,
         params: Dict[str, Any] | None = None,
     ) -> str:
         base = f"mongodb://{host}:{port}"
+        query: Dict[str, Any] = {}
         if auth_db:
-            base = f"{base}/{auth_db}"
+            query["authSource"] = auth_db
         if params:
-            if isinstance(params, dict) and params:
-                qs = urlencode(params, doseq=True)
-                base = f"{base}?{qs}"
-            elif isinstance(params, str) and params:
-                sep = "&" if "?" in base else "?"
-                base = f"{base}{sep}{params}"
+            query.update(params)
+        if query:
+            return f"{base}/?{urlencode(query, doseq=True)}"
         return base
 
     mp.setattr(

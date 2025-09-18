@@ -123,9 +123,7 @@ class JobExecutionHandler:
                 try:
                     cleanup()
                 except Exception:
-                    self.logger.exception(
-                        "Component cleanup failed for %s", comp.name
-                    )
+                    self.logger.exception("Component cleanup failed for %s", comp.name)
 
         try:
             closed = ConnectionPoolRegistry.instance().close_idle_pools()

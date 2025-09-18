@@ -28,10 +28,7 @@ class MongoDBComponent(DatabaseComponent, ABC):
 
     auth_db_name: Optional[str] = Field(
         default="admin",
-        description=(
-            "Authentication database name. If not set, defaults to the database "
-            "specified in the resolved credentials."
-        ),
+        description=("Authentication database name"),
     )
 
     # Lazily-initialized connection bits
@@ -83,7 +80,9 @@ class MongoDBComponent(DatabaseComponent, ABC):
             self._log.debug("%s: database name missing, triggering setup.", self.name)
             self._setup_connection()
         if not self._database_name:
-            self._log.error("%s: database name still unavailable after setup.", self.name)
+            self._log.error(
+                "%s: database name still unavailable after setup.", self.name
+            )
             raise RuntimeError(f"{self.name}: database name not available.")
         return self._database_name
 
@@ -171,7 +170,9 @@ class MongoDBComponent(DatabaseComponent, ABC):
             closed = False
 
         if closed:
-            self._log.debug("%s: Mongo connection pool closed after execution.", self.name)
+            self._log.debug(
+                "%s: Mongo connection pool closed after execution.", self.name
+            )
         else:
             self._log.debug(
                 "%s: Mongo connection pool not closed; leaving handler in place.",

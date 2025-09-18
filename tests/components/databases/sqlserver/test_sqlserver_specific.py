@@ -241,49 +241,57 @@ class TestSQLServerSpecificFeatures:
         expected_attr,
         persisted_mapping_context_id: str,
     ) -> None:
-        for value in test_values:
-            if component_class == SQLServerRead:
-                comp = component_class(
-                    name="test_component",
-                    description="Test SQL Server component",
-                    comp_type="read_sqlserver",
-                    entity_name="test_table" if test_type != "entity_names" else value,
-                    query=value if test_type == "queries" else "",
-                    context_id=persisted_mapping_context_id,
-                )
-            else:
-                comp = self._create_sqlserver_write_with_schema(
-                    name="test_component",
-                    description="Test SQL Server component",
-                    comp_type="write_sqlserver",
-                    entity_name="test_table",
-                    operation=(
-                        value
-                        if test_type == "if_exists_values"
-                        else DatabaseOperation.INSERT
-                    ),
-                    bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
-                    bigdata_partition_chunk_size=(
-                        value * 2 if test_type == "chunk_sizes" else 50000
-                    ),
-                    context_id=persisted_mapping_context_id,
-                )
-            if test_type == "queries":
-                assert value == getattr(comp, expected_attr)
-            else:
-                assert getattr(comp, expected_attr) == value
+        with patch(
+            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        ):
+            for value in test_values:
+                if component_class == SQLServerRead:
+                    comp = component_class(
+                        name="test_component",
+                        description="Test SQL Server component",
+                        comp_type="read_sqlserver",
+                        entity_name=(
+                            "test_table" if test_type != "entity_names" else value
+                        ),
+                        query=value if test_type == "queries" else "",
+                        context_id=persisted_mapping_context_id,
+                    )
+                else:
+                    comp = self._create_sqlserver_write_with_schema(
+                        name="test_component",
+                        description="Test SQL Server component",
+                        comp_type="write_sqlserver",
+                        entity_name="test_table",
+                        operation=(
+                            value
+                            if test_type == "if_exists_values"
+                            else DatabaseOperation.INSERT
+                        ),
+                        bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
+                        bigdata_partition_chunk_size=(
+                            value * 2 if test_type == "chunk_sizes" else 50000
+                        ),
+                        context_id=persisted_mapping_context_id,
+                    )
+                if test_type == "queries":
+                    assert value == getattr(comp, expected_attr)
+                else:
+                    assert getattr(comp, expected_attr) == value
 
     def test_sqlserver_component_zero_chunk_sizes(
         self, persisted_mapping_context_id: str
     ) -> None:
-        comp = self._create_sqlserver_write_with_schema(
-            name="test_component",
-            description="Test SQL Server component",
-            comp_type="write_sqlserver",
-            entity_name="test_table",
-            bulk_chunk_size=1,
-            bigdata_partition_chunk_size=2,
-            context_id=persisted_mapping_context_id,
-        )
-        assert comp.bulk_chunk_size == 1
-        assert comp.bigdata_partition_chunk_size == 2
+        with patch(
+            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        ):
+            comp = self._create_sqlserver_write_with_schema(
+                name="test_component",
+                description="Test SQL Server component",
+                comp_type="write_sqlserver",
+                entity_name="test_table",
+                bulk_chunk_size=1,
+                bigdata_partition_chunk_size=2,
+                context_id=persisted_mapping_context_id,
+            )
+            assert comp.bulk_chunk_size == 1
+            assert comp.bigdata_partition_chunk_size == 2

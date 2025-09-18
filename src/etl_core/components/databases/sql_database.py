@@ -30,9 +30,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
     _connection_handler: SQLConnectionHandler = None
     _log: logging.Logger = PrivateAttr(
-        default_factory=lambda: logging.getLogger(
-            "etl_core.components.databases.sql"
-        )
+        default_factory=lambda: logging.getLogger("etl_core.components.databases.sql")
     )
 
     @model_validator(mode="after")
@@ -90,9 +88,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         try:
             closed = handler.close_pool(force=force)
             if not closed and not force:
-                self._log.debug(
-                    "%s: SQL pool still leased; forcing close.", self.name
-                )
+                self._log.debug("%s: SQL pool still leased; forcing close.", self.name)
                 closed = handler.close_pool(force=True)
         except Exception:
             self._log.exception(
@@ -101,7 +97,9 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
             closed = False
 
         if closed:
-            self._log.debug("%s: SQL connection pool closed after execution.", self.name)
+            self._log.debug(
+                "%s: SQL connection pool closed after execution.", self.name
+            )
             self._connection_handler = None
         else:
             self._log.debug(

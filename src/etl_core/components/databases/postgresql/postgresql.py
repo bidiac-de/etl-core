@@ -28,5 +28,4 @@ class PostgreSQLComponent(SQLDatabaseComponent):
 
     def _build_objects(self):
         """Build PostgreSQL-specific objects after validation."""
-        super()._build_objects()
         return self

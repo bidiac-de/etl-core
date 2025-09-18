@@ -75,7 +75,11 @@ def _make_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Tuple[scheduler_service.SchedulerService, FakeScheduler, Dict[str, Any]]:
     fake_scheduler = FakeScheduler()
-    monkeypatch.setattr(scheduler_service, "AsyncIOScheduler", lambda: fake_scheduler)
+    monkeypatch.setattr(
+        scheduler_service,
+        "AsyncIOScheduler",
+        lambda *args, **kwargs: fake_scheduler,
+    )
 
     captured: Dict[str, Any] = {}
 
@@ -170,7 +174,9 @@ async def test_run_schedule_logs_when_job_already_running(
         def __init__(self) -> None:
             self.calls = 0
 
-        def execute_job(self, job: SimpleNamespace, env: str | None = None) -> None:
+        async def execute_job_async(
+            self, job: SimpleNamespace, env: str | None = None
+        ) -> None:
             self.calls += 1
             raise scheduler_service.ExecutionAlreadyRunning("already running")
 
