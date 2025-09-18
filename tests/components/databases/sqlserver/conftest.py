@@ -18,6 +18,7 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
+from etl_core.components.databases.sqlserver.sqlserver import SQLServerComponent
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
@@ -35,6 +36,19 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force deterministic env + in-memory secrets during tests."""
     monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
+
+
+@pytest.fixture(autouse=True)
+def _patch_sqls_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _noop(self) -> None:
+        return None
+
+    monkeypatch.setattr(
+        SQLServerComponent,
+        "_setup_session_variables",
+        _noop,
+        raising=True,
+    )
 
 
 @pytest.fixture
