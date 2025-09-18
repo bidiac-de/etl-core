@@ -8,7 +8,7 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: INFO
+    level: DEBUG
     formatter: standard
 
   file:
@@ -24,6 +24,10 @@ loggers:
     propagate: False
   "etl_core.components":
     handlers: ["file"]
+    level: DEBUG
+    propagate: False
+  "etl_core.mongodb.connection":
+    handlers: ["console", "file"]
     level: DEBUG
     propagate: False
   "pymongo":

@@ -26,7 +26,7 @@ class MongoDBComponent(DatabaseComponent, ABC):
     """
 
     auth_db_name: Optional[str] = Field(
-        default=None,
+        default="admin",
         description=(
             "Authentication database name. If not set, defaults to the database "
             "specified in the resolved credentials."
