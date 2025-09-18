@@ -14,6 +14,7 @@ from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
 from etl_core.components.envelopes import InTagged, Out
 from etl_core.context.environment import Environment
+from etl_core.components.databases.pool_registry import ConnectionPoolRegistry
 
 
 class ExecutionAlreadyRunning(Exception):
@@ -59,8 +60,10 @@ class JobExecutionHandler:
         """
         execution = self._begin_execution(job, environment)
         try:
-            return asyncio.run(self._main_loop(execution))
+            result = asyncio.run(self._main_loop(execution))
+            return result
         finally:
+            self._cleanup_after_execution(execution)
             self._release_execution(job.id)
 
     async def execute_job_async(
@@ -74,8 +77,10 @@ class JobExecutionHandler:
         """
         execution = self._begin_execution(job, environment)
         try:
-            return await self._main_loop(execution)
+            result = await self._main_loop(execution)
+            return result
         finally:
+            self._cleanup_after_execution(execution)
             self._release_execution(job.id)
 
     def _begin_execution(
@@ -108,6 +113,30 @@ class JobExecutionHandler:
     def _release_execution(self, job_id: str) -> None:
         with self._guard_lock:
             self._running_jobs.discard(job_id)
+
+    def _cleanup_after_execution(self, execution: JobExecution) -> None:
+        job = execution.job
+
+        for comp in job.components:
+            cleanup = getattr(comp, "cleanup_after_execution", None)
+            if callable(cleanup):
+                try:
+                    cleanup()
+                except Exception:
+                    self.logger.exception(
+                        "Component cleanup failed for %s", comp.name
+                    )
+
+        try:
+            closed = ConnectionPoolRegistry.instance().close_idle_pools()
+            if closed["sql"] or closed["mongo"]:
+                self.logger.debug(
+                    "Closed idle pools after execution: sql=%s mongo=%s",
+                    closed["sql"],
+                    closed["mongo"],
+                )
+        except Exception:
+            self.logger.exception("Failed to close idle connection pools")
 
     @staticmethod
     def _normalize_environment(

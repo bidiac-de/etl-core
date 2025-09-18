@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
+import os
+import threading
 from dataclasses import dataclass
 from hashlib import sha256
 from threading import Lock
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Tuple
 
-from sqlalchemy.engine import Engine
-from sqlalchemy import create_engine
 from motor.motor_asyncio import AsyncIOMotorClient
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 
 @dataclass(frozen=True)
@@ -44,10 +47,7 @@ class PoolKey:
 
 
 class ConnectionPoolRegistry:
-    """
-    Central registry that creates and reuses SQLAlchemy Engines and
-    Motor AsyncIOMotorClient instances. Keeps simple lease counters.
-    """
+    """Create and reuse SQLAlchemy Engines and AsyncIOMotorClient instances."""
 
     _instance: Optional["ConnectionPoolRegistry"] = None
     _lock: Lock = Lock()
@@ -56,6 +56,20 @@ class ConnectionPoolRegistry:
         self._sql: MutableMapping[PoolKey, Dict[str, Any]] = {}
         self._mongo: MutableMapping[PoolKey, Dict[str, Any]] = {}
         self._guard = Lock()
+        self._log = logging.getLogger("etl_core.components.databases.pool_registry")
+        self._idle_timeout_seconds = self._load_idle_timeout()
+
+    @staticmethod
+    def _load_idle_timeout() -> int:
+        raw = os.getenv("ETL_POOL_IDLE_TIMEOUT_SECONDS")
+        default = 300
+        if raw is None:
+            return default
+        try:
+            value = int(raw)
+        except ValueError:
+            return default
+        return value if value >= 0 else default
 
     @classmethod
     def instance(cls) -> "ConnectionPoolRegistry":
@@ -64,6 +78,31 @@ class ConnectionPoolRegistry:
                 if cls._instance is None:
                     cls._instance = cls()
         return cls._instance
+
+    def _handle_idle_timeout(self, key: PoolKey) -> None:
+        try:
+            closed = self.close_pool(key)
+            if closed:
+                self._log.debug("Closed idle %s pool %s", key.kind, key.dsn)
+        except Exception:  # pragma: no cover - cleanup should not crash caller
+            self._log.exception("Failed to close idle pool %s", key.dsn)
+
+    def _schedule_idle_close(self, key: PoolKey, slot: Dict[str, Any]) -> None:
+        if self._idle_timeout_seconds == 0:
+            delay = 0.01
+        else:
+            delay = float(self._idle_timeout_seconds)
+        timer = threading.Timer(delay, self._handle_idle_timeout, args=(key,))
+        timer.daemon = True
+        slot["close_timer"] = timer
+        timer.start()
+
+    @staticmethod
+    def _cancel_timer(slot: Dict[str, Any]) -> None:
+        timer = slot.get("close_timer")
+        if timer:
+            slot["close_timer"] = None
+            timer.cancel()
 
     def get_sql_engine(
         self, *, url: str, engine_kwargs: Optional[Mapping[str, Any]] = None
@@ -74,37 +113,62 @@ class ConnectionPoolRegistry:
             slot = self._sql.get(key)
             if slot is None:
                 engine = create_engine(url, **engine_kwargs)
-                self._sql[key] = {"engine": engine, "leased": 0, "opened": 0}
-                slot = self._sql[key]
+                slot = {
+                    "engine": engine,
+                    "leased": 0,
+                    "opened": 0,
+                    "close_timer": None,
+                }
+                self._sql[key] = slot
+            else:
+                self._cancel_timer(slot)
             return key, slot["engine"]
 
     def lease_sql(self, key: PoolKey) -> None:
-        with self._guard:
-            slot = self._sql[key]
-            slot["leased"] += 1
-            slot["opened"] += 1
-
-    def release_sql(self, key: PoolKey) -> None:
+        timer_to_cancel: Optional[threading.Timer] = None
         with self._guard:
             slot = self._sql.get(key)
-            if slot:
-                slot["leased"] = max(0, slot["leased"] - 1)
+            if slot is None:
+                return
+            slot["leased"] += 1
+            slot["opened"] += 1
+            timer_to_cancel = slot.get("close_timer")
+            slot["close_timer"] = None
+        if timer_to_cancel:
+            timer_to_cancel.cancel()
+
+    def release_sql(self, key: PoolKey) -> None:
+        timer_to_cancel: Optional[threading.Timer] = None
+        with self._guard:
+            slot = self._sql.get(key)
+            if not slot:
+                return
+            slot["leased"] = max(0, slot["leased"] - 1)
+            timer_to_cancel = slot.get("close_timer")
+            slot["close_timer"] = None
+            if slot["leased"] == 0 and self._idle_timeout_seconds >= 0:
+                self._schedule_idle_close(key, slot)
+        if timer_to_cancel:
+            timer_to_cancel.cancel()
 
     def get_mongo_client(
         self, *, uri: str, client_kwargs: Optional[Mapping[str, Any]] = None
     ) -> Tuple[PoolKey, Any]:
-        """
-        Always returns an AsyncIOMotorClient pooled by (uri, client_kwargs).
-        """
-
         client_kwargs = dict(client_kwargs or {})
         key = PoolKey.for_mongo(uri=uri, client_kwargs=client_kwargs)
         with self._guard:
             slot = self._mongo.get(key)
             if slot is None:
                 client = AsyncIOMotorClient(uri, **client_kwargs)
-                self._mongo[key] = {"client": client, "leased": 0, "opened": 0}
-                slot = self._mongo[key]
+                slot = {
+                    "client": client,
+                    "leased": 0,
+                    "opened": 0,
+                    "close_timer": None,
+                }
+                self._mongo[key] = slot
+            else:
+                self._cancel_timer(slot)
             return key, slot["client"]
 
     def register_mongo_client(
@@ -114,11 +178,6 @@ class ConnectionPoolRegistry:
         client: AsyncIOMotorClient,
         client_kwargs: Optional[Mapping[str, Any]] = None,
     ) -> PoolKey:
-        """
-        Register an externally created AsyncIOMotorClient so the registry leases
-        that instance instead of building a new one.
-        """
-
         client_kwargs = dict(client_kwargs or {})
         key = PoolKey.for_mongo(uri=uri, client_kwargs=client_kwargs)
         with self._guard:
@@ -128,20 +187,40 @@ class ConnectionPoolRegistry:
                     slot["client"].close()
                 except Exception:
                     pass
-            self._mongo[key] = {"client": client, "leased": 0, "opened": 0}
+            self._mongo[key] = {
+                "client": client,
+                "leased": 0,
+                "opened": 0,
+                "close_timer": None,
+            }
         return key
 
     def lease_mongo(self, key: PoolKey) -> None:
-        with self._guard:
-            slot = self._mongo[key]
-            slot["leased"] += 1
-            slot["opened"] += 1
-
-    def release_mongo(self, key: PoolKey) -> None:
+        timer_to_cancel: Optional[threading.Timer] = None
         with self._guard:
             slot = self._mongo.get(key)
-            if slot:
-                slot["leased"] = max(0, slot["leased"] - 1)
+            if slot is None:
+                return
+            slot["leased"] += 1
+            slot["opened"] += 1
+            timer_to_cancel = slot.get("close_timer")
+            slot["close_timer"] = None
+        if timer_to_cancel:
+            timer_to_cancel.cancel()
+
+    def release_mongo(self, key: PoolKey) -> None:
+        timer_to_cancel: Optional[threading.Timer] = None
+        with self._guard:
+            slot = self._mongo.get(key)
+            if not slot:
+                return
+            slot["leased"] = max(0, slot["leased"] - 1)
+            timer_to_cancel = slot.get("close_timer")
+            slot["close_timer"] = None
+            if slot["leased"] == 0 and self._idle_timeout_seconds >= 0:
+                self._schedule_idle_close(key, slot)
+        if timer_to_cancel:
+            timer_to_cancel.cancel()
 
     def stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
         with self._guard:
@@ -156,25 +235,49 @@ class ConnectionPoolRegistry:
             return {"sql": sql_stats, "mongo": mongo_stats}
 
     def close_pool(self, key: PoolKey, *, force: bool = False) -> bool:
+        timer_to_cancel: Optional[threading.Timer] = None
         with self._guard:
             if key.kind == "sql":
                 slot = self._sql.get(key)
-                if not slot:
+                if slot is None:
                     return False
                 if slot["leased"] > 0 and not force:
                     return False
+                timer_to_cancel = slot.get("close_timer")
+                slot["close_timer"] = None
                 slot["engine"].dispose()
                 del self._sql[key]
-                return True
-
-            if key.kind == "mongo":
+                closed = True
+            elif key.kind == "mongo":
                 slot = self._mongo.get(key)
-                if not slot:
+                if slot is None:
                     return False
                 if slot["leased"] > 0 and not force:
                     return False
+                timer_to_cancel = slot.get("close_timer")
+                slot["close_timer"] = None
                 slot["client"].close()
                 del self._mongo[key]
-                return True
+                closed = True
+            else:
+                return False
+        if timer_to_cancel:
+            timer_to_cancel.cancel()
+        return closed
 
-            return False
+    def close_idle_pools(self) -> Dict[str, int]:
+        sql_keys: List[PoolKey]
+        mongo_keys: List[PoolKey]
+        with self._guard:
+            sql_keys = [key for key, slot in self._sql.items() if slot["leased"] == 0]
+            mongo_keys = [
+                key for key, slot in self._mongo.items() if slot["leased"] == 0
+            ]
+        closed_counts = {"sql": 0, "mongo": 0}
+        for key in sql_keys:
+            if self.close_pool(key):
+                closed_counts["sql"] += 1
+        for key in mongo_keys:
+            if self.close_pool(key):
+                closed_counts["mongo"] += 1
+        return closed_counts
