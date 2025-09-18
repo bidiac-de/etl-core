@@ -54,18 +54,43 @@ class JobExecutionHandler:
         environment: Optional[Environment | str] = None,
     ) -> JobExecution:
         """
-        Top-level method to execute a Job, managing its execution lifecycle.
+        Top-level synchronous entrypoint. Runs the async pipeline inside a
+        temporary event loop (CLI, tests, sync API handlers).
         """
-        env_obj: Optional[Environment] = (
-            Environment(environment) if isinstance(environment, str) else environment
-        )
+        execution = self._begin_execution(job, environment)
+        try:
+            return asyncio.run(self._main_loop(execution))
+        finally:
+            self._release_execution(job.id)
+
+    async def execute_job_async(
+        self,
+        job: RuntimeJob,
+        environment: Optional[Environment | str] = None,
+    ) -> JobExecution:
+        """
+        Async variant that reuses the caller's event loop. Required for
+        scheduler-driven runs that share the FastAPI loop.
+        """
+        execution = self._begin_execution(job, environment)
+        try:
+            return await self._main_loop(execution)
+        finally:
+            self._release_execution(job.id)
+
+    def _begin_execution(
+        self,
+        job: RuntimeJob,
+        environment: Optional[Environment | str],
+    ) -> JobExecution:
+        env_obj = self._normalize_environment(environment)
+
         with self._guard_lock:
             if job.id in self._running_jobs:
                 self.logger.warning("Job '%s' is already running", job.name)
                 raise ExecutionAlreadyRunning(
                     f"Job '{job.name}' ({job.id}) is already running."
                 )
-            # mark as running and create the execution instance
             self._running_jobs.add(job.id)
             execution = JobExecution(job, environment=env_obj)
 
@@ -78,12 +103,24 @@ class JobExecutionHandler:
         except Exception:
             self.logger.exception("Failed to persist execution start")
 
-        try:
-            return asyncio.run(self._main_loop(execution))
-        finally:
-            # cleanup in both success/failure paths
-            with self._guard_lock:
-                self._running_jobs.discard(job.id)
+        return execution
+
+    def _release_execution(self, job_id: str) -> None:
+        with self._guard_lock:
+            self._running_jobs.discard(job_id)
+
+    @staticmethod
+    def _normalize_environment(
+        environment: Optional[Environment | str],
+    ) -> Optional[Environment]:
+        if isinstance(environment, Environment):
+            return environment
+        if isinstance(environment, str):
+            try:
+                return Environment(environment)
+            except ValueError:
+                return None
+        return environment
 
     def _prepare_comps_for_execution(
         self, job: RuntimeJob, environment: Optional[Environment] = None

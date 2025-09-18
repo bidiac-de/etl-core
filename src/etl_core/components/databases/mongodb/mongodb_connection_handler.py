@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, Optional, Tuple
 from urllib.parse import quote_plus
@@ -19,6 +20,7 @@ class MongoConnectionHandler:
         self._registry = ConnectionPoolRegistry.instance()
         self._key: Optional[PoolKey] = None
         self._client: Optional[Any] = None  # AsyncIOMotorClient
+        self._log = logging.getLogger("etl_core.mongodb.connection")
 
     @staticmethod
     def build_uri(
@@ -57,10 +59,29 @@ class MongoConnectionHandler:
             query.update(params)
 
         if not query:
+            masked = MongoConnectionHandler._mask_uri(base)
+            logging.getLogger("etl_core.mongodb.connection").debug(
+                "Constructed Mongo URI: %s", masked
+            )
             return base
 
         kv = "&".join(f"{k}={v}" for k, v in query.items())
-        return f"{base}/?{kv}"
+        uri = f"{base}/?{kv}"
+        logging.getLogger("etl_core.mongodb.connection").debug(
+            "Constructed Mongo URI: %s", MongoConnectionHandler._mask_uri(uri)
+        )
+        return uri
+
+    @staticmethod
+    def _mask_uri(uri: str) -> str:
+        if "@" not in uri:
+            return uri
+
+        prefix, suffix = uri.split("@", 1)
+        if ":" not in prefix:
+            return f"***@{suffix}"
+        user, _password = prefix.split(":", 1)
+        return f"{user}:***@{suffix}"
 
     def connect(
         self, *, uri: str, client_kwargs: Optional[Dict[str, Any]] = None

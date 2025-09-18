@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import os
 import re
 import threading
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -283,7 +283,7 @@ class SchedulerService:
         safe_env = self._context_for_log(env)
         self._log.info("Executing scheduled job id '%s' (env=%s)", sch.job_id, safe_env)
         try:
-            await asyncio.to_thread(self._deps.executor.execute_job, runtime_job, env)
+            await self._deps.executor.execute_job_async(runtime_job, env)
         except ExecutionAlreadyRunning:
             self._log.warning(
                 "Scheduled job id '%s' already running; skipping trigger", sch.job_id
@@ -352,9 +352,35 @@ class SchedulerService:
             ):
                 scheduler = None
         if scheduler is None:
-            scheduler = AsyncIOScheduler()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            scheduler = AsyncIOScheduler(event_loop=loop)
             self._scheduler = scheduler
         return scheduler
+
+    def add_internal_job(
+        self,
+        *,
+        job_id: str,
+        func: Callable[..., Any],
+        trigger,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Schedule a coroutine/function with a reserved job ID so DB sync skips it.
+        """
+
+        scheduler = self._ensure_scheduler()
+        _INTERNAL_JOB_IDS.add(job_id)
+        scheduler.add_job(
+            func,
+            trigger=trigger,
+            id=job_id,
+            replace_existing=True,
+            **kwargs,
+        )
 
 
 def parse_sync_interval(raw: Any) -> Optional[int]:

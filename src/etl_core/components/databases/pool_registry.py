@@ -107,6 +107,30 @@ class ConnectionPoolRegistry:
                 slot = self._mongo[key]
             return key, slot["client"]
 
+    def register_mongo_client(
+        self,
+        *,
+        uri: str,
+        client: AsyncIOMotorClient,
+        client_kwargs: Optional[Mapping[str, Any]] = None,
+    ) -> PoolKey:
+        """
+        Register an externally created AsyncIOMotorClient so the registry leases
+        that instance instead of building a new one.
+        """
+
+        client_kwargs = dict(client_kwargs or {})
+        key = PoolKey.for_mongo(uri=uri, client_kwargs=client_kwargs)
+        with self._guard:
+            slot = self._mongo.get(key)
+            if slot is not None and slot["client"] is not client:
+                try:
+                    slot["client"].close()
+                except Exception:
+                    pass
+            self._mongo[key] = {"client": client, "leased": 0, "opened": 0}
+        return key
+
     def lease_mongo(self, key: PoolKey) -> None:
         with self._guard:
             slot = self._mongo[key]
