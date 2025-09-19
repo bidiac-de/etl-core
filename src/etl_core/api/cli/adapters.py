@@ -9,8 +9,9 @@ from etl_core.context.context import Context
 from etl_core.context.credentials import Credentials
 from etl_core.context.credentials_mapping_context import CredentialsMappingContext
 from etl_core.context.environment import Environment
+from etl_core.context.secrets.secret_provider import SecretProvider
 from etl_core.context.secure_context_adapter import SecureContextAdapter
-from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
+from etl_core.context.secrets.secret_utils import create_secret_provider
 from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.singletons import (
     job_handler as _jh_singleton,
@@ -153,15 +154,18 @@ class LocalExecutionClient(ExecutionPort):
 
 
 class LocalContextsClient(ContextsPort):
-    _DEFAULT_SERVICE = "sep-sose-2025/default"
+    _DEFAULT_SERVICE = os.getenv("SECRET_SERVICE").strip()
 
     def __init__(self) -> None:
         self.ctx_handler = _ch_singleton()
         self.creds_handler = _crh_singleton()
 
-    def _secret_store(self, override: Optional[str]) -> KeyringSecretProvider:
-        service = override or self._DEFAULT_SERVICE
-        return KeyringSecretProvider(service=service)
+    def _secret_store(self) -> SecretProvider:
+        try:
+            provider = create_secret_provider()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Failed to initialize secret store: {exc}") from exc
+        return provider
 
     @staticmethod
     def _non_secure_params(ctx: Context) -> Dict[str, Any]:
@@ -173,7 +177,7 @@ class LocalContextsClient(ContextsPort):
         ctx = Context(**context)
         context_id = str(uuid4())
 
-        store = self._secret_store(keyring_service)
+        store = self._secret_store()
         SecureContextAdapter(
             provider_id=context_id,
             secret_store=store,
@@ -202,7 +206,7 @@ class LocalContextsClient(ContextsPort):
         creds = Credentials(**credentials)
         creds_id = str(uuid4())
 
-        store = self._secret_store(keyring_service)
+        store = self._secret_store()
         SecureContextAdapter(
             provider_id=creds_id,
             secret_store=store,

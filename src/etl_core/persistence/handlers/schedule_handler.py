@@ -43,8 +43,8 @@ class ScheduleHandler:
                 trigger_type=trigger_type,
                 trigger_args=dict(trigger_args or {}),
                 is_paused=is_paused,
-                created_at=datetime.now,
-                updated_at=datetime.now,
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
             )
             s.add(row)
             s.commit()
@@ -78,7 +78,7 @@ class ScheduleHandler:
                 row.trigger_args = dict(trigger_args)
             if is_paused is not None:
                 row.is_paused = is_paused
-            row.updated_at = datetime.now
+            row.updated_at = datetime.now()
             s.add(row)
             s.commit()
             s.refresh(row)
