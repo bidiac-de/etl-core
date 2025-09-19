@@ -149,7 +149,7 @@ async def test_run_schedule_logs_when_job_already_running(
         id="schedule-1",
         name="Demo",
         job_id="job-1",
-        context="dev",
+        environment="dev",
         trigger_type=None,
         trigger_args={"seconds": 10},
         is_paused=False,

@@ -18,7 +18,7 @@ class Command:
 class CreateScheduleCommand(Command):
     name: str
     job_id: str
-    context: str
+    environment: str
     trigger_type: TriggerType
     trigger_args: Dict[str, Any]
     paused: bool = False
@@ -29,7 +29,7 @@ class CreateScheduleCommand(Command):
         row = self.schedules.create(
             name=self.name,
             job_id=self.job_id,
-            context=self.context,
+            environment=self.environment,
             trigger_type=self.trigger_type,
             trigger_args=self.trigger_args,
             is_paused=self.paused,
@@ -43,7 +43,7 @@ class UpdateScheduleCommand(Command):
     schedule_id: str
     name: Optional[str] = None
     job_id: Optional[str] = None
-    context: Optional[str] = None
+    environment: Optional[str] = None
     trigger_type: Optional[TriggerType] = None
     trigger_args: Optional[Dict[str, Any]] = None
     paused: Optional[bool] = None
@@ -55,7 +55,7 @@ class UpdateScheduleCommand(Command):
             self.schedule_id,
             name=self.name,
             job_id=self.job_id,
-            context=self.context,
+            environment=self.environment,
             trigger_type=self.trigger_type,
             trigger_args=self.trigger_args,
             is_paused=self.paused,

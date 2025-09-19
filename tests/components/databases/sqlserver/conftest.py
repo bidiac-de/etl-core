@@ -17,6 +17,7 @@ from unittest.mock import Mock, patch
 import dask.dataframe as dd
 import pandas as pd
 import pytest
+import contextlib
 
 from etl_core.components.databases.sqlserver.sqlserver import SQLServerComponent
 from etl_core.context.environment import Environment
@@ -28,6 +29,10 @@ from etl_core.components.wiring.schema import Schema
 from etl_core.singletons import (
     credentials_handler as _crh_singleton,
     context_handler as _ch_singleton,
+)
+
+SQL_CONNECTION_HANDLER_PATH = (
+    "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
 )
 
 
@@ -50,6 +55,35 @@ def _patch_sqls_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
         raising=True,
     )
 
+@pytest.fixture(autouse=True)
+def _stub_sql_connection_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Autouse fixture to stub out SQLConnectionHandler globally.
+
+    Prevents any real engine/ODBC connection attempts during tests.
+    Provides a no-op lease() context manager and close_pool().
+    """
+
+    class _StubHandler:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @contextlib.contextmanager
+        def lease(self, *args, **kwargs):
+            # Provide a dummy connection object with execute/commit methods
+            class _Conn:
+                def execute(self, *_a, **_kw): return None
+                def commit(self): return None
+            yield _Conn()
+
+        def close_pool(self) -> bool:
+            return True
+
+    monkeypatch.setattr(
+        SQL_CONNECTION_HANDLER_PATH,
+        _StubHandler,
+        raising=True,
+    )
 
 @pytest.fixture
 def test_creds() -> Tuple[str, str]:
@@ -135,7 +169,7 @@ def mock_metrics() -> Mock:
 def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead:
     """Construct SQLServerRead with a persisted mapping context; patch connection."""
     with patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        SQL_CONNECTION_HANDLER_PATH
     ):
         return SQLServerRead(
             name="test_read",
@@ -151,7 +185,7 @@ def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead
 def sqlserver_write_component(persisted_mapping_context_id: str) -> SQLServerWrite:
     """Construct SQLServerWrite with a persisted mapping context; patch connection."""
     with patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+        SQL_CONNECTION_HANDLER_PATH
     ):
         schema = Schema(
             fields=[

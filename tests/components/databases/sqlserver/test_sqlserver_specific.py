@@ -33,50 +33,41 @@ class TestSQLServerSpecificFeatures:
     def test_sqlserver_session_variables_default(
         self, persisted_mapping_context_id: str
     ):
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            context_id=persisted_mapping_context_id,
+        )
         assert comp.charset == "utf8"
         assert comp.collation == "SQL_Latin1_General_CP1_CI_AS"
 
     def test_sqlserver_session_variables_custom(
         self, persisted_mapping_context_id: str
     ):
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                charset="latin1",
-                collation="SQL_Latin1_General_CP1_CS_AS",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            charset="latin1",
+            collation="SQL_Latin1_General_CP1_CS_AS",
+            context_id=persisted_mapping_context_id,
+        )
         assert comp.charset == "latin1"
         assert comp.collation == "SQL_Latin1_General_CP1_CS_AS"
 
     def test_sqlserver_session_variables_setup_execution(
         self, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_handler = Mock()
         mock_connection = Mock()
@@ -93,32 +84,26 @@ class TestSQLServerSpecificFeatures:
     def test_sqlserver_session_variables_without_connection(
         self, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            context_id=persisted_mapping_context_id,
+        )
         # Should be a no-op without raising
         comp._setup_session_variables()
 
     def test_sqlserver_session_variables_connection_error(
         self, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_handler = Mock()
         mock_connection = Mock()
@@ -146,49 +131,40 @@ class TestSQLServerSpecificFeatures:
     def test_sqlserver_collation_handling(
         self, collation: str, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                collation=collation,
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            collation=collation,
+            context_id=persisted_mapping_context_id,
+        )
         assert comp.collation == collation
 
     @pytest.mark.parametrize("charset", ["utf8", "latin1", "cp1252", "iso_8859_1"])
     def test_sqlserver_charset_handling(
         self, charset: str, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                charset=charset,
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            charset=charset,
+            context_id=persisted_mapping_context_id,
+        )
         assert comp.charset == charset
 
     def test_sqlserver_build_objects_flow(
         self, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="read_sqlserver",
-                entity_name="test_table",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="read_sqlserver",
+            entity_name="test_table",
+            context_id=persisted_mapping_context_id,
+        )
         # Receiver gets created during build
         result = comp._build_objects()
         assert comp._receiver is not None
@@ -241,57 +217,49 @@ class TestSQLServerSpecificFeatures:
         expected_attr,
         persisted_mapping_context_id: str,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            for value in test_values:
-                if component_class == SQLServerRead:
-                    comp = component_class(
-                        name="test_component",
-                        description="Test SQL Server component",
-                        comp_type="read_sqlserver",
-                        entity_name=(
-                            "test_table" if test_type != "entity_names" else value
-                        ),
-                        query=value if test_type == "queries" else "",
-                        context_id=persisted_mapping_context_id,
-                    )
-                else:
-                    comp = self._create_sqlserver_write_with_schema(
-                        name="test_component",
-                        description="Test SQL Server component",
-                        comp_type="write_sqlserver",
-                        entity_name="test_table",
-                        operation=(
-                            value
-                            if test_type == "if_exists_values"
-                            else DatabaseOperation.INSERT
-                        ),
-                        bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
-                        bigdata_partition_chunk_size=(
-                            value * 2 if test_type == "chunk_sizes" else 50000
-                        ),
-                        context_id=persisted_mapping_context_id,
-                    )
-                if test_type == "queries":
-                    assert value == getattr(comp, expected_attr)
-                else:
-                    assert getattr(comp, expected_attr) == value
+        for value in test_values:
+            if component_class == SQLServerRead:
+                comp = component_class(
+                    name="test_component",
+                    description="Test SQL Server component",
+                    comp_type="read_sqlserver",
+                    entity_name=("test_table" if test_type != "entity_names" else value),
+                    query=value if test_type == "queries" else "",
+                    context_id=persisted_mapping_context_id,
+                )
+            else:
+                comp = self._create_sqlserver_write_with_schema(
+                    name="test_component",
+                    description="Test SQL Server component",
+                    comp_type="write_sqlserver",
+                    entity_name="test_table",
+                    operation=(
+                        value
+                        if test_type == "if_exists_values"
+                        else DatabaseOperation.INSERT
+                    ),
+                    bulk_chunk_size=value if test_type == "chunk_sizes" else 50000,
+                    bigdata_partition_chunk_size=(
+                        value * 2 if test_type == "chunk_sizes" else 50000
+                    ),
+                    context_id=persisted_mapping_context_id,
+                )
+            if test_type == "queries":
+                assert value == getattr(comp, expected_attr)
+            else:
+                assert getattr(comp, expected_attr) == value
 
     def test_sqlserver_component_zero_chunk_sizes(
         self, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = self._create_sqlserver_write_with_schema(
-                name="test_component",
-                description="Test SQL Server component",
-                comp_type="write_sqlserver",
-                entity_name="test_table",
-                bulk_chunk_size=1,
-                bigdata_partition_chunk_size=2,
-                context_id=persisted_mapping_context_id,
-            )
-            assert comp.bulk_chunk_size == 1
-            assert comp.bigdata_partition_chunk_size == 2
+        comp = self._create_sqlserver_write_with_schema(
+            name="test_component",
+            description="Test SQL Server component",
+            comp_type="write_sqlserver",
+            entity_name="test_table",
+            bulk_chunk_size=1,
+            bigdata_partition_chunk_size=2,
+            context_id=persisted_mapping_context_id,
+        )
+        assert comp.bulk_chunk_size == 1
+        assert comp.bigdata_partition_chunk_size == 2

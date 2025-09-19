@@ -279,7 +279,7 @@ class SchedulerService:
             )
             return
 
-        env = sch.context
+        env = sch.environment
         safe_env = self._context_for_log(env)
         self._log.info("Executing scheduled job id '%s' (env=%s)", sch.job_id, safe_env)
         try:

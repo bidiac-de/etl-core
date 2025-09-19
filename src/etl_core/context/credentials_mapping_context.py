@@ -24,7 +24,7 @@ class CredentialsMappingContext(Context):
         mapping = values.get("credentials_ids")
         if not mapping:
             return values
-        # Accept Environment or str keys; store as strings (e.g., "TEST")
+        # Accept Environment or str keys, store as strings (e.g., "TEST")
         normalized: Dict[str, str] = {}
         for k, v in mapping.items():
             if isinstance(k, Environment):

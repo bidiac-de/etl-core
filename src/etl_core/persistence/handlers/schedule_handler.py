@@ -30,7 +30,7 @@ class ScheduleHandler:
         *,
         name: str,
         job_id: str,
-        context: str,
+        environment: str,
         trigger_type: TriggerType,
         trigger_args: Dict[str, Any],
         is_paused: bool = False,
@@ -39,12 +39,12 @@ class ScheduleHandler:
             row = ScheduleTable(
                 name=name,
                 job_id=job_id,
-                context=context,
+                environment=environment,
                 trigger_type=trigger_type,
                 trigger_args=dict(trigger_args or {}),
                 is_paused=is_paused,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now,
+                updated_at=datetime.now,
             )
             s.add(row)
             s.commit()
@@ -57,7 +57,7 @@ class ScheduleHandler:
         *,
         name: Optional[str] = None,
         job_id: Optional[str] = None,
-        context: Optional[str] = None,
+        environment: Optional[str] = None,
         trigger_type: Optional[TriggerType] = None,
         trigger_args: Optional[Dict[str, Any]] = None,
         is_paused: Optional[bool] = None,
@@ -70,15 +70,15 @@ class ScheduleHandler:
                 row.name = name
             if job_id is not None:
                 row.job_id = job_id
-            if context is not None:
-                row.context = context
+            if environment is not None:
+                row.environment = environment
             if trigger_type is not None:
                 row.trigger_type = trigger_type
             if trigger_args is not None:
                 row.trigger_args = dict(trigger_args)
             if is_paused is not None:
                 row.is_paused = is_paused
-            row.updated_at = datetime.utcnow()
+            row.updated_at = datetime.now
             s.add(row)
             s.commit()
             s.refresh(row)

@@ -155,7 +155,7 @@ def create_context_provider(
 
 
 @router.post(
-    "/context-mapping",
+    "/credentials-mapping-context",
     response_model=ProviderCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )

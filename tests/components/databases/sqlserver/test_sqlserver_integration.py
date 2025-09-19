@@ -81,25 +81,22 @@ class TestSQLServerIntegration:
         mock_metrics: ComponentMetrics,
         sample_data,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            read_comp = SQLServerRead(
-                name="test_read",
-                description="Test",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                context_id=persisted_mapping_context_id,
-            )
-            write_comp = SQLServerWrite(
-                name="test_write",
-                description="Test",
-                comp_type="write_sqlserver",
-                entity_name="users",
-                in_port_schemas={"in": self._mk_schema()},
-                context_id=persisted_mapping_context_id,
-            )
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
+        write_comp = SQLServerWrite(
+            name="test_write",
+            description="Test",
+            comp_type="write_sqlserver",
+            entity_name="users",
+            in_port_schemas={"in": self._mk_schema()},
+            context_id=persisted_mapping_context_id,
+        )
 
         # Both components resolved credentials via mapping
         assert read_comp._get_credentials()["__credentials_id__"]
@@ -152,18 +149,15 @@ class TestSQLServerIntegration:
         mock_metrics: ComponentMetrics,
         sample_data,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            read_comp = SQLServerRead(
-                name="test_read",
-                description="Test",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users WHERE id = %(id)s",
-                params={"id": 1},
-                context_id=persisted_mapping_context_id,
-            )
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users WHERE id = %(id)s",
+            params={"id": 1},
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_read_receiver = AsyncMock()
 
@@ -204,17 +198,14 @@ class TestSQLServerIntegration:
         mock_metrics: ComponentMetrics,
         sample_ddf: dd.DataFrame,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            read_comp = SQLServerRead(
-                name="test_read",
-                description="Test",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                context_id=persisted_mapping_context_id,
-            )
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
         mock_receiver.read_bigdata.return_value = sample_ddf
@@ -240,41 +231,35 @@ class TestSQLServerIntegration:
     async def test_error_propagation(
         self, persisted_mapping_context_id: str, mock_metrics: ComponentMetrics
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                context_id=persisted_mapping_context_id,
-            )
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
         mock_receiver.read_row.side_effect = Exception("Database error")
-        comp._receiver = mock_receiver
+        read_comp._receiver = mock_receiver
 
         with pytest.raises(Exception):
-            async for _ in comp.process_row({"id": 1}, mock_metrics):
+            async for _ in read_comp.process_row({"id": 1}, mock_metrics):
                 pass
 
     @pytest.mark.asyncio
     async def test_metrics_integration(
         self, persisted_mapping_context_id: str, mock_metrics: ComponentMetrics
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                context_id=persisted_mapping_context_id,
-            )
+        read_comp = SQLServerRead(
+            name="test_read",
+            description="Test",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
 
@@ -292,10 +277,10 @@ class TestSQLServerIntegration:
             mock_metrics.set_completed()
 
         mock_receiver.read_row = gen
-        comp._receiver = mock_receiver
+        read_comp._receiver = mock_receiver
 
         outs = []
-        async for out in comp.process_row({"id": 1}, mock_metrics):
+        async for out in read_comp.process_row({"id": 1}, mock_metrics):
             outs.append(out.payload)
 
         mock_metrics.set_started.assert_called()

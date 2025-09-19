@@ -33,7 +33,7 @@ def _parse_json(s: Optional[str]) -> Dict[str, Any]:
 def create(
     name: str = typer.Argument(..., help="Schedule name"),
     job_id: str = typer.Option(..., "--job", help="Target job id"),
-    context: str = typer.Option("DEV", help="Execution env: DEV/TEST/PROD"),
+    environment: str = typer.Option("DEV", help="Execution env: DEV/TEST/PROD"),
     trigger_type: TriggerType = typer.Option(..., case_sensitive=False),
     trigger_args: Optional[str] = typer.Option(
         None, help="JSON string with trigger args"
@@ -45,7 +45,7 @@ def create(
         payload = dict(
             name=name,
             job_id=job_id,
-            context=context,
+            environment=environment,
             trigger_type=(
                 trigger_type.value
                 if hasattr(trigger_type, "value")
@@ -61,7 +61,7 @@ def create(
     body = CreateScheduleCommand(
         name=name,
         job_id=job_id,
-        context=context,
+        environment=environment,
         trigger_type=trigger_type,
         trigger_args=_parse_json(trigger_args),
         paused=paused,
@@ -83,7 +83,7 @@ def list_cmd():
                         rj["id"],
                         rj["name"],
                         rj["job_id"],
-                        rj["context"],
+                        rj["environment"],
                         rj["trigger_type"],
                     ]
                 )
@@ -98,7 +98,7 @@ def list_cmd():
                     r.id,
                     r.name,
                     r.job_id,
-                    r.context,
+                    r.environment,
                     r.trigger_type,
                     f"paused={r.is_paused}",
                 ]
@@ -125,7 +125,7 @@ def get_cmd(schedule_id: str):
                 "id": r.id,
                 "name": r.name,
                 "job_id": r.job_id,
-                "context": r.context,
+                "environment": r.environment,
                 "trigger_type": r.trigger_type,
                 "trigger_args": r.trigger_args,
                 "is_paused": r.is_paused,
@@ -140,7 +140,7 @@ def update_cmd(
     schedule_id: str,
     name: Optional[str] = typer.Option(None),
     job_id: Optional[str] = typer.Option(None, "--job"),
-    context: Optional[str] = typer.Option(None),
+    environment: Optional[str] = typer.Option(None),
     trigger_type: Optional[TriggerType] = typer.Option(None, case_sensitive=False),
     trigger_args: Optional[str] = typer.Option(None, help="JSON string"),
     paused: Optional[bool] = typer.Option(None),
@@ -152,8 +152,8 @@ def update_cmd(
             payload["name"] = name
         if job_id is not None:
             payload["job_id"] = job_id
-        if context is not None:
-            payload["context"] = context
+        if environment is not None:
+            payload["environment"] = environment
         if trigger_type is not None:
             payload["trigger_type"] = (
                 trigger_type.value
@@ -174,7 +174,7 @@ def update_cmd(
         schedule_id=schedule_id,
         name=name,
         job_id=job_id,
-        context=context,
+        environment=environment,
         trigger_type=trigger_type,
         trigger_args=_parse_json(trigger_args) if trigger_args is not None else None,
         paused=paused,

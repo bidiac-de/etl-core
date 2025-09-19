@@ -24,7 +24,7 @@ router = APIRouter(prefix="/schedules", tags=["schedules"])
 class ScheduleIn(BaseModel):
     name: str
     job_id: str
-    context: str = Field(description="Execution environment gate: DEV/TEST/PROD")
+    environment: str = Field(description="Execution environment gate: DEV/TEST/PROD")
     trigger_type: TriggerType
     trigger_args: Dict[str, Any] = Field(default_factory=dict)
     paused: bool = False
@@ -33,7 +33,7 @@ class ScheduleIn(BaseModel):
 class SchedulePatch(BaseModel):
     name: Optional[str] = None
     job_id: Optional[str] = None
-    context: Optional[str] = None
+    environment: Optional[str] = None
     trigger_type: Optional[TriggerType] = None
     trigger_args: Optional[Dict[str, Any]] = None
     paused: Optional[bool] = None
@@ -43,7 +43,7 @@ class ScheduleOut(BaseModel):
     id: str
     name: str
     job_id: str
-    context: str
+    environment: str
     trigger_type: TriggerType
     trigger_args: Dict[str, Any]
     is_paused: bool
@@ -54,7 +54,7 @@ class ScheduleOut(BaseModel):
             id=row.id,
             name=row.name,
             job_id=row.job_id,
-            context=row.context,
+            environment=row.environment,
             trigger_type=row.trigger_type,
             trigger_args=row.trigger_args,
             is_paused=row.is_paused,
@@ -66,7 +66,7 @@ def create_schedule(body: ScheduleIn) -> str:
     cmd = CreateScheduleCommand(
         name=body.name,
         job_id=body.job_id,
-        context=body.context,
+        environment=body.environment,
         trigger_type=body.trigger_type,
         trigger_args=body.trigger_args,
         paused=body.paused,
@@ -96,7 +96,7 @@ def update_schedule(schedule_id: str, patch: SchedulePatch) -> str:
             schedule_id=schedule_id,
             name=patch.name,
             job_id=patch.job_id,
-            context=patch.context,
+            environment=patch.environment,
             trigger_type=patch.trigger_type,
             trigger_args=patch.trigger_args,
             paused=patch.paused,

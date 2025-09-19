@@ -310,7 +310,7 @@ class ExecutionTable(SQLModel, table=True):
     environment: Optional[str] = Field(default=None, nullable=True, index=True)
     status: str = Field(default="RUNNING", nullable=False, index=True)
     error: Optional[str] = Field(default=None, nullable=True)
-    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    started_at: datetime = Field(default_factory=datetime.now, nullable=False)
     finished_at: Optional[datetime] = Field(default=None, nullable=True)
 
 
@@ -330,7 +330,7 @@ class ExecutionAttemptTable(SQLModel, table=True):
     attempt_index: int = Field(nullable=False)
     status: str = Field(default="RUNNING", nullable=False, index=True)
     error: Optional[str] = Field(default=None, nullable=True)
-    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    started_at: datetime = Field(default_factory=datetime.now, nullable=False)
     finished_at: Optional[datetime] = Field(default=None, nullable=True)
 
 
@@ -360,7 +360,7 @@ class ScheduleTable(SQLModel, table=True):
     )
 
     # execution context gate (DEV/TEST/PROD)
-    context: str = Field(nullable=False, index=True)
+    environment: str = Field(nullable=False, index=True)
 
     trigger_type: TriggerType = Field(sa_column=Column(String, nullable=False))
     trigger_args: dict[str, Any] = Field(
@@ -371,5 +371,5 @@ class ScheduleTable(SQLModel, table=True):
     is_paused: bool = Field(default=False, nullable=False)
 
     # audit fields
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=datetime.now, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.now, nullable=False)
