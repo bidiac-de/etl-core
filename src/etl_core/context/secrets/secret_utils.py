@@ -17,7 +17,7 @@ def create_secret_provider() -> SecretProvider:
       - SECRET_SERVICE: service name for keyring (default "sep-sose-2025/default")
     """
     backend = os.getenv("SECRET_BACKEND", "memory").strip().lower()
-    service = os.getenv("SECRET_SERVICE").strip()
+    service = os.getenv("SECRET_SERVICE", "sep-sose-2025/default").strip()
 
     if backend == "memory":
         global _MEMORY_PROVIDER_SINGLETON
