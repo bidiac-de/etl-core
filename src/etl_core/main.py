@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, Optional, Tuple
 
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
@@ -63,7 +64,6 @@ def _resolve_example_job_settings() -> (
 
 async def example_mongo_job(*, app: FastAPI) -> None:
     """Fetch a handful of documents to validate Mongo connectivity."""
-
     log = logging.getLogger("etl_core.example_jobs.mongo")
 
     client: Optional[AsyncIOMotorClient] = getattr(app.state, "mongo_client", None)
@@ -93,17 +93,8 @@ async def example_mongo_job(*, app: FastAPI) -> None:
         )
 
 
-app = FastAPI()
-app.include_router(schemas.router)
-app.include_router(setup.router)
-app.include_router(jobs.router)
-app.include_router(execution.router)
-app.include_router(contexts.router)
-app.include_router(schedules.router)
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     setup_logging(
         default_path=str(
             Path(__file__).with_name("config").joinpath("logging_config.yaml")
@@ -127,7 +118,9 @@ async def on_startup() -> None:
     if uri:
         client = AsyncIOMotorClient(uri, **client_kwargs)
         ConnectionPoolRegistry.instance().register_mongo_client(
-            uri=uri, client=client, client_kwargs=client_kwargs
+            uri=uri,
+            client=client,
+            client_kwargs=client_kwargs,
         )
         _LOG.info("Mongo client initialised during startup")
     else:
@@ -159,17 +152,28 @@ async def on_startup() -> None:
             "Example Mongo job disabled (client missing or configuration incomplete)"
         )
 
+    try:
+        # Hand control to the application
+        yield
+    finally:
+        await SchedulerService.instance().shutdown_gracefully()
 
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    await SchedulerService.instance().shutdown_gracefully()
+        client_close: Optional[AsyncIOMotorClient] = getattr(
+            app.state, "mongo_client", None
+        )
+        if client_close is not None:
+            client_close.close()
+            app.state.mongo_client = None
+            _LOG.info("Mongo client closed during shutdown")
 
-    client: Optional[AsyncIOMotorClient] = getattr(app.state, "mongo_client", None)
-    if client is not None:
-        client.close()
-        app.state.mongo_client = None
-        _LOG.info("Mongo client closed during shutdown")
 
+app = FastAPI(lifespan=lifespan)
+app.include_router(schemas.router)
+app.include_router(setup.router)
+app.include_router(jobs.router)
+app.include_router(execution.router)
+app.include_router(contexts.router)
+app.include_router(schedules.router)
 
 if __name__ == "__main__":
     import uvicorn

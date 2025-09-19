@@ -83,7 +83,10 @@ class PrepareAwareComponent(StubComponent):
 
 @register_component("exploding_source", hidden=True)
 class ExplodingSource(MultiSource):
-    """Source component raises after short suspension to trigger TaskGroup aggregation."""
+    """
+    Source component raises after short suspension
+    to trigger TaskGroup aggregation.
+    """
 
     fail_message: str = "boom"
 
