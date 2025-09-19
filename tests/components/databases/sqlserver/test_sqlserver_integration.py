@@ -6,7 +6,7 @@ All credentials are resolved via a persisted mapping context (context_id on comp
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import dask.dataframe as dd
 import pandas as pd

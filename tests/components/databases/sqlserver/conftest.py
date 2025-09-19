@@ -55,6 +55,7 @@ def _patch_sqls_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
         raising=True,
     )
 
+
 @pytest.fixture(autouse=True)
 def _stub_sql_connection_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     """
@@ -72,8 +73,12 @@ def _stub_sql_connection_handler(monkeypatch: pytest.MonkeyPatch) -> None:
         def lease(self, *args, **kwargs):
             # Provide a dummy connection object with execute/commit methods
             class _Conn:
-                def execute(self, *_a, **_kw): return None
-                def commit(self): return None
+                def execute(self, *_a, **_kw):
+                    return None
+
+                def commit(self):
+                    return None
+
             yield _Conn()
 
         def close_pool(self) -> bool:
@@ -84,6 +89,7 @@ def _stub_sql_connection_handler(monkeypatch: pytest.MonkeyPatch) -> None:
         _StubHandler,
         raising=True,
     )
+
 
 @pytest.fixture
 def test_creds() -> Tuple[str, str]:
@@ -168,9 +174,7 @@ def mock_metrics() -> Mock:
 @pytest.fixture
 def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead:
     """Construct SQLServerRead with a persisted mapping context; patch connection."""
-    with patch(
-        SQL_CONNECTION_HANDLER_PATH
-    ):
+    with patch(SQL_CONNECTION_HANDLER_PATH):
         return SQLServerRead(
             name="test_read",
             description="Test read component",
@@ -184,9 +188,7 @@ def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead
 @pytest.fixture
 def sqlserver_write_component(persisted_mapping_context_id: str) -> SQLServerWrite:
     """Construct SQLServerWrite with a persisted mapping context; patch connection."""
-    with patch(
-        SQL_CONNECTION_HANDLER_PATH
-    ):
+    with patch(SQL_CONNECTION_HANDLER_PATH):
         schema = Schema(
             fields=[
                 FieldDef(name="id", data_type=DataType.INTEGER),

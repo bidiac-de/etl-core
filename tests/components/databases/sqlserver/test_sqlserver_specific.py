@@ -223,7 +223,9 @@ class TestSQLServerSpecificFeatures:
                     name="test_component",
                     description="Test SQL Server component",
                     comp_type="read_sqlserver",
-                    entity_name=("test_table" if test_type != "entity_names" else value),
+                    entity_name=(
+                        "test_table" if test_type != "entity_names" else value
+                    ),
                     query=value if test_type == "queries" else "",
                     context_id=persisted_mapping_context_id,
                 )

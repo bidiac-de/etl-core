@@ -59,17 +59,10 @@ class MongoConnectionHandler:
             query.update(params)
 
         if not query:
-            masked = MongoConnectionHandler._mask_uri(base)
-            logging.getLogger("etl_core.mongodb.connection").debug(
-                "Constructed Mongo URI: %s", masked
-            )
             return base
 
         kv = "&".join(f"{k}={v}" for k, v in query.items())
         uri = f"{base}/?{kv}"
-        logging.getLogger("etl_core.mongodb.connection").debug(
-            "Constructed Mongo URI: %s", MongoConnectionHandler._mask_uri(uri)
-        )
         return uri
 
     @staticmethod

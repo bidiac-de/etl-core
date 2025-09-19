@@ -26,15 +26,3 @@ loggers:
     handlers: ["file"]
     level: DEBUG
     propagate: False
-  "etl_core.mongodb.connection":
-    handlers: ["console", "file"]
-    level: DEBUG
-    propagate: False
-  "pymongo":
-    level: DEBUG
-  "pymongo.command":
-    level: DEBUG
-  "pymongo.connection":
-    level: DEBUG
-  "pymongo.serverSelection":
-    level: DEBUG
