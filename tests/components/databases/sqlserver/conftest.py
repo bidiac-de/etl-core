@@ -17,7 +17,9 @@ from unittest.mock import Mock, patch
 import dask.dataframe as dd
 import pandas as pd
 import pytest
+import contextlib
 
+from etl_core.components.databases.sqlserver.sqlserver import SQLServerComponent
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
 from etl_core.components.databases.sqlserver.sqlserver_read import SQLServerRead
@@ -29,12 +31,64 @@ from etl_core.singletons import (
     context_handler as _ch_singleton,
 )
 
+SQL_CONNECTION_HANDLER_PATH = (
+    "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
+)
+
 
 @pytest.fixture(autouse=True)
 def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force deterministic env + in-memory secrets during tests."""
     monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
+
+
+@pytest.fixture(autouse=True)
+def _patch_sqls_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _noop(self) -> None:
+        return None
+
+    monkeypatch.setattr(
+        SQLServerComponent,
+        "_setup_session_variables",
+        _noop,
+        raising=True,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _stub_sql_connection_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Autouse fixture to stub out SQLConnectionHandler globally.
+
+    Prevents any real engine/ODBC connection attempts during tests.
+    Provides a no-op lease() context manager and close_pool().
+    """
+
+    class _StubHandler:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @contextlib.contextmanager
+        def lease(self, *args, **kwargs):
+            # Provide a dummy connection object with execute/commit methods
+            class _Conn:
+                def execute(self, *_a, **_kw):
+                    return None
+
+                def commit(self):
+                    return None
+
+            yield _Conn()
+
+        def close_pool(self) -> bool:
+            return True
+
+    monkeypatch.setattr(
+        SQL_CONNECTION_HANDLER_PATH,
+        _StubHandler,
+        raising=True,
+    )
 
 
 @pytest.fixture
@@ -120,9 +174,7 @@ def mock_metrics() -> Mock:
 @pytest.fixture
 def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead:
     """Construct SQLServerRead with a persisted mapping context; patch connection."""
-    with patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    ):
+    with patch(SQL_CONNECTION_HANDLER_PATH):
         return SQLServerRead(
             name="test_read",
             description="Test read component",
@@ -136,9 +188,7 @@ def sqlserver_read_component(persisted_mapping_context_id: str) -> SQLServerRead
 @pytest.fixture
 def sqlserver_write_component(persisted_mapping_context_id: str) -> SQLServerWrite:
     """Construct SQLServerWrite with a persisted mapping context; patch connection."""
-    with patch(
-        "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-    ):
+    with patch(SQL_CONNECTION_HANDLER_PATH):
         schema = Schema(
             fields=[
                 FieldDef(name="id", data_type=DataType.INTEGER),

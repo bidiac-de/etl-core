@@ -1,7 +1,7 @@
 """
 Integration tests for PostgreSQL credentials using the mapping-context flow.
 
-- Persist Credentials (provider_id == credentials_id)
+- Persist Credentials
 - Build a mapping context (env -> credentials_id)
 - Components receive context_id and resolve creds via ContextHandler map
 """

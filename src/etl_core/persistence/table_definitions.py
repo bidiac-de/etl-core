@@ -9,6 +9,7 @@ from datetime import datetime
 from etl_core.persistence.base_models.component_base import ComponentBase
 from etl_core.persistence.base_models.dataclasses_base import LayoutBase, MetaDataBase
 from etl_core.persistence.base_models.job_base import JobBase
+from enum import Enum
 
 _FOREIGN_KEY_COMPONENT_TABLE = "componenttable.id"
 _FOREIGN_KEY_JOB_TABLE = "jobtable.id"
@@ -309,7 +310,7 @@ class ExecutionTable(SQLModel, table=True):
     environment: Optional[str] = Field(default=None, nullable=True, index=True)
     status: str = Field(default="RUNNING", nullable=False, index=True)
     error: Optional[str] = Field(default=None, nullable=True)
-    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    started_at: datetime = Field(default_factory=datetime.now, nullable=False)
     finished_at: Optional[datetime] = Field(default=None, nullable=True)
 
 
@@ -329,5 +330,46 @@ class ExecutionAttemptTable(SQLModel, table=True):
     attempt_index: int = Field(nullable=False)
     status: str = Field(default="RUNNING", nullable=False, index=True)
     error: Optional[str] = Field(default=None, nullable=True)
-    started_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    started_at: datetime = Field(default_factory=datetime.now, nullable=False)
     finished_at: Optional[datetime] = Field(default=None, nullable=True)
+
+
+class TriggerType(str, Enum):
+    INTERVAL = "interval"
+    CRON = "cron"
+    DATE = "date"
+
+
+class ScheduleTable(SQLModel, table=True):
+    """
+    A persisted schedule definition for executing a job by name using
+    APScheduler triggers. Trigger args are stored as JSON so we can
+    support interval/cron/date uniformly.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    name: str = Field(nullable=False, index=True)
+
+    # reference job by id to avoid name lookups
+    job_id: str = Field(
+        sa_column=Column(
+            ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    # execution context gate (DEV/TEST/PROD)
+    environment: str = Field(nullable=False, index=True)
+
+    trigger_type: TriggerType = Field(sa_column=Column(String, nullable=False))
+    trigger_args: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )
+
+    # scheduling status
+    is_paused: bool = Field(default=False, nullable=False)
+
+    # audit fields
+    created_at: datetime = Field(default_factory=datetime.now, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.now, nullable=False)

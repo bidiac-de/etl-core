@@ -7,7 +7,7 @@ All components accept a mapping-context via `context_id` and resolve real creds.
 from __future__ import annotations
 
 from typing import Tuple
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import dask.dataframe as dd
 import pandas as pd
@@ -84,18 +84,15 @@ class TestSQLServerComponents:
         persisted_mapping_context_id: str,
         persisted_credentials: Tuple[Credentials, str],
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test read component",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                params={"limit": 10},
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_read",
+            description="Test read component",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            params={"limit": 10},
+            context_id=persisted_mapping_context_id,
+        )
 
         assert comp.query == "SELECT * FROM users"
         assert comp.params == {"limit": 10}
@@ -109,16 +106,13 @@ class TestSQLServerComponents:
         persisted_mapping_context_id: str,
         persisted_credentials: Tuple[Credentials, str],
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = self._create_sqlserver_write_with_schema(
-                name="test_write",
-                description="Test write component",
-                comp_type="write_sqlserver",
-                entity_name="users",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = self._create_sqlserver_write_with_schema(
+            name="test_write",
+            description="Test write component",
+            comp_type="write_sqlserver",
+            entity_name="users",
+            context_id=persisted_mapping_context_id,
+        )
 
         assert comp.entity_name == "users"
         active_id = comp._get_credentials()["__credentials_id__"]
@@ -132,18 +126,15 @@ class TestSQLServerComponents:
         mock_metrics: ComponentMetrics,
         sample_data,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test read",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users WHERE id = %(id)s",
-                params={"id": 1},
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_read",
+            description="Test read",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users WHERE id = %(id)s",
+            params={"id": 1},
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
 
@@ -175,17 +166,14 @@ class TestSQLServerComponents:
         mock_metrics: ComponentMetrics,
         sample_dataframe: pd.DataFrame,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test read",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_read",
+            description="Test read",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
         mock_receiver.read_bulk.return_value = sample_dataframe
@@ -204,17 +192,14 @@ class TestSQLServerComponents:
         mock_metrics: ComponentMetrics,
         sample_dask_dataframe: dd.DataFrame,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test read",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="SELECT * FROM users",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_read",
+            description="Test read",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="SELECT * FROM users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
         mock_receiver.read_bigdata.return_value = sample_dask_dataframe
@@ -230,16 +215,13 @@ class TestSQLServerComponents:
     async def test_sqlserver_write_process_row(
         self, persisted_mapping_context_id: str, mock_metrics: ComponentMetrics
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = self._create_sqlserver_write_with_schema(
-                name="test_write",
-                description="Test write",
-                comp_type="write_sqlserver",
-                entity_name="users",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = self._create_sqlserver_write_with_schema(
+            name="test_write",
+            description="Test write",
+            comp_type="write_sqlserver",
+            entity_name="users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
 
@@ -264,16 +246,13 @@ class TestSQLServerComponents:
         mock_metrics: ComponentMetrics,
         sample_dataframe: pd.DataFrame,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = self._create_sqlserver_write_with_schema(
-                name="test_write",
-                description="Test write",
-                comp_type="write_sqlserver",
-                entity_name="users",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = self._create_sqlserver_write_with_schema(
+            name="test_write",
+            description="Test write",
+            comp_type="write_sqlserver",
+            entity_name="users",
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
         mock_receiver.write_bulk.return_value = sample_dataframe
@@ -292,18 +271,15 @@ class TestSQLServerComponents:
         mock_metrics: ComponentMetrics,
         sample_dask_dataframe: dd.DataFrame,
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = self._create_sqlserver_write_with_schema(
-                name="test_write",
-                description="Test write",
-                comp_type="write_sqlserver",
-                entity_name="users",
-                if_exists="replace",
-                bigdata_partition_chunk_size=25_000,
-                context_id=persisted_mapping_context_id,
-            )
+        comp = self._create_sqlserver_write_with_schema(
+            name="test_write",
+            description="Test write",
+            comp_type="write_sqlserver",
+            entity_name="users",
+            if_exists="replace",
+            bigdata_partition_chunk_size=25_000,
+            context_id=persisted_mapping_context_id,
+        )
 
         mock_receiver = AsyncMock()
         mock_receiver.write_bigdata.return_value = sample_dask_dataframe
@@ -324,17 +300,14 @@ class TestSQLServerComponents:
     def test_sqlserver_component_defaults_and_attrs(
         self, persisted_mapping_context_id: str
     ) -> None:
-        with patch(
-            "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
-        ):
-            comp = SQLServerRead(
-                name="test_read",
-                description="Test",
-                comp_type="read_sqlserver",
-                entity_name="users",
-                query="",
-                context_id=persisted_mapping_context_id,
-            )
+        comp = SQLServerRead(
+            name="test_read",
+            description="Test",
+            comp_type="read_sqlserver",
+            entity_name="users",
+            query="",
+            context_id=persisted_mapping_context_id,
+        )
         assert comp.entity_name == "users"
         assert hasattr(comp, "charset")
         assert hasattr(comp, "collation")

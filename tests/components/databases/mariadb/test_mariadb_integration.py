@@ -15,6 +15,8 @@ import pytest
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
 from etl_core.components.databases.mariadb.mariadb_write import MariaDBWrite
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
+from etl_core.strategies.row_strategy import RowExecutionStrategy
+from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 
 
 class TestMariaDBIntegration:
@@ -173,12 +175,7 @@ class TestMariaDBIntegration:
         mock_read_receiver.read_row = mock_read_row_generator
         read_comp._receiver = mock_read_receiver
 
-        class _DummyStrategy:
-            async def execute(self, component, payload, metrics):
-                async for item in component.process_row(payload, metrics):
-                    yield item
-
-        read_comp._strategy = _DummyStrategy()  # type: ignore[attr-defined]
+        read_comp.strategy = RowExecutionStrategy()
 
         payload = {"id": 1}
         results = []
@@ -213,13 +210,7 @@ class TestMariaDBIntegration:
         mock_receiver.read_bigdata.return_value = sample_ddf
         read_comp._receiver = mock_receiver
 
-        class _DummyStrategy:
-            async def execute(self, component, payload, metrics):
-                gen = component.process_bigdata(payload, metrics)
-                out = await anext(gen)
-                yield out
-
-        read_comp._strategy = _DummyStrategy()  # type: ignore[attr-defined]
+        read_comp.strategy = BigDataExecutionStrategy()
 
         results = []
         async for result in read_comp.execute(sample_ddf, mock_metrics):
@@ -253,12 +244,7 @@ class TestMariaDBIntegration:
         mock_receiver.read_row = mock_read_row_generator
         read_comp._receiver = mock_receiver
 
-        class _DummyStrategy:
-            async def execute(self, component, payload, metrics):
-                async for item in component.process_row(payload, metrics):
-                    yield item
-
-        read_comp._strategy = _DummyStrategy()  # type: ignore[attr-defined]
+        read_comp.strategy = RowExecutionStrategy()
 
         payload = {"id": 1}
         results = []

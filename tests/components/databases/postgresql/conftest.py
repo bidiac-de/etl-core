@@ -20,6 +20,7 @@ import pytest
 
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
+from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
 from etl_core.components.databases.postgresql.postgresql_read import PostgreSQLRead
 from etl_core.components.databases.postgresql.postgresql_write import PostgreSQLWrite
 from etl_core.components.wiring.column_definition import DataType, FieldDef
@@ -35,6 +36,19 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure deterministic env selection & in-memory secret store for tests."""
     monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
+
+
+@pytest.fixture(autouse=True)
+def _patch_pg_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _noop(self) -> None:
+        return None
+
+    monkeypatch.setattr(
+        PostgreSQLComponent,
+        "_setup_session_variables",
+        _noop,
+        raising=True,
+    )
 
 
 @pytest.fixture

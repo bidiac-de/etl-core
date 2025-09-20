@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 from typing import Tuple
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -111,14 +110,11 @@ def test_credentials_password_handling() -> None:
     assert creds_no_pass.decrypted_password is None
 
 
-@patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
 def test_sqlserver_read_component_with_real_credentials(
-    mock_handler_class: Mock,
     persisted_credentials: Tuple[Credentials, str],
     persisted_mapping_context_id: str,
     test_creds: Tuple[str, str],
 ) -> None:
-    mock_handler_class.return_value = Mock()
     comp = SQLServerRead(
         name="mssql_read",
         description="Test read component",
@@ -136,14 +132,11 @@ def test_sqlserver_read_component_with_real_credentials(
     assert creds["__credentials_id__"] == credentials_id
 
 
-@patch("etl_core.components.databases.sql_connection_handler.SQLConnectionHandler")
 def test_sqlserver_write_component_with_real_credentials(
-    mock_handler_class: Mock,
     persisted_credentials: Tuple[Credentials, str],
     persisted_mapping_context_id: str,
     test_creds: Tuple[str, str],
 ) -> None:
-    mock_handler_class.return_value = Mock()
     comp = SQLServerWrite(
         name="mssql_write",
         description="Test write component",

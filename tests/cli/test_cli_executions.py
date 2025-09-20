@@ -14,7 +14,11 @@ from contextlib import contextmanager
 
 
 def runner() -> CliRunner:
-    return CliRunner(mix_stderr=False)
+    # Try the newer Click keyword first; older versions raise TypeError.
+    try:
+        return CliRunner(mix_stderr=False)
+    except TypeError:
+        return CliRunner()
 
 
 class _FakeExecClient:

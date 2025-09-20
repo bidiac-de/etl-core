@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from etl_core.context.context import Context
 from etl_core.context.credentials import Credentials
 from etl_core.context.credentials_mapping_context import CredentialsMappingContext
 from etl_core.context.environment import Environment
+from etl_core.context.secrets.secret_provider import SecretProvider
 from etl_core.context.secure_context_adapter import SecureContextAdapter
-from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
+from etl_core.context.secrets.secret_utils import create_secret_provider
 from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.singletons import (
     job_handler as _jh_singleton,
@@ -18,6 +21,7 @@ from etl_core.singletons import (
     credentials_handler as _crh_singleton,
 )
 from etl_core.api.cli.ports import ContextsPort, ExecutionPort, JobsPort
+import requests
 
 
 class LocalJobsClient(JobsPort):
@@ -150,15 +154,18 @@ class LocalExecutionClient(ExecutionPort):
 
 
 class LocalContextsClient(ContextsPort):
-    _DEFAULT_SERVICE = "sep-sose-2025/default"
+    _DEFAULT_SERVICE = os.getenv("SECRET_SERVICE").strip()
 
     def __init__(self) -> None:
         self.ctx_handler = _ch_singleton()
         self.creds_handler = _crh_singleton()
 
-    def _secret_store(self, override: Optional[str]) -> KeyringSecretProvider:
-        service = override or self._DEFAULT_SERVICE
-        return KeyringSecretProvider(service=service)
+    def _secret_store(self) -> SecretProvider:
+        try:
+            provider = create_secret_provider()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Failed to initialize secret store: {exc}") from exc
+        return provider
 
     @staticmethod
     def _non_secure_params(ctx: Context) -> Dict[str, Any]:
@@ -170,7 +177,7 @@ class LocalContextsClient(ContextsPort):
         ctx = Context(**context)
         context_id = str(uuid4())
 
-        store = self._secret_store(keyring_service)
+        store = self._secret_store()
         SecureContextAdapter(
             provider_id=context_id,
             secret_store=store,
@@ -199,7 +206,7 @@ class LocalContextsClient(ContextsPort):
         creds = Credentials(**credentials)
         creds_id = str(uuid4())
 
-        store = self._secret_store(keyring_service)
+        store = self._secret_store()
         SecureContextAdapter(
             provider_id=creds_id,
             secret_store=store,
@@ -307,3 +314,177 @@ def _dedupe(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen.add(pid)
         out.append(it)
     return out
+
+
+def api_base_url() -> Optional[str]:
+    """
+    Resolve API base URL for CLI to talk to a running server.
+
+    Reads ETL_API_BASE_URL; returns a sanitized base (no trailing slash).
+    Returns None if not configured, signaling use of local clients.
+    """
+    raw = os.getenv("ETL_API_BASE_URL")
+    if not raw:
+        return None
+    return raw.rstrip("/")
+
+
+class _RestBase:
+    def __init__(self, base_url: str) -> None:
+        self.base = base_url.rstrip("/")
+        self.session = requests.Session()
+
+    @staticmethod
+    def _sanitize_url(raw_url: Optional[str]) -> str:
+        if not raw_url:
+            return "<unknown>"
+        try:
+            parsed = urlsplit(raw_url)
+        except ValueError:
+            return "<invalid-url>"
+
+        netloc = parsed.netloc
+        if "@" in netloc:
+            host = netloc.split("@", 1)[1]
+            netloc = f"***@{host}"
+
+        sanitized = parsed._replace(netloc=netloc, query="", fragment="")
+        return urlunsplit(sanitized)
+
+    def _raise_for_status(self, resp: requests.Response) -> None:
+        sanitized_url = self._sanitize_url(getattr(resp.request, "url", None))
+        method = getattr(resp.request, "method", "UNKNOWN")
+
+        if resp.status_code == 404:
+            raise PersistNotFoundError(f"Resource not found: {method} {sanitized_url}")
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            message = (
+                f"{resp.status_code} {resp.reason} " f"for {method} {sanitized_url}"
+            )
+            raise requests.HTTPError(
+                message,
+                response=resp,
+                request=resp.request,
+            ) from exc
+
+
+class RemoteJobsClient(_RestBase, JobsPort):
+    def create(self, cfg: Dict[str, Any]) -> str:
+        r = self.session.post(f"{self.base}/jobs/", json=cfg)
+        self._raise_for_status(r)
+        return r.json()
+
+    def get(self, job_id: str) -> Dict[str, Any]:
+        r = self.session.get(f"{self.base}/jobs/{job_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def update(self, job_id: str, cfg: Dict[str, Any]) -> str:
+        r = self.session.put(f"{self.base}/jobs/{job_id}", json=cfg)
+        self._raise_for_status(r)
+        return r.json()
+
+    def delete(self, job_id: str) -> None:
+        r = self.session.delete(f"{self.base}/jobs/{job_id}")
+        self._raise_for_status(r)
+
+    def list_brief(self) -> List[Dict[str, Any]]:
+        r = self.session.get(f"{self.base}/jobs/")
+        self._raise_for_status(r)
+        return r.json()
+
+
+class RemoteExecutionClient(_RestBase, ExecutionPort):
+    def start(
+        self, job_id: str, environment: Optional[Environment] = None
+    ) -> Dict[str, Any]:
+        body = {"environment": environment.value} if environment else None
+        r = self.session.post(f"{self.base}/execution/{job_id}", json=body)
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_executions(
+        self,
+        *,
+        job_id: Optional[str] = None,
+        status: Optional[str] = None,
+        environment: Optional[str] = None,
+        started_after: Optional[str] = None,
+        started_before: Optional[str] = None,
+        sort_by: str = "started_at",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "sort_by": sort_by,
+            "order": order,
+            "limit": limit,
+            "offset": offset,
+        }
+        if job_id:
+            params["job_id"] = job_id
+        if status:
+            params["status"] = status
+        if environment:
+            params["environment"] = environment
+        if started_after:
+            params["started_after"] = started_after
+        if started_before:
+            params["started_before"] = started_before
+        query = urlencode(params)
+        r = self.session.get(f"{self.base}/execution/executions?{query}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def get(self, execution_id: str) -> Dict[str, Any]:
+        r = self.session.get(f"{self.base}/execution/executions/{execution_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def attempts(self, execution_id: str) -> List[Dict[str, Any]]:
+        r = self.session.get(
+            f"{self.base}/execution/executions/{execution_id}/attempts"
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+
+class RemoteContextsClient(_RestBase, ContextsPort):
+    def create_context(
+        self, context: Dict[str, Any], keyring_service: Optional[str]
+    ) -> Dict[str, Any]:
+        payload = {"context": context, "keyring_service": keyring_service}
+        r = self.session.post(f"{self.base}/contexts/context", json=payload)
+        self._raise_for_status(r)
+        return r.json()
+
+    def create_credentials(
+        self, credentials: Dict[str, Any], keyring_service: Optional[str]
+    ) -> Dict[str, Any]:
+        payload = {"credentials": credentials, "keyring_service": keyring_service}
+        r = self.session.post(f"{self.base}/contexts/credentials", json=payload)
+        self._raise_for_status(r)
+        return r.json()
+
+    def create_context_mapping(self, mapping_ctx: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {"context": mapping_ctx}
+        r = self.session.post(f"{self.base}/contexts/context-mapping", json=payload)
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_providers(self) -> List[Dict[str, Any]]:
+        r = self.session.get(f"{self.base}/contexts/")
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_provider(self, provider_id: str) -> Dict[str, Any]:
+        r = self.session.get(f"{self.base}/contexts/{provider_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def delete_provider(self, provider_id: str) -> None:
+        r = self.session.delete(f"{self.base}/contexts/{provider_id}")
+        self._raise_for_status(r)

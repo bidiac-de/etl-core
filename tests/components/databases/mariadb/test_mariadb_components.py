@@ -20,6 +20,7 @@ from etl_core.components.wiring.column_definition import DataType, FieldDef
 from etl_core.components.wiring.schema import Schema
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.context.credentials import Credentials
+from etl_core.strategies.row_strategy import RowExecutionStrategy
 
 
 class TestMariaDBComponents:
@@ -416,12 +417,7 @@ class TestMariaDBComponents:
         mock_receiver.read_row = mock_read_row_generator
         read_comp._receiver = mock_receiver
 
-        class _DummyStrategy:
-            async def execute(self, component, payload, metrics):
-                async for item in component.process_row(payload, metrics):
-                    yield item
-
-        read_comp._strategy = _DummyStrategy()  # type: ignore[attr-defined]
+        read_comp.strategy = RowExecutionStrategy()
 
         payload = {"id": 1}
         results = []

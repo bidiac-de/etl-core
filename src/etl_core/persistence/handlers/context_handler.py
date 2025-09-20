@@ -5,7 +5,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from sqlmodel import Session, select
 
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import (
     ContextParameterTable,
     ContextTable,
@@ -25,6 +25,7 @@ class ContextHandler:
     """
 
     def __init__(self) -> None:
+        ensure_schema()
         self.engine = engine
 
     @contextmanager

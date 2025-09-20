@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 from unittest.mock import Mock, patch
 
+from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from etl_core.context.environment import Environment
 from etl_core.context.credentials import Credentials
 from etl_core.components.databases.mariadb.mariadb_read import MariaDBRead
@@ -39,6 +40,19 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setenv("EXECUTION_ENV", Environment.TEST.value)
     monkeypatch.setenv("SECRET_BACKEND", "memory")
+
+
+@pytest.fixture(autouse=True)
+def _patch_mdb_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _noop(self) -> None:
+        return None
+
+    monkeypatch.setattr(
+        MariaDBComponent,
+        "_setup_session_variables",
+        _noop,
+        raising=True,
+    )
 
 
 @pytest.fixture

@@ -18,6 +18,9 @@ import importlib
 import os
 import secrets
 import sys
+import shutil
+import tempfile
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -32,7 +35,7 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
-from etl_core.persistence.db import engine
+from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import (
     ComponentTable,
     JobTable,
@@ -54,6 +57,12 @@ from etl_core.singletons import (
     context_handler as _ch_singleton,
 )
 
+_TEST_LOG_DIR = Path(tempfile.mkdtemp(prefix="etl-core-logs-")).resolve()
+os.environ.setdefault("LOG_DIR", str(_TEST_LOG_DIR))
+
+
+ensure_schema()
+
 
 @pytest.fixture
 def data_ops_metrics() -> DataOperationsMetrics:
@@ -73,7 +82,8 @@ def _purge_modules(prefixes: Iterable[str]) -> None:
     Remove modules from sys.modules whose names match or start with
      any of the given prefixes.
 
-    This allows re-importing those modules to pick up environment overrides cleanly.
+    This allows re-importing those modules to pick up environment overrides
+    cleanly.
 
     Args:
         prefixes: An iterable of string prefixes. Any module whose name is equal to a
@@ -88,6 +98,16 @@ def _purge_modules(prefixes: Iterable[str]) -> None:
     ]
     for name in to_delete:
         sys.modules.pop(name, None)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _cleanup_test_logs() -> Generator[None, None, None]:
+    """Ensure temporary log directory does not leak between runs."""
+
+    try:
+        yield
+    finally:
+        shutil.rmtree(_TEST_LOG_DIR, ignore_errors=True)
 
 
 @pytest.fixture
@@ -368,26 +388,25 @@ async def mongo_handler(
     """
     #  Connect using current persisted creds (host/port/user/pass)
     persisted_mongo_credentials, creds_id = persisted_mongo_credentials
-    uri = MongoConnectionHandler.build_uri(
-        host=persisted_mongo_credentials.get_parameter("host"),
-        port=persisted_mongo_credentials.get_parameter("port"),
-        user=persisted_mongo_credentials.get_parameter("user"),
-        password=persisted_mongo_credentials.decrypted_password,
-        auth_db=None,
-        params=None,
-    )
-    client_kwargs = build_mongo_client_kwargs(persisted_mongo_credentials)
-
-    handler = MongoConnectionHandler()
-    handler.connect(uri=uri, client_kwargs=client_kwargs)
-
-    # Create a fresh database for the test and update the persisted creds
     dbname = f"testdb_{uuid4().hex}"
     persisted_mongo_credentials.database = dbname
     _crh_singleton().upsert(
         credentials_id=creds_id,
         creds=persisted_mongo_credentials,
     )
+
+    uri = MongoConnectionHandler.build_uri(
+        host=persisted_mongo_credentials.get_parameter("host"),
+        port=persisted_mongo_credentials.get_parameter("port"),
+        user=persisted_mongo_credentials.get_parameter("user"),
+        password=persisted_mongo_credentials.decrypted_password,
+        auth_db="admin",
+        params=None,
+    )
+    client_kwargs = build_mongo_client_kwargs(persisted_mongo_credentials)
+
+    handler = MongoConnectionHandler()
+    handler.connect(uri=uri, client_kwargs=client_kwargs)
 
     try:
         yield handler, dbname
@@ -410,25 +429,25 @@ def _force_mongomock_no_auth() -> Generator[None, None, None]:
     """
     mp = MonkeyPatch()
 
+    from tests.async_mongomock import AsyncMongoMockClient
+
     def _build_uri_no_auth(
         *,
         host: str,
         port: int,
-        user: str | None = None,
-        password: str | None = None,
+        user: str | None = None,  # noqa: ARG001
+        password: str | None = None,  # noqa: ARG001
         auth_db: str | None = None,
         params: Dict[str, Any] | None = None,
     ) -> str:
         base = f"mongodb://{host}:{port}"
+        query: Dict[str, Any] = {}
         if auth_db:
-            base = f"{base}/{auth_db}"
+            query["authSource"] = auth_db
         if params:
-            if isinstance(params, dict) and params:
-                qs = urlencode(params, doseq=True)
-                base = f"{base}?{qs}"
-            elif isinstance(params, str) and params:
-                sep = "&" if "?" in base else "?"
-                base = f"{base}{sep}{params}"
+            query.update(params)
+        if query:
+            return f"{base}/?{urlencode(query, doseq=True)}"
         return base
 
     mp.setattr(
@@ -447,6 +466,16 @@ def _force_mongomock_no_auth() -> Generator[None, None, None]:
         return kw
 
     mp.setattr(pool_args, "build_mongo_client_kwargs", _kwargs_no_auth, raising=True)
+
+    # Ensure async Mongo connections use an in-memory mongomock client
+    from etl_core.components.databases import pool_registry
+
+    mp.setattr(
+        pool_registry,
+        "AsyncIOMotorClient",
+        AsyncMongoMockClient,
+        raising=False,
+    )
 
     try:
         yield

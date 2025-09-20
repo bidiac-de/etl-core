@@ -1,8 +1,8 @@
 import asyncio
 import logging
 import threading
-from typing import Any, Dict, List, Set, Tuple, Optional
 from collections import deque
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.job_execution.runtimejob import RuntimeJob, JobExecution, Sentinel
@@ -14,6 +14,7 @@ from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
 from etl_core.components.envelopes import InTagged, Out
 from etl_core.context.environment import Environment
+from etl_core.components.databases.pool_registry import ConnectionPoolRegistry
 
 
 class ExecutionAlreadyRunning(Exception):
@@ -54,18 +55,47 @@ class JobExecutionHandler:
         environment: Optional[Environment | str] = None,
     ) -> JobExecution:
         """
-        Top-level method to execute a Job, managing its execution lifecycle.
+        Top-level synchronous entrypoint. Runs the async pipeline inside a
+        temporary event loop (CLI, tests, sync API handlers).
         """
-        env_obj: Optional[Environment] = (
-            Environment(environment) if isinstance(environment, str) else environment
-        )
+        execution = self._begin_execution(job, environment)
+        try:
+            result = asyncio.run(self._main_loop(execution))
+            return result
+        finally:
+            self._cleanup_after_execution(execution)
+            self._release_execution(job.id)
+
+    async def execute_job_async(
+        self,
+        job: RuntimeJob,
+        environment: Optional[Environment | str] = None,
+    ) -> JobExecution:
+        """
+        Async variant that reuses the caller's event loop. Required for
+        scheduler-driven runs that share the FastAPI loop.
+        """
+        execution = self._begin_execution(job, environment)
+        try:
+            result = await self._main_loop(execution)
+            return result
+        finally:
+            self._cleanup_after_execution(execution)
+            self._release_execution(job.id)
+
+    def _begin_execution(
+        self,
+        job: RuntimeJob,
+        environment: Optional[Environment | str],
+    ) -> JobExecution:
+        env_obj = self._normalize_environment(environment)
+
         with self._guard_lock:
             if job.id in self._running_jobs:
                 self.logger.warning("Job '%s' is already running", job.name)
                 raise ExecutionAlreadyRunning(
                     f"Job '{job.name}' ({job.id}) is already running."
                 )
-            # mark as running and create the execution instance
             self._running_jobs.add(job.id)
             execution = JobExecution(job, environment=env_obj)
 
@@ -78,12 +108,46 @@ class JobExecutionHandler:
         except Exception:
             self.logger.exception("Failed to persist execution start")
 
+        return execution
+
+    def _release_execution(self, job_id: str) -> None:
+        with self._guard_lock:
+            self._running_jobs.discard(job_id)
+
+    def _cleanup_after_execution(self, execution: JobExecution) -> None:
+        job = execution.job
+
+        for comp in job.components:
+            cleanup = getattr(comp, "cleanup_after_execution", None)
+            if callable(cleanup):
+                try:
+                    cleanup()
+                except Exception:
+                    self.logger.exception("Component cleanup failed for %s", comp.name)
+
         try:
-            return asyncio.run(self._main_loop(execution))
-        finally:
-            # cleanup in both success/failure paths
-            with self._guard_lock:
-                self._running_jobs.discard(job.id)
+            closed = ConnectionPoolRegistry.instance().close_idle_pools()
+            if closed["sql"] or closed["mongo"]:
+                self.logger.debug(
+                    "Closed idle pools after execution: sql=%s mongo=%s",
+                    closed["sql"],
+                    closed["mongo"],
+                )
+        except Exception:
+            self.logger.exception("Failed to close idle connection pools")
+
+    @staticmethod
+    def _normalize_environment(
+        environment: Optional[Environment | str],
+    ) -> Optional[Environment]:
+        if isinstance(environment, Environment):
+            return environment
+        if isinstance(environment, str):
+            try:
+                return Environment(environment)
+            except ValueError:
+                return None
+        return environment
 
     def _prepare_comps_for_execution(
         self, job: RuntimeJob, environment: Optional[Environment] = None
@@ -212,8 +276,8 @@ class JobExecutionHandler:
         out_edges: Dict[str, Dict[str, List[Tuple[asyncio.Queue, str, bool]]]] = {}
 
         # Destination-side helper:
-        # pred_to_in_port_by_component: dst_comp_name -> {pred_comp_id: in_port}
-        pred_to_in_port_by_component: Dict[str, Dict[str, str]] = {
+        # pred_to_in_ports_by_component: dst_comp_name -> {pred_comp_id: Deque[in_port]}
+        pred_to_in_ports_by_component: Dict[str, Dict[str, Deque[str]]] = {
             comp.name: {} for comp in job.components
         }
 
@@ -226,8 +290,10 @@ class JobExecutionHandler:
                     # destination declares multi-input?
                     multi_in = len(dst.expected_in_port_names()) > 1
                     triples.append((in_queues[dst.name], in_port, multi_in))
-                    # remember for the destination which in_port this predecessor feeds
-                    pred_to_in_port_by_component[dst.name][comp.id] = in_port
+                    # remember every destination in_port this predecessor feeds
+                    pred_map = pred_to_in_ports_by_component.setdefault(dst.name, {})
+                    in_ports_queue = pred_map.setdefault(comp.id, deque())
+                    in_ports_queue.append(in_port)
                 by_port[outp] = triples
             out_edges[comp.name] = by_port
 
@@ -241,7 +307,12 @@ class JobExecutionHandler:
                     comp.id,
                     get_metrics_class(comp.comp_type),
                 )
-                pred_map = pred_to_in_port_by_component.get(comp.name, {})
+                pred_map = {
+                    pred_id: deque(ports)
+                    for pred_id, ports in pred_to_in_ports_by_component.get(
+                        comp.name, {}
+                    ).items()
+                }
                 task = tg.create_task(
                     self._worker(
                         execution,
@@ -264,10 +335,15 @@ class JobExecutionHandler:
         in_queues: List[asyncio.Queue],
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
         metrics: ComponentMetrics,
-        pred_to_in_port: Dict[str, str],
+        pred_to_in_ports: Dict[str, Deque[str]],
     ) -> None:
         """
         Async worker loop per component.
+
+        Args:
+            pred_to_in_ports: Maps predecessor component IDs to a deque of
+                destination in-port names they feed, preserving routing order
+                for components that expect multiple inputs.
         """
         attempt = execution.latest_attempt()
         sentinel = execution.sentinels[component.id]
@@ -282,7 +358,7 @@ class JobExecutionHandler:
                 await self._run_component(component, None, metrics, out_edges_by_port)
             else:
                 await self._consume_and_run(
-                    component, metrics, in_queues, out_edges_by_port, pred_to_in_port
+                    component, metrics, in_queues, out_edges_by_port, pred_to_in_ports
                 )
         except asyncio.CancelledError:
             # mark cancelled in metrics, then re-raise
@@ -296,6 +372,7 @@ class JobExecutionHandler:
             if metrics.status != RuntimeState.CANCELLED:
                 metrics.status = RuntimeState.SUCCESS
         finally:
+            metrics.update_processing_time()
             await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
 
     async def _broadcast_to_next_inputs(
@@ -318,7 +395,18 @@ class JobExecutionHandler:
         """
         Execute the component and route its results.
         """
-        metrics.set_started()
+        status = metrics.status
+        try:
+            current_state = (
+                status
+                if isinstance(status, RuntimeState)
+                else RuntimeState(str(status))
+            )
+        except ValueError:
+            current_state = RuntimeState.PENDING
+
+        if current_state == RuntimeState.PENDING:
+            metrics.set_started()
         async for batch in component.execute(payload, metrics):
             if not isinstance(batch, Out):
                 raise TypeError(
@@ -355,16 +443,31 @@ class JobExecutionHandler:
         component: Component,
         metrics: ComponentMetrics,
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-        pred_to_in_port: Dict[str, str],
+        pred_to_in_ports: Dict[str, Deque[str]],
         requires_tagged: bool,
-        remaining: Set[str],
+        remaining_counts: Dict[str, int],
     ) -> None:
-        if item.component_id not in remaining:
+        pred_id = item.component_id
+        if pred_id not in remaining_counts:
             return
-        remaining.discard(item.component_id)
+
+        in_ports_queue = pred_to_in_ports.get(pred_id)
+        in_port: Optional[str] = None
+        if in_ports_queue:
+            try:
+                in_port = in_ports_queue.popleft()
+            except IndexError:
+                in_port = None
+
+        outstanding = remaining_counts[pred_id] - 1
+        if outstanding <= 0:
+            remaining_counts.pop(pred_id, None)
+        else:
+            remaining_counts[pred_id] = outstanding
+
         if not requires_tagged:
             return
-        in_port = pred_to_in_port.get(item.component_id)
+
         if in_port:
             await self._run_component(
                 component, InTagged(in_port, Ellipsis), metrics, out_edges_by_port
@@ -404,13 +507,31 @@ class JobExecutionHandler:
         component.validate_in_payload(single_in_port, item)
         await self._run_component(component, item, metrics, out_edges_by_port)
 
+    def _initial_remaining_counts(
+        self,
+        component: Component,
+        pred_to_in_ports: Dict[str, Deque[str]],
+    ) -> Dict[str, int]:
+        counts: Dict[str, int] = {}
+        for pred in component.prev_components:
+            ports = pred_to_in_ports.get(pred.id)
+            if ports:
+                counts[pred.id] = len(ports)
+            else:
+                pred_name = getattr(pred, "name", pred.id)
+                raise RuntimeError(
+                    f"Wiring invariant violated: component '{component.name}' "
+                    f"missing in-port mapping from predecessor '{pred_name}'."
+                )
+        return counts
+
     async def _consume_and_run(
         self,
         component: Component,
         metrics: ComponentMetrics,
         in_queues: List[asyncio.Queue],
         out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
-        pred_to_in_port: Dict[str, str],
+        pred_to_in_ports: Dict[str, Deque[str]],
     ) -> None:
         """
         Consume from a single inbound queue, handle fan-in via sentinels.
@@ -427,7 +548,7 @@ class JobExecutionHandler:
           * Otherwise we just account for the closing predecessor.
         """
         queue = in_queues[0]
-        remaining = {p.id for p in component.prev_components}
+        remaining = self._initial_remaining_counts(component, pred_to_in_ports)
 
         # Resolve the single expected in-port name if applicable
         in_port_names = component.expected_in_port_names()
@@ -443,9 +564,9 @@ class JobExecutionHandler:
                     component=component,
                     metrics=metrics,
                     out_edges_by_port=out_edges_by_port,
-                    pred_to_in_port=pred_to_in_port,
+                    pred_to_in_ports=pred_to_in_ports,
                     requires_tagged=requires_tagged,
-                    remaining=remaining,
+                    remaining_counts=remaining,
                 )
                 continue
 

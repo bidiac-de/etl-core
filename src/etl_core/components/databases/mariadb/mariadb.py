@@ -28,5 +28,4 @@ class MariaDBComponent(SQLDatabaseComponent):
 
     def _build_objects(self):
         """Build MariaDB-specific objects after validation."""
-        super()._build_objects()
         return self
