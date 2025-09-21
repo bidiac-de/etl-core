@@ -250,18 +250,6 @@ def read_json_row(path: Path, chunk_size: int = 65536) -> Iterator[Dict[str, Any
         yield from _iter_array_stream(f, buf[1:], dec, chunk_size)
 
 
-def _is_nullish(v: Any) -> bool:
-    try:
-        import pandas as _pd  # lazy to avoid hard dep at import-time
-
-        if v is None or _pd.isna(v):
-            return True
-    except Exception:
-        if v is None:
-            return True
-    return False
-
-
 def _is_flat_key(key: str) -> bool:
     return "." in key or ("[" in key and "]" in key)
 
