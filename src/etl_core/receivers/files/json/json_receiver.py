@@ -150,7 +150,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
 
                 else:
                     tmpdir = Path(tempfile.mkdtemp(prefix="etl_json_to_ndjson_"))
-                    _register_temp_dir(tmpdir)  # <-- HIER
+                    _register_temp_dir(tmpdir)
                     ndjson_path = tmpdir / (
                         filepath.stem
                         + ".jsonl"
