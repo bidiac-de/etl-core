@@ -19,6 +19,8 @@ class DatabaseComponent(Component, ABC):
     can use them consistently.
     """
 
+    ICON = "fa-solid fa-database"
+
     credentials_id: int = Field(..., description="ID of credentials to use")
 
     entity_name: str = Field(
