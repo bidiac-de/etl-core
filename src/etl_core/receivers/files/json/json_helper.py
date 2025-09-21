@@ -31,9 +31,9 @@ def dump_records_auto(
 ) -> None:
     def _write(tmp_path: Path):
         if is_ndjson_path(path):
-            dump_ndjson_records(tmp_path, records)  # nutzt Sanitizer
+            dump_ndjson_records(tmp_path, records)  # uses sanitizer
         else:
-            dump_json_records(tmp_path, records, indent=indent)  # nutzt Sanitizer
+            dump_json_records(tmp_path, records, indent=indent)  # uses sanitizer
 
     _atomic_write_textfile(path, _write)
 
