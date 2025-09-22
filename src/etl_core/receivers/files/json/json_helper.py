@@ -3,7 +3,6 @@ import io
 import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional
-import re
 import pandas as pd
 import math
 import tempfile
@@ -311,9 +310,6 @@ def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     flat: Dict[str, Any] = {}
     _flatten_to_map("", rec, flat)
     return {k.lstrip("."): v for k, v in flat.items()}
-
-
-_LIST_INDEX_RE = re.compile(r"\[\d+\]")
 
 
 def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:

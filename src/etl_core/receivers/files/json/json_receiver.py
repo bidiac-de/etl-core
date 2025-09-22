@@ -102,9 +102,6 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         ensure_file_exists(filepath)
         try:
             if is_ndjson_path(filepath):
-                from etl_core.receivers.files.json.json_helper import (
-                    iter_ndjson_lenient,
-                )
 
                 def _on_error(_: Exception):
                     metrics.error_count += 1
@@ -268,6 +265,7 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
         try:
             await asyncio.to_thread(_write_nested_records)
         except Exception as exc:
+            metrics.error_count += 1
             raise FileReceiverError(f"Failed to write JSON bulk: {exc}") from exc
 
         metrics.lines_received += len(data)
