@@ -6,7 +6,7 @@ from etl_core.components.databases.sql_database import SQLDatabaseComponent
 class SQLServerComponent(SQLDatabaseComponent):
     """Base class for SQL Server components with common functionality."""
 
-    ICON = "ti ti-brand-microsoft-sql-server"
+    ICON = "devicon-microsoftsqlserver-plain"
 
     charset: str = Field(default="utf8", description="Character set for SQL Server")
     collation: str = Field(
