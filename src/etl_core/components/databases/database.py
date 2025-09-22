@@ -23,9 +23,8 @@ class DatabaseComponent(Component, ABC):
       - credentials_id values are provider IDs from persistence, so the same
         credentials object can be referenced by many components.
     """
-    ICON = "fa-solid fa-database"
 
-    credentials_id: int = Field(..., description="ID of credentials to use")
+    ICON = "fa-solid fa-database"
 
     entity_name: str = Field(
         default="",

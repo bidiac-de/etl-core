@@ -20,7 +20,6 @@ from pydantic import (
     PrivateAttr,
     field_validator,
 )
-from enum import Enum
 
 from etl_core.components.dataclasses import MetaData, Layout
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics

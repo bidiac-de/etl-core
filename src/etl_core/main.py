@@ -33,6 +33,19 @@ def _resolve_registry_mode() -> RegistryMode:
         return RegistryMode.PRODUCTION
 
 
+def _parse_origins(raw: str | None) -> List[str]:
+    """
+    Accept comma-separated origins from env. Use "*" to allow all origins.
+    Examples:
+      CORS_ALLOW_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
+      CORS_ALLOW_ORIGINS="*"
+    """
+    if not raw or raw.strip() == "*":
+        return ["*"]
+    items = [p.strip() for p in raw.split(",")]
+    return [x for x in items if x]
+
+
 def _resolve_scheduler_sync_seconds() -> Optional[str]:
     return config("ETL_SCHEDULES_SYNC_SECONDS", default=None)
 

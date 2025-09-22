@@ -112,7 +112,9 @@ class JobConfig(JobBase):
         - instantiate a RuntimeJob to reuse runtime wiring + port/schema checks
         If the runtime would fail, fail here with the same messages.
         """
-        cloned_components: List[Component] = [c.model_copy(deep=True) for c in self.components]
+        cloned_components: List[Component] = [
+            c.model_copy(deep=True) for c in self.components
+        ]
 
         _ = RuntimeJob(
             name=self.name,
