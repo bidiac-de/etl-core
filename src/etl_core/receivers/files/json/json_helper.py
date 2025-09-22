@@ -46,9 +46,8 @@ def _to_json_safe_scalar(v):
     except Exception:
         pass
     try:
-        import pandas as _pd
 
-        if _pd.isna(v):
+        if pd.isna(v):
             return None
     except Exception:
         pass
@@ -437,7 +436,7 @@ def _parse_path_escaped(path: str):
         i += 1
 
     flush_name()
-    return [(name, idx) for (name, idx) in parts if name != "" or idx is not None]
+    return [(name, idx) for (name, idx) in parts if name or idx is not None]
 
 
 def stream_json_array_to_ndjson(
