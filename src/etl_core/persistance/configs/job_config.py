@@ -9,6 +9,7 @@ from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
 from etl_core.components.wiring.ports import EdgeRef
 from etl_core.utils.common_helpers import assert_unique
+from etl_core.job_execution.runtimejob import RuntimeJob  # <- deep validation import
 
 
 def _known_component_types() -> Set[str]:
@@ -52,10 +53,11 @@ def _assert_routes_point_to_existing(components: Iterable[Component]) -> None:
 
 class JobConfig(JobBase):
     """
-    Thin config model used by endpoints/tests to:
+    Config model used by endpoints/tests to:
       - inflate component dicts into concrete Component subclasses via the registry
-      - validate top-level job fields and cheap graph-level sanity
-    Wiring (fan-in/out, schema presence, in_port selection) is done by RuntimeJob.
+      - validate top-level job fields and graph-level sanity
+      - **NEW**: perform deep runtime-equivalent validation
+        (wiring, port contracts, schema presence) by instantiating a RuntimeJob.
     """
 
     components: List[Component] = Field(default_factory=list)
@@ -92,14 +94,34 @@ class JobConfig(JobBase):
         return inflated
 
     @model_validator(mode="after")
-    def _validate_components(self) -> "JobConfig":
+    def _validate_components_shallow(self) -> "JobConfig":
         """
-        Keep this validator shallow and delegate to helpers to reduce complexity.
+        Keep this layer shallow to provide early, focused messages.
         """
         valid_types = _known_component_types()
         _assert_known_types(self.components, valid_types)
         assert_unique([c.name for c in self.components], context="component names")
         _assert_routes_point_to_existing(self.components)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_runtime_equivalence(self) -> "JobConfig":
+        """
+        Deep validation pass:
+        - clone components to avoid mutating the config
+        - instantiate a RuntimeJob to reuse runtime wiring + port/schema checks
+        If the runtime would fail, fail here with the same messages.
+        """
+        cloned_components: List[Component] = [c.model_copy(deep=True) for c in self.components]
+
+        _ = RuntimeJob(
+            name=self.name,
+            num_of_retries=self.num_of_retries,
+            file_logging=self.file_logging,
+            strategy_type=self.strategy_type,
+            components=cloned_components,
+            metadata_={},  # runtime doesn't need persisted metadata for validation
+        )
         return self
 
     @field_validator("name", "strategy_type", mode="before")
