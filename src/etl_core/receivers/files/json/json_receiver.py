@@ -136,6 +136,8 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
     ) -> dd.DataFrame:
         ensure_file_exists(filepath)
 
+        op_temp_dirs: list[Path] = []
+
         try:
             if filepath.is_dir():
                 read_target = str(filepath / "*.json*")
@@ -144,17 +146,17 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                 is_single_file = True
                 if is_ndjson_path(filepath):
                     read_target = str(filepath)
-
                 else:
-                    tmpdir = Path(tempfile.mkdtemp(prefix="etl_json_to_ndjson_"))
-                    _register_temp_dir(tmpdir)
-                    ndjson_path = tmpdir / (
+                    # Convert JSON array/object to NDJSON
+                    conv_dir = Path(tempfile.mkdtemp(prefix="etl_json_to_ndjson_"))
+                    op_temp_dirs.append(conv_dir)
+                    ndjson_path = conv_dir / (
                         filepath.stem
                         + ".jsonl"
                         + (".gz" if str(filepath).lower().endswith(".gz") else "")
                     )
 
-                    def _on_conv_err(_: Exception):
+                    def _on_conv_err(_: Exception) -> None:
                         metrics.error_count += 1
 
                     await asyncio.to_thread(
@@ -163,11 +165,11 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                     read_target = str(ndjson_path)
 
             if is_single_file:
-
+                # Pre-flatten NDJSON to keep dtypes stable across partitions
                 def _preflatten_ndjson(src: Path, dst: Path) -> int:
                     count = 0
 
-                    def _on_flat_err(_: Exception):
+                    def _on_flat_err(_: Exception) -> None:
                         metrics.error_count += 1
 
                     for rec in iter_ndjson_lenient(src, on_error=_on_flat_err):
@@ -181,12 +183,14 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
                     return count
 
                 flat_dir = Path(tempfile.mkdtemp(prefix="etl_flatten_ndjson_"))
-                _register_temp_dir(flat_dir)
+                op_temp_dirs.append(flat_dir)
                 flat_path = flat_dir / "flattened.jsonl"
                 await asyncio.to_thread(
                     _preflatten_ndjson, Path(read_target), flat_path
                 )
                 read_target = str(flat_path)
+
+                op_temp_dirs = [flat_dir]
 
                 use_blocksize = blocksize
                 ddf = dd.read_json(read_target, lines=True, blocksize=use_blocksize)
@@ -194,9 +198,9 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             else:
                 use_blocksize = None if str(read_target).endswith(".gz") else blocksize
                 ddf_raw = dd.read_json(read_target, lines=True, blocksize=use_blocksize)
-
                 ddf = ddf_raw.map_partitions(_flatten_partition)
 
+            # Compute simple metrics
             def _compute_row_count() -> int:
                 try:
                     counts = ddf.map_partitions(lambda pdf: len(pdf)).compute()
@@ -210,10 +214,20 @@ class JSONReceiver(ReadFileReceiver, WriteFileReceiver):
             total_rows = await asyncio.to_thread(_compute_row_count)
             metrics.lines_forwarded += total_rows
 
+            # Register dirs for process-exit cleanup
+            for d in op_temp_dirs:
+                _register_temp_dir(d)
+
             return ddf
 
         except Exception as exc:
             metrics.error_count += 1
+            # Best-effort local cleanup
+            for p in op_temp_dirs:
+                try:
+                    shutil.rmtree(p, ignore_errors=True)
+                except Exception:
+                    pass
             raise FileReceiverError(f"Failed to read JSON bigdata: {exc}") from exc
 
     async def write_row(
