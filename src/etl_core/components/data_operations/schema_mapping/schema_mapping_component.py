@@ -24,11 +24,10 @@ from etl_core.receivers.data_operations_receivers.schema_mapping.schema_mapping_
     SchemaMappingReceiver,
 )
 from etl_core.components.wiring.schema import Schema
-from etl_core.job_execution.job_execution_handler import InTagged, Out
+from etl_core.components.envelopes import Out, InTagged, unwrap
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
-
 
 StrRule = Tuple[str, str, str, str]
 
@@ -112,14 +111,16 @@ class SchemaMappingComponent(DataOperationsComponent):
 
     async def _process_row_tagged_join(
         self,
-        row: InTagged,
+        row: Union[Dict[str, Any], InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Buffer rows per-port, Ellipsis signals that a port is closed
-        if row.payload is Ellipsis:
-            self._closed_ports.add(row.in_port)
+        # Normalize via
+        in_port, payload = unwrap(row, default_port="")
+        if payload is Ellipsis:
+            self._closed_ports.add(in_port)
         else:
-            self._row_buf.setdefault(row.in_port, []).append(row.payload)
+            if isinstance(payload, dict):
+                self._row_buf.setdefault(in_port, []).append(payload)
 
         # Join once all required ports have been closed
         if not self._ready_to_join():
@@ -131,8 +132,8 @@ class SchemaMappingComponent(DataOperationsComponent):
             metrics=metrics,
         )
         for port, rows in results.items():
-            for payload in rows:
-                yield Out(port=port, payload=payload)
+            for rec in rows:
+                yield Out(port=port, payload=rec)
         self._reset_buffers()
 
     async def _process_row_mapping(
@@ -165,21 +166,21 @@ class SchemaMappingComponent(DataOperationsComponent):
 
     async def _process_bulk_tagged_join(
         self,
-        dataframe: InTagged,
+        dataframe: Union[pd.DataFrame, InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Buffer frames per port: concatenate chunks until closed
-        if dataframe.payload is Ellipsis:
-            self._closed_ports.add(dataframe.in_port)
+        in_port, payload = unwrap(dataframe, default_port="")
+        if payload is Ellipsis:
+            self._closed_ports.add(in_port)
         else:
-            df = dataframe.payload
-            cur = self._bulk_buf.get(dataframe.in_port)
-            if cur is None:
-                self._bulk_buf[dataframe.in_port] = df
-            else:
-                self._bulk_buf[dataframe.in_port] = pd.concat(
-                    [cur, df], ignore_index=True
-                )
+            if isinstance(payload, pd.DataFrame):
+                cur = self._bulk_buf.get(in_port)
+                if cur is None:
+                    self._bulk_buf[in_port] = payload
+                else:
+                    self._bulk_buf[in_port] = pd.concat(
+                        [cur, payload], ignore_index=True
+                    )
 
         if not self._ready_to_join():
             return
@@ -227,18 +228,19 @@ class SchemaMappingComponent(DataOperationsComponent):
 
     async def _process_bigdata_tagged_join(
         self,
-        ddf: InTagged,
+        ddf: Union[dd.DataFrame, InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Concatenate DDFs per port: Ellipsis closes the port
-        if ddf.payload is Ellipsis:
-            self._closed_ports.add(ddf.in_port)
+        in_port, payload = unwrap(ddf, default_port="")
+        if payload is Ellipsis:
+            self._closed_ports.add(in_port)
         else:
-            cur = self._big_buf.get(ddf.in_port)
-            if cur is None:
-                self._big_buf[ddf.in_port] = ddf.payload
-            else:
-                self._big_buf[ddf.in_port] = dd.concat([cur, ddf.payload])
+            if isinstance(payload, dd.DataFrame):
+                cur = self._big_buf.get(in_port)
+                if cur is None:
+                    self._big_buf[in_port] = payload
+                else:
+                    self._big_buf[in_port] = dd.concat([cur, payload])
 
         if not self._ready_to_join():
             return

@@ -20,7 +20,6 @@ class Credentials(BaseModel, IContextProvider):
         frozen=False,
     )
 
-    credentials_id: int
     name: str
     user: str
     host: str = Field(..., description="Database host")
@@ -40,7 +39,6 @@ class Credentials(BaseModel, IContextProvider):
 
     def get_parameter(self, key: str) -> Any:
         mapping: dict[str, Any] = {
-            "credentials_id": self.credentials_id,
             "user": self.user,
             "host": self.host,
             "port": self.port,

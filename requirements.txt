@@ -45,3 +45,4 @@ mypy
 types-requests
 httpx
 openpyxl
+apscheduler

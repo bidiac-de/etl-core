@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from sqlalchemy.orm import aliased
 
-from etl_core.persistance.table_definitions import ComponentLinkTable, ComponentTable
+from etl_core.persistence.table_definitions import ComponentLinkTable, ComponentTable
 
 
 def post_job(client: TestClient, config: Dict | None = None) -> str:

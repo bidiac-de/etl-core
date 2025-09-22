@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import ConfigDict, Field
 
-from src.etl_core.components.file_components.file_component import FileComponent
+from etl_core.components.file_components.file_component import FileComponent
 
 
 class Excel(FileComponent, ABC):

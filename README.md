@@ -82,6 +82,9 @@ Key features include:
     ```plaintext
     Create a `.env` file in the root, filling in values for the placeholder values found in:
     etl-core/.env_example
+   ETL_COMPONENT_MODE excluding certain Components only used for testing
+   EXECUTION_ENV setting a default Environment for resolving the Components Context configurations
+    ```
 
 ### Starting the Core
 - **Run the ETL Core Engine:**
@@ -93,6 +96,12 @@ Key features include:
     ```
 
     This command starts the ETL Core Engine in development mode, allowing for hot-reloading of code changes.
+
+### Scheduler Sync Configuration
+
+- The in-process scheduler refreshes persisted schedules every 30 seconds by default.
+- Set `ETL_SCHEDULES_SYNC_SECONDS` in your `.env` file or environment to change the cadence.
+- Use values like `off`, `false`, or `0` to disable the periodic sync entirely when external control is preferred.
 
 
 ## Contributions

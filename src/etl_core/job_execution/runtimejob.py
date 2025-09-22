@@ -1,4 +1,6 @@
-from typing import List, Dict, Tuple, Any, Set, Self
+from typing import List, Dict, Tuple, Any, Set, Self, Optional
+
+
 from etl_core.components.dataclasses import MetaData
 from pydantic import (
     Field,
@@ -10,9 +12,10 @@ import asyncio
 
 from etl_core.components.base_component import Component, get_strategy
 from etl_core.job_execution.retry_strategy import RetryStrategy, ConstantRetryStrategy
-from etl_core.persistance.base_models.job_base import JobBase
+from etl_core.persistence.base_models.job_base import JobBase
 from etl_core.components.wiring.ports import EdgeRef
 from etl_core.utils.common_helpers import assert_unique
+from etl_core.context.environment import Environment
 from uuid import uuid4
 import logging
 
@@ -342,13 +345,14 @@ class JobExecution:
     Runtime state for one execution of a JobDefinition.
     """
 
-    def __init__(self, job: RuntimeJob):
+    def __init__(self, job: RuntimeJob, environment: Optional[Environment] = None):
         self._id: str = str(uuid4())
         self._job = job
         # each execution carries its own retry strategy
         self._retry_strategy = ConstantRetryStrategy(job.num_of_retries)
         self._max_attempts = job.num_of_retries + 1
         self._attempts: List[ExecutionAttempt] = []
+        self._environment: Optional[Environment] = environment
 
         # each component gets its own sentinel instance
         self._sentinels: Dict[str, Sentinel] = {
@@ -388,6 +392,10 @@ class JobExecution:
         Returns the retry strategy for this job execution.
         """
         return self._retry_strategy
+
+    @property
+    def environment(self) -> Optional[Environment]:
+        return self._environment
 
     @property
     def sentinels(self) -> Dict[str, Sentinel]:

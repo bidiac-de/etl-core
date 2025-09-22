@@ -5,6 +5,8 @@ import pytest
 from sqlalchemy.engine import Engine
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from tests.async_mongomock import AsyncMongoMockClient
+
 from src.etl_core.components.databases.pool_registry import (
     ConnectionPoolRegistry,
     PoolKey,
@@ -188,7 +190,7 @@ class TestConnectionPoolRegistry:
         key, client = registry.get_mongo_client(uri="mongodb://localhost:27017")
         assert isinstance(key, PoolKey)
         assert key.kind == "mongo"
-        assert isinstance(client, AsyncIOMotorClient)
+        assert isinstance(client, (AsyncIOMotorClient, AsyncMongoMockClient))
 
     def test_get_mongo_client_existing_connection(self) -> None:
         registry = ConnectionPoolRegistry()
@@ -251,6 +253,19 @@ class TestConnectionPoolRegistry:
         registry = ConnectionPoolRegistry()
         key = PoolKey(kind="invalid", dsn="test")
         assert registry.close_pool(key) is False
+
+    def test_close_idle_pools(self) -> None:
+        registry = ConnectionPoolRegistry()
+        sql_key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
+        mongo_key, _ = registry.get_mongo_client(uri="mongodb://localhost:27017")
+
+        closed = registry.close_idle_pools()
+
+        assert closed["sql"] == 1
+        assert closed["mongo"] == 1
+        stats = registry.stats()
+        assert sql_key.dsn not in stats["sql"]
+        assert mongo_key.dsn not in stats["mongo"]
 
     def test_thread_safety(self) -> None:
         registry = ConnectionPoolRegistry()

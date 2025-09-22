@@ -3,7 +3,7 @@ from pydantic import field_validator, ConfigDict, PrivateAttr
 from uuid import uuid4
 from typing import Optional
 
-from etl_core.persistance.base_models.dataclasses_base import LayoutBase, MetaDataBase
+from etl_core.persistence.base_models.dataclasses_base import LayoutBase, MetaDataBase
 
 
 class Layout(LayoutBase):

@@ -7,6 +7,9 @@ name = "etl-core"
 version = "0.1.0"
 requires-python = ">=3.10"
 
+[project.scripts]
+etl = "etl_core.api.cli.cli_app:run"
+
 [tool.setuptools]
 packages = { find = { where = ["src"] } }
 

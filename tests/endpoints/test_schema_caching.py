@@ -57,7 +57,7 @@ def test_job_schema_is_cached(
     calls: Dict[str, int] = {"job_model_json_schema": 0}
 
     # Patch JobBase.model_json_schema
-    import etl_core.persistance.base_models.job_base as job_base
+    import etl_core.persistence.base_models.job_base as job_base
 
     real_job_schema = job_base.JobBase.model_json_schema
 
@@ -158,7 +158,7 @@ def test_mode_is_part_of_cache_key(
         return _FakeMode("production")
 
     # Count calls
-    import etl_core.persistance.base_models.job_base as job_base
+    import etl_core.persistence.base_models.job_base as job_base
 
     job_calls: Dict[str, int] = {"model_json_schema": 0}
     real_job_schema = job_base.JobBase.model_json_schema
@@ -195,7 +195,7 @@ def test_job_schema_cache_is_thread_safe(
     client = fresh_client("test")
     _require_cache_or_skip(client)
 
-    import etl_core.persistance.base_models.job_base as job_base
+    import etl_core.persistence.base_models.job_base as job_base
 
     schemas_router = _schemas_router_module(client)
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]

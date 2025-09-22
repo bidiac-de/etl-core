@@ -5,9 +5,9 @@ from typing import Dict, List
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from etl_core.persistance.configs.job_config import JobConfig
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import ComponentTable
+from etl_core.persistence.configs.job_config import JobConfig
+from etl_core.persistence.db import engine
+from etl_core.persistence.table_definitions import ComponentTable
 from tests.endpoints.job_endpoints_test.job_endpoint_utils import (
     cfg_two,
     fetch_link_pairs,

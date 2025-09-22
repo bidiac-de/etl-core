@@ -29,7 +29,8 @@ from etl_core.strategies.base_strategy import ExecutionStrategy
 from etl_core.strategies.bigdata_strategy import BigDataExecutionStrategy
 from etl_core.strategies.bulk_strategy import BulkExecutionStrategy
 from etl_core.strategies.row_strategy import RowExecutionStrategy
-from etl_core.persistance.base_models.component_base import ComponentBase
+from etl_core.persistence.base_models.component_base import ComponentBase
+from etl_core.persistence.handlers.context_handler import ContextHandler
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.envelopes import Out
 from etl_core.components.wiring.ports import OutPortSpec, InPortSpec, EdgeRef
@@ -38,25 +39,13 @@ from etl_core.components.wiring.validation import (
     validate_dataframe_against_schema,
     validate_dask_dataframe_against_schema,
 )
-
-
-class StrategyType(str, Enum):
-    """
-    Enum for different strategy types
-    """
-
-    ROW = "row"
-    BULK = "bulk"
-    BIGDATA = "bigdata"
+from etl_core.context.context import Context
+from etl_core.components.strategy_type import StrategyType
 
 
 class Component(ComponentBase, ABC):
     """
     Base class for all components in the system.
-
-    Supports both static (class-level) and dynamic (instance-level) ports.
-    - Class-level declarations keep simple components declarative.
-    - Instance-level extras come from config and are merged during validation.
     """
 
     # declarations (overridable in subclasses)
@@ -125,6 +114,11 @@ class Component(ComponentBase, ABC):
     )
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
 
+    context_id: Optional[str] = Field(
+        default=None, description="Persisted Context ID to resolve during build."
+    )
+    _resolved_context: Optional[Context] = PrivateAttr(default=None)
+
     routes: Dict[str, List[EdgeRef | str]] = Field(
         default_factory=dict,
         description="out_port -> [EdgeRef|target_name]. Use EdgeRef to "
@@ -164,12 +158,10 @@ class Component(ComponentBase, ABC):
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)
-
-    # Runtime, set during wiring in Job creation
     _out_routes: Dict[str, List["Component"]] = PrivateAttr(default_factory=dict)
     _out_edges_in_ports: Dict[str, List[str]] = PrivateAttr(default_factory=dict)
 
-    # these need to be created on the concrete component classes
+    # need to be created on the concrete component classes
     _strategy: Optional[ExecutionStrategy] = PrivateAttr(default=None)
     _receiver: Optional[Receiver] = PrivateAttr(default=None)
 
@@ -178,9 +170,6 @@ class Component(ComponentBase, ABC):
     def _coerce_extra_output_ports(
         cls, v: Iterable[OutPortSpec | str | dict] | None
     ) -> List[OutPortSpec]:
-        """
-        Accept List[OutPortSpec] | List[str] | List[dict], cast to List[OutPortSpec].
-        """
         if v is None:
             return []
         result: List[OutPortSpec] = []
@@ -202,9 +191,6 @@ class Component(ComponentBase, ABC):
     def _coerce_extra_input_ports(
         cls, v: Iterable[InPortSpec | str | dict] | None
     ) -> List[InPortSpec]:
-        """
-        Accept List[InPortSpec] | List[str] | List[dict], cast to List[InPortSpec].
-        """
         if v is None:
             return []
         result: List[InPortSpec] = []
@@ -249,6 +235,25 @@ class Component(ComponentBase, ABC):
     def _class_in_specs(cls) -> List[InPortSpec]:
         return list(cls.INPUT_PORTS)
 
+    @model_validator(mode="after")
+    def _resolve_context_by_id(self) -> "Component":
+        if self._resolved_context is not None:
+            return self
+        if not self.context_id:
+            return self
+        ctx_handler = ContextHandler()
+        loaded = ctx_handler.get_by_id(self.context_id)
+        if not loaded:
+            raise ValueError(f"Context with ID {self.context_id} not found")
+        ctx, _ctx_id = loaded
+        if not isinstance(ctx, Context):
+            raise TypeError("Resolved object is not a Context")
+        self._resolved_context = ctx
+        return self
+
+    def get_resolved_context(self) -> Optional[Context]:
+        return self._resolved_context
+
     # public instance methods used by wiring/runtime
     def expected_ports(self) -> List[OutPortSpec]:
         return self._merged_out_specs()
@@ -264,7 +269,7 @@ class Component(ComponentBase, ABC):
     def _build_objects(self) -> "Component":
         """
         After-instantiation hook. Override in subclasses to assign
-        `self._receiver`, then return `self`.
+        "self._receiver", then return "self".
         """
         return self
 
