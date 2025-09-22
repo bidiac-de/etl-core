@@ -284,12 +284,17 @@ def _set_path(root: dict, path: str, value):
             lst = _ensure_list(cur, name)
             j = int(idx)
             while len(lst) <= j:
-                lst.append({})
+                lst.append(None)
             if last:
                 lst[j] = value
                 return
-            if not isinstance(lst[j], dict):
-                lst[j] = {}
+            next_name, next_idx = parts[i + 1]
+            if next_idx is None:
+                if lst[j] is None or not isinstance(lst[j], dict):
+                    lst[j] = {}
+            else:
+                if lst[j] is None or not isinstance(lst[j], list):
+                    lst[j] = []
             cur = lst[j]
 
 
