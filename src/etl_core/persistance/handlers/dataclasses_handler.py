@@ -77,7 +77,7 @@ class DataClassHandler:
         return row
 
     def dump_metadata(self, meta: MetaDataTable) -> Dict[str, Any]:
-        return meta.model_dump()
+        return meta.model_dump(mode="json", exclude_none=True)
 
     def dump_layout(self, layout: LayoutTable) -> Dict[str, Any]:
-        return layout.model_dump()
+        return layout.model_dump(mode="json", exclude_none=True)
