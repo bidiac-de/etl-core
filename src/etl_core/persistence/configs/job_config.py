@@ -9,7 +9,7 @@ from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
 from etl_core.components.wiring.ports import EdgeRef
 from etl_core.utils.common_helpers import assert_unique
-from etl_core.job_execution.runtimejob import RuntimeJob  # <- deep validation import
+from etl_core.job_execution.runtimejob import RuntimeJob  # <- runtime wiring for deep validation
 
 
 def _known_component_types() -> Set[str]:
@@ -51,13 +51,26 @@ def _assert_routes_point_to_existing(components: Iterable[Component]) -> None:
                     )
 
 
+def _clone_for_validation(components: List[Component]) -> List[Component]:
+    """
+    Create fresh component instances from their public data only.
+    Avoids deepcopying private attrs that are not picklable.
+    """
+    clones: List[Component] = []
+    for comp in components:
+        cls = type(comp)
+        data = comp.model_dump()
+        clones.append(cls(**data))
+    return clones
+
+
 class JobConfig(JobBase):
     """
     Config model used by endpoints/tests to:
       - inflate component dicts into concrete Component subclasses via the registry
       - validate top-level job fields and graph-level sanity
-      - **NEW**: perform deep runtime-equivalent validation
-        (wiring, port contracts, schema presence) by instantiating a RuntimeJob.
+      - perform deep runtime-equivalent validation by instantiating a RuntimeJob
+        with clean component clones.
     """
 
     components: List[Component] = Field(default_factory=list)
@@ -89,15 +102,11 @@ class JobConfig(JobBase):
             if comp_cls is None:
                 raise ValueError(f"Unknown component type: {comp_type!r}")
 
-            # let the concrete class validate itself
             inflated.append(comp_cls(**item))
         return inflated
 
     @model_validator(mode="after")
     def _validate_components_shallow(self) -> "JobConfig":
-        """
-        Keep this layer shallow to provide early, focused messages.
-        """
         valid_types = _known_component_types()
         _assert_known_types(self.components, valid_types)
         assert_unique([c.name for c in self.components], context="component names")
@@ -108,13 +117,11 @@ class JobConfig(JobBase):
     def _validate_runtime_equivalence(self) -> "JobConfig":
         """
         Deep validation pass:
-        - clone components to avoid mutating the config
+        - re-instantiate components from public data to avoid copying private attrs
         - instantiate a RuntimeJob to reuse runtime wiring + port/schema checks
         If the runtime would fail, fail here with the same messages.
         """
-        cloned_components: List[Component] = [
-            c.model_copy(deep=True) for c in self.components
-        ]
+        cloned_components = _clone_for_validation(self.components)
 
         _ = RuntimeJob(
             name=self.name,
@@ -122,7 +129,7 @@ class JobConfig(JobBase):
             file_logging=self.file_logging,
             strategy_type=self.strategy_type,
             components=cloned_components,
-            metadata_={},  # runtime doesn't need persisted metadata for validation
+            metadata_={},  # runtime does not need persisted metadata for validation
         )
         return self
 
@@ -145,7 +152,6 @@ class JobConfig(JobBase):
     @field_validator("file_logging", mode="before")
     @classmethod
     def _validate_file_logging(cls, value: bool) -> bool:
-        """Validate that file_logging is a boolean."""
         if not isinstance(value, bool):
             raise ValueError("File logging must be a boolean value.")
         return value
