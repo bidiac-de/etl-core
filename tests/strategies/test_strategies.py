@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, AsyncIterator
 
 import pytest
@@ -17,13 +16,19 @@ class DummyComponent:
     def __init__(self, name: str = "dummy") -> None:
         self.name = name
 
-    async def process_row(self, payload: Any, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_row(
+        self, payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
         yield Out("out", payload)
 
-    async def process_bulk(self, payload: Any, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_bulk(
+        self, payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
         yield Out("out", payload)
 
-    async def process_bigdata(self, payload: Any, metrics: ComponentMetrics) -> AsyncIterator[Out]:
+    async def process_bigdata(
+        self, payload: Any, metrics: ComponentMetrics
+    ) -> AsyncIterator[Out]:
         yield Out("out", payload)
 
 
@@ -44,7 +49,7 @@ async def test_row_strategy_success() -> None:
 @pytest.mark.asyncio
 async def test_row_strategy_type_error_when_not_out() -> None:
     class BadComponent(DummyComponent):
-        async def process_row(self, payload: Any, metrics: ComponentMetrics):  # type: ignore[override]
+        async def process_row(self, payload: Any, metrics: ComponentMetrics):
             yield payload  # not an Out
 
     strat = RowExecutionStrategy()
@@ -64,7 +69,7 @@ async def test_bulk_strategy_success_and_type_check() -> None:
     assert len(outs) == 1 and isinstance(outs[0], Out)
 
     class BadBulk(DummyComponent):
-        async def process_bulk(self, payload: Any, metrics: ComponentMetrics):  # type: ignore[override]
+        async def process_bulk(self, payload: Any, metrics: ComponentMetrics):
             yield "not-an-out"
 
     with pytest.raises(TypeError):
@@ -81,7 +86,7 @@ async def test_bigdata_strategy_success_and_type_check() -> None:
     assert len(outs) == 1 and isinstance(outs[0], Out)
 
     class BadBD(DummyComponent):
-        async def process_bigdata(self, payload: Any, metrics: ComponentMetrics):  # type: ignore[override]
+        async def process_bigdata(self, payload: Any, metrics: ComponentMetrics):
             yield 42
 
     with pytest.raises(TypeError):

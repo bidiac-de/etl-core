@@ -1,8 +1,5 @@
 import json
-import math
-import tempfile
 from pathlib import Path
-from typing import Dict, Any
 import pandas as pd
 import pytest
 
@@ -20,7 +17,6 @@ from etl_core.receivers.files.json.json_helper import (
     read_json_row,
     iter_ndjson_lenient,
     load_json_records,
-    dump_json_records,
     append_ndjson_record,
     dump_records_auto,
     _atomic_write_textfile,
@@ -34,14 +30,14 @@ class TestJsonSafeScalar:
 
     def test_to_json_safe_scalar_nan(self):
         """Test NaN handling in JSON serialization."""
-        result = _to_json_safe_scalar(float('nan'))
+        result = _to_json_safe_scalar(float("nan"))
         assert result is None
 
     def test_to_json_safe_scalar_inf(self):
         """Test infinity handling in JSON serialization."""
-        result = _to_json_safe_scalar(float('inf'))
+        result = _to_json_safe_scalar(float("inf"))
         assert result is None
-        result = _to_json_safe_scalar(float('-inf'))
+        result = _to_json_safe_scalar(float("-inf"))
         assert result is None
 
     def test_to_json_safe_scalar_pandas_na(self):
@@ -60,24 +56,18 @@ class TestJsonSafeScalar:
         """Test sanitization of nested structures."""
         data = {
             "normal": 42,
-            "nan_val": float('nan'),
-            "inf_val": float('inf'),
-            "nested": {
-                "pandas_na": pd.NA,
-                "normal": "test"
-            },
-            "list": [1, float('nan'), "ok"]
+            "nan_val": float("nan"),
+            "inf_val": float("inf"),
+            "nested": {"pandas_na": pd.NA, "normal": "test"},
+            "list": [1, float("nan"), "ok"],
         }
         result = _sanitize_for_json(data)
         expected = {
             "normal": 42,
             "nan_val": None,
             "inf_val": None,
-            "nested": {
-                "pandas_na": None,
-                "normal": "test"
-            },
-            "list": [1, None, "ok"]
+            "nested": {"pandas_na": None, "normal": "test"},
+            "list": [1, None, "ok"],
         }
         assert result == expected
 
@@ -125,15 +115,9 @@ class TestFlattenUnflatten:
         data = {
             "user": {
                 "name": "John",
-                "address": {
-                    "street": "Main St",
-                    "city": "Anytown"
-                }
+                "address": {"street": "Main St", "city": "Anytown"},
             },
-            "orders": [
-                {"id": 1, "amount": 100},
-                {"id": 2, "amount": 200}
-            ]
+            "orders": [{"id": 1, "amount": 100}, {"id": 2, "amount": 200}],
         }
         result = flatten_record(data)
         expected = {
@@ -143,7 +127,7 @@ class TestFlattenUnflatten:
             "orders[0].id": 1,
             "orders[0].amount": 100,
             "orders[1].id": 2,
-            "orders[1].amount": 200
+            "orders[1].amount": 200,
         }
         assert result == expected
 
@@ -153,28 +137,18 @@ class TestFlattenUnflatten:
             "user.name": "John",
             "user.address.street": "Main St",
             "orders[0].id": 1,
-            "orders[1].amount": 200
+            "orders[1].amount": 200,
         }
         result = unflatten_record(flat)
         expected = {
-            "user": {
-                "name": "John",
-                "address": {"street": "Main St"}
-            },
-            "orders": [
-                {"id": 1},
-                {"amount": 200}
-            ]
+            "user": {"name": "John", "address": {"street": "Main St"}},
+            "orders": [{"id": 1}, {"amount": 200}],
         }
         assert result == expected
 
     def test_roundtrip_flatten_unflatten(self):
         """Test that flatten + unflatten preserves data."""
-        original = {
-            "a": {"b": {"c": 1}},
-            "d": [{"e": 2}, {"f": 3}],
-            "g": "simple"
-        }
+        original = {"a": {"b": {"c": 1}}, "d": [{"e": 2}, {"f": 3}], "g": "simple"}
         flattened = flatten_record(original)
         unflattened = unflatten_record(flattened)
         assert unflattened == original
@@ -228,12 +202,12 @@ class TestJsonFileOperations:
     def test_open_text_auto_gzip(self, tmp_path: Path):
         """Test automatic gzip handling."""
         import gzip
-        
+
         # Test gzip file
         gz_path = tmp_path / "test.json.gz"
         with gzip.open(gz_path, "wt", encoding="utf-8") as f:
             f.write('{"test": "data"}')
-        
+
         with open_text_auto(gz_path, "rt") as f:
             content = f.read()
         assert content == '{"test": "data"}'
@@ -241,10 +215,10 @@ class TestJsonFileOperations:
     def test_atomic_write_textfile_error_handling(self, tmp_path: Path):
         """Test atomic write with cleanup on error."""
         target_path = tmp_path / "target.txt"
-        
+
         def failing_writer(tmp_path: Path):
             raise RuntimeError("Write failed")
-        
+
         # Should raise the error but clean up temp file
         with pytest.raises(RuntimeError, match="Write failed"):
             _atomic_write_textfile(target_path, failing_writer)
@@ -255,17 +229,18 @@ class TestJsonFileOperations:
         ndjson_path = tmp_path / "malformed.jsonl"
         lines = [
             '{"valid": "line1"}',
-            'invalid json line',
+            "invalid json line",
             '{"valid": "line2"}',
-            '',
-            '{"valid": "line3"}'
+            "",
+            '{"valid": "line3"}',
         ]
-        ndjson_path.write_text('\n'.join(lines))
-        
+        ndjson_path.write_text("\n".join(lines))
+
         errors = []
+
         def error_handler(exc):
             errors.append(exc)
-        
+
         records = list(iter_ndjson_lenient(ndjson_path, on_error=error_handler))
         assert len(records) == 3
         assert len(errors) == 1
@@ -274,20 +249,15 @@ class TestJsonFileOperations:
     def test_iter_ndjson_lenient_non_dict_wrapping(self, tmp_path: Path):
         """Test that non-dict values get wrapped."""
         ndjson_path = tmp_path / "non_dict.jsonl"
-        lines = [
-            '{"dict": "value"}',
-            '"string value"',
-            '42',
-            'null'
-        ]
-        ndjson_path.write_text('\n'.join(lines))
-        
+        lines = ['{"dict": "value"}', '"string value"', "42", "null"]
+        ndjson_path.write_text("\n".join(lines))
+
         records = list(iter_ndjson_lenient(ndjson_path))
         expected = [
             {"dict": "value"},
             {"_value": "string value"},
             {"_value": 42},
-            {"_value": None}
+            {"_value": None},
         ]
         assert records == expected
 
@@ -296,21 +266,24 @@ class TestJsonFileOperations:
         # Create invalid JSON array
         invalid_json = tmp_path / "invalid.json"
         invalid_json.write_text('{"not": "array"}')
-        
+
         output_path = tmp_path / "output.jsonl"
-        
+
         errors = []
+
         def error_handler(exc):
             errors.append(exc)
-        
+
         with pytest.raises(ValueError, match="Source is not a JSON array"):
-            stream_json_array_to_ndjson(invalid_json, output_path, on_error=error_handler)
+            stream_json_array_to_ndjson(
+                invalid_json, output_path, on_error=error_handler
+            )
 
     def test_read_json_row_invalid_format(self, tmp_path: Path):
         """Test reading invalid JSON format."""
         invalid_json = tmp_path / "invalid.json"
         invalid_json.write_text('"not object or array"')
-        
+
         with pytest.raises(ValueError, match="Top-level JSON must be"):
             list(read_json_row(invalid_json))
 
@@ -318,7 +291,7 @@ class TestJsonFileOperations:
         """Test loading from empty file."""
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("")
-        
+
         result = load_json_records(empty_file)
         assert result == []
 
@@ -326,7 +299,7 @@ class TestJsonFileOperations:
         """Test loading single JSON object."""
         single_obj = tmp_path / "single.json"
         single_obj.write_text('{"id": 1, "name": "test"}')
-        
+
         result = load_json_records(single_obj)
         assert result == [{"id": 1, "name": "test"}]
 
@@ -334,10 +307,10 @@ class TestJsonFileOperations:
         """Test automatic format detection for NDJSON."""
         ndjson_path = tmp_path / "test.ndjson"
         records = [{"id": 1}, {"id": 2}]
-        
+
         dump_records_auto(ndjson_path, records)
-        
-        lines = ndjson_path.read_text().strip().split('\n')
+
+        lines = ndjson_path.read_text().strip().split("\n")
         assert len(lines) == 2
         assert json.loads(lines[0]) == {"id": 1}
         assert json.loads(lines[1]) == {"id": 2}
@@ -345,10 +318,10 @@ class TestJsonFileOperations:
     def test_append_ndjson_record_sanitization(self, tmp_path: Path):
         """Test that appended records are sanitized."""
         ndjson_path = tmp_path / "test.jsonl"
-        record = {"id": 1, "nan_val": float('nan')}
-        
+        record = {"id": 1, "nan_val": float("nan")}
+
         append_ndjson_record(ndjson_path, record)
-        
+
         content = ndjson_path.read_text().strip()
         parsed = json.loads(content)
         assert parsed["id"] == 1
@@ -371,7 +344,7 @@ class TestJsonReceiverEdgeCases:
         """Test flattening of empty structures."""
         empty_dict = {}
         assert flatten_record(empty_dict) == {}
-        
+
         with_list = {"items": []}
         assert flatten_record(with_list) == {}
 
@@ -387,9 +360,9 @@ class TestJsonReceiverEdgeCases:
         """Test edge cases in path parsing."""
         # Empty path
         assert _parse_path_escaped("") == []
-        
+
         # Just brackets
         assert _parse_path_escaped("[0]") == [("", 0)]
-        
+
         # Trailing dot
         assert _parse_path_escaped("path.") == [("path", None)]

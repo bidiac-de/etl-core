@@ -20,7 +20,11 @@ def test_error_payload_with_and_without_context():
     assert p1 == {"code": "CODE", "message": "Message"}
 
     p2 = H._error_payload("X", "Y", a=1, b="t")
-    assert p2["code"] == "X" and p2["message"] == "Y" and p2["context"] == {"a": 1, "b": "t"}
+    assert (
+        p2["code"] == "X"
+        and p2["message"] == "Y"
+        and p2["context"] == {"a": 1, "b": "t"}
+    )
 
 
 def test_exc_meta_contains_safe_fields():
@@ -80,7 +84,9 @@ def test_schema_post_processing_transforms_and_strip_order():
 
     # properties becomes ordered array and 'y' coerced to select
     props = out["properties"]
-    assert isinstance(props, list) and props[0]["name"] == "y" and props[1]["name"] == "x"
+    assert (
+        isinstance(props, list) and props[0]["name"] == "y" and props[1]["name"] == "x"
+    )
     assert props[0]["schema"]["type"] == "select"
     # order keys removed
     assert "order" not in props[0]["schema"] and "order" not in props[1]["schema"]
