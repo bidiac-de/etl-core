@@ -9,7 +9,7 @@ from etl_core.components.base_component import Component
 from etl_core.components.component_registry import component_registry
 from etl_core.components.wiring.ports import EdgeRef
 from etl_core.utils.common_helpers import assert_unique
-from etl_core.job_execution.runtimejob import RuntimeJob  # <- runtime wiring for deep validation
+from etl_core.job_execution.runtimejob import RuntimeJob
 
 
 def _known_component_types() -> Set[str]:
@@ -54,7 +54,6 @@ def _assert_routes_point_to_existing(components: Iterable[Component]) -> None:
 def _clone_for_validation(components: List[Component]) -> List[Component]:
     """
     Create fresh component instances from their public data only.
-    Avoids deepcopying private attrs that are not picklable.
     """
     clones: List[Component] = []
     for comp in components:
@@ -129,7 +128,7 @@ class JobConfig(JobBase):
             file_logging=self.file_logging,
             strategy_type=self.strategy_type,
             components=cloned_components,
-            metadata_={},  # runtime does not need persisted metadata for validation
+            metadata_={},
         )
         return self
 
