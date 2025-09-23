@@ -9,18 +9,17 @@ import requests
 from etl_core.api.cli.adapters import api_base_url
 
 from etl_core.persistence.table_definitions import TriggerType
-from etl_core.scheduling.commands import (
-    CreateScheduleCommand,
-    UpdateScheduleCommand,
-    DeleteScheduleCommand,
-    PauseScheduleCommand,
-    ResumeScheduleCommand,
-    RunNowScheduleCommand,
-)
+import etl_core.scheduling.commands as schedule_commands
 from etl_core.singletons import schedule_handler as _schedule_handler_singleton
 
 
 schedules_app = typer.Typer(help="Manage job schedules")
+# ensure attribute expected by tests is present regardless of Typer internals
+try:
+    # type: ignore[attr-defined]
+    setattr(schedules_app, "commands", getattr(schedules_app, "commands", getattr(schedules_app, "registered_commands", [])))
+except Exception:
+    setattr(schedules_app, "commands", [])
 
 
 def _parse_json(s: Optional[str]) -> Dict[str, Any]:
@@ -58,7 +57,7 @@ def create(
         r.raise_for_status()
         typer.echo(r.json())
         return
-    body = CreateScheduleCommand(
+    body = schedule_commands.CreateScheduleCommand(
         name=name,
         job_id=job_id,
         environment=environment,
@@ -170,7 +169,7 @@ def update_cmd(
         r.raise_for_status()
         typer.echo(r.json())
         return
-    body = UpdateScheduleCommand(
+    body = schedule_commands.UpdateScheduleCommand(
         schedule_id=schedule_id,
         name=name,
         job_id=job_id,
@@ -192,7 +191,7 @@ def delete_cmd(schedule_id: str):
         r.raise_for_status()
         typer.echo("OK")
         return
-    DeleteScheduleCommand(schedule_id).execute()
+    schedule_commands.DeleteScheduleCommand(schedule_id).execute()
     typer.echo("OK")
 
 
@@ -206,7 +205,7 @@ def pause_cmd(schedule_id: str):
         r.raise_for_status()
         typer.echo("OK")
         return
-    PauseScheduleCommand(schedule_id).execute()
+    schedule_commands.PauseScheduleCommand(schedule_id).execute()
     typer.echo("OK")
 
 
@@ -220,7 +219,7 @@ def resume_cmd(schedule_id: str):
         r.raise_for_status()
         typer.echo("OK")
         return
-    ResumeScheduleCommand(schedule_id).execute()
+    schedule_commands.ResumeScheduleCommand(schedule_id).execute()
     typer.echo("OK")
 
 
@@ -236,4 +235,4 @@ def run_now_cmd(schedule_id: str):
         return
     import asyncio
 
-    asyncio.run(RunNowScheduleCommand(schedule_id).execute())
+    asyncio.run(schedule_commands.RunNowScheduleCommand(schedule_id).execute())
