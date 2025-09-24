@@ -149,7 +149,7 @@ class AsyncMongoMockClient:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: D401, ANN401
-        self._client = mongomock.MongoClient()
+        self._client = mongomock.MongoClient(*args, **kwargs)
 
     def __getitem__(self, name: str) -> _AsyncDatabase:
         return _AsyncDatabase(self._client[name])
