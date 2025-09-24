@@ -1,7 +1,11 @@
 from abc import ABC
 from datetime import datetime, timedelta
+import time
+from typing import Optional
 from uuid import uuid4
+
 from pydantic import BaseModel, PrivateAttr
+
 from etl_core.components.runtime_state import RuntimeState
 
 
@@ -13,8 +17,9 @@ class Metrics(BaseModel, ABC):
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
     _status: str = RuntimeState.PENDING.value
     _created_at: datetime = datetime.now()
-    _started_at: datetime
-    _processing_time: timedelta
+    _started_at: Optional[datetime] = PrivateAttr(default=None)
+    _started_at_monotonic: Optional[float] = PrivateAttr(default=None)
+    _processing_time: timedelta = PrivateAttr(default=timedelta(0))
     _error_count: int = 0
 
     def set_started(self):
@@ -22,6 +27,7 @@ class Metrics(BaseModel, ABC):
         Set the started_at time and reset processing_time.
         """
         self.started_at = datetime.now()
+        self._started_at_monotonic = time.perf_counter()
         self.status = RuntimeState.RUNNING.value
 
     @property
@@ -47,7 +53,7 @@ class Metrics(BaseModel, ABC):
         return self._created_at
 
     @property
-    def started_at(self) -> datetime:
+    def started_at(self) -> Optional[datetime]:
         return self._started_at
 
     @started_at.setter
@@ -56,6 +62,19 @@ class Metrics(BaseModel, ABC):
             raise ValueError("started_at must be a datetime object")
         self._started_at = value
         self.processing_time = timedelta(0)
+
+    def update_processing_time(self) -> None:
+        """Refresh processing_time using the most reliable available clock."""
+        started_at = self.started_at
+        if self._started_at_monotonic is not None:
+            elapsed = time.perf_counter() - self._started_at_monotonic
+            self.processing_time = timedelta(seconds=elapsed)
+            return
+        if started_at is None:
+            return
+        tz = started_at.tzinfo
+        current = datetime.now(tz=tz) if tz else datetime.now()
+        self.processing_time = current - started_at
 
     @property
     def processing_time(self) -> timedelta:

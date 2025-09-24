@@ -1,7 +1,6 @@
-from etl_core.metrics.base_metrics import Metrics
-from datetime import datetime
-from etl_core.components.runtime_state import RuntimeState
 from typing import Dict
+
+from etl_core.metrics.base_metrics import Metrics
 
 
 class ExecutionMetrics(Metrics):
@@ -11,8 +10,7 @@ class ExecutionMetrics(Metrics):
 
     def __init__(self):
         super().__init__()
-        self.started_at = datetime.now()
-        self.status = RuntimeState.RUNNING.value
+        self.set_started()
 
     _throughput: float = 0.0
 
@@ -29,9 +27,7 @@ class ExecutionMetrics(Metrics):
         update processing time and throughput.
         """
         total = sum(m.lines_received for m in metrics_map.values())
-        now = datetime.now()
-        elapsed = now - self.started_at
-        self.processing_time = elapsed
+        self.update_processing_time()
         self.calc_throughput(total_lines=total)
 
     @property

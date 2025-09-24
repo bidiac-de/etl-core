@@ -1,0 +1,10 @@
+{
+  "name": "mongo_test_creds",
+  "user": "",
+  "host": "localhost",
+  "port": 27017,
+  "database": "etl_core_demo",
+  "password": "",
+  "pool_max_size": 10,
+  "pool_timeout_s": 30
+}

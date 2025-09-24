@@ -6,6 +6,8 @@ from etl_core.components.databases.sql_database import SQLDatabaseComponent
 class PostgreSQLComponent(SQLDatabaseComponent):
     """Base class for PostgreSQL components with common functionality."""
 
+    ICON = "devicon-postgresql-plain"
+
     charset: str = Field(default="utf8", description="Character set for PostgreSQL")
     collation: str = Field(
         default="en_US.UTF-8", description="Collation for PostgreSQL"
@@ -28,7 +30,4 @@ class PostgreSQLComponent(SQLDatabaseComponent):
 
     def _build_objects(self):
         """Build PostgreSQL-specific objects after validation."""
-        super()._build_objects()
-        # Set session variables after connection is established
-        self._setup_session_variables()
         return self

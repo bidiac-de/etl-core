@@ -9,12 +9,12 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from etl_core.api.dependencies import get_job_handler
 from etl_core.api.helpers import _error_payload, _exc_meta, _sanitize_errors
-from etl_core.persistance.errors import (
+from etl_core.persistence.errors import (
     PersistLinkageError,
     PersistNotFoundError,
 )
-from etl_core.persistance.configs.job_config import JobConfig
-from etl_core.persistance.handlers.job_handler import JobHandler
+from etl_core.persistence.configs.job_config import JobConfig
+from etl_core.persistence.handlers.job_handler import JobHandler
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 

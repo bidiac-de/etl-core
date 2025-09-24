@@ -1,0 +1,56 @@
+{
+  "name": "JSON Row Type Conversion to CSV",
+  "num_of_retries": 0,
+  "file_logging": false,
+  "strategy_type": "row",
+  "metadata": { "created_by": "pytest" },
+  "components": [
+    {
+      "name": "reader",
+      "comp_type": "read_json",
+      "description": "NDJSON in (row)",
+      "filepath": "__IN__",
+      "routes": { "out": [ { "to": "tc", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "tc",
+      "comp_type": "type_conversion",
+      "description": "id->integer (no-op if already int)",
+      "rules": [
+        { "column_path": "id", "target": "integer", "on_error": "raise" }
+      ],
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      },
+      "routes": { "out": [ { "to": "writer", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    },
+    {
+      "name": "writer",
+      "comp_type": "write_csv",
+      "description": "CSV out",
+      "filepath": "__OUT__",
+      "separator": ",",
+      "in_port_schemas": {
+        "in": { "fields": [
+          { "name": "id", "data_type": "integer" },
+          { "name": "name", "data_type": "string" }
+        ] }
+      }
+    }
+  ]
+}

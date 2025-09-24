@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any, Dict
 
 import pandas as pd
 import dask.dataframe as dd
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from etl_core.components.databases.database import DatabaseComponent
 from etl_core.components.databases.sql_connection_handler import (
@@ -22,12 +23,16 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     database-specific differences while maintaining the common interface.
     """
 
+    ICON = "ti ti-sql"
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
 
     entity_name: str = Field(..., description="Name of the target entity (table/view)")
 
     _connection_handler: SQLConnectionHandler = None
+    _log: logging.Logger = PrivateAttr(
+        default_factory=lambda: logging.getLogger("etl_core.components.databases.sql")
+    )
 
     @model_validator(mode="after")
     def _build_objects(self):
@@ -37,18 +42,21 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
     @property
     def connection_handler(self) -> SQLConnectionHandler:
+        if self._connection_handler is None:
+            self._log.debug("%s: connection handler missing; rebuilding.", self.name)
+            self._setup_connection()
+        if self._connection_handler is None:
+            raise RuntimeError(f"{self.name}: SQL connection handler not initialized.")
         return self._connection_handler
 
     def _setup_connection(self):
         """Setup the SQL database connection with credentials and specific settings."""
-        if not self._context:
-            return
 
         creds = self._get_credentials()
 
         self._connection_handler = SQLConnectionHandler()
 
-        # Use comp_type directly instead of calling non-existent method
+        # Use comp_type directly
         url = SQLConnectionHandler.build_url(
             comp_type=self.comp_type,
             user=creds["user"],
@@ -58,8 +66,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
             database=creds["database"],
         )
 
-        credentials_obj = self._context.get_credentials(self.credentials_id)
-        engine_kwargs = build_sql_engine_kwargs(credentials_obj)
+        engine_kwargs = build_sql_engine_kwargs(self._credentials)
 
         self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
 
@@ -74,10 +81,39 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
         """
         raise NotImplementedError
 
+    def cleanup_after_execution(self, force: bool = False) -> None:
+        handler = self._connection_handler
+        if handler is None:
+            return
+
+        try:
+            closed = handler.close_pool(force=force)
+            if not closed and not force:
+                self._log.debug("%s: SQL pool still leased; forcing close.", self.name)
+                closed = handler.close_pool(force=True)
+        except Exception:
+            self._log.exception(
+                "%s: error while closing SQL connection pool.", self.name
+            )
+            closed = False
+
+        if closed:
+            self._log.debug(
+                "%s: SQL connection pool closed after execution.", self.name
+            )
+            self._connection_handler = None
+        else:
+            self._log.debug(
+                "%s: SQL connection pool not closed; handler retained.", self.name
+            )
+
     def __del__(self):
         """Cleanup connection when component is destroyed."""
-        if hasattr(self, "_connection_handler") and self._connection_handler:
-            self._connection_handler.close_pool(force=True)
+        if getattr(self, "_connection_handler", None):
+            try:
+                self.cleanup_after_execution(force=True)
+            except Exception:
+                pass
 
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:

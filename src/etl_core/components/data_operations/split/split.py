@@ -31,6 +31,8 @@ class SplitComponent(DataOperationsComponent):
       - All ports declared in OUTPUT_PORTS.
     """
 
+    ICON = "fa-solid fa-arrows-split-up-and-left"
+
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="one"),)

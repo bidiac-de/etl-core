@@ -83,7 +83,6 @@ class PostgreSQLWrite(PostgreSQLComponent, DatabaseOperationMixin):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build PostgreSQL-specific objects after validation."""
-        super()._build_objects()
         self._receiver = PostgreSQLReceiver()
         schema = self.in_port_schemas["in"]
         columns = [field.name for field in schema.fields]

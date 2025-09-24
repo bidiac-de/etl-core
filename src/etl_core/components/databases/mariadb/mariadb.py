@@ -10,6 +10,7 @@ class MariaDBComponent(SQLDatabaseComponent):
     collation: str = Field(
         default="utf8mb4_unicode_ci", description="Collation for MariaDB"
     )
+    ICON = "ti ti-brand-mysql"
 
     def _setup_session_variables(self):
         """Setup MariaDB-specific session variables."""
@@ -28,7 +29,4 @@ class MariaDBComponent(SQLDatabaseComponent):
 
     def _build_objects(self):
         """Build MariaDB-specific objects after validation."""
-        super()._build_objects()
-        # Set session variables after connection is established
-        self._setup_session_variables()
         return self

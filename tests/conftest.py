@@ -1,47 +1,67 @@
 from __future__ import annotations
 
-from typing import Generator, Callable, Iterable, Tuple, Dict, Any, List, AsyncIterator
-import motor.motor_asyncio as motor_asyncio
-import pymongo
-import pymongo.mongo_client as pymongo_mclient
-import mongomock
-import pandas as pd
+from datetime import datetime, timedelta
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Tuple,
+)
 from uuid import uuid4
-import asyncio
-
-from tests.utils.async_mongomock import AsyncMongoMockClient
-from fastapi.requests import Request
 from urllib.parse import urlencode
-from pytest import MonkeyPatch
-
-import pytest
-import os
+import asyncio
 import importlib
+import os
 import secrets
 import sys
+import shutil
+import tempfile
+from pathlib import Path
+
+import pandas as pd
+import pytest
+from fastapi.requests import Request
 from fastapi.testclient import TestClient
+from pytest import MonkeyPatch
 from sqlmodel import Session, delete
-from datetime import datetime, timedelta
 
 from etl_core.main import app
 from etl_core.api.dependencies import get_execution_handler, get_job_handler
-from etl_core.persistance.db import engine
-from etl_core.persistance.table_definitions import (
-    JobTable,
-    MetaDataTable,
-    ComponentTable,
-    LayoutTable,
-)
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
     DataOperationsMetrics,
 )
+from etl_core.persistence.db import engine, ensure_schema
+from etl_core.persistence.table_definitions import (
+    ComponentTable,
+    JobTable,
+    LayoutTable,
+    MetaDataTable,
+)
+
 from etl_core.components.databases.mongodb.mongodb_connection_handler import (
     MongoConnectionHandler,
 )
-
-from etl_core.components.databases.pool_args import build_mongo_client_kwargs
 from etl_core.components.databases import pool_args
+from etl_core.components.databases.pool_args import build_mongo_client_kwargs
+
+
+from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
+from etl_core.singletons import (
+    credentials_handler as _crh_singleton,
+    context_handler as _ch_singleton,
+)
+
+_TEST_LOG_DIR = Path(tempfile.mkdtemp(prefix="etl-core-logs-")).resolve()
+os.environ.setdefault("LOG_DIR", str(_TEST_LOG_DIR))
+
+
+ensure_schema()
 
 
 @pytest.fixture
@@ -58,6 +78,18 @@ def data_ops_metrics() -> DataOperationsMetrics:
 
 
 def _purge_modules(prefixes: Iterable[str]) -> None:
+    """
+    Remove modules from sys.modules whose names match or start with
+     any of the given prefixes.
+
+    This allows re-importing those modules to pick up environment overrides
+    cleanly.
+
+    Args:
+        prefixes: An iterable of string prefixes. Any module whose name is equal to a
+        prefix or starts with a prefix followed by a dot will be removed
+        from sys.modules.
+    """
     keys = list(sys.modules.keys())
     to_delete = [
         name
@@ -68,14 +100,23 @@ def _purge_modules(prefixes: Iterable[str]) -> None:
         sys.modules.pop(name, None)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _cleanup_test_logs() -> Generator[None, None, None]:
+    """Ensure temporary log directory does not leak between runs."""
+
+    try:
+        yield
+    finally:
+        shutil.rmtree(_TEST_LOG_DIR, ignore_errors=True)
+
+
 @pytest.fixture
 def fresh_client(
     monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> Callable[[str], TestClient]:
     """
-    Build a brand‑new FastAPI TestClient for the given mode and ENSURE:
-      - all app, component, and router modules are re-imported cleanly
-      - the app lifespan runs (so set_registry_mode(...) takes effect)
+    Build a TestClient after setting ETL_COMPONENT_MODE.
+    Use like: client = fresh_client("test")  # or "production"
     """
 
     def _make(mode: str) -> TestClient:
@@ -83,8 +124,8 @@ def fresh_client(
         _purge_modules(
             (
                 "etl_core.main",
-                "etl_core.components",  # component registry and implementations
-                "etl_core.api.routers",  # routers (schemas/jobs/execution/setup)
+                "etl_core.components",
+                "etl_core.api.routers",
             )
         )
         importlib.invalidate_caches()
@@ -122,8 +163,7 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture(scope="session", autouse=True)
 def enable_stub_components() -> None:
     """
-    Automatically run before any tests.
-    Sets the registry mode to 'test' so stub components are visible.
+    Ensure component mode is 'test' for the suite unless explicitly overridden.
     """
     os.environ["ETL_COMPONENT_MODE"] = "test"
     if "etl_core.main" in sys.modules:
@@ -135,7 +175,7 @@ def enable_stub_components() -> None:
 @pytest.fixture(autouse=True)
 def clear_db() -> Generator[None, None, None]:
     """
-    Ensure a clean DB before/after each test.
+    Truncate core persistence tables before and after each test.
     """
     with Session(engine) as session:
         session.exec(delete(JobTable))
@@ -154,6 +194,9 @@ def clear_db() -> Generator[None, None, None]:
 
 @pytest.fixture()
 def shared_job_handler(client: TestClient):
+    """
+    Convenience access to the JobHandler resolved via FastAPI dependencies.
+    """
     req = Request({"type": "http", "app": client.app})
     return get_job_handler(req)
 
@@ -202,8 +245,8 @@ def override_exec_handler() -> Generator[None, None, None]:
 @pytest.fixture(scope="session", autouse=True)
 def _set_test_env() -> Tuple[str, str]:
     """
-    Session-wide: ensure test creds exist in the environment exactly once,
-    without using the function-scoped 'monkeypatch'.
+    Provide a username/password pair for tests via env.
+    If not present, generate a password.
     """
     user = os.environ.get("APP_TEST_USER") or "test_user"
     password = os.environ.get("APP_TEST_PASSWORD") or secrets.token_urlsafe(24)
@@ -214,10 +257,6 @@ def _set_test_env() -> Tuple[str, str]:
 
 @pytest.fixture()
 def test_creds(_set_test_env: Tuple[str, str]) -> Tuple[str, str]:
-    """
-    Function-scoped handle for tests that need the values.
-    Reads from env guaranteed by '_set_test_env'.
-    """
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 
@@ -244,60 +283,8 @@ def schema_row_two_fields() -> Dict[str, object]:
     }
 
 
-class _DummyCreds:
-    def __init__(self) -> None:
-        self._params: Dict[str, Any] = {
-            "user": "u",
-            "host": "localhost",
-            "port": 27017,
-            "database": "testdb",
-        }
-        self._password = ""
-
-    def get_parameter(self, key: str) -> Any:
-        return self._params.get(key)
-
-    @property
-    def decrypted_password(self) -> str:
-        return self._password
-
-
-class _DummyContext:
-    def __init__(self, creds: _DummyCreds) -> None:
-        self._creds = creds
-
-    def get_credentials(self, _: int) -> _DummyCreds:
-        return self._creds
-
-
-@pytest.fixture(scope="session", autouse=True)
-def patch_mongo_clients() -> None:
-    mp = MonkeyPatch()
-    # Motor async client -> async mongomock wrapper
-    mp.setattr(motor_asyncio, "AsyncIOMotorClient", AsyncMongoMockClient, raising=True)
-
-    import etl_core.components.databases.pool_registry as pool_registry_mod
-
-    mp.setattr(
-        pool_registry_mod, "AsyncIOMotorClient", AsyncMongoMockClient, raising=True
-    )
-
-    # Pymongo sync fallbacks to mongomock
-    mp.setattr(pymongo, "MongoClient", mongomock.MongoClient, raising=True)
-    mp.setattr(pymongo_mclient, "MongoClient", mongomock.MongoClient, raising=True)
-
-    # keep patch active entire session
-    yield
-    mp.undo()
-
-
 @pytest.fixture
-def mongo_context() -> _DummyContext:
-    return _DummyContext(_DummyCreds())
-
-
-@pytest.fixture
-def sample_docs() -> list[dict]:
+def sample_docs() -> List[Dict[str, Any]]:
     return [
         {"_id": 1, "name": "John", "age": 28, "city": "Berlin", "active": True},
         {"_id": 2, "name": "Jane", "age": 31, "city": "Hamburg", "active": True},
@@ -307,8 +294,51 @@ def sample_docs() -> list[dict]:
 
 
 @pytest.fixture
-def sample_pdf(sample_docs: list[dict]) -> pd.DataFrame:
+def sample_pdf(sample_docs: List[Dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(sample_docs)
+
+
+@pytest.fixture()
+def persisted_mongo_credentials(test_creds: Tuple[str, str]) -> Tuple[Credentials, str]:
+    """
+    Persist real Credentials for Mongo tests (host/port/db are local/mocked).
+    provider_id == credentials_id to satisfy FK to mapping table.
+    """
+    user, password = test_creds
+    creds = Credentials(
+        credentials_id=str(uuid4()),
+        name="mongo_test_creds",
+        user=user,
+        host="localhost",
+        port=27017,
+        database="testdb_placeholder",
+        password=password,
+        pool_max_size=10,
+        pool_timeout_s=30,
+    )
+    credentials_id = _crh_singleton().upsert(creds)
+    return creds, credentials_id
+
+
+@pytest.fixture()
+def persisted_mongo_context_id(
+    persisted_mongo_credentials: Tuple[Credentials, str],
+) -> str:
+    """
+    Create a Credentials-Mapping Context that maps TEST to persisted Mongo creds.
+    Return the context provider_id, which components use as context_id.
+    """
+    _, persisted_mongo_creds_id = persisted_mongo_credentials
+    context_id = str(uuid4())
+    _ch_singleton().upsert_credentials_mapping_context(
+        context_id=context_id,
+        name="mongo_test_context",
+        environment=Environment.TEST.value,
+        mapping_env_to_credentials_id={
+            Environment.TEST.value: persisted_mongo_creds_id
+        },
+    )
+    return context_id
 
 
 async def seed_docs(
@@ -349,24 +379,34 @@ async def get_all_docs(
 
 @pytest.fixture
 async def mongo_handler(
-    mongo_context,
+    persisted_mongo_credentials: Tuple[Credentials, str],
 ) -> AsyncIterator[Tuple[MongoConnectionHandler, str]]:
-    creds = mongo_context.get_credentials(101)
+    """
+    Build a MongoConnectionHandler using the persisted credentials.
+    Assign a fresh DB name per test and reflect it into the persisted creds
+    so components resolve the same database.
+    """
+    #  Connect using current persisted creds (host/port/user/pass)
+    persisted_mongo_credentials, creds_id = persisted_mongo_credentials
+    dbname = f"testdb_{uuid4().hex}"
+    persisted_mongo_credentials.database = dbname
+    _crh_singleton().upsert(
+        credentials_id=creds_id,
+        creds=persisted_mongo_credentials,
+    )
+
     uri = MongoConnectionHandler.build_uri(
-        host=creds.get_parameter("host"),
-        port=creds.get_parameter("port"),
-        user=creds.get_parameter("user"),
-        password=creds.decrypted_password,
-        auth_db=None,
+        host=persisted_mongo_credentials.get_parameter("host"),
+        port=persisted_mongo_credentials.get_parameter("port"),
+        user=persisted_mongo_credentials.get_parameter("user"),
+        password=persisted_mongo_credentials.decrypted_password,
+        auth_db="admin",
         params=None,
     )
-    client_kwargs = build_mongo_client_kwargs(creds)
+    client_kwargs = build_mongo_client_kwargs(persisted_mongo_credentials)
 
     handler = MongoConnectionHandler()
     handler.connect(uri=uri, client_kwargs=client_kwargs)
-
-    dbname = f"testdb_{uuid4().hex}"
-    creds._params["database"] = dbname  # noqa: SLF001
 
     try:
         yield handler, dbname
@@ -382,28 +422,32 @@ async def mongo_handler(
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _force_mongomock_no_auth():
+def _force_mongomock_no_auth() -> Generator[None, None, None]:
+    """
+    Many CI/test setups rely on mongomock-compatible URIs without auth.
+    Patch the URI builder and pool args to avoid injecting username/password.
+    """
     mp = MonkeyPatch()
+
+    from tests.async_mongomock import AsyncMongoMockClient
 
     def _build_uri_no_auth(
         *,
         host: str,
         port: int,
-        user: str | None = None,
-        password: str | None = None,
+        user: str | None = None,  # noqa: ARG001
+        password: str | None = None,  # noqa: ARG001
         auth_db: str | None = None,
         params: Dict[str, Any] | None = None,
     ) -> str:
         base = f"mongodb://{host}:{port}"
+        query: Dict[str, Any] = {}
         if auth_db:
-            base = f"{base}/{auth_db}"
+            query["authSource"] = auth_db
         if params:
-            if isinstance(params, dict) and params:
-                qs = urlencode(params, doseq=True)
-                base = f"{base}?{qs}"
-            elif isinstance(params, str) and params:
-                sep = "&" if "?" in base else "?"
-                base = f"{base}{sep}{params}"
+            query.update(params)
+        if query:
+            return f"{base}/?{urlencode(query, doseq=True)}"
         return base
 
     mp.setattr(
@@ -415,7 +459,7 @@ def _force_mongomock_no_auth():
 
     _orig_build_kwargs = pool_args.build_mongo_client_kwargs
 
-    def _kwargs_no_auth(creds_obj):
+    def _kwargs_no_auth(creds_obj: Credentials) -> Dict[str, Any]:
         kw = _orig_build_kwargs(creds_obj)
         kw.pop("username", None)
         kw.pop("password", None)
@@ -423,5 +467,29 @@ def _force_mongomock_no_auth():
 
     mp.setattr(pool_args, "build_mongo_client_kwargs", _kwargs_no_auth, raising=True)
 
-    yield
-    mp.undo()
+    # Ensure async Mongo connections use an in-memory mongomock client
+    from etl_core.components.databases import pool_registry
+
+    mp.setattr(
+        pool_registry,
+        "AsyncIOMotorClient",
+        AsyncMongoMockClient,
+        raising=False,
+    )
+
+    try:
+        yield
+    finally:
+        mp.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _force_test_env_and_memory_secret_backend() -> None:
+    """
+    Apply a consistent test environment + in-memory secret backend for *all* tests.
+
+    This prevents Windows CredWrite / win32ctypes errors by ensuring we never
+    hit the OS credential manager during tests.
+    """
+    os.environ["EXECUTION_ENV"] = Environment.TEST.value
+    os.environ["SECRET_BACKEND"] = "memory"

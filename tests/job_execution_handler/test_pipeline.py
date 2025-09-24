@@ -1,12 +1,24 @@
+import asyncio
 from datetime import datetime
 
 import etl_core.job_execution.runtimejob as runtimejob_module
+from etl_core.job_execution.runtimejob import RuntimeJob
 from etl_core.components.runtime_state import RuntimeState
 from etl_core.components.stubcomponents import MultiSource, MultiEcho
+from etl_core.components.data_operations.filter.filter_component import FilterComponent
+from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
+from etl_core.components.data_operations.schema_mapping.schema_mapping_component import (  # noqa: E501
+    SchemaMappingComponent,
+)
+from etl_core.components.data_operations.schema_mapping.join_rules import (
+    JoinPlan,
+    JoinStep,
+)
+from etl_core.components.envelopes import Out
+from etl_core.components.wiring.ports import EdgeRef
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from tests.helpers import get_component_by_name, runtime_job_from_config
 
-# ensure Job._build_components() can find TestComponent
 runtimejob_module.MultiSourceComponent = MultiSource
 runtimejob_module.MultiEchoComponent = MultiEcho
 
@@ -169,3 +181,201 @@ def test_fan_in_multiple_rows(schema_row_min):
     assert src1_metrics.lines_received == src1.count
     assert src2_metrics.lines_received == src2.count
     assert echo_metrics.lines_received == src1.count + src2.count
+
+
+def test_single_predecessor_multi_port_join(schema_row_min):
+    handler = JobExecutionHandler()
+    source = MultiSource(
+        name="source",
+        comp_type="multi_source",
+        description="",
+        routes={"out": [EdgeRef(to="fanout", in_port="in")]},
+        out_port_schemas={"out": schema_row_min},
+        count=3,
+    )
+    fanout = MultiEcho(
+        name="fanout",
+        comp_type="multi_echo",
+        description="",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={
+            "out": [
+                EdgeRef(to="join", in_port="L"),
+                EdgeRef(to="join", in_port="R"),
+            ]
+        },
+    )
+    join = SchemaMappingComponent(
+        name="join",
+        comp_type="schema_mapping",
+        description="",
+        extra_input_ports=["L", "R"],
+        in_port_schemas={"L": schema_row_min, "R": schema_row_min},
+        extra_output_ports=["J"],
+        out_port_schemas={"J": schema_row_min},
+        routes={"J": [EdgeRef(to="sink", in_port="in")]},
+        join_plan=JoinPlan(
+            steps=[
+                JoinStep(
+                    left_port="L",
+                    right_port="R",
+                    left_on="id",
+                    right_on="id",
+                    how="inner",
+                    output_port="J",
+                )
+            ]
+        ),
+    )
+    sink = MultiEcho(
+        name="sink",
+        comp_type="multi_echo",
+        description="",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": []},
+    )
+
+    runtime_job = RuntimeJob(
+        name="SplitJoinJob",
+        num_of_retries=0,
+        file_logging=False,
+        strategy_type="row",
+        components=[source, fanout, join, sink],
+        metadata={},
+    )
+
+    execution = handler.execute_job(runtime_job)
+
+    mh = handler.job_info.metrics_handler
+    attempt = execution.attempts[0]
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
+
+    sink_comp = get_component_by_name(runtime_job, "sink")
+    sink_metrics = mh.get_comp_metrics(execution.id, attempt.id, sink_comp.id)
+    assert sink_metrics.lines_received == source.count
+
+
+def test_filter_component_pipeline(schema_row_min):
+    handler = JobExecutionHandler()
+
+    source = MultiSource(
+        name="source",
+        comp_type="multi_source",
+        description="emits test rows",
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": [EdgeRef(to="filter", in_port="in")]},
+        count=4,
+    )
+
+    filter_component = FilterComponent(
+        name="filter",
+        comp_type="filter",
+        description="passes ids >= 2",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"pass": schema_row_min, "fail": schema_row_min},
+        routes={
+            "pass": [EdgeRef(to="pass_sink", in_port="in")],
+            "fail": [EdgeRef(to="fail_sink", in_port="in")],
+        },
+        rule=ComparisonRule(column="id", operator=">=", value=2),
+    )
+
+    pass_sink = MultiEcho(
+        name="pass_sink",
+        comp_type="multi_echo",
+        description="captures passing rows",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": []},
+    )
+
+    fail_sink = MultiEcho(
+        name="fail_sink",
+        comp_type="multi_echo",
+        description="captures failing rows",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": []},
+    )
+
+    runtime_job = RuntimeJob(
+        name="FilterPipeline",
+        num_of_retries=0,
+        file_logging=False,
+        strategy_type="row",
+        components=[source, filter_component, pass_sink, fail_sink],
+        metadata={},
+    )
+
+    execution = handler.execute_job(runtime_job)
+    attempt = execution.attempts[0]
+    mh = handler.job_info.metrics_handler
+
+    assert mh.get_job_metrics(execution.id).status == RuntimeState.SUCCESS
+
+    filter_comp = get_component_by_name(runtime_job, "filter")
+    pass_comp = get_component_by_name(runtime_job, "pass_sink")
+    fail_comp = get_component_by_name(runtime_job, "fail_sink")
+
+    filter_metrics = mh.get_comp_metrics(execution.id, attempt.id, filter_comp.id)
+    pass_metrics = mh.get_comp_metrics(execution.id, attempt.id, pass_comp.id)
+    fail_metrics = mh.get_comp_metrics(execution.id, attempt.id, fail_comp.id)
+
+    total_rows = source.count
+    expected_pass = sum(1 for i in range(total_rows) if i >= 2)
+    expected_fail = total_rows - expected_pass
+
+    assert filter_metrics.lines_received == total_rows
+    assert filter_metrics.lines_forwarded == expected_pass
+    assert filter_metrics.lines_dismissed == expected_fail
+
+    assert pass_metrics.lines_received == expected_pass
+    assert fail_metrics.lines_received == expected_fail
+
+
+class SlowSource(MultiSource):
+    """Source that introduces a measurable delay between outputs."""
+
+    async def process_row(self, payload, metrics):
+        metrics.lines_received += 1
+        yield Out("out", {"id": 0})
+        await asyncio.sleep(0.05)
+        metrics.lines_received += 1
+        yield Out("out", {"id": 1})
+
+
+def test_component_metrics_processing_time(schema_row_min):
+    handler = JobExecutionHandler()
+    source = SlowSource(
+        name="slow",
+        comp_type="slow_source",
+        description="",
+        routes={"out": [EdgeRef(to="sink", in_port="in")]},
+        out_port_schemas={"out": schema_row_min},
+    )
+    sink = MultiEcho(
+        name="sink",
+        comp_type="multi_echo",
+        description="",
+        in_port_schemas={"in": schema_row_min},
+        out_port_schemas={"out": schema_row_min},
+        routes={"out": []},
+    )
+
+    runtime_job = RuntimeJob(
+        name="SlowMetricsJob",
+        num_of_retries=0,
+        file_logging=False,
+        strategy_type="row",
+        components=[source, sink],
+        metadata={},
+    )
+
+    execution = handler.execute_job(runtime_job)
+    attempt = execution.attempts[0]
+    metrics = handler.job_info.metrics_handler.get_comp_metrics(
+        execution.id, attempt.id, source.id
+    )
+    assert metrics.processing_time.total_seconds() >= 0.05

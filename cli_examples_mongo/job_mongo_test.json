@@ -1,0 +1,54 @@
+{
+  "name": "mongo_row_cli",
+  "strategy_type": "row",
+  "components": [
+    {
+      "comp_type": "read_mongodb",
+      "name": "read_people",
+      "description": "Read nested docs from source collection",
+      "entity_name": "people_src",
+      "context_id": "aecadd64-a350-4c22-9240-328fd399fdb2",
+      "routes": { "out": [ { "to": "write_people_out", "in_port": "in" } ] },
+      "out_port_schemas": {
+        "out": {
+          "fields": [
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "zip", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      },
+      "query_filter": {},
+      "sort": [["name", 1]]
+    },
+    {
+      "comp_type": "write_mongodb",
+      "name": "write_people_out",
+      "description": "Write nested docs to target collection",
+      "entity_name": "people_out_cli",
+      "context_id": "aecadd64-a350-4c22-9240-328fd399fdb2",
+      "operation": "insert",
+      "in_port_schemas": {
+        "in": {
+          "fields": [
+            { "name": "name", "data_type": "string" },
+            {
+              "name": "address",
+              "data_type": "object",
+              "children": [
+                { "name": "city", "data_type": "string" },
+                { "name": "zip", "data_type": "string" }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
