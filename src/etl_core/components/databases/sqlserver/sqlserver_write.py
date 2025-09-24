@@ -66,15 +66,18 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
             )
 
             merge_query = f"""
-            MERGE {table} AS target
-            USING (SELECT {', '.join([f':{col} AS {col}' for col in columns])}) AS source
-            ON {' AND '.join([
-                f'target.{col} = source.{col}' for col in conflict_columns
-            ])}
-            WHEN MATCHED THEN
-                UPDATE SET {update_clause}
-            WHEN NOT MATCHED THEN
-                INSERT ({columns_str}) VALUES ({placeholders});
+                MERGE {table} AS target
+                USING (SELECT {', '.join([
+                    f':{col} AS {col}' for col in columns
+                ])}) AS source
+                ON {' AND '.join([
+                    f'target.{col} = source.{col}'
+                    for col in conflict_columns
+                ])}
+                WHEN MATCHED THEN
+                    UPDATE SET {update_clause}
+                WHEN NOT MATCHED THEN
+                    INSERT ({columns_str}) VALUES ({placeholders});
             """
             return merge_query.strip()
 
@@ -93,7 +96,6 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
     @model_validator(mode="after")
     def _build_objects(self):
         """Build SQL Server-specific objects after validation."""
-        super()._build_objects()
         self._receiver = SQLServerReceiver()
         schema = self.in_port_schemas["in"]
         columns = [field.name for field in schema.fields]

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import asyncio
+import inspect
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import AsyncGenerator, Any, Dict, List
 
 import dask.dataframe as dd
 import pandas as pd
@@ -49,7 +51,7 @@ async def test_read_row_ndjson_happy_path(metrics: ComponentMetrics) -> None:
         {"id": 2, "name": "Bob"},
         {"id": 3, "name": "Charlie"},
     ]
-    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -74,7 +76,7 @@ async def test_read_row_ndjson_with_bad_line_skips_and_counts_error(
         {"id": 1, "name": "Alice"},
         {"id": 3, "name": "Charlie"},
     ]
-    assert metrics.lines_received == 2
+    assert metrics.lines_forwarded == 2
     assert metrics.error_count == 1
 
 
@@ -98,7 +100,7 @@ async def test_read_row_ndjson_mixed_schema(metrics: ComponentMetrics) -> None:
         {"id": 2, "nickname": "Bobby"},
         {"id": 3, "name": "Charlie", "active": True},
     ]
-    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -132,7 +134,7 @@ async def test_read_bulk_json_array(metrics: ComponentMetrics) -> None:
     )
 
     pd.testing.assert_frame_equal(df, expected, check_dtype=False)
-    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -156,11 +158,18 @@ async def test_read_bulk_json_array_nested_and_nulls(metrics: ComponentMetrics) 
 
     assert df.shape[0] == 3
     assert list(df["id"]) == [1, 2, 3]
-    assert isinstance(df.loc[0, "addr"], dict)
-    assert isinstance(df.loc[1, "addr"], dict)
-    assert pd.isna(df.loc[2, "addr"]) or df.loc[2, "addr"] is None
+    assert {"addr.city", "addr.zip"} <= set(df.columns)
 
-    assert metrics.lines_received == 3
+    assert df.loc[0, "addr.city"] == "Berlin"
+    assert df.loc[0, "addr.zip"] == "10115"
+    assert df.loc[1, "addr.city"] == "Hamburg"
+    assert df.loc[1, "addr.zip"] == "20095"
+    assert pd.isna(df.loc[2, "addr.city"])
+    assert pd.isna(df.loc[2, "addr.zip"])
+
+    assert not any(isinstance(v, dict) for v in df.to_numpy().ravel())
+
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -212,7 +221,7 @@ async def test_read_bulk_extra_and_missing_columns(metrics: ComponentMetrics) ->
         row3["nickname"] == "Charlie" and pd.isna(row3["name"]) and pd.isna(row3["age"])
     )
 
-    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -237,7 +246,7 @@ async def test_read_bulk_mixed_types(metrics: ComponentMetrics) -> None:
     assert scores[0] == 95
     assert scores[1] == "88"
     assert pd.isna(scores[2])
-    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -271,7 +280,7 @@ async def test_read_bigdata_from_ndjson(metrics: ComponentMetrics) -> None:
     )
 
     pd.testing.assert_frame_equal(df, expected, check_dtype=False)
-    assert metrics.lines_received == 3
+    assert metrics.lines_forwarded == 3
     assert metrics.error_count == 0
 
 
@@ -421,3 +430,182 @@ async def test_read_row_ndjson_missing_file_raises(
     with pytest.raises(FileNotFoundError):
         gen = comp.execute(payload=None, metrics=metrics)
         await anext(gen)
+
+
+@pytest.mark.asyncio
+async def test_read_json_row_streaming_nested_returns_nested(metrics) -> None:
+    comp = ReadJSON(
+        name="read_row_nested",
+        description="row nested",
+        comp_type="read_json",
+        filepath=NESTED_JSON,
+    )
+    comp.strategy = RowExecutionStrategy()
+
+    rows = comp.execute(payload=None, metrics=metrics)
+    assert inspect.isasyncgen(rows) or isinstance(rows, AsyncGenerator)
+
+    first: Out = await asyncio.wait_for(anext(rows), timeout=0.5)
+    assert isinstance(first, Out) and first.port == "out"
+    payload = first.payload
+    assert isinstance(payload, dict)
+    assert "addr" in payload and isinstance(payload["addr"], dict)
+    assert set(payload.keys()) >= {"id", "addr"}
+
+    async for _ in rows:
+        pass
+
+    await rows.aclose()
+
+
+@pytest.mark.asyncio
+async def test_read_json_bulk_flattens(metrics) -> None:
+    comp = ReadJSON(
+        name="read_bulk_flattens",
+        description="bulk flatten",
+        comp_type="read_json",
+        filepath=NESTED_JSON,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    chunks: List[pd.DataFrame] = []
+    async for item in comp.execute(payload=None, metrics=metrics):
+        assert isinstance(item, Out) and isinstance(item.payload, pd.DataFrame)
+        chunks.append(item.payload)
+
+    assert chunks
+    df = pd.concat(chunks, ignore_index=True)
+
+    assert {"id", "addr.city", "addr.zip"} <= set(df.columns)
+    assert not any(isinstance(v, dict) for v in df.to_numpy().ravel())
+
+
+@pytest.mark.asyncio
+async def test_read_json_bigdata_flattens_partitions(metrics, tmp_path: Path) -> None:
+    ndjson = tmp_path / "nested.jsonl"
+    lines = [
+        {"id": 1, "addr": {"street": "Main", "city": "Town"}},
+        {"id": 2, "addr": {"street": "Second", "city": "Ville"}},
+    ]
+    with ndjson.open("w", encoding="utf-8") as f:
+        for r in lines:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+    comp = ReadJSON(
+        name="read_big_nested",
+        description="bigdata nested",
+        comp_type="read_json",
+        filepath=ndjson,
+    )
+    comp.strategy = BigDataExecutionStrategy()
+
+    outs: List[dd.DataFrame] = []
+    async for item in comp.execute(payload=None, metrics=metrics):
+        outs.append(item.payload)
+
+    assert len(outs) == 1
+    ddf = outs[0]
+    df = ddf.compute().sort_values("id").reset_index(drop=True)
+    assert {"id", "addr.street", "addr.city"} <= set(df.columns)
+    assert list(df["addr.street"]) == ["Main", "Second"]
+
+
+@pytest.mark.asyncio
+async def test_write_json_row_accepts_nested_and_appends(
+    metrics, tmp_path: Path
+) -> None:
+    out = tmp_path / "rows.json"
+    comp = WriteJSON(
+        name="write_row_nested_ok",
+        description="row nested ok",
+        comp_type="write_json",
+        filepath=out,
+    )
+    comp.strategy = RowExecutionStrategy()
+
+    r1 = {"id": 1, "addr": {"street": "Main", "city": "Town"}}
+    r2 = {"id": 2, "addr": {"street": "Second", "city": "Ville"}}
+
+    got1 = await anext(comp.execute(payload=r1, metrics=metrics))
+    got2 = await anext(comp.execute(payload=r2, metrics=metrics))
+    assert isinstance(got1, Out) and got1.payload == r1
+    assert isinstance(got2, Out) and got2.payload == r2
+
+    on_disk = json.loads(out.read_text(encoding="utf-8"))
+    assert on_disk == [r1, r2]
+
+
+@pytest.mark.asyncio
+async def test_write_json_bulk_unflattens_from_flat_df(metrics, tmp_path: Path) -> None:
+    out = tmp_path / "bulk.json"
+    comp = WriteJSON(
+        name="write_bulk_unflatten",
+        description="bulk unflatten",
+        comp_type="write_json",
+        filepath=out,
+    )
+    comp.strategy = BulkExecutionStrategy()
+
+    df = pd.DataFrame(
+        [
+            {
+                "id": 1,
+                "addr.street": "Main",
+                "addr.city": "Town",
+                "tags[0]": "t1",
+                "tags[1]": "t2",
+            },
+            {"id": 2, "addr.street": "Second", "addr.city": "Ville", "tags[0]": "u1"},
+        ]
+    )
+
+    yielded = await anext(comp.execute(payload=df, metrics=metrics))
+    assert isinstance(yielded, Out) and yielded.port == "out"
+
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data[0]["addr"] == {"street": "Main", "city": "Town"}
+    assert data[0]["tags"] == ["t1", "t2"]
+    assert data[1]["addr"] == {"street": "Second", "city": "Ville"}
+    assert data[1]["tags"] == ["u1", None]
+
+
+@pytest.mark.asyncio
+async def test_write_json_bigdata_partitioned_ndjson(metrics, tmp_path: Path) -> None:
+    out_dir = tmp_path / "bigdata_out"
+    comp = WriteJSON(
+        name="write_bigdata_partitioned",
+        description="bigdata partitioned ndjson",
+        comp_type="write_json",
+        filepath=out_dir,
+    )
+    comp.strategy = BigDataExecutionStrategy()
+
+    pdf = pd.DataFrame(
+        [
+            {"id": 10, "addr.street": "Alpha", "addr.city": "A-Town"},
+            {"id": 11, "addr.street": "Beta", "addr.city": "B-City"},
+        ]
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    yielded = await anext(comp.execute(payload=ddf, metrics=metrics))
+    assert isinstance(yielded, Out) and yielded.port == "out"
+
+    parts = sorted(out_dir.glob("part-*.jsonl*"))
+    assert parts, "no NDJSON part files written"
+
+    rows = []
+    for p in parts:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if s:
+                rows.append(json.loads(s))
+
+    assert rows == [
+        {"id": 10, "addr": {"street": "Alpha", "city": "A-Town"}},
+        {"id": 11, "addr": {"street": "Beta", "city": "B-City"}},
+    ]
+
+    assert metrics.error_count == 0
+    assert metrics.lines_received == 2
+    assert metrics.lines_forwarded == 2

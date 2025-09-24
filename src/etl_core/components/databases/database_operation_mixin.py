@@ -20,7 +20,7 @@ class DatabaseOperationMixin:
     where_conditions: Optional[list[str]] = Field(
         default_factory=list,
         description=(
-            "WHERE conditions for UPDATE operations (required for update operation)",
+            "WHERE conditions for UPDATE operations (required for update operation)"
         ),
     )
 
