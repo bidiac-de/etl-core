@@ -18,6 +18,7 @@ pydantic
 sqlalchemy
 mysql-connector-python
 psycopg2-binary
+pyodbc
 pymongo
 keyring
 motor
