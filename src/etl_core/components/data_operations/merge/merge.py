@@ -32,6 +32,8 @@ class MergeComponent(DataOperationsComponent):
       - output: str        (name of single output port)
     """
 
+    ICON = "fa-solid fa-code-merge"
+
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     INPUT_PORTS: Tuple[InPortSpec, ...] = (

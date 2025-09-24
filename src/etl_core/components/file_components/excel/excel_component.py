@@ -9,6 +9,7 @@ from etl_core.components.file_components.file_component import FileComponent
 class Excel(FileComponent, ABC):
     """Abstract base class for Excel file components."""
 
+    ICON = "ti ti-file-type-xls"
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",

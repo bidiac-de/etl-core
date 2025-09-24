@@ -10,6 +10,7 @@ class MariaDBComponent(SQLDatabaseComponent):
     collation: str = Field(
         default="utf8mb4_unicode_ci", description="Collation for MariaDB"
     )
+    ICON = "ti ti-brand-mysql"
 
     def _setup_session_variables(self):
         """Setup MariaDB-specific session variables."""

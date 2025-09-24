@@ -19,11 +19,12 @@ class DatabaseComponent(Component, ABC):
     Enforces multiple-credentials-by-environment:
       - The active environment is chosen in this order:
       - Exactly one credential is resolved for the active env.
-
-    Reusability:
+      Reusability:
       - credentials_id values are provider IDs from persistence, so the same
         credentials object can be referenced by many components.
     """
+
+    ICON = "fa-solid fa-database"
 
     entity_name: str = Field(
         default="",

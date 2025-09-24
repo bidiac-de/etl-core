@@ -26,6 +26,7 @@ class MongoDBComponent(DatabaseComponent, ABC):
     - expose 'entity_name' (collection) and 'database_name'
     """
 
+    ICON = "ti ti-brand-mongodb"
     auth_db_name: Optional[str] = Field(
         default="admin",
         description=("Authentication database name"),

@@ -1,7 +1,8 @@
 import importlib
 import pkgutil
-from typing import Any, Dict, List, Optional, Tuple
 import copy
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Tuple
 
 _DEFS = "$defs"
 
@@ -175,3 +176,128 @@ def _exc_meta(exc: BaseException) -> Dict[str, Optional[str]]:
         "cause": str(exc.__cause__) if exc.__cause__ else None,
         "context": str(exc.__context__) if exc.__context__ else None,
     }
+
+
+def _collapse_allof_ref(node: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Collapse {"allOf": [{"$ref": ...}], <siblings>} -> {"$ref": ..., <siblings>}
+    when safe (no anyOf/oneOf/not), otherwise return node unchanged.
+    """
+    all_of = node.get("allOf")
+    if (
+        isinstance(all_of, list)
+        and len(all_of) == 1
+        and isinstance(all_of[0], dict)
+        and "$ref" in all_of[0]
+        and not any(k in node for k in ("anyOf", "oneOf", "not"))
+    ):
+        merged: Dict[str, Any] = {"$ref": all_of[0]["$ref"]}
+        for k, v in node.items():
+            if k != "allOf":
+                merged[k] = v
+        return merged
+    return node
+
+
+def _order_prop_names(
+    props: Dict[str, Any],
+    insertion_index: Dict[str, int],
+) -> List[str]:
+    """
+    Determine display order for property names.
+
+    Ordering priority:
+      1) integer 'order' on the property's schema
+      2) original insertion order
+    """
+
+    def key(name: str) -> Tuple[int, int, int]:
+        raw = props.get(name, {})
+        ord_val = raw.get("order")
+        has_ord = 0 if isinstance(ord_val, int) else 1
+        ord_num = ord_val if isinstance(ord_val, int) else 10**9
+        return (has_ord, ord_num, insertion_index[name])
+
+    return sorted(insertion_index.keys(), key=key)
+
+
+def _remove_key_recursively(node: Any, key: str) -> Any:
+    """Remove 'key' from node everywhere, preserving structure."""
+    if isinstance(node, dict):
+        node.pop(key, None)
+        for k, v in list(node.items()):
+            node[k] = _remove_key_recursively(v, key)
+        return node
+    if isinstance(node, list):
+        return [_remove_key_recursively(x, key) for x in node]
+    return node
+
+
+def _coerce_select_for_enum(obj: Dict[str, Any]) -> None:
+    """
+    If a schema object has an 'enum' and 'type' is 'string',
+    convert the type to 'select' for the UI.
+    """
+    if "enum" in obj and obj.get("type") == "string":
+        obj["type"] = "select"
+
+
+def _properties_to_array(obj: Dict[str, Any]) -> None:
+    """
+    Replace object's 'properties' dict with an ordered array of entries:
+      [{"name": str, "schema": dict, "required": bool}, ...]
+    Keeps 'required' information.
+    """
+    props = obj.get("properties")
+    if not isinstance(props, dict):
+        return
+
+    insertion = {k: i for i, k in enumerate(props.keys())}
+    ordered = _order_prop_names(props, insertion)
+    required = set(obj.get("required", []) or [])
+    obj["properties"] = [
+        {"name": n, "schema": props[n], "required": n in required} for n in ordered
+    ]
+
+
+def _walk_and_transform(node: Any) -> Any:
+    """
+    Depth-first transform applying:
+      - allOf/$ref collapse
+      - enum->select coercion
+      - properties dict -> ordered array
+    """
+    if isinstance(node, list):
+        return [_walk_and_transform(x) for x in node]
+    if not isinstance(node, dict):
+        return node
+
+    # Recurse first so children get transformed before parent logic runs.
+    walked: Dict[str, Any] = {k: _walk_and_transform(v) for k, v in node.items()}
+    walked = _collapse_allof_ref(walked)
+    _coerce_select_for_enum(walked)
+    _properties_to_array(walked)
+    return walked
+
+
+def schema_post_processing(
+    schema: Dict[str, Any], *, strip_order: bool = True
+) -> Dict[str, Any]:
+    """
+    UI-only transform:
+      - Collapse: {"allOf": [{"$ref": ...}], <siblings>} -> {"$ref": ..., <siblings>}
+      - Replace each object's "properties" dict with an ordered array:
+          "properties": [{"name": str, "schema": dict, "required": bool}, ...]
+      - If a node has an 'enum' and type is 'string', change type to 'select'.
+      - Optionally remove every 'order' key after sorting (default True).
+
+    Ordering:
+      1) integer 'order' in each property's schema
+      2) original insertion order
+
+    NOTE: Result is NOT standard JSON Schema (because 'properties' becomes an array).
+    """
+    result = _walk_and_transform(deepcopy(schema))
+    if strip_order:
+        result = _remove_key_recursively(result, "order")
+    return result

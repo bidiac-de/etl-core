@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Set, Tuple
 
 from sqlmodel import Session
@@ -46,6 +47,24 @@ def _split_base_and_payload(
         if k not in BASE_FIELDS and k not in TRANSIENT_FIELDS
     }
     return base, payload
+
+
+def _coerce_base_types(base: Dict[str, Any]) -> None:
+    """
+    Convert JSON-serialized base fields back to their Python types
+    that the SQLModel/DB expects. Currently only handles metadata_.timestamp.
+    """
+    meta = base.get("metadata_")
+    if isinstance(meta, dict):
+        ts = meta.get("timestamp")
+        if isinstance(ts, str):
+            # Support both plain ISO 8601 and the 'Z' suffix
+            iso = ts.replace("Z", "+00:00") if ts.endswith("Z") else ts
+            try:
+                meta["timestamp"] = datetime.fromisoformat(iso)
+            except ValueError:
+                # Leave as is, DB layer will surface clear error
+                pass
 
 
 def _to_edgeref(target: Any) -> EdgeRef:
@@ -116,9 +135,13 @@ class ComponentHandler:
         self, session: Session, job_record: JobTable, cfg: Component
     ) -> ComponentTable:
         raw: Dict[str, Any] = cfg.model_dump(
-            by_alias=False, exclude_none=True, exclude_defaults=True
+            mode="json", by_alias=False, exclude_none=True, exclude_defaults=True
         )
+
         base_fields, payload_fields = _split_base_and_payload(raw)
+
+        # Convert types to what the DB layer expects(datetime, paths etc)
+        _coerce_base_types(base_fields)
 
         ct = ComponentTable(
             name=base_fields["name"],
@@ -130,10 +153,14 @@ class ComponentHandler:
         session.add(ct)
         session.flush()
 
-        self.dc.create_layout_for_component(session, ct, base_fields.get("layout", {}))
-        self.dc.create_metadata_for_component(
-            session, ct, base_fields.get("metadata_", {})
-        )
+        layout_data = base_fields.get("layout")
+        if isinstance(layout_data, dict):
+            self.dc.create_layout_for_component(session, ct, layout_data)
+
+        metadata_data = base_fields.get("metadata_")
+        if isinstance(metadata_data, dict):
+            self.dc.create_metadata_for_component(session, ct, metadata_data)
+
         return ct
 
     def _create_links(
@@ -197,14 +224,14 @@ class ComponentHandler:
         if not job_record.components:
             return
         with session.no_autoflush:
-            # deleting components cascades and delete‑orphans the links
+            # deleting components cascades
             job_record.components.clear()
         session.flush()
         session.expire(job_record, ["components"])
 
     def build_runtime_for_all(self, job_record: JobTable) -> List[Component]:
         """
-        Rebuild Component objects from DB rows and re‑hydrate
+        Rebuild Component objects from DB rows and re-hydrate
         Component.routes from link rows.
         Do NOT wire next/prev; RuntimeJob wires via `routes`.
         """
@@ -219,7 +246,9 @@ class ComponentHandler:
                 "description": ct.description,
                 "comp_type": ct.comp_type,
                 "layout": self.dc.dump_layout(ct.layout) if ct.layout else {},
-                "metadata": self.dc.dump_metadata(ct.metadata_) if ct.metadata_ else {},
+                "metadata_": (
+                    self.dc.dump_metadata(ct.metadata_) if ct.metadata_ else {}
+                ),
             }
             data = {**ct.payload, **base}
 

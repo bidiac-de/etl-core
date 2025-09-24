@@ -40,6 +40,8 @@ class SchemaMappingComponent(DataOperationsComponent):
     provides inherent uniqueness per destination field.
     """
 
+    ICON = "fa-solid fa-table-columns"
+
     rules_by_dest: Dict[str, Dict[str, FieldMappingSrc]] = Field(default_factory=dict)
     join_plan: JoinPlan = Field(default_factory=JoinPlan)
 

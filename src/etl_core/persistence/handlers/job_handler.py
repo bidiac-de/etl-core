@@ -102,7 +102,7 @@ class JobHandler:
             file_logging=rec.file_logging,
             strategy_type=rec.strategy_type,
             components=[],
-            metadata={},
+            metadata_={},
         )
         object.__setattr__(job, "_id", rec.id)
 

@@ -16,6 +16,8 @@ class Delimiter(str, Enum):
 class CSV(FileComponent, ABC):
     """Abstract base class for CSV file components."""
 
+    ICON = "ti ti-file-type-csv"
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",

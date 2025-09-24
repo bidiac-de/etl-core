@@ -52,6 +52,9 @@ class Component(ComponentBase, ABC):
     INPUT_PORTS: ClassVar[Sequence[InPortSpec]] = ()
     ALLOW_NO_INPUTS: ClassVar[bool] = False
 
+    # hint for UI
+    ICON: ClassVar[Optional[str]] = None
+
     _schema_path_separator: ClassVar[str] = "."
 
     def _validate_payload_against(
@@ -119,6 +122,7 @@ class Component(ComponentBase, ABC):
         default_factory=dict,
         description="out_port -> [EdgeRef|target_name]. Use EdgeRef to "
         "specify target input port.",
+        json_schema_extra={"used_in_table": False},
     )
     out_port_schemas: Dict[str, Schema] = Field(
         default_factory=dict,
@@ -129,10 +133,27 @@ class Component(ComponentBase, ABC):
         description="in_port -> Schema expected on the port.",
     )
 
-    extra_output_ports: List[OutPortSpec] = Field(default_factory=list)
-    extra_input_ports: List[InPortSpec] = Field(default_factory=list)
-    layout: Layout = Field(default_factory=lambda: Layout())
-    metadata_: MetaData = Field(default_factory=lambda: MetaData(), alias="metadata")
+    # dynamic ports supplied via config (merged with class-level ports)
+    extra_output_ports: List[OutPortSpec] = Field(
+        default_factory=list,
+        description="Additional output ports declared by config "
+        "(merged with class-level OUTPUT_PORTS).",
+        json_schema_extra={"used_in_table": False},
+    )
+    extra_input_ports: List[InPortSpec] = Field(
+        default_factory=list,
+        description="Additional input ports declared by config "
+        "(merged with class-level INPUT_PORTS).",
+        json_schema_extra={"used_in_table": False},
+    )
+    layout: Layout = Field(
+        default_factory=lambda: Layout(),
+        description="UI layout info",
+        json_schema_extra={"used_in_table": False},
+    )
+    metadata_: MetaData = Field(
+        default_factory=lambda: MetaData(), json_schema_extra={"used_in_table": False}
+    )
 
     _next_components: List["Component"] = PrivateAttr(default_factory=list)
     _prev_components: List["Component"] = PrivateAttr(default_factory=list)

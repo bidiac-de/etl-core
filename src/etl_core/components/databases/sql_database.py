@@ -23,6 +23,7 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
     database-specific differences while maintaining the common interface.
     """
 
+    ICON = "ti ti-sql"
     charset: str = Field(default="utf8", description="Character set for SQL database")
     collation: str = Field(default="", description="Collation for SQL database")
 

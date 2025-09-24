@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import field_validator, ConfigDict, PrivateAttr
 from uuid import uuid4
 from typing import Optional
@@ -33,7 +33,7 @@ class Layout(LayoutBase):
         """
         return self._id
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"Layout(x_coordinate={self.x_coordinate}"
             f", y_coordinate={self.y_coordinate})"
@@ -54,19 +54,31 @@ class MetaData(MetaDataBase):
     @classmethod
     def validate_timestamps(cls, value: datetime) -> datetime:
         """
-        Validate that datetime values are not in the future
+        Accept ISO strings or datetime; interpret naive datetimes as local time,
+        then compare in UTC with small skew tolerance.
         """
-        # If string (from JSON): parse
         if isinstance(value, str):
             try:
                 value = datetime.fromisoformat(value)
-            except ValueError:
+            except ValueError as exc:
                 raise ValueError(
-                    "Timestamp must be ISO-format datetime string"
-                    " or datetime object."
-                )
+                    "Timestamp must be ISO-format datetime string or datetime object."
+                ) from exc
 
-        if value > datetime.now():
+        if not isinstance(value, datetime):
+            raise ValueError("Timestamp must be a datetime.")
+
+        # If naive, assume local timezone
+        if value.tzinfo is None:
+            local_tz = datetime.now().astimezone().tzinfo
+            value_local = value.replace(tzinfo=local_tz)
+        else:
+            value_local = value
+
+        # Compare in UTC
+        candidate_utc = value_local.astimezone(timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+        if candidate_utc > now_utc:
             raise ValueError("Timestamp cannot be in the future.")
         return value
 

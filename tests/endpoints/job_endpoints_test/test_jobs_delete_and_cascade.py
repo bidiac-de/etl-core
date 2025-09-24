@@ -29,6 +29,8 @@ def test_delete_job_not_found(client: TestClient) -> None:
 
 
 def test_delete_job_cascades_all_related_rows(client: TestClient) -> None:
+    min_schema = {"fields": [{"name": "id", "data_type": "integer", "nullable": False}]}
+
     job_id = client.post(
         "/jobs/",
         json={
@@ -38,9 +40,18 @@ def test_delete_job_cascades_all_related_rows(client: TestClient) -> None:
                     "comp_type": "test",
                     "name": "a",
                     "description": "",
+                    "out_port_schemas": {"out": min_schema},
+                    "in_port_schemas": {"in": min_schema},
                     "routes": {"out": ["b"]},
                 },
-                {"comp_type": "test", "name": "b", "description": "", "routes": {}},
+                {
+                    "comp_type": "test",
+                    "name": "b",
+                    "description": "",
+                    "out_port_schemas": {"out": min_schema},
+                    "in_port_schemas": {"in": min_schema},
+                    "routes": {},
+                },
             ],
         },
     ).json()
