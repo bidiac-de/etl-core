@@ -154,7 +154,6 @@ class LocalExecutionClient(ExecutionPort):
 
 
 class LocalContextsClient(ContextsPort):
-    _DEFAULT_SERVICE = os.getenv("SECRET_SERVICE").strip()
 
     def __init__(self) -> None:
         self.ctx_handler = _ch_singleton()
