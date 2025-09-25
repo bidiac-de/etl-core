@@ -32,6 +32,8 @@ class AggregationComponent(DataOperationsComponent):
       - Ellipsis signals flush/closure for the given in-port.
     """
 
+    ICON = "fa-solid fa-table"
+
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
 

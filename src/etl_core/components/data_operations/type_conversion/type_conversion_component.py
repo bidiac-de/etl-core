@@ -60,6 +60,8 @@ class TypeConversionComponent(Component):
     Component for type conversion with row, bulk and bigdata processing
     """
 
+    ICON = "fa-solid fa-shuffle"
+
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)

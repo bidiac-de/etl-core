@@ -6,6 +6,8 @@ from etl_core.components.file_components.file_component import FileComponent
 class XML(FileComponent, ABC):
     """Abstract base class for XML file components."""
 
+    ICON = "ti ti-file-type-xml"
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
