@@ -38,8 +38,6 @@ class TypeConversionRuleModel(BaseModel):
             - OnError.RAISE raises an error on the first unconvertible value.
     """
 
-    ICON = "fa-solid fa-shuffle"
-
     column_path: str = Field(..., description="Dot path; use '*' for list items.")
     target: Any = Field(..., description="Logical target data type.")
     on_error: OnError = Field(default=OnError.RAISE, description="raise|null|skip")
@@ -61,6 +59,8 @@ class TypeConversionComponent(Component):
     """
     Component for type conversion with row, bulk and bigdata processing
     """
+
+    ICON = "fa-solid fa-shuffle"
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
