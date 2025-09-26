@@ -35,6 +35,73 @@ def invalidate_job_caches(job_id: Optional[str] = None) -> None:
             _JOB_BY_ID_CACHE.pop(job_id, None)
         _JOB_LIST_CACHE = None
 
+def _serialize_components_from(obj: Any) -> Optional[List[Dict[str, Any]]]:
+    """
+    Best-effort component serialization that supports:
+    - list of Pydantic models (uses model_dump)
+    - list of dicts (returned as-is)
+    - list of simple objects (falls back to __dict__)
+    Returns None when components aren't present.
+    """
+    comps: Any = None
+    if isinstance(obj, dict):
+        comps = obj.get("components")
+    else:
+        if hasattr(obj, "components"):
+            comps = getattr(obj, "components")
+
+    if comps is None:
+        return None
+
+    out: List[Dict[str, Any]] = []
+    for c in comps:
+        if hasattr(c, "model_dump"):
+            out.append(
+                c.model_dump(mode="json", exclude_none=False, exclude_unset=False)
+            )
+        elif isinstance(c, dict):
+            out.append(c)
+        else:
+            # last resort: shallow dict conversion
+            out.append(dict(getattr(c, "__dict__", {})))
+    return out
+
+
+def _job_to_payload(job: Any, job_id: str) -> Dict[str, Any]:
+    """
+    Build a hydrated payload for a runtime job while remaining robust against
+    test doubles (like DummyJob) that only provide model_dump().
+    """
+    base: Dict[str, Any] = {}
+    # Prefer model_dump if available
+    if hasattr(job, "model_dump"):
+        try:
+            dumped = job.model_dump()  # type: ignore[assignment]
+            if isinstance(dumped, dict):
+                base.update(dumped)
+        except Exception:
+            # ignore and fall back to attributes
+            pass
+
+    # Fill in common fields from attributes if missing in base
+    def _put(key: str) -> None:
+        if key not in base and hasattr(job, key):
+            base[key] = getattr(job, key)
+
+    for key in ("name", "num_of_retries", "file_logging", "strategy_type", "metadata_"):
+        _put(key)
+
+    # Components
+    comps = _serialize_components_from(job)
+    if comps is None and base:
+        comps = _serialize_components_from(base)
+    if comps is not None:
+        base["components"] = comps
+
+    # Ensure id is present
+    base["id"] = base.get("id", getattr(job, "id", job_id))
+    return base
+
 
 def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
     with _CACHE_LOCK:
@@ -50,19 +117,18 @@ def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
         ) from exc
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"code": "DB_ERROR", "message": "Failed to load job."},
         ) from exc
 
-    data: Dict[str, Any] = job.model_dump()
-    data["id"] = job.id
+    # Robust payload construction
+    payload = _job_to_payload(job, job_id)
 
     with _CACHE_LOCK:
-        _JOB_BY_ID_CACHE[job_id] = data
-    return data
-
+        _JOB_BY_ID_CACHE[job_id] = payload
+    return payload
 
 def _cached_job_list(job_handler: JobHandler) -> List[Dict[str, Any]]:
     global _JOB_LIST_CACHE
