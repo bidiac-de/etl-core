@@ -135,7 +135,10 @@ class ComponentHandler:
         self, session: Session, job_record: JobTable, cfg: Component
     ) -> ComponentTable:
         raw: Dict[str, Any] = cfg.model_dump(
-            mode="json", by_alias=False, exclude_none=True, exclude_defaults=True
+            mode="json",
+            by_alias=False,
+            exclude_none=False,
+            exclude_defaults=False,
         )
 
         base_fields, payload_fields = _split_base_and_payload(raw)

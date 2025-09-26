@@ -53,7 +53,18 @@ def test_component_payload_persisted_in_db(client: TestClient) -> None:
         assert len(rows) == 1
         ct = rows[0]
         assert isinstance(ct.payload, dict)
-        assert ct.payload == {"count": 7}
+
+        # user-specified field is persisted
+        assert ct.payload.get("count") == 7
+
+        # default fields are present
+        assert ct.payload.get("in_port_schemas") == {}
+        assert ct.payload.get("out_port_schemas") == {}
+        assert ct.payload.get("extra_input_ports") == []
+        assert ct.payload.get("extra_output_ports") == []
+
+
+        assert "context_id" in ct.payload
 
 
 def test_component_payload_hydrates_to_runtime(shared_job_handler) -> None:
