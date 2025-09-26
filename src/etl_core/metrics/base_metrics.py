@@ -1,7 +1,7 @@
 from abc import ABC
 from datetime import datetime, timedelta
 import time
-from typing import Optional
+from typing import Optional, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, PrivateAttr
@@ -15,7 +15,7 @@ class Metrics(BaseModel, ABC):
     """
 
     _id: str = PrivateAttr(default_factory=lambda: str(uuid4()))
-    _status: str = RuntimeState.PENDING.value
+    _status: RuntimeState = RuntimeState.PENDING
     _created_at: datetime = datetime.now()
     _started_at: Optional[datetime] = PrivateAttr(default=None)
     _started_at_monotonic: Optional[float] = PrivateAttr(default=None)
@@ -39,14 +39,24 @@ class Metrics(BaseModel, ABC):
         return self._id
 
     @property
-    def status(self) -> str:
+    def status(self) -> RuntimeState:
         return self._status
 
     @status.setter
-    def status(self, value: str) -> None:
-        if value not in RuntimeState:
-            raise ValueError(f"Invalid status: {value}")
-        self._status = value
+    def status(self, value: Union[RuntimeState, str]) -> None:
+        """
+        Accept either a RuntimeState enum or a string; normalize to the enum.
+        """
+        if isinstance(value, RuntimeState):
+            self._status = value
+            return
+        if isinstance(value, str):
+            try:
+                self._status = RuntimeState(value)
+            except ValueError as exc:
+                raise ValueError(f"Invalid status: {value}") from exc
+            return
+        raise TypeError("status must be a RuntimeState or str")
 
     @property
     def created_at(self) -> datetime:
