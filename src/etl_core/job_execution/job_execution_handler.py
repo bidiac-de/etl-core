@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import threading
+import inspect
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
@@ -390,56 +391,53 @@ class JobExecutionHandler:
                 await q.put(item)
 
     async def _run_component(
-        self,
-        component: Component,
-        payload: Any,
-        metrics: ComponentMetrics,
-        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+            self,
+            component: Component,
+            payload: Any,
+            metrics: ComponentMetrics,
+            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
     ) -> None:
-        """
-        Execute the component and route its results.
-        """
+        # mark start
         status = metrics.status
         try:
-            current_state = (
-                status
-                if isinstance(status, RuntimeState)
-                else RuntimeState(str(status))
-            )
+            current_state = status if isinstance(status, RuntimeState) else RuntimeState(str(status))
         except ValueError:
             current_state = RuntimeState.PENDING
-
         if current_state == RuntimeState.PENDING:
             metrics.set_started()
+
+        # >>> added diagnostics
+        try:
+            sig = str(inspect.signature(component.execute))  # e.g. (payload, metrics)
+            self.logger.debug(
+                "Executing component '%s' (%s.execute%s) payload_type=%s",
+                component.name,
+                component.__class__.__name__,
+                sig,
+                type(payload).__name__,
+            )
+        except Exception:
+            self.logger.debug("Executing component '%s' (signature unavailable)", component.name)
+
         async for batch in component.execute(payload, metrics):
             if not isinstance(batch, Out):
                 self.logger.error(
-                    "Invalid yield from component '%s': got %s; expected Out(port, payload).",
-                    component.name,
-                    type(batch).__name__,
+                    "Invalid yield from '%s': %s (expected Out(port, payload))",
+                    component.name, type(batch).__name__
                 )
-                raise TypeError(
-                    f"{component.name} must yield Out(port, payload) with port routing"
-                )
+                raise TypeError(f"{component.name} must yield Out(port, payload) with port routing")
             edges = out_edges_by_port.get(batch.port, [])
-            # validate output payload if any edge receives it
             if edges:
                 try:
                     component.validate_out_payload(batch.port, batch.payload)
                 except TypeError as exc:
                     self.logger.error(
-                        "Output validation TypeError in '%s' on port '%s' with payload type %s: %s",
-                        component.name,
-                        batch.port,
-                        type(batch.payload).__name__,
-                        exc,
+                        "Output validation TypeError in '%s' on port '%s' with payload=%s: %s",
+                        component.name, batch.port, type(batch.payload).__name__, exc
                     )
                     raise
-
-            for q, dest_in, needs_tag in out_edges_by_port.get(batch.port, []):
-                await q.put(
-                    batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
-                )
+            for q, dest_in, needs_tag in edges:
+                await q.put(batch.payload if not needs_tag else InTagged(dest_in, batch.payload))
 
     def _resolve_single_in_port(self, component: Component) -> Optional[str]:
         names = component.expected_in_port_names()
