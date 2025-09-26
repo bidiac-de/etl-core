@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from uuid import uuid4
-from typing import Optional, Literal, Iterable, Union, Annotated, Any
+from typing import Optional, Literal, Iterable, Union, Annotated, Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -356,12 +356,22 @@ def get_provider(
     )
 
 
-@router.delete("/{id}", status_code=status.HTTP_200_OK, response_class=Response)
+@router.delete(
+    "/{id}",
+    response_model=Dict,
+    status_code=status.HTTP_200_OK,
+    summary="Delete Context or Credentials by ID",
+    description=(
+        "Deletes the provider (context or credentials) matching the given ID. "
+        "On success returns a JSON message, consistent with the Jobs delete endpoint."
+    ),
+)
 def delete_provider(
     id: str,
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
     ctx_handler: ContextHandler = Depends(get_context_handler),
-) -> Response:
+) -> Dict[str, str]:
+    # Best-effort cleanup of secret store (if this ID is registered)
     try:
         adapter = ContextRegistry.resolve(id)
     except KeyError:
@@ -377,24 +387,37 @@ def delete_provider(
         deleted_creds = creds_handler.delete_by_id(id)
         deleted_ctx = ctx_handler.delete_by_id(id)
     except IntegrityError as exc:
-        # Something in the DB still references this id
+        # Likely FK reference from jobs/links/etc
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Delete blocked by database constraints for id '{id}': {exc}",
+            detail={
+                "code": "DB_INTEGRITY_ERROR",
+                "message": "Delete blocked by database constraints.",
+                "id": id,
+            },
         ) from exc
-    except Exception as exc:
-        # Unexpected — surface as 500
+    except Exception as exc:  # noqa: BLE001
+        # Unexpected database/runtime error
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error while deleting '{id}': {exc}",
+            detail={
+                "code": "DB_ERROR",
+                "message": "Unexpected error while deleting provider.",
+                "id": id,
+            },
         ) from exc
 
     if not (deleted_creds or deleted_ctx):
         # Nothing matched this id
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No provider found for id '{id}'",
+            detail={
+                "code": "PROVIDER_NOT_FOUND",
+                "message": f"No provider found for id {id!r}.",
+                "id": id,
+            },
         )
 
-    # Something was actually deleted
-    return Response(status_code=status.HTTP_200_OK)
+    if deleted_ctx:
+        return {"message": f"Context {id!r} deleted successfully"}
+    return {"message": f"Credentials {id!r} deleted successfully"}

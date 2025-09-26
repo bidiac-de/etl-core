@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from fastapi import HTTPException, Response
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 import etl_core.api.routers.contexts as C
@@ -156,8 +156,8 @@ def test_delete_provider_with_adapter_success(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(C.ContextRegistry, "unregister", lambda _id: None)
 
     resp = C.delete_provider("x", ctx_handler=ctx_handler, creds_handler=creds_handler)
-    assert isinstance(resp, Response)
-    assert resp.status_code == 200
+    assert isinstance(resp, dict)
+    assert "message" in resp and "deleted successfully" in resp["message"]
     assert dummy.deleted is True
 
 

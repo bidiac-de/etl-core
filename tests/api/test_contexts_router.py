@@ -19,7 +19,7 @@ class FailProvider:
 class FakeAdapter:
     def __init__(
         self, provider_id, secret_store, context=None, credentials=None
-    ):  # noqa: D401
+    ) -> None:
         self.provider_id = provider_id
         self.secret_store = secret_store
         self.context = context
@@ -29,12 +29,12 @@ class FakeAdapter:
     def bootstrap_to_store(self):
         return SimpleNamespace(errors={})
 
-    def delete_from_store(self):
+    def delete_from_store(self) -> None:
         self._deleted = True
 
 
 class FakeContextRow:
-    def __init__(self, id_: str, name: str = "n", env: str = "DEV"):
+    def __init__(self, id_: str, name: str = "n", env: str = "DEV") -> None:
         self.id = id_
         self.name = name
         self.environment = env
@@ -43,13 +43,13 @@ class FakeContextRow:
 
 
 class FakeCredsRow:
-    def __init__(self, id_: str, name: str = "c"):
+    def __init__(self, id_: str, name: str = "c") -> None:
         self.id = id_
         self.name = name
 
 
 class FakeContextHandler:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rows = {}
 
     def upsert(
@@ -77,7 +77,7 @@ class FakeContextHandler:
 
 
 class FakeCredsHandler:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rows = {}
 
     def upsert(self, creds, credentials_id):
@@ -147,8 +147,9 @@ def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
     )
     assert info.kind == "context"
 
-    # delete should not error
+    # delete should return a success message dict (HTTP 200 handled by router decorator)
     out = C.delete_provider(
         resp_ctx.id, creds_handler=creds_handler, ctx_handler=ctx_handler
     )
-    assert out.status_code == 200
+    assert isinstance(out, dict)
+    assert "message" in out and "deleted successfully" in out["message"]
