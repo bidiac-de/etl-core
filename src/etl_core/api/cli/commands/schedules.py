@@ -17,7 +17,13 @@ schedules_app = typer.Typer(help="Manage job schedules")
 # ensure attribute expected by tests is present regardless of Typer internals
 try:
     # type: ignore[attr-defined]
-    setattr(schedules_app, "commands", getattr(schedules_app, "commands", getattr(schedules_app, "registered_commands", [])))
+    setattr(
+        schedules_app,
+        "commands",
+        getattr(
+            schedules_app, "commands", getattr(schedules_app, "registered_commands", [])
+        ),
+    )
 except Exception:
     setattr(schedules_app, "commands", [])
 

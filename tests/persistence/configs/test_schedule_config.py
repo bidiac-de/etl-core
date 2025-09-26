@@ -2,7 +2,6 @@
 
 import pytest
 from datetime import datetime
-from typing import Any, Dict
 from pydantic import ValidationError
 
 from etl_core.persistence.configs.schedule_config import (
@@ -12,7 +11,6 @@ from etl_core.persistence.configs.schedule_config import (
     _parse_dt,
     _ensure_allowed_keys,
 )
-from etl_core.context.environment import Environment
 from etl_core.persistence.table_definitions import TriggerType
 
 
@@ -76,13 +74,13 @@ class TestScheduleConfigImports:
     def test_schedule_config_class_exists(self):
         """Test that ScheduleConfig can be imported."""
         assert ScheduleConfig is not None
-        assert hasattr(ScheduleConfig, '__init__')
-        
+        assert hasattr(ScheduleConfig, "__init__")
+
     def test_schedule_patch_config_class_exists(self):
         """Test that SchedulePatchConfig can be imported."""
         assert SchedulePatchConfig is not None
-        assert hasattr(SchedulePatchConfig, '__init__')
-    
+        assert hasattr(SchedulePatchConfig, "__init__")
+
     def test_helper_functions_exist(self):
         """Test that helper functions can be imported."""
         assert _is_non_empty_string is not None
@@ -92,28 +90,28 @@ class TestScheduleConfigImports:
     def test_schedule_config_fields(self):
         """Test ScheduleConfig field definitions."""
         fields = ScheduleConfig.model_fields
-        
+
         assert "name" in fields
-        assert "job_id" in fields 
+        assert "job_id" in fields
         assert "context" in fields
         assert "trigger_type" in fields
         assert "trigger_args" in fields
         assert "paused" in fields
-        
+
         # Check default for paused
         assert fields["paused"].default is False
-        
+
     def test_schedule_patch_config_fields(self):
         """Test SchedulePatchConfig field definitions."""
         fields = SchedulePatchConfig.model_fields
-        
+
         assert "name" in fields
-        assert "job_id" in fields 
+        assert "job_id" in fields
         assert "context" in fields
         assert "trigger_type" in fields
         assert "trigger_args" in fields
         assert "paused" in fields
-        
+
         # Check that all fields are optional (have None as default)
         for field_name, field_info in fields.items():
             assert field_info.default is None
@@ -127,7 +125,7 @@ class TestScheduleConfigBasic:
         config_dict = ScheduleConfig.model_config
         assert config_dict["validate_assignment"] is True
         assert config_dict["extra"] == "ignore"
-        
+
     def test_schedule_patch_config_model_config(self):
         """Test that patch config model configuration is set correctly."""
         config_dict = SchedulePatchConfig.model_config
@@ -140,22 +138,22 @@ class TestValidationMethods:
 
     def test_validate_interval_method_exists(self):
         """Test that _validate_interval static method exists."""
-        assert hasattr(ScheduleConfig, '_validate_interval')
+        assert hasattr(ScheduleConfig, "_validate_interval")
         assert callable(ScheduleConfig._validate_interval)
-        
+
     def test_validate_cron_method_exists(self):
         """Test that _validate_cron static method exists."""
-        assert hasattr(ScheduleConfig, '_validate_cron')
+        assert hasattr(ScheduleConfig, "_validate_cron")
         assert callable(ScheduleConfig._validate_cron)
-        
+
     def test_validate_date_method_exists(self):
         """Test that _validate_date static method exists."""
-        assert hasattr(ScheduleConfig, '_validate_date')
+        assert hasattr(ScheduleConfig, "_validate_date")
         assert callable(ScheduleConfig._validate_date)
-        
+
     def test_validate_trigger_method_exists(self):
         """Test that _validate_trigger model validator exists."""
-        assert hasattr(ScheduleConfig, '_validate_trigger')
+        assert hasattr(ScheduleConfig, "_validate_trigger")
         assert callable(ScheduleConfig._validate_trigger)
 
     def test_interval_validation_basic(self):
@@ -164,44 +162,46 @@ class TestValidationMethods:
         valid_args = {"minutes": 30}
         result = ScheduleConfig._validate_interval(valid_args)
         assert result == valid_args
-        
+
     def test_interval_validation_requires_duration(self):
         """Test that interval validation requires a duration field."""
         invalid_args = {"timezone": "UTC"}
         with pytest.raises(ValueError, match="interval trigger requires one of"):
             ScheduleConfig._validate_interval(invalid_args)
-            
+
     def test_interval_validation_positive_integers(self):
         """Test that interval validation requires positive integers."""
         invalid_args = {"minutes": -5}
         with pytest.raises(ValueError, match="must be a positive integer"):
             ScheduleConfig._validate_interval(invalid_args)
-            
+
     def test_cron_validation_basic(self):
         """Test basic cron validation."""
         valid_args = {"hour": 9}
         result = ScheduleConfig._validate_cron(valid_args)
         assert result == valid_args
-        
+
     def test_cron_validation_requires_field(self):
         """Test that cron validation requires at least one time field."""
         invalid_args = {"timezone": "UTC"}
-        with pytest.raises(ValueError, match="cron trigger requires at least one scheduling field"):
+        with pytest.raises(
+            ValueError, match="cron trigger requires at least one scheduling field"
+        ):
             ScheduleConfig._validate_cron(invalid_args)
-            
+
     def test_date_validation_basic(self):
         """Test basic date validation."""
         dt = datetime(2023, 12, 31, 23, 59, 59)
         valid_args = {"run_date": dt}
         result = ScheduleConfig._validate_date(valid_args)
         assert result["run_date"] == dt
-        
+
     def test_date_validation_requires_run_date(self):
         """Test that date validation requires run_date."""
         invalid_args = {"timezone": "UTC"}
         with pytest.raises(ValueError, match="date trigger requires 'run_date'"):
             ScheduleConfig._validate_date(invalid_args)
-            
+
     def test_date_validation_alias(self):
         """Test that 'date' alias works for 'run_date'."""
         dt = datetime(2023, 12, 31, 23, 59, 59)
@@ -213,21 +213,21 @@ class TestValidationMethods:
 
 class TestValidatorFunctions:
     """Test the individual validator functions."""
-    
+
     def test_non_empty_validator(self):
         """Test the _non_empty field validator."""
         # This should work without triggering model validation
         assert ScheduleConfig._non_empty("test") == "test"
         assert ScheduleConfig._non_empty("  test  ") == "test"
-        
+
         with pytest.raises(ValueError, match="must be a non-empty string"):
             ScheduleConfig._non_empty("")
-            
+
     def test_context_validator(self):
         """Test the _validate_context field validator."""
         assert ScheduleConfig._validate_context("dev") == "DEV"
         assert ScheduleConfig._validate_context("PROD") == "PROD"
-        
+
         with pytest.raises(ValueError, match="context must be one of DEV/TEST/PROD"):
             ScheduleConfig._validate_context("INVALID")
 
@@ -273,13 +273,13 @@ class TestSchedulePatchConfig:
 
 class TestTriggerTypes:
     """Test that all trigger types are covered."""
-    
+
     def test_all_trigger_types_importable(self):
         """Test that TriggerType enum values can be accessed."""
         assert TriggerType.INTERVAL is not None
         assert TriggerType.CRON is not None
         assert TriggerType.DATE is not None
-        
+
         # Check string values
         assert TriggerType.INTERVAL.value == "interval"
         assert TriggerType.CRON.value == "cron"
@@ -293,6 +293,6 @@ class TestTriggerTypes:
             TriggerType.CRON: ScheduleConfig._validate_cron,
             TriggerType.DATE: ScheduleConfig._validate_date,
         }
-        
+
         for trigger_type, method in validation_methods.items():
             assert callable(method), f"No validation method for {trigger_type}"

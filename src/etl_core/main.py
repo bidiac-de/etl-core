@@ -33,7 +33,7 @@ def _resolve_registry_mode() -> RegistryMode:
         return RegistryMode.PRODUCTION
 
 
-def _parse_origins(raw: str | None) -> List[str]:
+def _parse_origins(raw: Optional[str]) -> List[str]:
     """
     Accept comma-separated origins from env. Use "*" to allow all origins.
     Examples:

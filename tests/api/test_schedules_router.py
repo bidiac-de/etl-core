@@ -55,11 +55,27 @@ def test_create_update_delete_pause_resume(monkeypatch):
     # Patch command classes
     monkeypatch.setattr(S, "CreateScheduleCommand", lambda **kw: FakeCmd(**kw))
     monkeypatch.setattr(S, "UpdateScheduleCommand", lambda **kw: FakeCmd(**kw))
-    monkeypatch.setattr(S, "DeleteScheduleCommand", lambda schedule_id: SimpleNamespace(execute=lambda: None))
-    monkeypatch.setattr(S, "PauseScheduleCommand", lambda schedule_id: FakeCmd(id=schedule_id))
-    monkeypatch.setattr(S, "ResumeScheduleCommand", lambda schedule_id: FakeCmd(id=schedule_id))
+    monkeypatch.setattr(
+        S,
+        "DeleteScheduleCommand",
+        lambda schedule_id: SimpleNamespace(execute=lambda: None),
+    )
+    monkeypatch.setattr(
+        S, "PauseScheduleCommand", lambda schedule_id: FakeCmd(id=schedule_id)
+    )
+    monkeypatch.setattr(
+        S, "ResumeScheduleCommand", lambda schedule_id: FakeCmd(id=schedule_id)
+    )
 
-    new_id = S.create_schedule(S.ScheduleIn(name="n", job_id="j", environment="DEV", trigger_type="cron", trigger_args={}))  # type: ignore[arg-type]
+    new_id = S.create_schedule(
+        S.ScheduleIn(
+            name="n",
+            job_id="j",
+            environment="DEV",
+            trigger_type="cron",
+            trigger_args={},
+        )
+    )  # type: ignore[arg-type]
     assert new_id == "X"
 
     upd_id = S.update_schedule("Z", S.SchedulePatch(name="nn"))

@@ -5,7 +5,6 @@ from fastapi import HTTPException
 
 from etl_core.api.routers import contexts as C
 from etl_core.context.environment import Environment
-from etl_core.context.credentials import Credentials
 
 
 class FakeSecretProvider:
@@ -18,7 +17,9 @@ class FailProvider:
 
 
 class FakeAdapter:
-    def __init__(self, provider_id, secret_store, context=None, credentials=None):  # noqa: D401
+    def __init__(
+        self, provider_id, secret_store, context=None, credentials=None
+    ):  # noqa: D401
         self.provider_id = provider_id
         self.secret_store = secret_store
         self.context = context
@@ -51,11 +52,15 @@ class FakeContextHandler:
     def __init__(self):
         self.rows = {}
 
-    def upsert(self, context_id, name, environment, non_secure_params, secure_param_keys):
+    def upsert(
+        self, context_id, name, environment, non_secure_params, secure_param_keys
+    ):
         self.rows[context_id] = FakeContextRow(context_id, name, environment)
         return context_id
 
-    def upsert_credentials_mapping_context(self, context_id, name, environment, mapping_env_to_credentials_id):
+    def upsert_credentials_mapping_context(
+        self, context_id, name, environment, mapping_env_to_credentials_id
+    ):
         self.rows[context_id] = FakeContextRow(context_id, name, environment)
         return context_id
 
@@ -90,7 +95,9 @@ class FakeCredsHandler:
 
 
 def test_get_secret_provider_errors_to_http(monkeypatch):
-    monkeypatch.setattr(C, "create_secret_provider", lambda: (_ for _ in ()).throw(RuntimeError("x")))
+    monkeypatch.setattr(
+        C, "create_secret_provider", lambda: (_ for _ in ()).throw(RuntimeError("x"))
+    )
     with pytest.raises(HTTPException) as ei:
         C.get_secret_provider()
     assert ei.value.status_code == 500
@@ -114,13 +121,19 @@ def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
         "password": None,
     }
     body_creds = C.CredentialsCreateRequest(credentials=creds_payload)
-    resp_creds = C.create_credentials_provider(body_creds, default_provider=C.get_secret_provider(), creds_handler=creds_handler)
+    resp_creds = C.create_credentials_provider(
+        body_creds,
+        default_provider=C.get_secret_provider(),
+        creds_handler=creds_handler,
+    )
     assert resp_creds.kind == "credentials" and resp_creds.id in creds_handler.rows
 
     # create context
     ctx = C.Context(environment=Environment.DEV, parameters={}, name="n")
     body_ctx = C.ContextCreateRequest(context=ctx)
-    resp_ctx = C.create_context_provider(body_ctx, default_provider=C.get_secret_provider(), ctx_handler=ctx_handler)
+    resp_ctx = C.create_context_provider(
+        body_ctx, default_provider=C.get_secret_provider(), ctx_handler=ctx_handler
+    )
     assert resp_ctx.kind == "context" and resp_ctx.id in ctx_handler.rows
 
     # list providers contains both
@@ -129,9 +142,13 @@ def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
     assert kinds == {"context", "credentials"}
 
     # get provider for context id
-    info = C.get_provider(resp_ctx.id, ctx_handler=ctx_handler, creds_handler=creds_handler)
+    info = C.get_provider(
+        resp_ctx.id, ctx_handler=ctx_handler, creds_handler=creds_handler
+    )
     assert info.kind == "context"
 
     # delete should not error
-    out = C.delete_provider(resp_ctx.id, creds_handler=creds_handler, ctx_handler=ctx_handler)
+    out = C.delete_provider(
+        resp_ctx.id, creds_handler=creds_handler, ctx_handler=ctx_handler
+    )
     assert out.status_code == 204
