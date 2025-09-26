@@ -153,6 +153,7 @@ class JobExecutionHandler:
         self, job: RuntimeJob, environment: Optional[Environment] = None
     ) -> None:
         if environment is not None:
+            self.logger.info("environment set to '%s'", environment.value)
             for comp in job.components:
                 (
                     comp.prepare_for_execution(environment)
@@ -214,11 +215,14 @@ class JobExecutionHandler:
         self._prepare_comps_for_execution(
             job, execution.environment if execution.environment else None
         )
+        self.logger.info("Prepared %d components for execution", len(job.components))
 
         job_metrics = self.job_info.metrics_handler.create_job_metrics(execution.id)
 
+        self.logger.info("starting attempt(s) for job '%s'", job.name)
         for attempt_index in range(execution.max_attempts):
             execution.start_attempt()
+            self.logger.info("started attempt %d", attempt_index + 1)
             attempt = execution.latest_attempt()
 
             # record attempt start
