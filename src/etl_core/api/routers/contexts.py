@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from uuid import uuid4
-from typing import Optional, Literal, Iterable
+from typing import Optional, Literal, Iterable, Union, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from src.etl_core.context.context import Context
 from src.etl_core.context.environment import Environment
@@ -56,6 +56,34 @@ class CredentialsMappingContextCreateRequest(BaseModel):
     context: CredentialsMappingContext
 
 
+class ContextResponse(BaseModel):
+    id: str
+    kind: Literal["context"]
+    name: str
+    environment: str
+    parameters: dict[str, Optional[str]] = {}
+    credentials_ids: dict[str, str] = {}
+
+
+class CredentialsResponse(BaseModel):
+    id: str
+    kind: Literal["credentials"]
+    name: str
+    user: str
+    host: str
+    port: int
+    database: str
+    pool_max_size: Optional[int] = None
+    pool_timeout_s: Optional[int] = None
+    password: Optional[SecretStr] = None
+
+
+ProviderGetResponse = Annotated[
+    Union[ContextResponse, CredentialsResponse],
+    Field(discriminator="kind"),
+]
+
+
 class ProviderCreateResponse(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -63,15 +91,6 @@ class ProviderCreateResponse(BaseModel):
     kind: Literal["context", "credentials"]
     environment: Optional[Environment] = None
     parameters_registered: int = 0
-
-
-class ProviderInfoResponse(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    id: str
-    kind: Literal["context", "credentials"]
-    environment: Optional[Environment] = None
-    provider_class: str = "SecureContextAdapter"
 
 
 class ProviderListItem(BaseModel):
@@ -282,30 +301,53 @@ def list_providers(
 
 @router.get(
     "/{id}",
-    response_model=ProviderInfoResponse,
+    response_model=ProviderGetResponse,
     status_code=status.HTTP_200_OK,
 )
 def get_provider(
     id: str,
     ctx_handler: ContextHandler = Depends(get_context_handler),
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
-) -> ProviderInfoResponse:
+):
     row_ctx = ctx_handler.get_by_id(id)
     if row_ctx is not None:
-        ctx, _ctx_id = row_ctx
-        return ProviderInfoResponse(
+        ctx_obj, _ctx_id = row_ctx
+        name: Optional[str] = getattr(ctx_obj, "name", None)
+        environment: Any = getattr(ctx_obj, "environment", None)
+
+        if name is None:
+            try:
+                for r in ctx_handler.list_all():
+                    if getattr(r, "id", None) == id:
+                        name = getattr(r, "name", "")
+                        environment = environment or getattr(r, "environment", None)
+                        break
+            except Exception:  # noqa: BLE001
+                name = ""
+
+        return ContextResponse(
             id=id,
             kind="context",
-            environment=str(ctx.environment),
-            provider_class="SecureContextAdapter",
+            name=name or "",
+            environment=str(environment) if environment is not None else "",
+            parameters=getattr(ctx_obj, "parameters", {}),
+            credentials_ids=getattr(ctx_obj, "credentials_ids", {}),
         )
+
     row_creds = creds_handler.get_by_id(id)
     if row_creds is not None:
-        return ProviderInfoResponse(
+        creds, _creds_id = row_creds
+        return CredentialsResponse(
             id=id,
             kind="credentials",
-            environment=None,
-            provider_class="SecureContextAdapter",
+            name=creds.name,
+            user=creds.user,
+            host=creds.host,
+            port=creds.port,
+            database=creds.database,
+            pool_max_size=creds.pool_max_size,
+            pool_timeout_s=creds.pool_timeout_s,
+            password=creds.password,
         )
 
     raise HTTPException(
