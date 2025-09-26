@@ -413,13 +413,28 @@ class JobExecutionHandler:
             metrics.set_started()
         async for batch in component.execute(payload, metrics):
             if not isinstance(batch, Out):
+                self.logger.error(
+                    "Invalid yield from component '%s': got %s; expected Out(port, payload).",
+                    component.name,
+                    type(batch).__name__,
+                )
                 raise TypeError(
                     f"{component.name} must yield Out(port, payload) with port routing"
                 )
             edges = out_edges_by_port.get(batch.port, [])
             # validate output payload if any edge receives it
             if edges:
-                component.validate_out_payload(batch.port, batch.payload)
+                try:
+                    component.validate_out_payload(batch.port, batch.payload)
+                except TypeError as exc:
+                    self.logger.error(
+                        "Output validation TypeError in '%s' on port '%s' with payload type %s: %s",
+                        component.name,
+                        batch.port,
+                        type(batch.payload).__name__,
+                        exc,
+                    )
+                    raise
 
             for q, dest_in, needs_tag in out_edges_by_port.get(batch.port, []):
                 await q.put(
@@ -490,7 +505,17 @@ class JobExecutionHandler:
             return
         dest_port = item.in_port
         payload = item.payload
-        component.validate_in_payload(dest_port, payload)
+        try:
+            component.validate_out_payload(dest_port, payload)
+        except TypeError as exc:
+            self.logger.error(
+                "Output validation TypeError in '%s' on port '%s' with payload type %s: %s",
+                component.name,
+                dest_port,
+                type(payload).__name__,
+                exc,
+            )
+            raise
         await self._run_component(component, payload, metrics, out_edges_by_port)
 
     async def _handle_untagged_item(
