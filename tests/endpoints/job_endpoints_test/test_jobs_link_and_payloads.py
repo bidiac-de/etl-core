@@ -63,7 +63,6 @@ def test_component_payload_persisted_in_db(client: TestClient) -> None:
         assert ct.payload.get("extra_input_ports") == []
         assert ct.payload.get("extra_output_ports") == []
 
-
         assert "context_id" in ct.payload
 
 

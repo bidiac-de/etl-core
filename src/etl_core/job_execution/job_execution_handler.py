@@ -391,16 +391,20 @@ class JobExecutionHandler:
                 await q.put(item)
 
     async def _run_component(
-            self,
-            component: Component,
-            payload: Any,
-            metrics: ComponentMetrics,
-            out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
+        self,
+        component: Component,
+        payload: Any,
+        metrics: ComponentMetrics,
+        out_edges_by_port: Dict[str, List[Tuple[asyncio.Queue, str, bool]]],
     ) -> None:
         # mark start
         status = metrics.status
         try:
-            current_state = status if isinstance(status, RuntimeState) else RuntimeState(str(status))
+            current_state = (
+                status
+                if isinstance(status, RuntimeState)
+                else RuntimeState(str(status))
+            )
         except ValueError:
             current_state = RuntimeState.PENDING
         if current_state == RuntimeState.PENDING:
@@ -417,27 +421,38 @@ class JobExecutionHandler:
                 type(payload).__name__,
             )
         except Exception:
-            self.logger.debug("Executing component '%s' (signature unavailable)", component.name)
+            self.logger.debug(
+                "Executing component '%s' (signature unavailable)", component.name
+            )
 
         async for batch in component.execute(payload, metrics):
             if not isinstance(batch, Out):
                 self.logger.error(
                     "Invalid yield from '%s': %s (expected Out(port, payload))",
-                    component.name, type(batch).__name__
+                    component.name,
+                    type(batch).__name__,
                 )
-                raise TypeError(f"{component.name} must yield Out(port, payload) with port routing")
+                raise TypeError(
+                    f"{component.name} must yield Out(port, payload) with port routing"
+                )
             edges = out_edges_by_port.get(batch.port, [])
             if edges:
                 try:
                     component.validate_out_payload(batch.port, batch.payload)
                 except TypeError as exc:
                     self.logger.error(
-                        "Output validation TypeError in '%s' on port '%s' with payload=%s: %s",
-                        component.name, batch.port, type(batch.payload).__name__, exc
+                        "Output validation TypeError"
+                        " in '%s' on port '%s' with payload=%s: %s",
+                        component.name,
+                        batch.port,
+                        type(batch.payload).__name__,
+                        exc,
                     )
                     raise
             for q, dest_in, needs_tag in edges:
-                await q.put(batch.payload if not needs_tag else InTagged(dest_in, batch.payload))
+                await q.put(
+                    batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
+                )
 
     def _resolve_single_in_port(self, component: Component) -> Optional[str]:
         names = component.expected_in_port_names()
@@ -504,10 +519,11 @@ class JobExecutionHandler:
         dest_port = item.in_port
         payload = item.payload
         try:
-            component.validate_out_payload(dest_port, payload)
+            component.validate_in_payload(dest_port, payload)
         except TypeError as exc:
             self.logger.error(
-                "Output validation TypeError in '%s' on port '%s' with payload type %s: %s",
+                "Output validation TypeError in '%s'"
+                " on port '%s' with payload type %s: %s",
                 component.name,
                 dest_port,
                 type(payload).__name__,

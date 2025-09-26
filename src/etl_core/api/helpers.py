@@ -175,8 +175,6 @@ def _exc_meta(exc: BaseException) -> Dict[str, Optional[str]]:
         "type": exc.__class__.__name__,
         "cause": str(exc.__cause__) if exc.__cause__ else None,
         "context": str(exc.__context__) if exc.__context__ else None,
-        "args": str(exc.args) if exc.args else None,
-        "message": str(exc) if str(exc) else None,
     }
 
 
