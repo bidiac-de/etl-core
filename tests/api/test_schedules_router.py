@@ -73,3 +73,4 @@ def test_create_update_delete_pause_resume(monkeypatch):
 
     resumed = S.resume_schedule("Z")
     assert resumed.id == "X"
+

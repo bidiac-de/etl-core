@@ -97,3 +97,4 @@ def test_schema_post_processing_keep_order_when_requested():
     keep = H.schema_post_processing(deepcopy(schema), strip_order=False)
     props = keep["properties"]
     assert props[0]["schema"]["order"] == 5
+
