@@ -291,8 +291,8 @@ def get_provider(
     creds_handler: CredentialsHandler = Depends(get_credentials_handler),
 ) -> ProviderInfoResponse:
     row_ctx = ctx_handler.get_by_id(id)
-    ctx, _ctx_id = row_ctx
     if row_ctx is not None:
+        ctx, _ctx_id = row_ctx
         return ProviderInfoResponse(
             id=id,
             kind="context",
