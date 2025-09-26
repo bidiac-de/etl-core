@@ -35,6 +35,7 @@ def test_serialize_components_from_variants():
     class C:
         def __init__(self):
             self.y = 2
+
     o = types.SimpleNamespace(components=[C()])
     out2 = J._serialize_components_from(o)
     assert isinstance(out2[0], dict) and "y" in out2[0]
@@ -45,7 +46,10 @@ def test_serialize_components_from_variants():
 
 def test_job_to_payload_model_dump_fails(monkeypatch):
     job = DummyObj()
-    def bad_dump(): raise RuntimeError("x")
+
+    def bad_dump():
+        raise RuntimeError("x")
+
     job.model_dump = bad_dump
     out = J._job_to_payload(job, "jid")
     assert out["id"] == "jid"

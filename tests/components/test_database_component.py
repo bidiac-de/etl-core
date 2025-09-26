@@ -14,8 +14,10 @@ import etl_core.components.databases.database as db
 # Test doubles
 # ---------------------------------------------------------------------------
 
+
 class DummyCreds:
     """Minimal stand-in for etl_core.context.credentials.Credentials."""
+
     def __init__(self) -> None:
         self.decrypted_password = "pw"
 
@@ -32,6 +34,7 @@ class DummyCreds:
 
 class DummyMapping:
     """Mimics CredentialsMappingContext with resolve_active_credentials()."""
+
     def __init__(self, creds: DummyCreds | None = None, cid: str = "cid-123") -> None:
         self._creds = creds or DummyCreds()
         self._cid = cid
@@ -71,6 +74,7 @@ def _new_db(cls: type[TestableDB], name: str) -> TestableDB:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 def test_build_objects_with_none_context() -> None:
     class NoCtx(TestableDB):
         pass
@@ -79,7 +83,9 @@ def test_build_objects_with_none_context() -> None:
     # DatabaseComponent validator triggers during __init__, wrapped as ValidationError
     with pytest.raises(ValidationError) as ei:
         _new_db(NoCtx, "x")
-    assert "require a context_id referencing a CredentialsMappingContext" in str(ei.value)
+    assert "require a context_id referencing a CredentialsMappingContext" in str(
+        ei.value
+    )
 
 
 def test_build_objects_with_wrong_context_type() -> None:
@@ -122,7 +128,9 @@ def test_build_objects_and_get_credentials(monkeypatch: pytest.MonkeyPatch) -> N
     }
 
 
-def test_get_credentials_resolves_when_cache_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_credentials_resolves_when_cache_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(db, "CredentialsMappingContext", DummyMapping, raising=True)
 
     class GoodCtx(TestableDB):
@@ -142,7 +150,9 @@ def test_get_credentials_resolves_when_cache_empty(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_concrete_overrides_can_raise_not_implemented(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_concrete_overrides_can_raise_not_implemented(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """
     You cannot instantiate a class lacking abstract methods. To assert the
     "raises NotImplementedError when used" semantics, implement them but raise.

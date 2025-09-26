@@ -35,6 +35,7 @@ def invalidate_job_caches(job_id: Optional[str] = None) -> None:
             _JOB_BY_ID_CACHE.pop(job_id, None)
         _JOB_LIST_CACHE = None
 
+
 def _serialize_components_from(obj: Any) -> Optional[List[Dict[str, Any]]]:
     """
     Best-effort component serialization that supports:
@@ -129,6 +130,7 @@ def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
     with _CACHE_LOCK:
         _JOB_BY_ID_CACHE[job_id] = payload
     return payload
+
 
 def _cached_job_list(job_handler: JobHandler) -> List[Dict[str, Any]]:
     global _JOB_LIST_CACHE

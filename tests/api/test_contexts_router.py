@@ -73,7 +73,7 @@ class FakeContextHandler:
         return (SimpleNamespace(environment=row.environment), id_) if row else None
 
     def delete_by_id(self, id_):
-        self.rows.pop(id_, None)
+        return self.rows.pop(id_, None) is not None
 
 
 class FakeCredsHandler:
@@ -91,7 +91,7 @@ class FakeCredsHandler:
         return self.rows.get(id_)
 
     def delete_by_id(self, id_):
-        self.rows.pop(id_, None)
+        return self.rows.pop(id_, None) is not None
 
 
 def test_get_secret_provider_errors_to_http(monkeypatch):
@@ -151,4 +151,4 @@ def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
     out = C.delete_provider(
         resp_ctx.id, creds_handler=creds_handler, ctx_handler=ctx_handler
     )
-    assert out.status_code == 204
+    assert out.status_code == 200

@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 
 from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import (
@@ -183,13 +184,15 @@ class ContextHandler:
         )
         return ctx, context_id
 
-    def delete_by_id(self, context_id: str) -> None:
+    def delete_by_id(self, context_id: str) -> bool:
         """
         Delete a context row, its parameter rows, and its mapping rows.
+        Returns True if a Context row was deleted, False if it didn't exist.
+        Raises IntegrityError if the delete is blocked by FK constraints.
         (Secrets should be removed separately by the caller.)
         """
         with self._session() as s:
-            # Remove parameters first
+            # Remove parameters first (safe even if none exist)
             params = s.exec(
                 select(ContextParameterTable).where(
                     ContextParameterTable.context_id == context_id
@@ -209,7 +212,18 @@ class ContextHandler:
             row = s.exec(
                 select(ContextTable).where(ContextTable.id == context_id)
             ).first()
-            if row is not None:
-                s.delete(row)
 
-            s.commit()
+            if row is None:
+                # Nothing to delete
+                s.commit()
+                return False
+
+            try:
+                s.delete(row)
+                s.commit()
+            except IntegrityError:
+                # Propagate so the API can return 409
+                s.rollback()
+                raise
+
+            return True

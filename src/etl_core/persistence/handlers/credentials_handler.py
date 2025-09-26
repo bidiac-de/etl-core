@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Tuple, List
 
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 
 from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.table_definitions import CredentialsTable
@@ -134,12 +135,31 @@ class CredentialsHandler:
         with Session(self.engine) as s:
             return list(s.exec(select(CredentialsTable)).all())
 
-    def delete_by_id(self, credentials_id: str) -> None:
+    def delete_by_id(self, credentials_id: str) -> bool:
+        """
+        Delete a credentials row and its secret.
+        Returns True if the row existed and was deleted, False otherwise.
+        Raises IntegrityError if the delete is blocked by FK constraints.
+        """
+        deleted = False
         with Session(self.engine) as s:
             row = s.exec(
                 select(CredentialsTable).where(CredentialsTable.id == credentials_id)
             ).first()
             if row:
-                s.delete(row)
-                s.commit()
-        self.secret_store.delete(self._password_key(credentials_id))
+                try:
+                    s.delete(row)
+                    s.commit()
+                    deleted = True
+                except IntegrityError:
+                    s.rollback()
+                    raise
+
+        # Secrets: best-effort cleanup — don't fail if the secret didn't exist
+        try:
+            self.secret_store.delete(self._password_key(credentials_id))
+        except Exception:
+            # Ignore missing/other secret backend issues on delete
+            pass
+
+        return deleted

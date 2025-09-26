@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException, Response
+from sqlalchemy.exc import IntegrityError
 
 import etl_core.api.routers.contexts as C
 
@@ -18,7 +19,9 @@ class DummyAdapter:
 def test_create_context_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     # Force SecureContextAdapter to raise to hit the 400 branch
     monkeypatch.setattr(
-        C, "SecureContextAdapter", lambda **kw: (_ for _ in ()).throw(RuntimeError("boom"))
+        C,
+        "SecureContextAdapter",
+        lambda **kw: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     # NOTE: environment must be a STRING ("DEV"|"TEST"|"PROD"), not the enum
     ctx = C.Context(environment="DEV", parameters={}, name="x")
@@ -29,7 +32,9 @@ def test_create_context_provider_failure(monkeypatch: pytest.MonkeyPatch) -> Non
     assert e.value.status_code == 400
 
 
-def test_create_credentials_provider_with_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_credentials_provider_with_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class BadAdapter:
         def bootstrap_to_store(self) -> SimpleNamespace:
             return SimpleNamespace(errors={"pw": "bad"})
@@ -46,7 +51,9 @@ def test_create_credentials_provider_with_errors(monkeypatch: pytest.MonkeyPatch
     req = C.CredentialsCreateRequest(credentials=creds)
 
     with pytest.raises(HTTPException) as e:
-        C.create_credentials_provider(req, default_provider=Mock(), creds_handler=Mock())
+        C.create_credentials_provider(
+            req, default_provider=Mock(), creds_handler=Mock()
+        )
     assert e.value.status_code == 400
 
 
@@ -55,8 +62,8 @@ def test_create_credentials_mapping_context_success_and_missing(
 ) -> None:
     ctx_handler = Mock()
     creds_handler = Mock()
-    creds_handler.get_by_id.side_effect = (
-        lambda cid: SimpleNamespace() if cid == "ok" else None
+    creds_handler.get_by_id.side_effect = lambda cid: (
+        SimpleNamespace() if cid == "ok" else None
     )
 
     # SUCCESS: environment must be STRING
@@ -101,7 +108,6 @@ def test_get_provider_context_fallback() -> None:
     ctx_handler = Mock()
     creds_handler = Mock()
 
-    # get_by_id returns context-like object without a name to trigger fallback list_all()
     ctx_obj = SimpleNamespace(environment="DEV", parameters={}, credentials_ids={})
     ctx_handler.get_by_id.return_value = (ctx_obj, "id1")
     ctx_handler.list_all.return_value = [
@@ -141,9 +147,9 @@ def test_get_provider_credentials_and_not_found() -> None:
     assert e.value.status_code == 404
 
 
-def test_delete_provider_with_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
-    ctx_handler = Mock()
-    creds_handler = Mock()
+def test_delete_provider_with_adapter_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx_handler = Mock(delete_by_id=Mock(return_value=True))
+    creds_handler = Mock(delete_by_id=Mock(return_value=False))
     dummy = DummyAdapter()
 
     monkeypatch.setattr(C.ContextRegistry, "resolve", lambda _id: dummy)
@@ -151,14 +157,44 @@ def test_delete_provider_with_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
 
     resp = C.delete_provider("x", ctx_handler=ctx_handler, creds_handler=creds_handler)
     assert isinstance(resp, Response)
-    assert resp.status_code == 204
+    assert resp.status_code == 200
     assert dummy.deleted is True
 
 
-def test_delete_provider_handlers_raise(monkeypatch: pytest.MonkeyPatch) -> None:
-    ctx_handler = Mock(delete_by_id=Mock(side_effect=RuntimeError("x")))
-    creds_handler = Mock(delete_by_id=Mock(side_effect=RuntimeError("y")))
+def test_delete_provider_404_when_nothing_deleted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx_handler = Mock(delete_by_id=Mock(return_value=False))
+    creds_handler = Mock(delete_by_id=Mock(return_value=False))
     monkeypatch.setattr(C.ContextRegistry, "resolve", lambda _id: None)
 
-    resp = C.delete_provider("y", ctx_handler=ctx_handler, creds_handler=creds_handler)
-    assert resp.status_code == 204
+    with pytest.raises(HTTPException) as e:
+        C.delete_provider(
+            "missing", ctx_handler=ctx_handler, creds_handler=creds_handler
+        )
+    assert e.value.status_code == 404
+
+
+def test_delete_provider_409_on_integrity_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # One of the handlers raises IntegrityError → 409
+    ctx_handler = Mock(delete_by_id=Mock(side_effect=IntegrityError("stmt", {}, None)))
+    creds_handler = Mock(delete_by_id=Mock(return_value=False))
+    monkeypatch.setattr(C.ContextRegistry, "resolve", lambda _id: None)
+
+    with pytest.raises(HTTPException) as e:
+        C.delete_provider("y", ctx_handler=ctx_handler, creds_handler=creds_handler)
+    assert e.value.status_code == 409
+
+
+def test_delete_provider_500_on_unexpected_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx_handler = Mock(delete_by_id=Mock(side_effect=RuntimeError("x")))
+    creds_handler = Mock(delete_by_id=Mock(return_value=False))
+    monkeypatch.setattr(C.ContextRegistry, "resolve", lambda _id: None)
+
+    with pytest.raises(HTTPException) as e:
+        C.delete_provider("y", ctx_handler=ctx_handler, creds_handler=creds_handler)
+    assert e.value.status_code == 500

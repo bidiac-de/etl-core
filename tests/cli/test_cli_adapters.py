@@ -6,8 +6,6 @@ from etl_core.api.cli.adapters import (
     LocalJobsClient,
     LocalExecutionClient,
     LocalContextsClient,
-    _dedupe,
-    api_base_url,
 )
 
 
@@ -36,7 +34,10 @@ def test_local_jobs_client_crud(monkeypatch, mock_job_handler):
     jobs = client.list_brief()
     assert len(jobs) == 2
 
-def test_local_execution_client_start_and_get(monkeypatch, mock_job_handler, mock_execution_handler):
+
+def test_local_execution_client_start_and_get(
+    monkeypatch, mock_job_handler, mock_execution_handler
+):
     monkeypatch.setattr(adapters, "_jh_singleton", lambda: mock_job_handler)
     monkeypatch.setattr(adapters, "_eh_singleton", lambda: mock_execution_handler)
     monkeypatch.setattr(adapters, "_erh_singleton", lambda: Mock())
@@ -55,14 +56,24 @@ def test_local_execution_client_start_and_get(monkeypatch, mock_job_handler, moc
         client.get("missing-id")
 
     # get with row
-    row = Mock(id="exec-1", job_id="j1", environment="dev",
-               status="ok", error=None,
-               started_at=Mock(isoformat=lambda: "2021-01-01T00:00:00"),
-               finished_at=None)
-    attempt = Mock(id="a1", execution_id="exec-1", attempt_index=1,
-                   status="ok", error=None,
-                   started_at=Mock(isoformat=lambda: "2021-01-01T00:00:00"),
-                   finished_at=None)
+    row = Mock(
+        id="exec-1",
+        job_id="j1",
+        environment="dev",
+        status="ok",
+        error=None,
+        started_at=Mock(isoformat=lambda: "2021-01-01T00:00:00"),
+        finished_at=None,
+    )
+    attempt = Mock(
+        id="a1",
+        execution_id="exec-1",
+        attempt_index=1,
+        status="ok",
+        error=None,
+        started_at=Mock(isoformat=lambda: "2021-01-01T00:00:00"),
+        finished_at=None,
+    )
     records.get_execution.return_value = (row, [attempt])
     out = client.get("exec-1")
     assert out["execution"]["id"] == "exec-1"
@@ -71,10 +82,15 @@ def test_local_execution_client_start_and_get(monkeypatch, mock_job_handler, moc
 
 def test_local_execution_list_and_attempts(monkeypatch):
     records = Mock()
-    row = Mock(id="exec-2", job_id="j2", environment="prod",
-               status="done", error=None,
-               started_at=Mock(isoformat=lambda: "t0"),
-               finished_at=Mock(isoformat=lambda: "t1"))
+    row = Mock(
+        id="exec-2",
+        job_id="j2",
+        environment="prod",
+        status="done",
+        error=None,
+        started_at=Mock(isoformat=lambda: "t0"),
+        finished_at=Mock(isoformat=lambda: "t1"),
+    )
     records.list_executions.return_value = ([row], 1)
     records.get_execution.return_value = (row, [])
     records.list_attempts.return_value = [row]
@@ -105,7 +121,11 @@ def test_local_execution_parse_dt():
 
 def test_local_contexts_secret_store_failure(monkeypatch):
     client = LocalContextsClient()
-    monkeypatch.setattr(adapters, "create_secret_provider", lambda: (_ for _ in ()).throw(Exception("boom")))
+    monkeypatch.setattr(
+        adapters,
+        "create_secret_provider",
+        lambda: (_ for _ in ()).throw(Exception("boom")),
+    )
     with pytest.raises(RuntimeError):
         client._secret_store()
 
@@ -117,7 +137,8 @@ def test_local_contexts_create_and_get(monkeypatch):
     monkeypatch.setattr(adapters, "_crh_singleton", lambda: creds_handler)
     monkeypatch.setattr(adapters, "create_secret_provider", lambda: Mock())
     monkeypatch.setattr(
-        adapters, "SecureContextAdapter",
+        adapters,
+        "SecureContextAdapter",
         lambda **kw: Mock(bootstrap_to_store=lambda: None),
     )
 
@@ -174,6 +195,7 @@ def test_local_contexts_create_and_get(monkeypatch):
     ctx_handler.delete_by_id.assert_called()
     creds_handler.delete_by_id.assert_called()
 
+
 def test_sanitize_url_edge_cases():
     assert adapters._RestBase._sanitize_url(None) == "<unknown>"
 
@@ -184,11 +206,15 @@ def test_sanitize_url_edge_cases():
     s = adapters._RestBase._sanitize_url("https://user:pass@h.com/p?q=1#frag")
     assert s == "https://***@h.com/p"
 
-@pytest.mark.parametrize("cls,method,url", [
-    (adapters.RemoteJobsClient, "get", "/jobs/123"),
-    (adapters.RemoteExecutionClient, "get", "/execution/executions/123"),
-    (adapters.RemoteContextsClient, "list_providers", "/contexts/"),
-])
+
+@pytest.mark.parametrize(
+    "cls,method,url",
+    [
+        (adapters.RemoteJobsClient, "get", "/jobs/123"),
+        (adapters.RemoteExecutionClient, "get", "/execution/executions/123"),
+        (adapters.RemoteContextsClient, "list_providers", "/contexts/"),
+    ],
+)
 def test_remote_clients_methods(monkeypatch, cls, method, url):
     resp = Mock()
     resp.json.return_value = {"ok": True}
