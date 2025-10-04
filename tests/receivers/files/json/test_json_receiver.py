@@ -28,7 +28,7 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_json_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
+        Path(__file__).parent.parent.parent.parent
         / "components"
         / "data"
         / "json"
@@ -39,7 +39,7 @@ def sample_json_file() -> Path:
 @pytest.fixture
 def sample_ndjson_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
+        Path(__file__).parent.parent.parent.parent
         / "components"
         / "data"
         / "json"

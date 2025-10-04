@@ -27,7 +27,7 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_xml_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
+        Path(__file__).parent.parent.parent.parent
         / "components"
         / "data"
         / "xml"
@@ -38,7 +38,7 @@ def sample_xml_file() -> Path:
 @pytest.fixture
 def sample_bigdata_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
+        Path(__file__).parent.parent.parent.parent
         / "components"
         / "data"
         / "xml"

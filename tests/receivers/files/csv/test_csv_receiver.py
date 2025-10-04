@@ -26,7 +26,7 @@ def metrics() -> ComponentMetrics:
 @pytest.fixture
 def sample_csv_file() -> Path:
     return (
-        Path(__file__).parent.parent.parent
+        Path(__file__).parent.parent.parent.parent
         / "components"
         / "data"
         / "csv"
