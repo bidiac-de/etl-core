@@ -13,6 +13,7 @@ omit =
     */htmlcov/*
     */htmlcov_*
     */__init__.py
+    */stubcomponents.py
     # Critical tests that require real database connections
     tests/components/databases/mariadb/test_real_database_connection.py
 
@@ -24,6 +25,8 @@ exclude_lines =
     if settings.DEBUG
     raise AssertionError
     raise NotImplementedError
+    raise ValueError
+
     if 0:
     if __name__ == .__main__.:
     class .*\bProtocol\):

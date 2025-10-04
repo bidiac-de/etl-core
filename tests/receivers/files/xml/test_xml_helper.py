@@ -11,7 +11,6 @@ import types
 import etl_core.receivers.files.xml.xml_helper as xh
 
 
-
 @pytest.fixture(autouse=True)
 def patch_file_helpers(monkeypatch):
     monkeypatch.setattr(xh, "resolve_file_path", lambda p: Path(p))
@@ -23,7 +22,13 @@ def patch_file_helpers(monkeypatch):
 
 
 def _mk_xml(root: str, items: List[str]) -> str:
-    return '<?xml version="1.0" encoding="utf-8"?>\n<' + root + ">" + "".join(items) + f"</{root}>"
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n<'
+        + root
+        + ">"
+        + "".join(items)
+        + f"</{root}>"
+    )
 
 
 def _el(tag: str, inner: str) -> str:
@@ -46,7 +51,6 @@ def _canonical_xml(txt: str) -> str:
         flags=re.IGNORECASE,
     )
     return txt
-
 
 
 def test_element_to_nested_with_attrs_text_repeat():
@@ -77,17 +81,21 @@ def test_element_to_nested_leaf_only():
     [
         ({"a": "1"}, "<root><a>1</a></root>"),
         ({xh.ATTRS: {"id": 7}, xh.TEXT: "hi"}, '<root id="7">hi</root>'),
-        ({"item": ["x", {xh.ATTRS: {"k": "v"}}]}, '<root><item>x</item><item k="v" /></root>'),
+        (
+            {"item": ["x", {xh.ATTRS: {"k": "v"}}]},
+            '<root><item>x</item><item k="v" /></root>',
+        ),
         (None, "<root />"),
     ],
 )
-def test_nested_to_element_builds_expected(payload: Dict[str, Any] | None, expected_xml: str):
+def test_nested_to_element_builds_expected(
+    payload: Dict[str, Any] | None, expected_xml: str
+):
     el = xh.nested_to_element("root", payload)
     got = xh.ET.tostring(el, encoding="unicode")
     got_norm = _canonical_xml(got)
     exp_norm = _canonical_xml(expected_xml)
     assert got_norm == exp_norm
-
 
 
 def test_flatten_and_unflatten_roundtrip_with_attrs_and_lists():
@@ -151,14 +159,10 @@ def test_build_payload_passthrough_nested():
     assert xh.build_payload(nested) == nested
 
 
-
-
 def test_has_flat_paths_detects_dots_and_brackets():
     assert xh._has_flat_paths({"a.b": 1})
     assert xh._has_flat_paths({"a[0]": 1})
     assert not xh._has_flat_paths({"a": 1})
-
-
 
 
 def test_read_xml_row_and_flatten_chunks_and_once(tmp_path: Path):
@@ -171,7 +175,11 @@ def test_read_xml_row_and_flatten_chunks_and_once(tmp_path: Path):
     p.write_text(_mk_xml("rows", recs), encoding="utf-8")
 
     rows = list(xh.read_xml_row(p, "row"))
-    assert rows == [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}, {"id": "3", "name": "C"}]
+    assert rows == [
+        {"id": "1", "name": "A"},
+        {"id": "2", "name": "B"},
+        {"id": "3", "name": "C"},
+    ]
 
     parts = list(xh.read_xml_bulk_chunks(p, "row", chunk_size=2))
     assert [len(df) for df in parts] == [2, 1]
@@ -217,7 +225,7 @@ def test_write_xml_row_validations(tmp_path: Path):
     p = tmp_path / "rows.xml"
 
     with pytest.raises(TypeError):
-        xh.write_xml_row(p, ["not", "dict"], root_tag="rows", record_tag="row")  # type: ignore[arg-type]
+        xh.write_xml_row(p, ["not", "dict"], root_tag="rows", record_tag="row")
 
     with pytest.raises(ValueError):
         xh.write_xml_row(p, {"a.b": 1}, root_tag="rows", record_tag="row")
@@ -226,7 +234,6 @@ def test_write_xml_row_validations(tmp_path: Path):
     txt = p.read_text(encoding="utf-8")
     assert "<rows>" in txt and "</rows>" in txt
     assert "<row><id>1</id><name>A</name></row>" in txt
-
 
 
 def test_append_record_to_new_file_creates_root(tmp_path: Path):
@@ -251,7 +258,9 @@ def test_append_record_scans_from_end(tmp_path: Path):
     assert t.strip().endswith("</rows>")
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Windows prevents os.replace on an open file handle.")
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows prevents os.replace on an open file handle."
+)
 def test_append_record_fallback_when_closing_not_found(tmp_path: Path, monkeypatch):
     p = tmp_path / "broken.xml"
     p.write_text(_mk_xml("rows", [_el("row", _el("id", "1"))]), encoding="utf-8")
@@ -260,6 +269,7 @@ def test_append_record_fallback_when_closing_not_found(tmp_path: Path, monkeypat
 
     el = xh.nested_to_element("row", {"id": "9"})
     xh._append_record_to_file(p, "rows", el)
+
 
 class _DummyFile:
     def __init__(self) -> None:
@@ -287,26 +297,27 @@ def test_detect_root_bytes_decl_and_none(tmp_path: Path) -> None:
     no_xml.write_text("not xml at all", encoding="utf-8")
 
     qname = xh._detect_root_qname_bytes(has_decl)
-    assert qname == b"rows", "Root qname should be detected when XML is valid"  # :contentReference[oaicite:0]{index=0}
+    assert qname == b"rows", "Root qname should be detected when XML is valid"
 
     none_qname = xh._detect_root_qname_bytes(no_xml)
-    assert none_qname is None, "Should return None when no start tag exists"  # :contentReference[oaicite:1]{index=1}
+    assert none_qname is None, "Should return None when no start tag exists"
 
 
 def test_closing_tag_bytes_for_known_and_fallback(tmp_path: Path) -> None:
     known = tmp_path / "a.xml"
     known.write_text("<root><x /></root>", encoding="utf-8")
     got_known = xh._closing_tag_bytes_for(known, "ignored")
-    assert got_known == b"</root>", "Uses detected QName if present"  # :contentReference[oaicite:2]{index=2}
+    assert got_known == b"</root>", "Uses detected QName if present"
 
     unknown = tmp_path / "b.xml"
     unknown.write_text("no xml here", encoding="utf-8")
     got_fallback = xh._closing_tag_bytes_for(unknown, "rows")
-    assert got_fallback == b"</rows>", "Falls back to provided root name"  # :contentReference[oaicite:3]{index=3}
+    assert got_fallback == b"</rows>", "Falls back to provided root name"
 
 
 def test_exclusive_lock_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(xh.os, "name", "nt")
+
     class _FakeMSVCRT:
         LK_LOCK = 1
         LK_UNLCK = 2
@@ -327,8 +338,9 @@ def test_exclusive_lock_windows(monkeypatch: pytest.MonkeyPatch) -> None:
         pass
 
 
-
-def test_exclusive_lock_posix_branch_covers_excepts(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_exclusive_lock_posix_branch_covers_excepts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(xh.os, "name", "posix")
 
     class _FakeFCNTL(types.SimpleNamespace):

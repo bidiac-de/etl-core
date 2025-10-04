@@ -107,7 +107,6 @@ def test_begin_execution_and_release_guard():
     execution = handler._begin_execution(job, None)
     assert execution.job.id in handler._running_jobs
 
-
     with pytest.raises(ExecutionAlreadyRunning):
         handler._begin_execution(job, None)
 
@@ -181,7 +180,6 @@ async def test_broadcast_and_worker_cancel():
 
     class Sentinel:
         pass
-
 
     execution = SimpleNamespace(
         latest_attempt=lambda: SimpleNamespace(current_tasks={}),

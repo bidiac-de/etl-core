@@ -93,7 +93,9 @@ def test__raise_for_status_404_raises_persist_not_found() -> None:
     assert "?" not in msg and "#" not in msg
 
 
-def test__raise_for_status_other_http_error_rewraps(monkeypatch: pytest.MonkeyPatch) -> None:
+def test__raise_for_status_other_http_error_rewraps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     r = _resp(status=400, reason="Bad Request")
     err = requests.HTTPError("orig")
     r.raise_for_status = Mock(side_effect=err)  # type: ignore[attr-defined]

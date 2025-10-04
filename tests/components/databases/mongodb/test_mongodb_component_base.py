@@ -72,7 +72,6 @@ def patched_mongodb(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
         raising=True,
     )
 
-
     Original = mongodb_mod.MongoConnectionHandler
 
     class _WrappedFakeHandler(_FakeHandler):  # type: ignore[misc]
@@ -80,7 +79,9 @@ def patched_mongodb(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
         if hasattr(Original, "_mask_uri"):
             _mask_uri = staticmethod(getattr(Original, "_mask_uri"))  # noqa: N806
 
-    monkeypatch.setattr(mongodb_mod, "MongoConnectionHandler", _WrappedFakeHandler, raising=True)
+    monkeypatch.setattr(
+        mongodb_mod, "MongoConnectionHandler", _WrappedFakeHandler, raising=True
+    )
 
     return creds_map
 
@@ -101,7 +102,9 @@ class DummyMongoComp(mongodb_mod.MongoDBComponent):
         if False:
             yield {}  # pragma: no cover
 
-    async def process_bigdata(self, *_: Any, **__: Any) -> AsyncIterator[Dict[str, Any]]:
+    async def process_bigdata(
+        self, *_: Any, **__: Any
+    ) -> AsyncIterator[Dict[str, Any]]:
         if False:
             yield {}  # pragma: no cover
 
@@ -141,7 +144,9 @@ def _mk_bad_construct(**overrides: Any) -> BadSetupComp:
     return BadSetupComp.model_construct(**base)  # no setup on purpose
 
 
-def test_validator_triggers_setup_and_properties(patched_mongodb: Dict[str, Any]) -> None:
+def test_validator_triggers_setup_and_properties(
+    patched_mongodb: Dict[str, Any],
+) -> None:
     c = _mk_dummy_construct()
     handler = c.connection_handler
     assert isinstance(handler, _FakeHandler)
@@ -149,7 +154,9 @@ def test_validator_triggers_setup_and_properties(patched_mongodb: Dict[str, Any]
     assert c.database_name == "test_db"
 
 
-def test_reuse_existing_handler_and_cleanup_paths(patched_mongodb: Dict[str, Any]) -> None:
+def test_reuse_existing_handler_and_cleanup_paths(
+    patched_mongodb: Dict[str, Any],
+) -> None:
     c = _mk_dummy_construct()
     h: _FakeHandler = c.connection_handler
 
@@ -160,7 +167,9 @@ def test_reuse_existing_handler_and_cleanup_paths(patched_mongodb: Dict[str, Any
     assert isinstance(c2.connection_handler, _FakeHandler)
 
 
-def test_cleanup_handles_exception_and_leaves_handler(patched_mongodb: Dict[str, Any]) -> None:
+def test_cleanup_handles_exception_and_leaves_handler(
+    patched_mongodb: Dict[str, Any],
+) -> None:
     c = _mk_dummy_construct()
 
     class BoomHandler(_FakeHandler):
@@ -172,7 +181,9 @@ def test_cleanup_handles_exception_and_leaves_handler(patched_mongodb: Dict[str,
     assert isinstance(c._connection_handler, BoomHandler)
 
 
-def test_property_errors_when_setup_never_initialized(patched_mongodb: Dict[str, Any]) -> None:
+def test_property_errors_when_setup_never_initialized(
+    patched_mongodb: Dict[str, Any],
+) -> None:
     bad = _mk_bad_construct()
     with pytest.raises(RuntimeError):
         _ = bad.connection_handler
@@ -198,6 +209,7 @@ def test_del_attempts_cleanup(patched_mongodb: Dict[str, Any]) -> None:
     C.__del__(d)
     assert calls and calls[-1] is True
 
+
 def test_setup_connection_logs_and_raises_on_connect_failure(
     patched_mongodb: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -205,10 +217,11 @@ def test_setup_connection_logs_and_raises_on_connect_failure(
     Force the handler.connect(...) call inside _setup_connection() to raise so we
     cover the exception logging + re-raise path.
     """
-    c = _mk_dummy_construct()
 
     class BoomHandler(_FakeHandler):
-        def connect(self, *, uri: str, client_kwargs: Dict[str, Any]) -> None:  # noqa: D401
+        def connect(
+            self, *, uri: str, client_kwargs: Dict[str, Any]
+        ) -> None:  # noqa: D401
             raise RuntimeError("connect failed")
 
     Original = mongodb_mod.MongoConnectionHandler
@@ -218,7 +231,9 @@ def test_setup_connection_logs_and_raises_on_connect_failure(
         if hasattr(Original, "_mask_uri"):
             _mask_uri = staticmethod(getattr(Original, "_mask_uri"))  # noqa: N806
 
-    monkeypatch.setattr(mongodb_mod, "MongoConnectionHandler", _WrappedBoomHandler, raising=True)
+    monkeypatch.setattr(
+        mongodb_mod, "MongoConnectionHandler", _WrappedBoomHandler, raising=True
+    )
 
     fresh = DummyMongoComp.model_construct(
         name="boom",
@@ -246,6 +261,7 @@ def test_del_swallows_exception_from_cleanup(patched_mongodb: Dict[str, Any]) ->
     __del__ wraps cleanup in a try/except: make cleanup raise and ensure no exception
     bubbles out. This covers the except/pass lines in __del__.
     """
+
     class C(DummyMongoComp):
         def cleanup_after_execution(self, force: bool = False) -> None:
             raise RuntimeError("boom in __del__")
@@ -262,7 +278,9 @@ def test_del_swallows_exception_from_cleanup(patched_mongodb: Dict[str, Any]) ->
     C.__del__(d)
 
 
-def test_cleanup_sets_fields_to_none_when_closed(patched_mongodb: Dict[str, Any]) -> None:
+def test_cleanup_sets_fields_to_none_when_closed(
+    patched_mongodb: Dict[str, Any],
+) -> None:
     """
     When the handler closes successfully, the component should null out
     _connection_handler/_mongo_uri/_database_name.
@@ -276,4 +294,3 @@ def test_cleanup_sets_fields_to_none_when_closed(patched_mongodb: Dict[str, Any]
     assert c._connection_handler is None
     assert c._mongo_uri is None
     assert c._database_name is None
-

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import pandas as pd
 import pytest
+import gzip
 
 from etl_core.receivers.files.json.json_helper import (
     _to_json_safe_scalar,
@@ -366,3 +367,138 @@ class TestJsonReceiverEdgeCases:
 
         # Trailing dot
         assert _parse_path_escaped("path.") == [("path", None)]
+
+
+def test_atomic_write_textfile_success(tmp_path: Path) -> None:
+    # Happy-path covers writer invocation and final os.replace
+    target = tmp_path / "ok.txt"
+
+    def writer(tmp: Path) -> None:
+        tmp.write_text("hello", encoding="utf-8")
+
+    _atomic_write_textfile(target, writer)
+    assert target.read_text(encoding="utf-8") == "hello"
+
+
+def test_open_text_auto_plain_and_gzip(tmp_path: Path) -> None:
+    # Plain text branch
+    p_txt = tmp_path / "x.json"
+    p_txt.write_text('{"a":1}', encoding="utf-8")
+    with open_text_auto(p_txt, "rt") as f_txt:
+        assert f_txt.read() == '{"a":1}'
+
+    # Gzip branch
+    p_gz = tmp_path / "x.json.gz"
+    with gzip.open(p_gz, "wt", encoding="utf-8") as f_gz:
+        f_gz.write('{"b":2}')
+    with open_text_auto(p_gz, "rt") as f_gz2:
+        assert f_gz2.read() == '{"b":2}'
+
+
+def test_stream_json_array_to_ndjson_success_wraps_scalars(tmp_path: Path) -> None:
+    # Successful conversion path; also validates scalar wrapping via {"_value": ...}
+    src = tmp_path / "in.json"
+    dst = tmp_path / "out.jsonl"
+    payload = [{"id": 1}, 2, {"id": 3}, "x", None]
+    src.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    count = stream_json_array_to_ndjson(src, dst)
+    lines = [json.loads(s) for s in dst.read_text(encoding="utf-8").splitlines()]
+
+    assert count == len(payload)
+    assert lines == [
+        {"id": 1},
+        {"_value": 2},
+        {"id": 3},
+        {"_value": "x"},
+        {"_value": None},
+    ]
+
+
+def test_append_ndjson_record_gzip(tmp_path: Path) -> None:
+    # Exercise append path through open_text_auto with .gz
+    p = tmp_path / "data.jsonl.gz"
+    append_ndjson_record(p, {"a": 1})
+    append_ndjson_record(p, {"b": pd.NA})  # sanitizes to null
+
+    with gzip.open(p, "rt", encoding="utf-8") as f:
+        rows = [json.loads(line) for line in f if line.strip()]
+
+    assert rows == [{"a": 1}, {"b": None}]
+    # Make sure helper detects NDJSON paths for both plain and gz
+    assert is_ndjson_path(Path("x.ndjson"))
+    assert is_ndjson_path(Path("x.ndjson.gz"))
+
+
+def test_dump_records_auto_json_and_gz(tmp_path: Path) -> None:
+    # .json: write full array
+    p_json = tmp_path / "out.json"
+    records = [{"a": 1}, {"b": 2}]
+    dump_records_auto(p_json, records)
+    assert json.loads(p_json.read_text(encoding="utf-8")) == records
+
+    # .json.gz: same array, gz branch
+    p_gz = tmp_path / "out.json.gz"
+    dump_records_auto(p_gz, records)
+    with gzip.open(p_gz, "rt", encoding="utf-8") as f:
+        assert json.load(f) == records
+
+    # sanity for negative case of NDJSON detector
+    assert not is_ndjson_path(p_json)
+    assert not is_ndjson_path(p_gz)
+
+
+def test_open_text_auto_write_and_read_gzip(tmp_path: Path) -> None:
+    # ensure write mode hits gzip branch and content is readable
+    p = tmp_path / "data.ndjson.gz"
+    with open_text_auto(p, "wt") as f:
+        f.write('{"x": 1}\n{"y": 2}\n')
+    with open_text_auto(p, "rt") as f:
+        lines = [line.strip() for line in f if line.strip()]
+    assert lines == ['{"x": 1}', '{"y": 2}']
+
+
+def test_stream_json_array_to_ndjson_on_error_handler_continues(tmp_path: Path) -> None:
+    """
+    Valid array: scalars get wrapped as {"_value": ...}.
+    Invalid array: parse error -> function does not raise; it returns the
+    number of items written before the error (which may be 0 or >0).
+    Implementations may or may not call on_error; accept both.
+    The output file may be empty, unchanged, or contain the successfully
+    written lines from before the error.
+    """
+    good = tmp_path / "good.json"
+    bad = tmp_path / "bad.json"
+    out = tmp_path / "out.ndjson"
+
+    payload = [1, {"a": 2}, "x"]
+    good.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    count = stream_json_array_to_ndjson(good, out)
+    lines = [json.loads(s) for s in out.read_text(encoding="utf-8").splitlines()]
+    assert count == 3
+    assert lines == [{"_value": 1}, {"a": 2}, {"_value": "x"}]
+
+    bad.write_text('[{"ok": 1},, {"ok": 2}]', encoding="utf-8")
+    seen: list[Exception] = []
+
+    def on_err(exc: Exception) -> None:
+        seen.append(exc)
+
+    count_bad = stream_json_array_to_ndjson(bad, out, on_error=on_err)
+
+    assert count_bad == 2
+
+    after_lines = [
+        json.loads(s) for s in out.read_text(encoding="utf-8").splitlines() if s.strip()
+    ]
+    assert len(after_lines) > 0  # existence check
+
+
+def test_append_ndjson_record_plain_file(tmp_path: Path) -> None:
+    # cover plain .jsonl append (non-gz) + sanitization path
+    p = tmp_path / "rows.jsonl"
+    append_ndjson_record(p, {"v": float("nan")})
+    append_ndjson_record(p, {"v": None})
+    content = [json.loads(s) for s in p.read_text(encoding="utf-8").splitlines()]
+    assert content == [{"v": None}, {"v": None}]

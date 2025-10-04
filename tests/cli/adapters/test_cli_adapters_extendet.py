@@ -13,10 +13,14 @@ def _resp200(payload: Dict[str, Any] | None = None) -> Any:
     """Tiny response double with .json() and request attrs."""
     payload = {"ok": True} if payload is None else payload
     req = SimpleNamespace(method="GET", url="http://h/p")
-    return SimpleNamespace(status_code=200, reason="OK", request=req, json=lambda: payload)
+    return SimpleNamespace(
+        status_code=200, reason="OK", request=req, json=lambda: payload
+    )
 
 
-def test_local_execution_list_executions_with_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_local_execution_list_executions_with_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     records = Mock()
     records.list_executions.return_value = ([], 0)
     monkeypatch.setattr(adapters, "_erh_singleton", lambda: records)
@@ -65,7 +69,9 @@ def test__non_secure_params_filters_secure_values() -> None:
     assert out == {"plain": "v1"}
 
 
-def test_remote_execution_start_with_environment_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_remote_execution_start_with_environment_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Patch Session
     session = Mock()
     session.post.return_value = _resp200({"status": "ok"})
@@ -85,7 +91,9 @@ def test_remote_execution_start_with_environment_payload(monkeypatch: pytest.Mon
     assert kwargs["json"] == {"environment": "PROD"}
 
 
-def test_remote_execution_list_executions_query_building(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_remote_execution_list_executions_query_building(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = Mock()
     session.get.return_value = _resp200({"data": []})
     monkeypatch.setattr(adapters, "requests", Mock(Session=lambda: session))
@@ -159,7 +167,14 @@ def test_remote_contexts_posts_payloads(monkeypatch: pytest.MonkeyPatch) -> None
     _, kwargs1 = session.post.call_args
     assert kwargs1["json"] == {"context": ctx, "keyring_service": "svc"}
 
-    creds = {"name": "c", "user": "u", "host": "h", "port": 1, "database": "d", "password": "p"}
+    creds = {
+        "name": "c",
+        "user": "u",
+        "host": "h",
+        "port": 1,
+        "database": "d",
+        "password": "p",
+    }
     out2 = client.create_credentials(creds, keyring_service=None)
     assert out2 == {"ok": True}
     _, kwargs2 = session.post.call_args
@@ -172,7 +187,9 @@ def test_remote_contexts_posts_payloads(monkeypatch: pytest.MonkeyPatch) -> None
     assert kwargs3["json"] == {"context": mapping}
 
 
-def test_local_execution_start_with_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_local_execution_start_with_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     job_handler = Mock()
     runtime_job = Mock(id="j1", model_dump=lambda: {"id": "j1"})
     job_handler.load_runtime_job.return_value = runtime_job

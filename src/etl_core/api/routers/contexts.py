@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 from typing import Optional, Literal, Iterable, Union, Annotated, Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy.exc import IntegrityError
 

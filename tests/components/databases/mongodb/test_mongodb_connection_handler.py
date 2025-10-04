@@ -21,6 +21,7 @@ def _decoded_inline_creds(uri: str) -> str | None:
     except Exception:
         return None
 
+
 class _FakeRegistry:
     def __init__(self) -> None:
         self._leased = 0
@@ -29,7 +30,9 @@ class _FakeRegistry:
         self._force_closed = False
         self._clients: Dict[str, Tuple[str, Any]] = {}
 
-    def get_mongo_client(self, *, uri: str, client_kwargs: Dict[str, Any]) -> Tuple[str, Any]:
+    def get_mongo_client(
+        self, *, uri: str, client_kwargs: Dict[str, Any]
+    ) -> Tuple[str, Any]:
         key = f"key:{uri}"
         client = _FakeClient()
         self._clients[key] = (uri, client)
@@ -78,7 +81,9 @@ class _FakeClient(dict):
 @pytest.fixture()
 def fake_registry(monkeypatch: pytest.MonkeyPatch) -> _FakeRegistry:
     reg = _FakeRegistry()
-    monkeypatch.setattr(mch.ConnectionPoolRegistry, "instance", lambda: reg, raising=True)
+    monkeypatch.setattr(
+        mch.ConnectionPoolRegistry, "instance", lambda: reg, raising=True
+    )
     return reg
 
 
@@ -110,7 +115,9 @@ def test_build_uri_variants() -> None:
 
 def test_mask_uri_variants() -> None:
     m = mch.MongoConnectionHandler._mask_uri
-    assert m("mongodb://h:1").startswith("mongodb://") and m("mongodb://h:1").endswith("h:1")
+    assert m("mongodb://h:1").startswith("mongodb://") and m("mongodb://h:1").endswith(
+        "h:1"
+    )
 
     masked_user = m("mongodb://u@h:1")
     assert masked_user.startswith("mongodb")
@@ -121,14 +128,18 @@ def test_mask_uri_variants() -> None:
     assert "***" in masked_pass and masked_pass.endswith("@h:1")
 
 
-def test_connect_and_lease_and_close(fake_registry: _FakeRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_connect_and_lease_and_close(
+    fake_registry: _FakeRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     h = mch.MongoConnectionHandler()
     key, client = h.connect(uri="mongodb://h:1", client_kwargs={})
     assert key.startswith("key:") and client is not None
 
     # Patch instance methods to operate on (key, client) without relying on privates.
     @contextmanager
-    def _patched_lease_collection(*, database: str, collection: str) -> Generator[Tuple[Any, Any], None, None]:
+    def _patched_lease_collection(
+        *, database: str, collection: str
+    ) -> Generator[Tuple[Any, Any], None, None]:
         fake_registry.lease_mongo(key)
         try:
             coll = client[database][collection]
@@ -152,7 +163,9 @@ def test_connect_and_lease_and_close(fake_registry: _FakeRegistry, monkeypatch: 
     assert stats == {"leased": 1, "released": 1, "closed": True, "force_closed": False}
 
 
-def test_force_close_when_still_leased(fake_registry: _FakeRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_force_close_when_still_leased(
+    fake_registry: _FakeRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     h = mch.MongoConnectionHandler()
     key, client = h.connect(uri="mongodb://h:1", client_kwargs={})
 
@@ -226,6 +239,7 @@ def test_close_pool_with_key_calls_registry(fake_registry: _FakeRegistry) -> Non
     fake_registry._released = 0
     assert h.close_pool(force=True) is True
     assert fake_registry._closed is True and fake_registry._force_closed is True
+
 
 def test_build_uri_user_and_password_and_params_exact() -> None:
     """

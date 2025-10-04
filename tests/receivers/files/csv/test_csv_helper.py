@@ -74,7 +74,9 @@ def test_write_csv_bigdata_variants(tmp_path: Path) -> None:
     pd.testing.assert_frame_equal(out, df)
 
 
-def test_write_csv_bigdata_handles_various_result_shapes(tmp_path: Path, monkeypatch) -> None:
+def test_write_csv_bigdata_handles_various_result_shapes(
+    tmp_path: Path, monkeypatch
+) -> None:
     df = pd.DataFrame([{"a": 1}])
     ddf = dd.from_pandas(df, npartitions=1)
     path = tmp_path / "result.csv"
@@ -97,7 +99,9 @@ def test_write_csv_bigdata_handles_various_result_shapes(tmp_path: Path, monkeyp
     assert "yes" in called
 
 
-def test_write_csv_bigdata_result_with_compute_method(tmp_path: Path, monkeypatch) -> None:
+def test_write_csv_bigdata_result_with_compute_method(
+    tmp_path: Path, monkeypatch
+) -> None:
     df = pd.DataFrame([{"a": 5}])
     ddf = dd.from_pandas(df, npartitions=1)
     path = tmp_path / "file.csv"
@@ -114,7 +118,9 @@ def test_write_csv_bigdata_result_with_compute_method(tmp_path: Path, monkeypatc
     assert getattr(Dummy, "computed", False)
 
 
-def test_write_csv_bigdata_result_none_does_nothing(tmp_path: Path, monkeypatch) -> None:
+def test_write_csv_bigdata_result_none_does_nothing(
+    tmp_path: Path, monkeypatch
+) -> None:
     df = pd.DataFrame([{"a": 1}])
     ddf = dd.from_pandas(df, npartitions=1)
     path = tmp_path / "noop.csv"

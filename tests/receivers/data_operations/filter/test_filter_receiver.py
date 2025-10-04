@@ -14,6 +14,8 @@ from etl_core.metrics.component_metrics.data_operations_metrics.filter_metrics i
 )
 from etl_core.receivers.data_operations_receivers.filter.filter_receiver import (
     FilterReceiver,
+    _apply_filter_partition,
+    _apply_remainder_partition,
 )
 
 
@@ -285,3 +287,60 @@ async def test_filter_receiver_bulk_no_matches(metrics: FilterMetrics) -> None:
     assert metrics.lines_forwarded == 0
     assert metrics.lines_dismissed == 3
     assert metrics.lines_received == 3
+
+
+def test__apply_filter_partition() -> None:
+    df = pd.DataFrame([{"x": 1}, {"x": 2}, {"x": 3}])
+    rule = ComparisonRule(column="x", operator=">", value=1)
+
+    filtered = _apply_filter_partition(df, rule)
+    remainder = _apply_remainder_partition(df, rule)
+
+    assert list(filtered["x"]) == [2, 3]
+    assert list(remainder["x"]) == [1]
+
+
+@pytest.mark.asyncio
+async def test_process_bigdata_metrics_try_except(
+    metrics: FilterMetrics, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pdf = pd.DataFrame(
+        [
+            {"id": 1, "name": "aa"},
+            {"id": 2, "name": "bb"},
+            {"id": 3, "name": "cc"},
+        ]
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    rule = ComparisonRule(column="id", operator=">=", value=2)
+
+    original_map_partitions = dd.DataFrame.map_partitions
+
+    def hacked_map_partitions(self, func, *args, **kwargs):
+        if func is len:
+
+            class _SumLike:
+                def sum(self_inner):
+                    class _ComputeBoom:
+                        def compute(self2):
+                            raise RuntimeError("boom")
+
+                    return _ComputeBoom()
+
+            return _SumLike()
+        return original_map_partitions(self, func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        dd.DataFrame, "map_partitions", hacked_map_partitions, raising=True
+    )
+
+    recv = FilterReceiver()
+    ports = []
+    async for port, payload in recv.process_bigdata(ddf, rule=rule, metrics=metrics):
+        ports.append(port)
+        _ = payload.head(1)
+
+    assert set(ports) == {"pass", "fail"}
+    assert metrics.lines_received == 0
+    assert metrics.lines_forwarded == 0
+    assert metrics.lines_dismissed == 0

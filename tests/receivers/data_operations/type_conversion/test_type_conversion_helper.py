@@ -61,7 +61,9 @@ def test__convert_scalar_string_preserves_pd_na() -> None:
         (2, DataType.BOOLEAN, ""),
     ],
 )
-def test__convert_scalar_errors_and_messages(value: Any, target: DataType, msg: str) -> None:
+def test__convert_scalar_errors_and_messages(
+    value: Any, target: DataType, msg: str
+) -> None:
     if target == DataType.BOOLEAN and isinstance(value, int):
         with pytest.raises(ValueError):
             _ = H._convert_scalar(value, DataType.BOOLEAN)
@@ -183,7 +185,9 @@ def test_convert_frame_top_level_boolean_all_modes() -> None:
     assert list(out_s["b"]) == [True, False, "weird"]
 
 
-def test_convert_frame_top_level_missing_column_and_multipart_path_are_ignored() -> None:
+def test_convert_frame_top_level_missing_column_and_multipart_path_are_ignored() -> (
+    None
+):
     df = pd.DataFrame({"x": ["1"]})
     rules = [
         H.TypeConversionRule("missing", DataType.INTEGER, H.OnError.RAISE),
@@ -283,19 +287,25 @@ def test_validate_frame_against_schema_success() -> None:
 
 def test_validate_frame_against_schema_missing_and_type_errors() -> None:
     df = pd.DataFrame({"x": [1]})
-    schema = Schema(fields=[FieldDef(name="y", data_type=DataType.STRING, nullable=True)])
+    schema = Schema(
+        fields=[FieldDef(name="y", data_type=DataType.STRING, nullable=True)]
+    )
     with pytest.raises(H.SchemaValidationError) as ei1:
         H.validate_frame_against_schema(df, schema)
     assert "missing column 'y'" in str(ei1.value)
 
     df2 = pd.DataFrame({"i": ["not-int"]})
-    schema2 = Schema(fields=[FieldDef(name="i", data_type=DataType.INTEGER, nullable=False)])
+    schema2 = Schema(
+        fields=[FieldDef(name="i", data_type=DataType.INTEGER, nullable=False)]
+    )
     with pytest.raises(H.SchemaValidationError) as ei2:
         H.validate_frame_against_schema(df2, schema2)
     assert "expected integer" in str(ei2.value)
 
     df3 = pd.DataFrame({"b": ["maybe"]})
-    schema3 = Schema(fields=[FieldDef(name="b", data_type=DataType.BOOLEAN, nullable=False)])
+    schema3 = Schema(
+        fields=[FieldDef(name="b", data_type=DataType.BOOLEAN, nullable=False)]
+    )
     with pytest.raises(H.SchemaValidationError) as ei3:
         H.validate_frame_against_schema(df3, schema3)
     assert "expected boolean" in str(ei3.value)
