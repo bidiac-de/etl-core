@@ -100,7 +100,6 @@ def test_stream_json_array_to_ndjson_on_error(tmp_path, monkeypatch):
     def flaky_append(path, rec):
         calls.append(1)
         if len(calls) == 1:
-            # Fail once
             raise IOError("disk full")
         return orig_append(path, rec)
 

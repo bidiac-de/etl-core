@@ -31,7 +31,6 @@ def test__engine_for_read_and_write_variants_and_errors() -> None:
 
     assert EH._engine_for_read(".xls") == "xlrd"
 
-    # read: unsupported
     with pytest.raises(ValueError):
         EH._engine_for_read(".csv")
 
@@ -136,7 +135,7 @@ def test__open_or_create_wb_ws_move_sheet_fallback(
 
     from openpyxl.workbook.workbook import Workbook as OB
 
-    def boom(self, *args, **kwargs):  # noqa: D401
+    def boom(self, *args, **kwargs):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(OB, "move_sheet", boom, raising=True)
@@ -251,14 +250,13 @@ def test__iter_openpyxl_rows_skips_none_and_pads(
         assert read_only is True and data_only is True
         return _FakeWB()
 
-    # Inject a tiny "openpyxl" module that only exposes load_workbook()
     fake_openpyxl = types.SimpleNamespace(load_workbook=_fake_load_workbook)
     monkeypatch.setitem(sys.modules, "openpyxl", fake_openpyxl)
 
     rows = list(EH._iter_openpyxl_rows(Path("dummy.xlsx"), None))
     assert rows == [
-        {"col1": "a", "col2": "b", "col3": None},  # padded
-        {"col1": "c", "col2": "d", "col3": "e"},  # full
+        {"col1": "a", "col2": "b", "col3": None},
+        {"col1": "c", "col2": "d", "col3": "e"},
     ]
 
 
@@ -349,7 +347,6 @@ def test_write_excel_row_engine_guard_branch(
     fake_path = tmp_path / "out.xlsx"
 
     def _fake_prepare_write(p: Path) -> Any:
-        # Return a non-openpyxl engine so the guard raises from inside write_excel_row
         return fake_path, "xlrd"
 
     monkeypatch.setattr(EH, "_prepare_write", _fake_prepare_write)

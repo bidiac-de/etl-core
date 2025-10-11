@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 
-# Ensure stub components are registered before building runtime jobs
 import etl_core.components.stubcomponents as _ensure_registration  # noqa: F401
 from tests.helpers import runtime_job_from_config
 
@@ -51,7 +50,6 @@ def test_extra_output_ports_are_visible_and_routable() -> None:
                 "comp_type": "test_source_dynamic_ports",
                 "description": "",
                 "routes": {"out": ["router"]},
-                # FIX: flat map port -> Schema
                 "out_port_schemas": {
                     "out": _row_schema(),
                 },
@@ -65,7 +63,6 @@ def test_extra_output_ports_are_visible_and_routable() -> None:
                     "ok": ["sink_ok"],
                     "err": ["sink_err"],
                 },
-                # FIX: flat maps
                 "in_port_schemas": {
                     "in": _row_schema(),
                 },
@@ -171,7 +168,6 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
     an edge without an explicit in_port should be rejected. Supplying the
     in_port via EdgeRef should succeed.
     """
-    # Ambiguous: missing in_port should fail
     ambiguous_cfg = {
         "name": "dyn-in-ports-ambiguous",
         "strategy_type": "row",
@@ -190,7 +186,6 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
                 "comp_type": "test_merge_dynamic_inputs",
                 "description": "",
                 "extra_input_ports": ["left", "right"],
-                # FIX: per-input port schemas under in_port_schemas
                 "in_port_schemas": {
                     "left": _row_schema(),
                     "right": _row_schema(),
@@ -202,7 +197,6 @@ def test_dynamic_input_ports_require_in_port_when_ambiguous() -> None:
         runtime_job_from_config(ambiguous_cfg)
     assert "has multiple input ports" in str(ei1.value)
 
-    # Explicit in_port: should pass and execute
     ok_cfg = {
         "name": "dyn-in-ports-ok",
         "strategy_type": "row",

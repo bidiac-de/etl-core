@@ -131,7 +131,6 @@ def test_postgresql_read_component_with_real_credentials(
     assert creds["user"] == user
     assert creds["password"] == password
     assert creds["database"] == "testdb"
-    # Ensure mapping selected the correct real credentials
     _, credentials_id = persisted_credentials
     assert creds["__credentials_id__"] == credentials_id
 

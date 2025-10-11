@@ -57,7 +57,6 @@ def _patch_mdb_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def test_creds() -> Tuple[str, str]:
-    # Provide these via your test env (e.g., in CI) or .env for local runs
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 

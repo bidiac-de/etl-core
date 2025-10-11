@@ -80,7 +80,6 @@ def patched_records_and_exec_handler() -> (
     exec_handler = JobExecutionHandler()
     exec_handler._exec_records_handler = records  # type: ignore[attr-defined]
 
-    # Patch router's module-level records handler to our in-memory one
     orig_records = getattr(execution_router, "_records", None)
     execution_router._records = records
     try:
@@ -112,35 +111,29 @@ def test_endpoints_persist_success_and_list_filters(
 ) -> None:
     client = dep_override_client
 
-    # Create ok job
     ok_id = shared_job_handler.create_job_entry(_cfg_success(schema_row_min)).id
 
-    # Start execution via endpoint
     r = client.post(f"/execution/{ok_id}")
     assert r.status_code == 200
     started = r.json()
     assert started["status"] == "started" and started["job_id"] == ok_id
     exec_id = started["execution_id"]
 
-    # List executions, filter by SUCCESS
     r = client.get("/execution/executions", params={"status": "SUCCESS"})
     assert r.status_code == 200
     payload = r.json()
     assert "data" in payload
     assert any(row["id"] == exec_id for row in payload["data"])
 
-    # Detail endpoint
     r = client.get(f"/execution/executions/{exec_id}")
     assert r.status_code == 200
     detail = r.json()
     assert detail["execution"]["id"] == exec_id
-    # should have exactly one successful attempt
     attempts = detail["attempts"]
     assert len(attempts) == 1
     assert attempts[0]["attempt_index"] == 1
     assert attempts[0]["status"] == "SUCCESS"
 
-    # Attempts endpoint returns list, same ordering
     r = client.get(f"/execution/executions/{exec_id}/attempts")
     assert r.status_code == 200
     rows = r.json()
@@ -154,21 +147,17 @@ def test_endpoints_persist_failure_and_404s(
 ) -> None:
     client = dep_override_client
 
-    # Create failing job
     job_id = shared_job_handler.create_job_entry(_cfg_fail(schema_row_min)).id
 
-    # will run and persist FAILED attempt + execution
     r = client.post(f"/execution/{job_id}")
     assert r.status_code == 200
     exec_id = r.json()["execution_id"]
 
-    # Verify FAILED appears in list
     r = client.get("/execution/executions", params={"status": "FAILED"})
     assert r.status_code == 200
     data = r.json()["data"]
     assert any(row["id"] == exec_id and row["status"] == "FAILED" for row in data)
 
-    # Detail should show a single FAILED attempt with error set
     r = client.get(f"/execution/executions/{exec_id}")
     assert r.status_code == 200
     body = r.json()
@@ -177,7 +166,6 @@ def test_endpoints_persist_failure_and_404s(
     assert len(body["attempts"]) == 1 and body["attempts"][0]["status"] == "FAILED"
     assert body["attempts"][0]["error"]
 
-    # Missing execution 404s
     r = client.get("/execution/executions/does-not-exist")
     assert r.status_code == 404
 
@@ -192,10 +180,8 @@ def test_endpoints_persist_retry_then_success_and_time_filters(
 ) -> None:
     client = dep_override_client
 
-    # Create a job that fails once then succeeds on retry
     job_id = shared_job_handler.create_job_entry(_cfg_retry_once(schema_row_min)).id
 
-    # Start execution, two attempts persisted
     r = client.post(f"/execution/{job_id}")
     assert r.status_code == 200
     exec_id = r.json()["execution_id"]
@@ -216,7 +202,7 @@ def test_endpoints_persist_retry_then_success_and_time_filters(
     data = r.json()["data"]
     assert any(row["id"] == exec_id for row in data)
 
-    # Detail shows two attempts ordered by attempt_index ascending
+
     r = client.get(f"/execution/executions/{exec_id}")
     assert r.status_code == 200
     det = r.json()

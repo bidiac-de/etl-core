@@ -30,7 +30,6 @@ def _metrics() -> DataOperationsMetrics:
 
 
 def _in_schema_user() -> Schema:
-    # Nested user schema used for rule path validation
     return Schema(
         fields=[
             FieldDef(
@@ -60,7 +59,6 @@ def _out_schema_a() -> Schema:
 
 
 def test_rules_by_dest_inherent_uniqueness() -> None:
-    # With nested dicts, each destination key can occur only once by construction.
     rules_by_dest = {
         "A": {
             "uname": {"src_port": "in", "src_path": "user.address.city"},

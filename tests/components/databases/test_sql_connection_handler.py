@@ -74,12 +74,10 @@ class TestSQLConnectionHandler:
             SQLConnectionHandler.build_url(
                 comp_type="write_postgresql",
                 user="testuser",
-                # Missing password, host, port, database
             )
 
     def test_build_url_unsupported_dialect(self):
         """Test building URL with any database type (all are supported)."""
-        # The current implementation supports any comp_type, so this should work
         url = SQLConnectionHandler.build_url(
             comp_type="oracle",
             user="testuser",
@@ -109,7 +107,6 @@ class TestSQLConnectionHandler:
             port=5432,
             database="testdb",
         )
-        # Current implementation is case sensitive, so these should be different
         assert url1 != url2
         assert url1 == "WRITE_POSTGRESQL://testuser:testpass@localhost:5432/testdb"
         assert url2 == "postgresql+psycopg2://testuser:testpass@localhost:5432/testdb"
@@ -180,7 +177,6 @@ class TestSQLConnectionHandler:
                 "before lease\\(\\)"
             ),
         ):
-            # directly enter the context manager to trigger the error
             handler.lease().__enter__()
 
     @patch(
@@ -196,7 +192,6 @@ class TestSQLConnectionHandler:
         mock_engine = Mock(spec=Engine)
         mock_connection = Mock(spec=Connection)
 
-        # Mock the context manager
         mock_context = MagicMock()
         mock_context.__enter__ = Mock(return_value=mock_connection)
         mock_context.__exit__ = Mock(return_value=None)
@@ -210,7 +205,6 @@ class TestSQLConnectionHandler:
         with handler.lease() as conn:
             assert conn == mock_connection
 
-        # Verify lease and release were called
         mock_registry.lease_sql.assert_called_once_with(mock_key)
         mock_registry.release_sql.assert_called_once_with(mock_key)
 
@@ -227,7 +221,6 @@ class TestSQLConnectionHandler:
         mock_engine = Mock(spec=Engine)
         mock_connection = Mock(spec=Connection)
 
-        # Mock the context manager
         mock_context = MagicMock()
         mock_context.__enter__ = Mock(return_value=mock_connection)
         mock_context.__exit__ = Mock(return_value=None)
@@ -242,7 +235,6 @@ class TestSQLConnectionHandler:
             with handler.lease():
                 raise RuntimeError("Test exception")
 
-        # Verify release was called even with exception
         mock_registry.release_sql.assert_called_once_with(mock_key)
 
     @patch(
@@ -319,7 +311,6 @@ class TestSQLConnectionHandler:
 
     def test_build_url_edge_cases(self):
         """Test edge cases in URL building."""
-        # Test with None values
         with pytest.raises(ValueError):
             SQLConnectionHandler.build_url(
                 comp_type="write_postgresql",
@@ -330,7 +321,6 @@ class TestSQLConnectionHandler:
                 database="testdb",
             )
 
-        # Test with empty strings
         with pytest.raises(ValueError):
             SQLConnectionHandler.build_url(
                 comp_type="write_postgresql",
@@ -375,12 +365,10 @@ class TestSQLConnectionHandler:
 
         handler = SQLConnectionHandler()
 
-        # First connection
         key1, engine1 = handler.connect(url="postgresql://localhost:5432/db1")
         assert key1 == mock_key1
         assert engine1 == mock_engine1
 
-        # Second connection (should replace first)
         key2, engine2 = handler.connect(url="postgresql://localhost:5432/db2")
         assert key2 == mock_key2
         assert engine2 == mock_engine2

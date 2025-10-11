@@ -72,7 +72,6 @@ def _set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def mariadb_read_component(
     persisted_mapping_context_id: str,
 ) -> MariaDBRead:
-    # Patch during construction because SQLDatabaseComponent connects in model validator
     with patch(
         "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
     ):
@@ -88,7 +87,7 @@ def mariadb_read_component(
 
 @pytest.fixture
 def mariadb_write_component(
-    persisted_mapping_context_id: str,  # provided by conftest.py
+    persisted_mapping_context_id: str,
 ) -> MariaDBWrite:
     with patch(
         "etl_core.components.databases.sql_connection_handler.SQLConnectionHandler"
@@ -140,7 +139,6 @@ def test_context_parameter_retrieval(sample_context: Context) -> None:
 def test_mariadb_read_component_with_real_credentials(
     mock_handler_class, mariadb_read_component: MariaDBRead, test_creds
 ) -> None:
-    # Handler is mocked because we just assert resolved credentials mapping
     mock_handler = Mock()
     mock_handler_class.return_value = mock_handler
 
@@ -185,7 +183,6 @@ def test_credentials_without_pool_settings(test_creds) -> None:
         database="mindb",
         password=password,
     )
-    # Persist for completeness (not strictly required for this assertion)
     CredentialsHandler().upsert(creds)
     assert creds.pool_max_size is None
     assert creds.pool_timeout_s is None

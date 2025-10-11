@@ -74,7 +74,6 @@ async def test_read_row_streaming_and_objectid_serialization(
         rows.append(row)
 
     assert [r["a"] for r in rows] == [1, 2]
-    # Receiver should stringify ObjectId for JSON-serializable output
     assert rows[0]["_id"] == str(oid)
     assert metrics.lines_forwarded == 2
 
@@ -82,7 +81,7 @@ async def test_read_row_streaming_and_objectid_serialization(
 @pytest.mark.asyncio
 async def test_read_bulk_projection_limit_skip(
     receiver: MongoDBReceiver,
-    metrics,  # ComponentMetrics
+    metrics,
     mongo_handler,
 ) -> None:
     handler, db = mongo_handler
@@ -111,7 +110,6 @@ async def test_read_bulk_projection_limit_skip(
         chunks.append(frame)
 
     assert [len(c) for c in chunks] == [3, 2]
-    # flattened columns (as produced by pandas_flatten_docs in receiver)
     assert list(chunks[0].columns) == ["a", "b.c"]
     assert metrics.lines_forwarded == 5
 
@@ -142,7 +140,6 @@ async def test_read_bigdata_emits_partitions(
     ):
         ddfs.append(ddf)
 
-    # Should emit multiple partitions wrapping the bulk frames
     assert len(ddfs) >= 3
     total = sum(int(ddf.shape[0].compute()) for ddf in ddfs)
     assert total == 8
@@ -168,7 +165,6 @@ async def test_write_row_insert_upsert_truncate(
     handler, db = mongo_handler
     coll = "write_row"
 
-    # Start with one existing row for upsert matching
     await _seed(handler, db, coll, [{"k": 1, "val": "old"}])
 
     res = await receiver.write_row(
@@ -190,18 +186,15 @@ async def test_write_row_insert_upsert_truncate(
     assert metrics.lines_received == 1
     assert metrics.lines_forwarded == 1
 
-    # Verify state after write
     with handler.lease_collection(database=db, collection=coll) as (_, c):
         docs = [
             d async for d in c.find(filter={}, projection={"_id": 0, "k": 1, "val": 1})
         ]
     if op is DatabaseOperation.TRUNCATE:
-        # After truncate, only the new row should remain
         assert docs == [{"k": 1, "val": "new"}]
     elif op is DatabaseOperation.UPSERT:
         assert {"k": 1, "val": "new"} in docs
     else:
-        # INSERT adds another row with same key (no unique index in mongomock)
         assert {"k": 1, "val": "old"} in docs and {"k": 1, "val": "new"} in docs
 
 
@@ -233,7 +226,6 @@ async def test_write_bulk_insert_many(
             seperator=".",
         )
     )
-    # one result per chunk
     assert results
     assert metrics.lines_received == 3
     assert metrics.lines_forwarded == 3
@@ -258,7 +250,6 @@ async def test_write_bulk_upsert_builds_update_ops(
     handler, db = mongo_handler
     coll = "bulk_upsert"
 
-    # Seed with one conflicting key to exercise matched vs upsert
     await _seed(handler, db, coll, [{"k": 1, "v": "old"}])
 
     frame = pd.DataFrame([{"k": 1, "v": "new"}, {"k": 2, "v": "b"}])
@@ -280,7 +271,7 @@ async def test_write_bulk_upsert_builds_update_ops(
             seperator=".",
         )
     )
-    assert results  # at least one bulk result emitted
+    assert results
     assert metrics.lines_received == 2
     assert metrics.lines_forwarded == 2
 
@@ -288,7 +279,6 @@ async def test_write_bulk_upsert_builds_update_ops(
         docs = [
             d async for d in c.find(filter={}, projection={"_id": 0, "k": 1, "v": 1})
         ]
-    # key=1 updated, key=2 inserted
     assert sorted(docs, key=lambda d: d["k"]) == [
         {"k": 1, "v": "new"},
         {"k": 2, "v": "b"},
@@ -368,12 +358,10 @@ async def test_write_bigdata_partitions(
         )
     )
 
-    # yielded results
     assert len(results) == 1
     assert isinstance(results[0], dd.DataFrame)
     assert int(results[0].compute().shape[0]) == 7
 
-    # metrics reflect total rows processed
     assert metrics.lines_received == 7
     assert metrics.lines_forwarded == 7
 

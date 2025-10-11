@@ -34,7 +34,6 @@ class _FakeHandler:
 
 
 def _make_concrete_instance(base_cls):
-    # Define a minimal concrete subclass implementing abstract async methods
     class _Concrete(base_cls):
         async def process_row(self, *args, **kwargs):  # type: ignore[override]
             return {}
@@ -70,13 +69,10 @@ def test_session_variables_are_set(component_cls, expected_snippets):
     fake = _FakeHandler()
     object.__setattr__(comp, "_connection_handler", fake)
 
-    # Execute
     comp._setup_session_variables()
 
-    # Verify at least one lease and commit happened
     assert fake.leases >= 1
     assert fake.conn.commits == 1
-    # Verify statements include expected snippets
     all_sql = "\n".join(fake.conn.calls)
     for snippet in expected_snippets:
         assert snippet in all_sql
@@ -84,11 +80,8 @@ def test_session_variables_are_set(component_cls, expected_snippets):
 
 def test_setup_session_variables_no_handler_does_nothing():
     comp = _make_concrete_instance(MariaDBComponent)
-    # Ensure no handler and charset empty triggers early return
     object.__setattr__(comp, "_connection_handler", None)
-    # Also test charset empty path
     object.__setattr__(comp, "charset", "")
-    # Should not raise
     comp._setup_session_variables()
 
 

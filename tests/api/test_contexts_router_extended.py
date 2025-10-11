@@ -17,13 +17,11 @@ class DummyAdapter:
 
 
 def test_create_context_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Force SecureContextAdapter to raise to hit the 400 branch
     monkeypatch.setattr(
         C,
         "SecureContextAdapter",
         lambda **kw: (_ for _ in ()).throw(RuntimeError("boom")),
     )
-    # NOTE: environment must be a STRING ("DEV"|"TEST"|"PROD"), not the enum
     ctx = C.Context(environment="DEV", parameters={}, name="x")
     req = C.ContextCreateRequest(context=ctx)
 
@@ -66,7 +64,6 @@ def test_create_credentials_mapping_context_success_and_missing(
         SimpleNamespace() if cid == "ok" else None
     )
 
-    # SUCCESS: environment must be STRING
     cmc_ok = C.CredentialsMappingContext(
         name="m",
         environment="DEV",
@@ -78,7 +75,6 @@ def test_create_credentials_mapping_context_success_and_missing(
     )
     assert out.kind == "context"
 
-    # MISSING: unknown credentials id → 400
     cmc_bad = C.CredentialsMappingContext(
         name="m",
         environment="DEV",
@@ -96,7 +92,7 @@ def test_list_providers_dedupes() -> None:
     ctx_handler = Mock()
     creds_handler = Mock()
     row = SimpleNamespace(id="x", name="n", environment="DEV")
-    ctx_handler.list_all.return_value = [row, row]  # duplicate id
+    ctx_handler.list_all.return_value = [row, row]
     creds_handler.list_all.return_value = []
 
     out = C.list_providers(ctx_handler=ctx_handler, creds_handler=creds_handler)
@@ -178,7 +174,6 @@ def test_delete_provider_404_when_nothing_deleted(
 def test_delete_provider_409_on_integrity_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # One of the handlers raises IntegrityError → 409
     ctx_handler = Mock(delete_by_id=Mock(side_effect=IntegrityError("stmt", {}, None)))
     creds_handler = Mock(delete_by_id=Mock(return_value=False))
     monkeypatch.setattr(C.ContextRegistry, "resolve", lambda _id: None)

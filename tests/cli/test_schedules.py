@@ -186,7 +186,6 @@ class TestListCommand:
         """Test list command when API base URL is not available."""
         mock_api_base_url.return_value = None
 
-        # Mock schedule handler
         mock_handler = Mock()
         mock_schedule_1 = Mock()
         mock_schedule_1.id = "local-schedule-1"
@@ -256,7 +255,6 @@ class TestGetCommand:
         mock_get.assert_called_once_with("http://test-api.com/schedules/schedule-123")
         mock_response.raise_for_status.assert_called_once()
 
-        # Verify the JSON output
         args, _ = mock_echo.call_args
         output_json = json.loads(args[0])
         assert output_json["id"] == "schedule-123"
@@ -287,7 +285,6 @@ class TestGetCommand:
         """Test get command without API URL when schedule exists."""
         mock_api_base_url.return_value = None
 
-        # Mock schedule handler and schedule
         mock_handler = Mock()
         mock_schedule = Mock()
         mock_schedule.id = "local-schedule-123"
@@ -306,7 +303,6 @@ class TestGetCommand:
 
         mock_handler.get.assert_called_once_with("local-schedule-123")
 
-        # Verify the JSON output
         args, _ = mock_echo.call_args
         output_json = json.loads(args[0])
         assert output_json["id"] == "local-schedule-123"
@@ -606,7 +602,6 @@ class TestRunNowCommand:
         )
         mock_response.raise_for_status.assert_called_once()
 
-        # Verify JSON output
         args, _ = mock_echo.call_args
         output_json = json.loads(args[0])
         assert output_json["execution_id"] == "exec-123"

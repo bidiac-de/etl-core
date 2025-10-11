@@ -12,7 +12,6 @@ from etl_core.components.wiring.column_definition import FieldDef, DataType
 
 
 def _schema() -> Schema:
-    # Nested object, array leaf, enum leaf, and a PATH leaf
     return Schema(
         fields=[
             FieldDef(name="id", data_type=DataType.INTEGER, nullable=False),
@@ -68,25 +67,14 @@ def _good_df(sep: str = ".") -> pd.DataFrame:
     )
 
 
-# -----------------------
-# Row validation — OK
-# -----------------------
-
-
 def test_row_ok() -> None:
     validate_row_against_schema(_good_row(), _schema(), schema_name="row-ok")
 
 
 def test_row_ok_with_custom_separator() -> None:
-    # Row validation doesn’t use the separator for traversal, but pass it to cover API
     validate_row_against_schema(
         _good_row(), _schema(), schema_name="row-ok-colon", path_separator=":"
     )
-
-
-# -----------------------
-# Row validation — failures
-# -----------------------
 
 
 @pytest.mark.parametrize(
@@ -140,11 +128,6 @@ def test_row_array_structure_only_when_item_none() -> None:
         validate_row_against_schema(bad, s, schema_name="row-array-struct-bad")
 
 
-# -----------------------
-# Pandas DataFrame validation
-# -----------------------
-
-
 def test_dataframe_ok() -> None:
     validate_dataframe_against_schema(_good_df(), _schema(), schema_name="df-ok")
 
@@ -183,11 +166,6 @@ def test_dataframe_enum_and_null_failures() -> None:
     assert "contains nulls" in str(ex2.value)
 
 
-# -----------------------
-# Dask DataFrame validation
-# -----------------------
-
-
 def test_dask_dataframe_ok() -> None:
     ddf = dd.from_pandas(_good_df(), npartitions=2)
     validate_dask_dataframe_against_schema(ddf, _schema(), schema_name="ddf-ok")
@@ -196,7 +174,6 @@ def test_dask_dataframe_ok() -> None:
 def test_dask_missing_unknown_enum_and_null_failures() -> None:
     pdf = _good_df()
 
-    # missing
     ddf_missing = dd.from_pandas(pdf.drop(columns=["name"]), npartitions=1)
     with pytest.raises(ValueError) as ex1:
         validate_dask_dataframe_against_schema(
@@ -204,18 +181,16 @@ def test_dask_missing_unknown_enum_and_null_failures() -> None:
         )
     assert "missing required columns" in str(ex1.value)
 
-    # unknown
     ddf_extra = dd.from_pandas(pdf.assign(extra=[0, 1]), npartitions=1)
     with pytest.raises(ValueError) as ex2:
         validate_dack_dataframe_against_schema = (
-            validate_dask_dataframe_against_schema  # alias for flake8 naming
+            validate_dask_dataframe_against_schema
         )
         validate_dack_dataframe_against_schema(
             ddf_extra, _schema(), schema_name="ddf-unknown"
         )
     assert "unknown columns present" in str(ex2.value)
 
-    # enum
     pdf_enum = pdf.copy()
     pdf_enum.loc[0, "status"] = "nope"
     ddf_enum = dd.from_pandas(pdf_enum, npartitions=1)
@@ -225,7 +200,6 @@ def test_dask_missing_unknown_enum_and_null_failures() -> None:
         )
     assert "outside ['active', 'blocked']" in str(ex3.value)
 
-    # null
     pdf_null = pdf.copy()
     pdf_null.loc[0, "id"] = None
     ddf_null = dd.from_pandas(pdf_null, npartitions=1)

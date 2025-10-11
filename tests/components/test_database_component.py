@@ -9,12 +9,6 @@ from pydantic import ValidationError
 
 import etl_core.components.databases.database as db
 
-
-# ---------------------------------------------------------------------------
-# Test doubles
-# ---------------------------------------------------------------------------
-
-
 class DummyCreds:
     """Minimal stand-in for etl_core.context.credentials.Credentials."""
 
@@ -45,12 +39,9 @@ class DummyMapping:
         return self._creds, self._cid
 
 
-# Base testable subclass:
-# - Allows no input ports to satisfy Component's validator.
-# - get_resolved_context reads a class attribute CTX which we set before __init__.
 class TestableDB(db.DatabaseComponent):
     ALLOW_NO_INPUTS = True
-    CTX: Any = None  # class-level "injection point" for the validator
+    CTX: Any = None
 
     def get_resolved_context(self):
         return self.__class__.CTX
@@ -66,13 +57,7 @@ class TestableDB(db.DatabaseComponent):
 
 
 def _new_db(cls: type[TestableDB], name: str) -> TestableDB:
-    # Provide required base fields; ALLOW_NO_INPUTS avoids port declarations.
     return cls(name=name, description="t", comp_type="db_test")
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 def test_build_objects_with_none_context() -> None:
@@ -80,7 +65,6 @@ def test_build_objects_with_none_context() -> None:
         pass
 
     NoCtx.CTX = None
-    # DatabaseComponent validator triggers during __init__, wrapped as ValidationError
     with pytest.raises(ValidationError) as ei:
         _new_db(NoCtx, "x")
     assert "require a context_id referencing a CredentialsMappingContext" in str(
@@ -93,14 +77,12 @@ def test_build_objects_with_wrong_context_type() -> None:
         pass
 
     WrongCtx.CTX = "not-a-mapping"
-    # Here the model_validator raises a TypeError directly (not wrapped)
     with pytest.raises(TypeError) as ei:
         _new_db(WrongCtx, "x")
     assert "context must be a CredentialsMappingContext" in str(ei.value)
 
 
 def test_build_objects_and_get_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Make DummyMapping pass isinstance(ctx, CredentialsMappingContext)
     monkeypatch.setattr(db, "CredentialsMappingContext", DummyMapping, raising=True)
 
     class GoodCtx(TestableDB):
@@ -111,7 +93,6 @@ def test_build_objects_and_get_credentials(monkeypatch: pytest.MonkeyPatch) -> N
 
     d = _new_db(GoodCtx, "ok")
 
-    # After init, credentials should be resolved and cached
     assert d._credentials is mapping._creds
     assert d._cred_id == "cid-123"
 
@@ -140,7 +121,6 @@ def test_get_credentials_resolves_when_cache_empty(
     GoodCtx.CTX = mapping
 
     d = _new_db(GoodCtx, "y")
-    # Simulate cleared cache; method should trigger resolve_active_credentials()
     d._credentials = None
 
     out = d._get_credentials()

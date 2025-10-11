@@ -105,7 +105,6 @@ def test__all_same_column_all_equal_and_none_cases() -> None:
     )
     assert FH._all_same_column([fake]) is None
 
-    # different columns -> None
     c3 = ComparisonRule(column="y", operator="==", value=1)
     assert FH._all_same_column([c1, c3]) is None
 
@@ -126,15 +125,14 @@ def test__optimize_or_eq_and_contains_success_and_nones() -> None:
     mask2 = FH._optimize_or_contains(df, contains_children_ok)
     assert list(df[mask2]["x"]) == ["alfa", "charlie"]
 
-    # Early-return Nones
-    assert FH._optimize_or_eq(df, []) is None  # no children
+    assert FH._optimize_or_eq(df, []) is None
     nested = ComparisonRule(logical_operator="OR", rules=[eq_children_ok[0]])
-    assert FH._optimize_or_eq(df, [nested]) is None  # nested -> None
+    assert FH._optimize_or_eq(df, [nested]) is None
     mixed_col = [
         ComparisonRule(column="x", operator="==", value="alfa"),
         ComparisonRule(column="y", operator="==", value="alfa"),
     ]
-    assert FH._optimize_or_eq(df, mixed_col) is None  # not same column
+    assert FH._optimize_or_eq(df, mixed_col) is None
     not_all_eq = [
         ComparisonRule(column="x", operator="==", value="alfa"),
         ComparisonRule(column="x", operator="!=", value="alfa"),
@@ -157,7 +155,6 @@ def test__optimize_and_neq_success_and_nones() -> None:
     mask = FH._optimize_and_neq(df, children_ok)
     assert list(df[mask]["x"]) == [2, 3]
 
-    # Early-return Nones
     assert FH._optimize_and_neq(df, []) is None
     nested = ComparisonRule(logical_operator="AND", rules=[children_ok[0]])
     assert FH._optimize_and_neq(df, [nested]) is None
@@ -199,11 +196,9 @@ def test__reduce_masks_and_try_optimizers() -> None:
 def test_build_mask_variants_and_errors() -> None:
     df = pd.DataFrame({"name": ["Alice", "Bob", "Charlie"], "age": [25, 30, 19]})
 
-    # leaf
     rule_leaf = ComparisonRule(column="age", operator=">=", value=25)
     assert list(df[FH.build_mask(df, rule_leaf)]["name"]) == ["Alice", "Bob"]
 
-    # OR optimized to .isin
     rule_or = ComparisonRule(
         logical_operator="OR",
         rules=[
@@ -213,7 +208,6 @@ def test_build_mask_variants_and_errors() -> None:
     )
     assert list(df[FH.build_mask(df, rule_or)]["name"]) == ["Alice", "Charlie"]
 
-    # OR reduced, no optimisation (mixed ops)
     rule_or_reduce = ComparisonRule(
         logical_operator="OR",
         rules=[
@@ -224,7 +218,6 @@ def test_build_mask_variants_and_errors() -> None:
     mask_or_reduce = FH.build_mask(df, rule_or_reduce)
     assert list(df[mask_or_reduce]["name"]) == ["Alice", "Bob", "Charlie"]
 
-    # AND optimized to negated isin
     rule_and_opt = ComparisonRule(
         logical_operator="AND",
         rules=[
@@ -234,7 +227,6 @@ def test_build_mask_variants_and_errors() -> None:
     )
     assert list(df[FH.build_mask(df, rule_and_opt)]["name"]) == ["Bob"]
 
-    # AND reduced, no optimisation
     rule_and_reduce = ComparisonRule(
         logical_operator="AND",
         rules=[
@@ -245,14 +237,12 @@ def test_build_mask_variants_and_errors() -> None:
     mask_and_reduce = FH.build_mask(df, rule_and_reduce)
     assert list(df[mask_and_reduce]["name"]) == ["Alice"]
 
-    # NOT happy path
     rule_not = ComparisonRule(
         logical_operator="NOT",
         rules=[ComparisonRule(column="name", operator="contains", value="li")],
     )
     assert list(df[FH.build_mask(df, rule_not)]["name"]) == ["Bob"]
 
-    # Errors validated at model construction:
     with pytest.raises(ValidationError, match="requires at least one sub-rule"):
         _ = ComparisonRule(logical_operator="OR", rules=[])
 
@@ -265,8 +255,7 @@ def test_build_mask_variants_and_errors() -> None:
             ],
         )
 
-    # build_mask also guards unknown logical operators.
-    # Use a fake rule to bypass model Literal validation and hit the helper's guard.
+
     fake_xor = SimpleNamespace(
         logical_operator="XOR",
         rules=[rule_leaf],

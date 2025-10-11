@@ -55,16 +55,12 @@ def test_inline_defs_inlines_and_preserves_cycles():
             "c": {"$ref": "#/$defs/Cycle"},
         },
     }
-    # create a cycle
     schema["$defs"]["Cycle"] = {"allOf": [{"$ref": "#/$defs/Cycle"}]}
 
     out = H.inline_defs(schema)
-    # local refs remain because of cycle, so $defs stays
     assert "$defs" in out
-    # non-cyclic refs should be expanded
     assert out["properties"]["f"]["properties"]["a"]["type"] == "string"
     assert out["properties"]["b"]["properties"]["a"]["type"] == "string"
-    # cycle ref remains
     assert out["properties"]["c"]["allOf"][0]["$ref"] == "#/$defs/Cycle"
 
 
@@ -82,15 +78,12 @@ def test_schema_post_processing_transforms_and_strip_order():
 
     out = H.schema_post_processing(schema, strip_order=True)
 
-    # properties becomes ordered array and 'y' coerced to select
     props = out["properties"]
     assert (
         isinstance(props, list) and props[0]["name"] == "y" and props[1]["name"] == "x"
     )
     assert props[0]["schema"]["type"] == "select"
-    # order keys removed
     assert "order" not in props[0]["schema"] and "order" not in props[1]["schema"]
-    # allOf/$ref collapsed into $ref on root
     assert out.get("$ref") == "#/$defs/Foo"
 
 

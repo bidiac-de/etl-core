@@ -6,7 +6,6 @@ from typing import Dict, Any
 import dask.dataframe as dd
 import pytest
 
-# Ensure CSV and mapping components are registered
 from etl_core.components.file_components.csv.read_csv import (  # noqa: F401
     ReadCSV,
 )
@@ -119,9 +118,7 @@ def test_csv_bulk_self_join_modes_to_csv(
     cfg = _load_cfg_and_apply_paths(
         cfg_name,
         {
-            # both readers get the same input via comp_type mapping
             "read_csv": CSV_VALID,
-            # single writer, so comp_type mapping works fine
             "write_csv": out_fp,
         },
     )
@@ -162,7 +159,6 @@ def test_csv_bigdata_self_join_inner_to_single_csv(
     status = exec_handler.job_info.metrics_handler.get_job_metrics(run.id).status
     assert status == RuntimeState.SUCCESS
 
-    # Read the single CSV file with dask
     assert out_file.is_file(), f"Expected single file at {out_file!s}"
     ddf = dd.read_csv([str(out_file)], assume_missing=True, dtype=str)
     out = ddf.compute().sort_values("id").reset_index(drop=True)

@@ -49,7 +49,6 @@ class TestInMemorySecretProvider:
 
     def test_delete_nonexistent_secret(self):
         """Test deleting a non-existent secret (should not raise error)."""
-        # Should not raise an error
         self.provider.delete("nonexistent")
         assert self.provider.exists("nonexistent") is False
 
@@ -113,15 +112,12 @@ class TestInMemorySecretProvider:
 
         def worker(thread_id):
             try:
-                # Set a secret
                 key = f"thread_{thread_id}_key"
                 value = f"thread_{thread_id}_value"
                 self.provider.set(key, value)
 
-                # Small delay to increase chance of race conditions
                 time.sleep(0.001)
 
-                # Get the secret
                 retrieved = self.provider.get(key)
                 if retrieved == value:
                     results.append(True)
@@ -131,18 +127,15 @@ class TestInMemorySecretProvider:
             except Exception as e:
                 errors.append(str(e))
 
-        # Create and start multiple threads
         threads = []
         for i in range(10):
             thread = threading.Thread(target=worker, args=(i,))
             threads.append(thread)
             thread.start()
 
-        # Wait for all threads to complete
         for thread in threads:
             thread.join()
 
-        # All operations should succeed
         assert len(results) == 10
         assert all(results)
         assert len(errors) == 0
@@ -154,7 +147,6 @@ class TestInMemorySecretProvider:
 
         def worker(thread_id):
             try:
-                # Each thread gets its own provider instance
                 provider = InMemorySecretProvider()
                 key = f"thread_{thread_id}_key"
                 value = f"thread_{thread_id}_value"
@@ -170,18 +162,15 @@ class TestInMemorySecretProvider:
             except Exception as e:
                 errors.append(str(e))
 
-        # Create and start multiple threads
         threads = []
         for i in range(10):
             thread = threading.Thread(target=worker, args=(i,))
             threads.append(thread)
             thread.start()
 
-        # Wait for all threads to complete
         for thread in threads:
             thread.join()
 
-        # All operations should succeed
         assert len(results) == 10
         assert all(results)
         assert len(errors) == 0
@@ -189,22 +178,16 @@ class TestInMemorySecretProvider:
     def test_lock_reentrancy(self):
         """Test that the RLock allows reentrant access."""
 
-        # This test verifies that the same thread can acquire the lock multiple times
         def nested_operations():
-            # First level
             self.provider.set("key1", "value1")
 
-            # Second level (should not block)
             self.provider.set("key2", "value2")
 
-            # Third level (should not block)
             assert self.provider.get("key1") == "value1"
             assert self.provider.get("key2") == "value2"
 
-        # This should not deadlock
         nested_operations()
 
-        # Verify the operations worked
         assert self.provider.get("key1") == "value1"
         assert self.provider.get("key2") == "value2"
 
@@ -213,16 +196,12 @@ class TestInMemorySecretProvider:
         provider1 = InMemorySecretProvider()
         provider2 = InMemorySecretProvider()
 
-        # Set secret in first provider
         provider1.set("shared_key", "provider1_value")
 
-        # Second provider should not have access to it
         assert not provider2.exists("shared_key")
 
-        # Set different value in second provider
         provider2.set("shared_key", "provider2_value")
 
-        # Values should be different
         assert provider1.get("shared_key") == "provider1_value"
         assert provider2.get("shared_key") == "provider2_value"
 
@@ -230,33 +209,26 @@ class TestInMemorySecretProvider:
         """Test deleting a secret after getting it."""
         self.provider.set("test_key", "test_value")
 
-        # Get the value
         value = self.provider.get("test_key")
         assert value == "test_value"
 
-        # Delete it
         self.provider.delete("test_key")
 
-        # Should no longer exist
         assert not self.provider.exists("test_key")
         with pytest.raises(KeyError):
             self.provider.get("test_key")
 
     def test_set_get_delete_cycle(self):
         """Test complete set-get-delete cycle."""
-        # Set
         self.provider.set("cycle_key", "cycle_value")
         assert self.provider.exists("cycle_key") is True
 
-        # Get
         value = self.provider.get("cycle_key")
         assert value == "cycle_value"
 
-        # Delete
         self.provider.delete("cycle_key")
         assert self.provider.exists("cycle_key") is False
 
-        # Set again
         self.provider.set("cycle_key", "new_value")
         assert self.provider.exists("cycle_key") is True
         assert self.provider.get("cycle_key") == "new_value"
@@ -270,6 +242,5 @@ class TestInMemorySecretProvider:
         assert self.provider.get(unicode_key) == unicode_value
         assert self.provider.exists(unicode_key) is True
 
-        # Test deletion
         self.provider.delete(unicode_key)
         assert not self.provider.exists(unicode_key)

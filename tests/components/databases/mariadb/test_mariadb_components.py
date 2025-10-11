@@ -111,7 +111,6 @@ class TestMariaDBComponents:
         active_id = read_comp._get_credentials()["__credentials_id__"]
         assert active_id == credentials_id
 
-        # Optional sanity: the resolved object is present
         assert read_comp._credentials is not None
 
     def test_mariadb_write_initialization(

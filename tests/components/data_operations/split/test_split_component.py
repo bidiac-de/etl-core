@@ -43,7 +43,6 @@ async def test_split_component_process_bulk(data_ops_metrics: DataOperationsMetr
     async for o in comp.process_bulk(dataframe=df, metrics=data_ops_metrics):
         outs.append(o)
 
-    # We expect one Out per OUTPUT_PORT with DataFrame payload
     assert {o.port for o in outs} == {"A", "B"}
     for o in outs:
         assert isinstance(o.payload, pd.DataFrame)

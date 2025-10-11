@@ -6,7 +6,6 @@ from etl_core.components.stubcomponents import StubComponent
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from tests.helpers import get_component_by_name, runtime_job_from_config
 
-# ensure Job._build_components() can find TestComponent
 runtimejob_module.TestComponent = StubComponent
 
 

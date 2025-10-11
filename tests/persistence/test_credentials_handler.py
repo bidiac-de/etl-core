@@ -57,7 +57,6 @@ def handler(monkeypatch) -> H.CredentialsHandler:
     def _ensure_schema() -> None:
         SQLModel.metadata.create_all(engine)
 
-    # wire handler dependencies
     monkeypatch.setattr(H, "engine", engine, raising=True)
     monkeypatch.setattr(H, "ensure_schema", _ensure_schema, raising=True)
 

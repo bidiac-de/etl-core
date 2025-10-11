@@ -98,7 +98,6 @@ class TestSQLServerIntegration:
             context_id=persisted_mapping_context_id,
         )
 
-        # Both components resolved credentials via mapping
         assert read_comp._get_credentials()["__credentials_id__"]
         assert write_comp._get_credentials()["__credentials_id__"]
 

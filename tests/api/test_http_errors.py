@@ -144,7 +144,7 @@ class TestAllHttpErrors:
             exc_422.status_code,
             exc_500.status_code,
         ]
-        assert len(set(status_codes)) == 4  # All should be unique
+        assert len(set(status_codes)) == 4
 
     def test_all_preserve_payload_structure(self):
         """Test that all HTTP error functions preserve payload structure."""

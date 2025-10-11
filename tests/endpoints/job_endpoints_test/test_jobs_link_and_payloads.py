@@ -54,10 +54,8 @@ def test_component_payload_persisted_in_db(client: TestClient) -> None:
         ct = rows[0]
         assert isinstance(ct.payload, dict)
 
-        # user-specified field is persisted
         assert ct.payload.get("count") == 7
 
-        # default fields are present
         assert ct.payload.get("in_port_schemas") == {}
         assert ct.payload.get("out_port_schemas") == {}
         assert ct.payload.get("extra_input_ports") == []
@@ -81,7 +79,6 @@ def test_component_payload_hydrates_to_runtime(shared_job_handler) -> None:
     row = shared_job_handler.create_job_entry(cfg)
     job_id = row.id
 
-    # Modernized: use the one-shot loader (no preflight + no refetch chains)
     runtime = shared_job_handler.load_runtime_job(job_id)
 
     assert len(runtime.components) == 1

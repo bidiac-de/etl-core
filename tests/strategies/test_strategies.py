@@ -99,7 +99,7 @@ def test_execution_strategy_is_abstract() -> None:
         pass
 
     with pytest.raises(TypeError):
-        BadStrategy()  # type: ignore[abstract]
+        BadStrategy()
 
 
 def test_get_strategy_factory() -> None:
@@ -107,4 +107,4 @@ def test_get_strategy_factory() -> None:
     assert isinstance(get_strategy(StrategyType.BULK), BulkExecutionStrategy)
     assert isinstance(get_strategy(StrategyType.BIGDATA), BigDataExecutionStrategy)
     with pytest.raises(ValueError):
-        get_strategy("unknown")  # type: ignore[arg-type]
+        get_strategy("unknown")

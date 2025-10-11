@@ -53,7 +53,6 @@ def _patch_pg_session_vars(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def test_creds() -> Tuple[str, str]:
-    # Provide these via your test env or .env for local runs
     return os.environ["APP_TEST_USER"], os.environ["APP_TEST_PASSWORD"]
 
 

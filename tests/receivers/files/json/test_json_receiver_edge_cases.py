@@ -147,10 +147,8 @@ class TestJSONReceiverWriteOperations:
         receiver = JSONReceiver()
         file_path = tmp_path / "test.json"
 
-        # Create a DataFrame that might cause issues
         data = pd.DataFrame([{"id": 1, "data": "test"}])
 
-        # Mock the dump_records_auto to raise an exception
         with patch(
             "etl_core.receivers.files.json.json_receiver.dump_records_auto"
         ) as mock_dump:
@@ -168,10 +166,8 @@ class TestJSONReceiverWriteOperations:
         """Test write_row error handling."""
         receiver = JSONReceiver()
 
-        # Test with NDJSON file to trigger append_ndjson_record
         ndjson_file = tmp_path / "test.ndjson"
 
-        # Mock append_ndjson_record to raise an exception
         with patch(
             "etl_core.receivers.files.json.json_receiver.append_ndjson_record"
         ) as mock_append:
@@ -195,7 +191,6 @@ class TestJSONReceiverWriteOperations:
         data = pd.DataFrame([{"id": 1}])
         ddf = dd.from_pandas(data, npartitions=1)
 
-        # Mock dask.compute to raise an exception
         with patch(
             "etl_core.receivers.files.json.json_receiver.dask.compute"
         ) as mock_compute:
@@ -219,7 +214,6 @@ class TestJSONReceiverWriteOperations:
         data = pd.DataFrame([{"id": 1}])
         ddf = dd.from_pandas(data, npartitions=1)
 
-        # Mock to_delayed to raise an exception
         with patch.object(ddf, "to_delayed") as mock_delayed:
             mock_delayed.side_effect = RuntimeError("Delayed failed")
 
@@ -255,7 +249,6 @@ class TestJSONReceiverBigDataOperations:
         ndjson_file = tmp_path / "test.jsonl"
         ndjson_file.write_text('{"id": 1}\n{"id": 2}')
 
-        # Mock dd.read_json to raise an exception
         with patch(
             "etl_core.receivers.files.json.json_receiver.dd.read_json"
         ) as mock_read:
@@ -277,7 +270,6 @@ class TestJSONReceiverBigDataOperations:
         data_dir = tmp_path / "data_dir"
         data_dir.mkdir()
 
-        # Create multiple JSONL files
         file1 = data_dir / "part1.jsonl"
         file2 = data_dir / "part2.jsonl"
         file1.write_text('{"id": 1}\n{"id": 2}')
@@ -419,14 +411,12 @@ class TestJSONReceiverSpecialCases:
         receiver = JSONReceiver()
         json_file = tmp_path / "test.json"
 
-        # Write some data
         data = pd.DataFrame([{"id": 1}, {"id": 2}, {"id": 3}])
         await receiver.write_bulk(json_file, metrics, data)
 
         assert metrics.lines_received == 3
         assert metrics.lines_forwarded == 3
 
-        # Read the data back
         read_metrics = ComponentMetrics(
             started_at=datetime.now(),
             processing_time=timedelta(0),
@@ -550,7 +540,6 @@ async def test_write_bulk_json_and_gz(
         {"id": 1},
         {"id": 2},
     ]
-    # .json.gz path -> gz array branch
     path_gz = tmp_path / "bulk.json.gz"
     await r.write_bulk(path_gz, metrics, df)
 
@@ -573,11 +562,11 @@ async def test_write_bigdata_error_branch_increments_metrics(
     pdf = pd.DataFrame([{"id": 1}, {"id": 2}])
     ddf = dd.from_pandas(pdf, npartitions=1)
 
-    def boom_part(_pdf: pd.DataFrame, _path: str) -> int:  # signature-compatible
+    def boom_part(_pdf: pd.DataFrame, _path: str) -> int:
         raise RuntimeError("boom")
 
     orig = jr._write_part_ndjson
-    jr._write_part_ndjson = boom_part  # type: ignore[assignment]
+    jr._write_part_ndjson = boom_part
     try:
         r = JSONReceiver()
         with pytest.raises(FileReceiverError, match="Failed to write JSON bigdata"):
@@ -586,7 +575,7 @@ async def test_write_bigdata_error_branch_increments_metrics(
         assert metrics.error_count >= 1
         assert not list(out.glob("part-*")), "no parts should be written after failure"
     finally:
-        jr._write_part_ndjson = orig  # type: ignore[assignment]
+        jr._write_part_ndjson = orig
 
 
 @pytest.mark.asyncio
@@ -598,14 +587,12 @@ async def test_write_row_switches_between_json_and_ndjson(
     """
     r = JSONReceiver()
 
-    # NDJSON path
     p_l = tmp_path / "rows.jsonl"
     await r.write_row(p_l, metrics, {"a": 1})
     await r.write_row(p_l, metrics, {"a": 2})
     rows = [json.loads(s) for s in p_l.read_text(encoding="utf-8").splitlines()]
     assert rows == [{"a": 1}, {"a": 2}]
 
-    # JSON array path
     p_j = tmp_path / "rows.json"
     await r.write_row(p_j, metrics, {"b": 3})
     await r.write_row(p_j, metrics, {"b": 4})

@@ -26,10 +26,8 @@ def test_neither_leaf_nor_node_raises() -> None:
 
 
 def test_leaf_missing_column_or_operator_raises() -> None:
-    # missing column
     with pytest.raises(ValueError):
         ComparisonRule(operator="==", value=1)
-    # missing operator
     with pytest.raises(ValueError):
         ComparisonRule(column="c", value=1)
 
@@ -72,7 +70,6 @@ def test_to_mask_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
         assert df_arg is df and rule_arg is rule
         return pd.Series([True, False])
 
-    # Create a dummy module to satisfy `from .filter_helper import build_mask`
     module_name = "etl_core.components.data_operations.filter.filter_helper"
     dummy_mod = types.ModuleType(module_name)
     dummy_mod.build_mask = fake_build_mask  # type: ignore[attr-defined]
@@ -87,7 +84,6 @@ def test_filter_df_applies_mask(monkeypatch: pytest.MonkeyPatch) -> None:
     df = pd.DataFrame({"x": [1, 2]})
     rule = ComparisonRule(column="x", operator="==", value=1)
 
-    # Patch the class method (instance attribute patching is restricted by Pydantic)
     monkeypatch.setattr(
         ComparisonRule,
         "to_mask",

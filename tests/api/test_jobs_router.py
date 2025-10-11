@@ -51,16 +51,13 @@ def test_cached_job_list_and_invalidation(monkeypatch):
     handler = DummyJobHandler()
     handler._rows = [{"id": "a"}, {"id": "b"}]
 
-    # first call populates cache
     out1 = R._cached_job_list(handler)
     assert out1 == handler._rows
     assert handler.calls.list == 1
 
-    # second returns from cache without calling handler
     out2 = R._cached_job_list(handler)
     assert out2 == handler._rows and handler.calls.list == 1
 
-    # invalidate and ensure handler is called again
     R.invalidate_job_caches()
     out3 = R._cached_job_list(handler)
     assert out3 == handler._rows and handler.calls.list == 2
@@ -81,7 +78,6 @@ def test_cached_job_successful_and_caches():
     out = R._cached_job("j1", handler)
     assert out["id"] == "j1" and out["name"] == "Job 1"
 
-    # second call should come from cache (no extra handler call)
     before = handler.calls.load
     out2 = R._cached_job("j1", handler)
     assert out2 == out and handler.calls.load == before
@@ -91,7 +87,6 @@ def test_list_jobs_db_error_maps_to_http(monkeypatch):
     handler = DummyJobHandler()
     import sqlalchemy
 
-    # ensure no cached list interferes
     R.invalidate_job_caches()
 
     handler._raise_on_list = sqlalchemy.exc.SQLAlchemyError("boom")

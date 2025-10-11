@@ -91,7 +91,6 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             context_id=persisted_mapping_context_id,
         )
-        # Should be a no-op without raising
         comp._setup_session_variables()
 
     def test_sqlserver_session_variables_connection_error(
@@ -114,7 +113,6 @@ class TestSQLServerSpecificFeatures:
         mock_handler.lease.return_value = mock_ctx
         comp._connection_handler = mock_handler
 
-        # Should not raise
         comp._setup_session_variables()
 
     @pytest.mark.parametrize(
@@ -165,7 +163,6 @@ class TestSQLServerSpecificFeatures:
             entity_name="test_table",
             context_id=persisted_mapping_context_id,
         )
-        # Receiver gets created during build
         result = comp._build_objects()
         assert comp._receiver is not None
         assert result == comp

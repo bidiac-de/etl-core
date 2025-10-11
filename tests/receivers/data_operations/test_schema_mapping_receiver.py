@@ -45,7 +45,6 @@ def _nested_user_schema() -> Schema:
 def _map_rules(
     *items: Tuple[str, str, str, str],
 ) -> List[Tuple[str, str, str, str]]:
-    # (src_port, src_path, dst_port, dst_path)
     return [tuple(x) for x in items]  # type: ignore[return-value]
 
 

@@ -6,7 +6,6 @@ from etl_core.components.stubcomponents import StubComponent
 from etl_core.job_execution.job_execution_handler import JobExecutionHandler
 from tests.helpers import get_component_by_name, runtime_job_from_config
 
-# ensure Job._build_components() can find TestComponent
 runtimejob_module.TestComponent = StubComponent
 
 
@@ -55,7 +54,6 @@ def test_branch_skip_fan_out(schema_row_min) -> None:
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    # Job failed and root failed
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error is not None
     assert "fail stubcomponent failed" in attempt.error
@@ -269,7 +267,6 @@ def test_skip_diamond(schema_row_min) -> None:
     assert len(execution.attempts) == 1
     mh = handler.job_info.metrics_handler
 
-    # Job-level assertions
     assert mh.get_job_metrics(execution.id).status == RuntimeState.FAILED
     assert attempt.error and "fail stubcomponent failed" in attempt.error
 

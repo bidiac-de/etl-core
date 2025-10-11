@@ -10,7 +10,6 @@ import etl_core.api.cli.adapters as adapters
 
 
 def _resp200(payload: Dict[str, Any] | None = None) -> Any:
-    """Tiny response double with .json() and request attrs."""
     payload = {"ok": True} if payload is None else payload
     req = SimpleNamespace(method="GET", url="http://h/p")
     return SimpleNamespace(
@@ -51,7 +50,6 @@ def test_local_execution_list_executions_with_filters(
     assert kwargs["order"] == "asc"
     assert kwargs["limit"] == 10
     assert kwargs["offset"] == 5
-    # started_after/before must be parsed datetimes
     assert hasattr(kwargs["started_after"], "isoformat")
     assert hasattr(kwargs["started_before"], "isoformat")
     assert kwargs["started_after"].isoformat().startswith("2024-01-02T03:04:05")
@@ -72,13 +70,11 @@ def test__non_secure_params_filters_secure_values() -> None:
 def test_remote_execution_start_with_environment_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Patch Session
     session = Mock()
     session.post.return_value = _resp200({"status": "ok"})
     monkeypatch.setattr(adapters, "requests", Mock(Session=lambda: session))
 
     client = adapters.RemoteExecutionClient("http://api")
-    # Avoid running the real status handler
     client._raise_for_status = lambda r: None  # type: ignore[method-assign]
     env = SimpleNamespace(value="PROD")
     out = client.start("jid-123", environment=env)  # type: ignore[arg-type]
@@ -114,7 +110,6 @@ def test_remote_execution_list_executions_query_building(
 
     assert session.get.called
     (url,) = session.get.call_args.args
-    # URL contains the path and all expected query parameters
     assert url.startswith("http://api/execution/executions?")
     for part in [
         "job_id=J1",
@@ -142,7 +137,6 @@ def test_remote_jobs_list_brief_and_attempts(monkeypatch: pytest.MonkeyPatch) ->
     (url_jobs,) = session.get.call_args.args
     assert url_jobs.endswith("/jobs/")
 
-    # attempts endpoint on RemoteExecutionClient
     session.get.reset_mock()
     session.get.return_value = _resp200([{"id": "a1"}])
     exec_client = adapters.RemoteExecutionClient("http://api")

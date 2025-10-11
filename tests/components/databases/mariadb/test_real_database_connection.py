@@ -42,7 +42,6 @@ class TestRealDatabaseConnection:
         credentials_id = CredentialsHandler().upsert(creds)
         return creds, credentials_id
 
-    # mapping fixture from conftest.py
 
     @pytest.fixture
     def test_table_name(self):
@@ -54,18 +53,13 @@ class TestRealDatabaseConnection:
         """Test that we can establish a connection to the database."""
         real_credentials, _cid = persisted_real_credentials
         try:
-            # Import here to avoid import errors if MariaDB is not available
             from etl_core.components.databases.sql_connection_handler import (
                 SQLConnectionHandler,
             )
             from sqlalchemy import text  # noqa: F401
 
-            # Create connection handler with real credentials
             handler = SQLConnectionHandler()
 
-            # Build connection URL manually since build_url doesn't handle empty
-            # passwords with Format:
-            # mysql+mysqlconnector://user:password@host:port/database
             password = (
                 real_credentials.decrypted_password
                 if real_credentials.decrypted_password
@@ -77,12 +71,9 @@ class TestRealDatabaseConnection:
                 f"/{real_credentials.database}"
             )
 
-            # Connect to database
             handler.connect(url=url)
 
-            # Try to connect
             with handler.lease() as connection:
-                # Execute a simple query to verify connection
 
                 result = connection.execute(text("SELECT 1 as test"))
                 row = result.fetchone()
@@ -108,12 +99,9 @@ class TestRealDatabaseConnection:
             )
             from sqlalchemy import text
 
-            # Create a test table first using direct connection
             credentials, _ = persisted_real_credentials
             handler = SQLConnectionHandler()
 
-            # Build connection URL manually since build_url doesn't
-            # handle empty passwords
             password = (
                 credentials.decrypted_password if credentials.decrypted_password else ""
             )
@@ -125,7 +113,6 @@ class TestRealDatabaseConnection:
             handler.connect(url=url)
 
             with handler.lease() as connection:
-                # Create test table if it doesn't exist
                 create_table_sql = f"""
                 CREATE TABLE IF NOT EXISTS {test_table_name} (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -136,7 +123,6 @@ class TestRealDatabaseConnection:
                 """
                 connection.execute(text(create_table_sql))
 
-                # Insert test data
                 insert_sql = f"""
                 INSERT INTO {test_table_name} (name, email) VALUES
                 ('Test User 1', 'test1@example.com'),
@@ -145,7 +131,6 @@ class TestRealDatabaseConnection:
                 """
                 connection.execute(text(insert_sql))
 
-            # Now test reading with MariaDBRead component
             read_comp = MariaDBRead(
                 name="test_real_read",
                 description="Test real database read",
@@ -156,7 +141,6 @@ class TestRealDatabaseConnection:
                 context_id=persisted_mapping_context_id,
             )
 
-            # Test that credentials can be retrieved
             creds = read_comp._get_credentials()
             assert creds["user"] == "root"
             assert creds["database"] == "etl_core"
@@ -178,7 +162,6 @@ class TestRealDatabaseConnection:
     ):
         """Test that we can write data to the database."""
 
-        # Test writing with MariaDBWrite component
         write_comp = MariaDBWrite(
             name="test_real_write",
             description="Test real database write",
@@ -188,7 +171,6 @@ class TestRealDatabaseConnection:
             context_id=persisted_mapping_context_id,
         )
 
-        # Test that credentials can be retrieved
         creds = write_comp._get_credentials()
         assert creds["user"] == "root"
         assert creds["database"] == "etl_core"
@@ -210,8 +192,6 @@ class TestRealDatabaseConnection:
             credentials, _ = persisted_real_credentials
             handler = SQLConnectionHandler()
 
-            # Build connection URL manually since build_url
-            # doesn't handle empty passwords
             password = credentials.decrypted_password
             url = (
                 f"mysql+mysqlconnector://{credentials.user}:{password}@"
@@ -219,11 +199,9 @@ class TestRealDatabaseConnection:
                 f"{credentials.database}"
             )
 
-            # Connect to database
             handler.connect(url=url)
 
             with handler.lease() as connection:
-                # Create a new test table for this workflow
                 workflow_table = f"{test_table_name}_workflow"
                 create_sql = f"""
                 CREATE TABLE IF NOT EXISTS {workflow_table} (
@@ -235,7 +213,6 @@ class TestRealDatabaseConnection:
                 """
                 connection.execute(text(create_sql))
 
-                # Insert test data - use named parameters instead of %s
                 test_data = [
                     {"name": "Item 1", "value": 100},
                     {"name": "Item 2", "value": 200},
@@ -248,14 +225,13 @@ class TestRealDatabaseConnection:
                     """
                     connection.execute(text(insert_sql), data)
 
-                # Read and verify data
                 select_sql = f"SELECT * FROM {workflow_table} ORDER BY id"
                 result = connection.execute(text(select_sql))
                 rows = result.fetchall()
 
                 assert len(rows) == 3
-                assert rows[0][1] == "Item 1"  # name column
-                assert rows[0][2] == 100  # value column
+                assert rows[0][1] == "Item 1"
+                assert rows[0][2] == 100
                 assert rows[1][1] == "Item 2"
                 assert rows[1][2] == 200
                 assert rows[2][1] == "Item 3"
@@ -263,7 +239,6 @@ class TestRealDatabaseConnection:
 
                 print("Successfully tested complete database workflow!")
 
-                # Clean up
                 connection.execute(text(f"DROP TABLE IF EXISTS {workflow_table}"))
 
         except ImportError:
@@ -283,7 +258,6 @@ class TestRealDatabaseConnection:
             )
             from sqlalchemy import text
 
-            # Test credentials with pool settings
             pool_credentials = Credentials(
                 name="pool_test",
                 user="root",
@@ -295,16 +269,12 @@ class TestRealDatabaseConnection:
                 pool_timeout_s=10,
             )
 
-            # Build engine kwargs
             engine_kwargs = build_sql_engine_kwargs(pool_credentials)
             assert engine_kwargs["pool_size"] == 5
             assert engine_kwargs["pool_timeout"] == 10
 
-            # Test connection with pool settings
             handler = SQLConnectionHandler()
 
-            # Build connection URL manually since build_url doesn't
-            # handle empty passwords
             password = pool_credentials.decrypted_password
             url = (
                 f"mysql+mysqlconnector://{pool_credentials.user}:{password}@"
@@ -312,7 +282,6 @@ class TestRealDatabaseConnection:
                 f"{pool_credentials.database}"
             )
 
-            # Connect to database with pool settings
             handler.connect(url=url, engine_kwargs=engine_kwargs)
 
             with handler.lease() as connection:
@@ -334,7 +303,6 @@ class TestRealDatabaseConnection:
             SQLConnectionHandler,
         )
 
-        # Test with invalid credentials to localhost to see what happens
         invalid_url = (
             "mysql+mysqlconnector://"
             "invalid_user:wrong_password@localhost:3306/etl_core"
@@ -342,7 +310,6 @@ class TestRealDatabaseConnection:
 
         handler = SQLConnectionHandler()
 
-        # Let's see what actually happens instead of expecting an exception
         try:
             handler.connect(url=invalid_url)
             print(
@@ -351,7 +318,6 @@ class TestRealDatabaseConnection:
             )
             print("MariaDB accepted 'invalid_user:wrong_password' - security concern!")
 
-            # Try to execute a query to see what user we're actually connected as
             with handler.lease() as connection:
                 from sqlalchemy import text as _text
 
@@ -375,7 +341,6 @@ class TestRealDatabaseConnection:
         credentials, _ = persisted_real_credentials
         handler = SQLConnectionHandler()
 
-        # Build connection URL manually since build_url doesn't handle empty passwords
         password = (
             credentials.decrypted_password if credentials.decrypted_password else ""
         )
@@ -385,21 +350,17 @@ class TestRealDatabaseConnection:
             f"/{credentials.database}"
         )
 
-        # Connect to database
         handler.connect(url=url)
 
         with handler.lease() as connection:
-            # Test getting database information
             result = connection.execute(text("SELECT DATABASE() as current_db"))
             row = result.fetchone()
             assert row[0] == "etl_core"
 
-            # Test getting table list
             result = connection.execute(text("SHOW TABLES"))
             tables = [row[0] for row in result.fetchall()]
             print(f"Available tables: {tables}")
 
-            # Test getting version information instead of user
             result = connection.execute(text("SELECT VERSION() as version"))
             row = result.fetchone()
             assert "MariaDB" in row[0] or "MySQL" in row[0]
@@ -418,8 +379,6 @@ class TestRealDatabaseConnection:
             credentials, _ = persisted_real_credentials
             handler = SQLConnectionHandler()
 
-            # Build connection URL manually since
-            # build_url doesn't handle empty passwords
             password = (
                 credentials.decrypted_password if credentials.decrypted_password else ""
             )
@@ -428,16 +387,13 @@ class TestRealDatabaseConnection:
                 f"{credentials.host}:{credentials.port}/{credentials.database}"
             )
 
-            # Connect to database
             handler.connect(url=url)
 
             with handler.lease() as connection:
-                # Show all tables
                 result = connection.execute(text("SHOW TABLES"))
                 tables = [row[0] for row in result.fetchall()]
                 print(f"\nAvailable tables in database 'etl_core': {tables}")
 
-                # Show data in test_connection_table
                 if "test_connection_table" in tables:
                     result = connection.execute(
                         text("SELECT * FROM test_connection_table")
@@ -453,7 +409,6 @@ class TestRealDatabaseConnection:
                     else:
                         print("   (No data found)")
 
-                # Show table structure
                 if "test_connection_table" in tables:
                     result = connection.execute(text("DESCRIBE test_connection_table"))
                     columns = result.fetchall()
@@ -483,8 +438,6 @@ class TestRealDatabaseConnection:
             credentials, _ = persisted_real_credentials
             handler = SQLConnectionHandler()
 
-            # Build connection URL manually since build_url
-            # doesn't handle empty passwords
             password = (
                 credentials.decrypted_password if credentials.decrypted_password else ""
             )
@@ -493,18 +446,15 @@ class TestRealDatabaseConnection:
                 f"{credentials.host}:{credentials.port}/{credentials.database}"
             )
 
-            # Connect to database
             handler.connect(url=url)
 
             with handler.lease() as connection:
-                # Check if test table exists
                 result = connection.execute(
                     text("SHOW TABLES LIKE 'test_connection_table'")
                 )
                 tables = result.fetchall()
 
                 if tables:
-                    # Drop the test table
                     connection.execute(text("DROP TABLE test_connection_table"))
                     print("Cleaned up test table 'test_connection_table'")
                 else:

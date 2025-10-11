@@ -73,7 +73,6 @@ class TestDatabaseOperationMixin:
         columns = ["id", "name", "status"]
 
         query = component._build_query(table, columns, DatabaseOperation.UPSERT)
-        # Note: Default implementation falls back to INSERT for UPSERT
         expected = (
             "INSERT INTO test_table (id, name, status) VALUES (:id, :name, :status)"
         )
@@ -119,7 +118,7 @@ class TestDatabaseOperationMixin:
     def test_build_query_update_without_conditions(self):
         """Test _build_query for UPDATE operation without conditions raises error."""
         component = DatabaseOperationMixinComponent(
-            operation=DatabaseOperation.UPDATE, where_conditions=[]  # Empty conditions
+            operation=DatabaseOperation.UPDATE, where_conditions=[]
         )
 
         table = "test_table"
@@ -179,7 +178,6 @@ class TestDatabaseOperationMixin:
         table = "test_table"
         columns = ["id", "name"]
 
-        # kwargs should not affect the basic implementation
         query = component._build_query(
             table,
             columns,
@@ -220,7 +218,6 @@ class TestDatabaseOperationMixin:
         component1 = DatabaseOperationMixinComponent()
         component2 = DatabaseOperationMixinComponent()
 
-        # Both should have separate empty lists
         assert component1.where_conditions == []
         assert component2.where_conditions == []
         assert component1.where_conditions is not component2.where_conditions
@@ -229,7 +226,6 @@ class TestDatabaseOperationMixin:
         """Test that mixin fields have proper descriptions."""
         component = DatabaseOperationMixinComponent()
 
-        # Check that fields exist with expected descriptions
         fields = component.model_fields
 
         assert "where_conditions" in fields
@@ -238,7 +234,6 @@ class TestDatabaseOperationMixin:
         where_desc = fields["where_conditions"].description
         op_desc = fields["operation"].description
 
-        # Handle case where description might be a tuple
         where_desc_str = (
             str(where_desc) if isinstance(where_desc, tuple) else where_desc
         )
@@ -257,7 +252,7 @@ class TestDatabaseOperationIntegration:
             (DatabaseOperation.INSERT, []),
             (DatabaseOperation.UPSERT, []),
             (DatabaseOperation.TRUNCATE, []),
-            (DatabaseOperation.UPDATE, ["id = 1"]),  # UPDATE needs conditions
+            (DatabaseOperation.UPDATE, ["id = 1"]),
         ]
 
         table = "test_table"
@@ -268,7 +263,6 @@ class TestDatabaseOperationIntegration:
                 operation=operation, where_conditions=conditions
             )
 
-            # Should not raise any exceptions
             query = component._build_query(table, columns, operation)
             assert isinstance(query, str)
             assert len(query) > 0
@@ -277,22 +271,19 @@ class TestDatabaseOperationIntegration:
     def test_operation_enum_coverage(self):
         """Test that all DatabaseOperation enum values are handled."""
         component = DatabaseOperationMixinComponent(
-            where_conditions=["id = 1"]  # For UPDATE case
+            where_conditions=["id = 1"]
         )
 
         table = "test_table"
         columns = ["id", "name"]
 
-        # Test each enum value
         for operation in DatabaseOperation:
             try:
                 query = component._build_query(table, columns, operation)
                 assert isinstance(query, str)
                 assert len(query) > 0
             except ValueError as e:
-                # Only UPDATE without conditions should raise ValueError
                 if operation == DatabaseOperation.UPDATE:
-                    # Reset conditions and try again
                     component.where_conditions = ["id = 1"]
                     query = component._build_query(table, columns, operation)
                     assert isinstance(query, str)
@@ -313,7 +304,6 @@ class TestDatabaseOperationIntegration:
         ]:
             query = component._build_query(table, columns, operation)
 
-            # All columns should appear as parameters
             for col in columns:
                 assert f":{col}" in query
 
@@ -328,16 +318,13 @@ class TestDatabaseOperationIntegration:
 
         query = component._build_query(table, columns, DatabaseOperation.UPDATE)
 
-        # Should contain SET clause with all columns
         for col in columns:
             assert f"{col} = :{col}" in query
 
-        # Should contain WHERE clause with all conditions
         for condition in component.where_conditions:
             assert condition in query
 
-        # Should have proper structure
         assert "UPDATE" in query
         assert "SET" in query
         assert "WHERE" in query
-        assert "AND" in query  # Multiple conditions
+        assert "AND" in query

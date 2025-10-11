@@ -56,7 +56,6 @@ def test_job_schema_is_cached(
 
     calls: Dict[str, int] = {"job_model_json_schema": 0}
 
-    # Patch JobBase.model_json_schema
     import etl_core.persistence.base_models.job_base as job_base
 
     real_job_schema = job_base.JobBase.model_json_schema
@@ -69,14 +68,11 @@ def test_job_schema_is_cached(
         job_base.JobBase, "model_json_schema", staticmethod(_wrapped_job_schema)
     )
 
-    # Start clean
     schemas_router = _schemas_router_module(client)
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]
 
-    # miss -> compute
     r1 = client.get("/configs/job")
     assert r1.status_code == 200
-    # hit -> no recompute
     r2 = client.get("/configs/job")
     assert r2.status_code == 200
 
@@ -99,7 +95,6 @@ def test_component_schema_is_cached_and_invalidates(
 
     calls: Dict[str, int] = {"model_json_schema": 0}
 
-    # Find the component class in the live registry
     import etl_core.components.component_registry as registry
 
     cls = registry.component_registry.get(comp)
@@ -116,16 +111,13 @@ def test_component_schema_is_cached_and_invalidates(
     schemas_router = _schemas_router_module(client)
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]
 
-    # miss
     r1 = client.get(f"/configs/{comp}/form")
     assert r1.status_code == 200
-    # hit
     r2 = client.get(f"/configs/{comp}/form")
     assert r2.status_code == 200
 
     assert calls["model_json_schema"] == 1
 
-    # invalidate -> recompute
     schemas_router.invalidate_schema_caches()  # type: ignore[attr-defined]
     r3 = client.get(f"/configs/{comp}/form")
     assert r3.status_code == 200
@@ -157,7 +149,6 @@ def test_mode_is_part_of_cache_key(
     def _fake_mode_b() -> _FakeMode:
         return _FakeMode("production")
 
-    # Count calls
     import etl_core.persistence.base_models.job_base as job_base
 
     job_calls: Dict[str, int] = {"model_json_schema": 0}
@@ -171,15 +162,12 @@ def test_mode_is_part_of_cache_key(
         job_base.JobBase, "model_json_schema", staticmethod(_wrapped_job_schema)
     )
 
-    # A -> compute
     monkeypatch.setattr(schemas_router, "get_registry_mode", _fake_mode_a)
     assert client.get("/configs/job").status_code == 200
 
-    # B -> compute again
     monkeypatch.setattr(schemas_router, "get_registry_mode", _fake_mode_b)
     assert client.get("/configs/job").status_code == 200
 
-    # back to A -> hit A cache
     monkeypatch.setattr(schemas_router, "get_registry_mode", _fake_mode_a)
     assert client.get("/configs/job").status_code == 200
 

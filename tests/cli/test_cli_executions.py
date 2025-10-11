@@ -14,7 +14,6 @@ from contextlib import contextmanager
 
 
 def runner() -> CliRunner:
-    # Try the newer Click keyword first; older versions raise TypeError.
     try:
         return CliRunner(mix_stderr=False)
     except TypeError:

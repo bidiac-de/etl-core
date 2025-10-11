@@ -175,7 +175,6 @@ class TestSecureContextAdapter:
         assert result.skipped_existing == []
         assert result.errors == {}
 
-        # Verify secrets were stored
         assert self.mock_secret_store.set.call_count == 2
         self.mock_secret_store.set.assert_any_call(
             f"{self.provider_id}/param1", "secret_value1"
@@ -184,9 +183,8 @@ class TestSecureContextAdapter:
             f"{self.provider_id}/param3", "secret_value2"
         )
 
-        # Verify context values were blanked
         assert mock_param1.value == ""
-        assert mock_param2.value == "plain_value"  # Should not change
+        assert mock_param2.value == "plain_value"
         assert mock_param3.value == ""
 
     def test_bootstrap_to_store_credentials_only(self):
@@ -209,7 +207,6 @@ class TestSecureContextAdapter:
         assert result.skipped_existing == []
         assert result.errors == {}
 
-        # Verify password was stored
         self.mock_secret_store.set.assert_called_once_with(
             f"{self.provider_id}/password", "secret_password"
         )
@@ -223,7 +220,6 @@ class TestSecureContextAdapter:
 
         mock_context.parameters = {"param": mock_param}
 
-        # Secret already exists
         self.mock_secret_store.exists.return_value = True
 
         adapter = SecureContextAdapter(
@@ -238,7 +234,6 @@ class TestSecureContextAdapter:
         assert result.skipped_existing == ["param"]
         assert result.errors == {}
 
-        # Should not try to store
         self.mock_secret_store.set.assert_not_called()
 
     def test_bootstrap_to_store_verification_failure(self):
@@ -253,7 +248,7 @@ class TestSecureContextAdapter:
         self.mock_secret_store.exists.return_value = False
         self.mock_secret_store.set.return_value = None
         self.mock_secret_store.get.return_value = (
-            "different_value"  # Verification fails
+            "different_value"
         )
 
         adapter = SecureContextAdapter(
@@ -313,7 +308,6 @@ class TestSecureContextAdapter:
 
         adapter.delete_from_store()
 
-        # Should only delete secure parameters
         self.mock_secret_store.delete.assert_called_once_with(
             f"{self.provider_id}/param1"
         )
@@ -330,7 +324,6 @@ class TestSecureContextAdapter:
 
         adapter.delete_from_store()
 
-        # Should delete password
         self.mock_secret_store.delete.assert_called_once_with(
             f"{self.provider_id}/password"
         )
@@ -343,7 +336,6 @@ class TestSecureContextAdapter:
 
         mock_context.parameters = {"param": mock_param}
 
-        # Simulate error during deletion
         self.mock_secret_store.delete.side_effect = Exception("Delete error")
 
         adapter = SecureContextAdapter(
@@ -352,7 +344,6 @@ class TestSecureContextAdapter:
             context=mock_context,
         )
 
-        # Should not raise error
         adapter.delete_from_store()
 
     def test_get_parameter_context_secure(self):
@@ -448,8 +439,6 @@ class TestSecureContextAdapter:
 
     def test_get_parameter_not_initialized(self):
         """Test get_parameter when adapter is not properly initialized."""
-        # We can't create an adapter without context or credentials due to validation
-        # So we'll test the error case differently
         with pytest.raises(
             ValueError, match="Provide either `context` or `credentials`"
         ):
@@ -524,7 +513,6 @@ class TestSecureContextAdapter:
         assert result.skipped_existing == []
         assert result.errors == {}
 
-        # Verify both were stored
         assert self.mock_secret_store.set.call_count == 2
         self.mock_secret_store.set.assert_any_call(
             f"{self.provider_id}/param", "context_secret"
@@ -546,7 +534,6 @@ class TestSecureContextAdapter:
 
         mock_context.parameters = {"param1": mock_param1, "param2": mock_param2}
 
-        # First secret succeeds, second fails
         self.mock_secret_store.exists.side_effect = [False, False]
         self.mock_secret_store.set.side_effect = [None, Exception("Storage failed")]
         self.mock_secret_store.get.side_effect = ["secret1", "secret1"]
@@ -564,6 +551,5 @@ class TestSecureContextAdapter:
         assert "param2" in result.errors
         assert "Storage failed" in result.errors["param2"]
 
-        # First param should be blanked, second should not
         assert mock_param1.value == ""
         assert mock_param2.value == "secret2"

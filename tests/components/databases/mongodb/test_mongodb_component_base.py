@@ -87,7 +87,6 @@ def patched_mongodb(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
 
 
 class DummyMongoComp(mongodb_mod.MongoDBComponent):
-    # minimal concrete implementation for the abstract base
     name: str
     description: str
     comp_type: str
@@ -141,7 +140,7 @@ def _mk_bad_construct(**overrides: Any) -> BadSetupComp:
         context_id="ctx",
     )
     base.update(overrides)
-    return BadSetupComp.model_construct(**base)  # no setup on purpose
+    return BadSetupComp.model_construct(**base)
 
 
 def test_validator_triggers_setup_and_properties(

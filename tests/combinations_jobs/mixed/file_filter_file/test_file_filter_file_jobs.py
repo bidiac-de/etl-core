@@ -5,7 +5,6 @@ from pathlib import Path
 import dask.dataframe as dd
 import pytest
 
-# Ensure components are registered
 import etl_core.components.file_components.csv.read_csv  # noqa: F401
 import etl_core.components.file_components.csv.write_csv  # noqa: F401
 import etl_core.components.file_components.json.read_json  # noqa: F401
@@ -25,7 +24,6 @@ from tests.config_helpers import (
 
 
 def _cfg_dir() -> Path:
-    # JSON configs live next to this test file
     return Path(__file__).with_suffix("").parent
 
 

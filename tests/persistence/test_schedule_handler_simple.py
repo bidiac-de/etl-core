@@ -39,7 +39,6 @@ class TestScheduleHandlerSimple:
 
             handler = ScheduleHandler()
 
-            # Test with None trigger_args
             handler.create(
                 name="Test Schedule",
                 job_id="test_job",
@@ -48,7 +47,6 @@ class TestScheduleHandlerSimple:
                 trigger_args=None,
             )
 
-            # Test with empty trigger_args
             handler.create(
                 name="Test Schedule 2",
                 job_id="test_job_2",
@@ -57,7 +55,6 @@ class TestScheduleHandlerSimple:
                 trigger_args={},
             )
 
-            # Verify that dict() was called to convert None to empty dict
             assert mock_session.add.call_count == 2
             assert mock_session.commit.call_count == 2
             assert mock_session.refresh.call_count == 2
@@ -98,7 +95,6 @@ class TestScheduleHandlerSimple:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
 
-            # Create a mock schedule object
             existing_schedule = MagicMock()
             existing_schedule.name = "Old Name"
             existing_schedule.is_paused = False
@@ -107,13 +103,11 @@ class TestScheduleHandlerSimple:
 
             handler = ScheduleHandler()
 
-            # Update only name
             handler.update("test_id", name="New Name")
 
             assert existing_schedule.name == "New Name"
-            assert existing_schedule.is_paused is False  # Should remain unchanged
+            assert existing_schedule.is_paused is False
 
-            # Update only is_paused
             handler.update("test_id", is_paused=True)
 
             assert existing_schedule.is_paused is True
@@ -210,7 +204,6 @@ class TestScheduleHandlerSimple:
 
             handler = ScheduleHandler()
 
-            # Test INTERVAL trigger
             handler.create(
                 name="Interval Schedule",
                 job_id="job1",
@@ -219,7 +212,6 @@ class TestScheduleHandlerSimple:
                 trigger_args={"seconds": 30},
             )
 
-            # Test CRON trigger
             handler.create(
                 name="Cron Schedule",
                 job_id="job2",
@@ -228,7 +220,6 @@ class TestScheduleHandlerSimple:
                 trigger_args={"cron": "0 0 * * *"},
             )
 
-            # Test DATE trigger
             handler.create(
                 name="Date Schedule",
                 job_id="job3",
@@ -237,7 +228,6 @@ class TestScheduleHandlerSimple:
                 trigger_args={"run_date": "2024-01-01 00:00:00"},
             )
 
-            # All three creates should have succeeded
             assert mock_session.add.call_count == 3
             assert mock_session.commit.call_count == 3
             assert mock_session.refresh.call_count == 3
@@ -257,10 +247,8 @@ class TestScheduleHandlerSimple:
 
             handler = ScheduleHandler()
 
-            # Update with no parameters (should still update timestamp)
             handler.update("test_id")
 
-            # Verify that updated_at was set (datetime.now() was called)
             assert existing_schedule.updated_at != datetime(2024, 1, 1, 12, 0, 0)
             mock_session.add.assert_called_once()
             mock_session.commit.assert_called_once()
@@ -276,7 +264,6 @@ class TestScheduleHandlerSimple:
 
             handler = ScheduleHandler()
 
-            # Create with is_paused default (False)
             handler.create(
                 name="Test Schedule",
                 job_id="test_job",
@@ -285,12 +272,11 @@ class TestScheduleHandlerSimple:
                 trigger_args={"seconds": 10},
             )
 
-            # Verify that the schedule was created with default is_paused=False
             mock_session.add.assert_called_once()
             call_args = mock_session.add.call_args[0][0]
             assert (
                 hasattr(call_args, "is_paused") or True
-            )  # Either has the attribute or we can't check it
+            )
 
     def test_context_manager_usage(self):
         """Test that the session context manager is used properly."""
@@ -305,11 +291,9 @@ class TestScheduleHandlerSimple:
 
             handler = ScheduleHandler()
 
-            # Use the context manager
             with handler._session():
                 pass
 
-            # Verify context manager was called
             mock_session_class.assert_called_once_with(handler.engine)
             mock_session_instance.__enter__.assert_called_once()
             mock_session_instance.__exit__.assert_called_once()

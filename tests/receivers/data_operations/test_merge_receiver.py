@@ -31,7 +31,6 @@ async def test_merge_receiver_process_row_forwards_and_metrics(
 
     assert len(outs) == 1
     assert outs[0][0].name == "out"
-    # payload forwarded as-is
     assert outs[0][1] == row
     assert data_ops_metrics.lines_received == 1
     assert data_ops_metrics.lines_processed == 1
@@ -54,7 +53,6 @@ async def test_merge_receiver_process_bulk_copies_dataframe_and_updates_metrics(
 
     assert len(outs) == 1
     assert outs[0][0].name == "out"
-    # Ensure a copy was forwarded (mutating original should not change forwarded copy)
     df.loc[0, "x"] = 999
     assert outs[0][1].iloc[0]["x"] == 1
 
@@ -80,5 +78,4 @@ async def test_merge_receiver_process_bigdata_forwards_same_ddf_and_counts(
 
     assert len(outs) == 1
     assert outs[0][0].name == "out"
-    # Dask object should be forwarded by reference
     assert outs[0][1] is ddf

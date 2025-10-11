@@ -29,15 +29,12 @@ class TestMariaDBReceivers:
     def mock_connection_handler(self):
         """Create a mock connection handler."""
         handler = Mock(spec=SQLConnectionHandler)
-        # Create a proper mock connection that can pass isinstance checks
         mock_connection = Mock()
         mock_connection.execute.return_value = Mock()
         mock_connection.commit = Mock(return_value=None)
-        mock_connection.rollback = Mock(return_value=None)  # Added rollback method
-        # Make the mock connection pass isinstance(connection, SQLConnection) check
+        mock_connection.rollback = Mock(return_value=None)
         mock_connection.__class__ = SQLConnection
 
-        # Mock the lease context manager
         mock_context_manager = Mock()
         mock_context_manager.__enter__ = Mock(return_value=mock_connection)
         mock_context_manager.__exit__ = Mock(return_value=None)
@@ -605,16 +602,13 @@ class TestMariaDBReceivers:
         """Test that connection lease context manager is properly used."""
         receiver = MariaDBReceiver()
 
-        # Mock the lease context manager
         mock_context = mock_connection_handler.lease.return_value
         mock_conn = mock_context.__enter__.return_value
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.__iter__ = Mock(return_value=iter([]))
         mock_conn.execute.return_value = mock_result
 
-        # Test read operation
         await receiver.read_bulk(
             entity_name="users",
             metrics=mock_metrics,
@@ -623,22 +617,18 @@ class TestMariaDBReceivers:
             params={},
         )
 
-        # Verify lease context manager was used
         mock_connection_handler.lease.assert_called_once()
         mock_context.__enter__.assert_called_once()
-        # Note: __exit__ is not called in current impl, but should be in production
 
     @pytest.mark.asyncio
     async def test_metrics_integration(self, mock_connection_handler, mock_metrics):
         """Test that metrics are properly passed through to operations."""
         receiver = MariaDBReceiver()
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.__iter__ = Mock(return_value=iter([]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test that metrics object is used in operations
         await receiver.read_bulk(
             entity_name="users",
             metrics=mock_metrics,
@@ -647,18 +637,14 @@ class TestMariaDBReceivers:
             params={},
         )
 
-        # Verify metrics object was passed through (not directly used in current impl)
-        # This test documents the expected behavior for future metrics integration
 
     @pytest.mark.asyncio
     async def test_large_data_handling(self, mock_connection_handler, mock_metrics):
         """Test handling of large datasets."""
         receiver = MariaDBReceiver()
 
-        # Create large mock result with proper SQLAlchemy structure
         large_data = [{"id": i, "name": f"User{i}"} for i in range(1000)]
         mock_result = Mock()
-        # Create mock row objects with _mapping attribute
         mock_rows = []
         for data in large_data:
             mock_row = Mock()
@@ -667,7 +653,6 @@ class TestMariaDBReceivers:
         mock_result.__iter__ = Mock(return_value=iter(mock_rows))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test read_bulk with large dataset
         result = await receiver.read_bulk(
             entity_name="large_table",
             metrics=mock_metrics,
@@ -687,20 +672,17 @@ class TestMariaDBReceivers:
         """Test handling of special characters in data."""
         receiver = MariaDBReceiver()
 
-        # Data with special characters
         special_data = {
             "name": "José María",
             "email": "jose.maria@café.com",
             "description": "Special chars: äöüßñéèêë",
         }
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
         mock_result.inserted_primary_key = [456]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_row with special characters
         result = await receiver.write_row(
             entity_name="users",
             row=special_data,
@@ -711,9 +693,7 @@ class TestMariaDBReceivers:
             table="users",
         )
 
-        # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        # Verify return value
         assert result == {"affected_rows": 1, "row": special_data}
 
     @pytest.mark.asyncio
@@ -721,7 +701,6 @@ class TestMariaDBReceivers:
         """Test handling of various numeric data types."""
         receiver = MariaDBReceiver()
 
-        # Data with different numeric types
         numeric_data = {
             "integer": 42,
             "float": 3.14159,
@@ -729,13 +708,11 @@ class TestMariaDBReceivers:
             "negative": -100,
         }
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
         mock_result.inserted_primary_key = [789]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_row with numeric data
         result = await receiver.write_row(
             entity_name="numeric_table",
             row=numeric_data,
@@ -747,9 +724,7 @@ class TestMariaDBReceivers:
             table="numeric_table",
         )
 
-        # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        # Verify return value
         assert result == {"affected_rows": 1, "row": numeric_data}
 
     @pytest.mark.asyncio
@@ -757,16 +732,13 @@ class TestMariaDBReceivers:
         """Test handling of boolean data types."""
         receiver = MariaDBReceiver()
 
-        # Data with boolean values
         boolean_data = {"is_active": True, "is_deleted": False, "has_permission": True}
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
         mock_result.inserted_primary_key = [101]
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_row with boolean data
         result = await receiver.write_row(
             entity_name="boolean_table",
             row=boolean_data,
@@ -777,12 +749,9 @@ class TestMariaDBReceivers:
             table="boolean_table",
         )
 
-        # Verify execute was called
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        # Verify return value
         assert result == {"affected_rows": 1, "row": boolean_data}
 
-    # NEW TESTS FOR IMPROVED COVERAGE
 
     @pytest.mark.asyncio
     async def test_write_bigdata_partition_processing(
@@ -791,20 +760,16 @@ class TestMariaDBReceivers:
         """Test Dask DataFrame partition processing in write_bigdata."""
         receiver = MariaDBReceiver()
 
-        # Create test data
         df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
         ddf = dd.from_pandas(df, npartitions=2)
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock compute to return real pandas DataFrames
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
-            # Test write_bigdata with new signature
             result = await receiver.write_bigdata(
                 entity_name="test_table",
                 frame=ddf,
@@ -814,9 +779,7 @@ class TestMariaDBReceivers:
                 connection_handler=mock_connection_handler,
             )
 
-            # Verify compute was called (2 partitions = 2 calls)
             assert mock_compute.call_count == 2
-            # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
 
@@ -827,15 +790,12 @@ class TestMariaDBReceivers:
         """Test write_bigdata with empty partition data."""
         receiver = MariaDBReceiver()
 
-        # Create empty DataFrame
         df = pd.DataFrame()
         ddf = dd.from_pandas(df, npartitions=1)
 
-        # Mock compute to return real pandas DataFrames
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
-            # Test write_bigdata with empty data and new signature
             result = await receiver.write_bigdata(
                 entity_name="test_table",
                 frame=ddf,
@@ -845,9 +805,7 @@ class TestMariaDBReceivers:
                 table="test_table",
             )
 
-            # Verify compute was called (once for first_partition + partitions)
             assert mock_compute.call_count >= 1
-            # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
 
@@ -858,20 +816,16 @@ class TestMariaDBReceivers:
         """Test write_bigdata with single partition."""
         receiver = MariaDBReceiver()
 
-        # Create single partition DataFrame
         df = pd.DataFrame({"id": [1], "name": ["A"]})
         ddf = dd.from_pandas(df, npartitions=1)
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 1
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock compute to return real pandas DataFrames
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
 
-            # Test write_bigdata with new signature
             result = await receiver.write_bigdata(
                 entity_name="test_table",
                 frame=ddf,
@@ -881,9 +835,7 @@ class TestMariaDBReceivers:
                 table="test_table",
             )
 
-            # Verify compute was called (once for first_partition + partitions)
             assert mock_compute.call_count >= 1
-            # Verify return value
             assert result is not None
             assert hasattr(result, "npartitions")
 
@@ -894,10 +846,8 @@ class TestMariaDBReceivers:
         """Test write_bulk early return for empty DataFrame."""
         receiver = MariaDBReceiver()
 
-        # Create empty DataFrame
         empty_df = pd.DataFrame()
 
-        # Test write_bulk with empty DataFrame
         result = await receiver.write_bulk(
             entity_name="users",
             frame=empty_df,
@@ -907,10 +857,8 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify no execute or commit calls for empty DataFrame
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
-        # Verify return value
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
@@ -920,7 +868,6 @@ class TestMariaDBReceivers:
         """Test write_bulk early return for empty list."""
         receiver = MariaDBReceiver()
 
-        # Test write_bulk with empty list (convert to DataFrame)
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
             entity_name="users",
@@ -931,10 +878,8 @@ class TestMariaDBReceivers:
             table="users",
         )
 
-        # Verify no execute or commit calls for empty list
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
-        # Verify return value
         assert result.equals(empty_df)
 
     @pytest.mark.asyncio
@@ -943,7 +888,6 @@ class TestMariaDBReceivers:
     ):
         """Test read_bigdata default partition setting."""
         receiver = MariaDBReceiver()
-        # Mock the connection execution
         mock_result = Mock()
         mock_row1 = Mock()
         mock_row1._mapping = {"id": 1, "name": "John"}
@@ -952,13 +896,11 @@ class TestMariaDBReceivers:
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Mock dask.dataframe.from_pandas
         with patch("dask.dataframe.from_pandas") as mock_from_pandas:
             mock_ddf = Mock()
             mock_ddf.npartitions = 4
             mock_from_pandas.return_value = mock_ddf
 
-            # Test read_bigdata
             await receiver.read_bigdata(
                 entity_name="users",
                 metrics=mock_metrics,
@@ -967,7 +909,6 @@ class TestMariaDBReceivers:
                 params={},
             )
 
-            # Verify from_pandas was called with default npartitions=1
             mock_from_pandas.assert_called_once()
             call_args = mock_from_pandas.call_args
             assert call_args[1]["npartitions"] == 1
@@ -979,15 +920,12 @@ class TestMariaDBReceivers:
         """Test write_bulk DataFrame to dict conversion."""
         receiver = MariaDBReceiver()
 
-        # Create DataFrame
         df = pd.DataFrame({"id": [1, 2], "name": ["John", "Jane"]})
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_bulk with DataFrame
         await receiver.write_bulk(
             entity_name="users",
             frame=df,
@@ -997,7 +935,6 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called (once for each row)
         assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
@@ -1008,15 +945,12 @@ class TestMariaDBReceivers:
         """Test write_bulk with list data (direct usage without conversion)."""
         receiver = MariaDBReceiver()
 
-        # List data
         list_data = [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Test write_bulk with list (convert to DataFrame first)
         df = pd.DataFrame(list_data)
         await receiver.write_bulk(
             entity_name="users",
@@ -1027,7 +961,6 @@ class TestMariaDBReceivers:
             connection_handler=mock_connection_handler,
         )
 
-        # Verify execute was called (once for each row)
         assert mock_connection_handler.lease().__enter__().execute.call_count == 2
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
@@ -1037,23 +970,18 @@ class TestMariaDBReceivers:
     ):
         """Test the partition processing logic manually by calling internal function."""
 
-        # Create test partition data
         partition_df = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Manually test the partition processing logic
-        # We'll simulate what _process_partition does
         table = "test_table"
 
-        # This simulates the _process_partition function logic
         with mock_connection_handler.lease() as conn:
             rows = partition_df.to_dict("records")
 
-            if rows:  # Test the non-empty case
+            if rows:
                 columns = list(rows[0].keys())
                 placeholders = ", ".join([f":{key}" for key in columns])
                 query = (
@@ -1064,14 +992,11 @@ class TestMariaDBReceivers:
                 conn.execute(text(query), rows)
                 conn.commit()
 
-        # Verify the connection was used correctly
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         mock_connection_handler.lease().__enter__().commit.assert_called_once()
 
-        # Verify the correct SQL was generated
         call_args = mock_connection_handler.lease().__enter__().execute.call_args
         assert call_args is not None
-        # The first argument should be a SQLAlchemy text object
         sql_query = call_args[0][0]
         assert "INSERT INTO test_table" in str(sql_query)
         assert "id, name" in str(sql_query) or "name, id" in str(sql_query)
@@ -1082,26 +1007,21 @@ class TestMariaDBReceivers:
     ):
         """Test the empty partition logic manually."""
 
-        # Create empty partition data
         empty_partition_df = pd.DataFrame()
 
-        # Mock the connection execution
         mock_result = Mock()
         mock_result.rowcount = 0
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-        # Manually test the empty partition processing logic
         table = "test_table"
 
-        # This simulates the _process_partition function logic with empty data
         with mock_connection_handler.lease() as conn:
             rows = empty_partition_df.to_dict("records")
 
-            if not rows:  # Test the empty case - should return early
+            if not rows:
                 # This should not execute any database operations
                 pass
             else:
-                # This should not be reached with empty data
                 columns = list(rows[0].keys())
                 placeholders = ", ".join([f":{key}" for key in columns])
                 query = (
@@ -1112,25 +1032,19 @@ class TestMariaDBReceivers:
                 conn.execute(text(query), rows)
                 conn.commit()
 
-        # Verify no database operations were performed for empty partition
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
 
     def test_partition_processing_column_logic(self, mock_connection_handler):
         """Test the column and placeholder generation logic from _process_partition."""
 
-        # Test different column configurations
         test_cases = [
-            # Single column
             pd.DataFrame({"id": [1, 2]}),
-            # Multiple columns
             pd.DataFrame({"id": [1, 2], "name": ["A", "B"], "age": [25, 30]}),
-            # Different data types
             pd.DataFrame({"id": [1], "active": [True], "score": [98.5]}),
         ]
 
         for i, partition_df in enumerate(test_cases):
-            # Mock the connection execution
             mock_result = Mock()
             mock_result.rowcount = len(partition_df)
             mock_connection_handler.lease().__enter__().execute.return_value = (
@@ -1139,7 +1053,6 @@ class TestMariaDBReceivers:
 
             table = f"test_table_{i}"
 
-            # Simulate the _process_partition logic
             with mock_connection_handler.lease() as conn:
                 rows = partition_df.to_dict("records")
 
@@ -1154,7 +1067,6 @@ class TestMariaDBReceivers:
                     conn.execute(text(query), rows)
                     conn.commit()
 
-            # Verify correct number of calls
             expected_calls = i + 1
             assert (
                 mock_connection_handler.lease().__enter__().execute.call_count

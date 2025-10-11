@@ -20,7 +20,6 @@ CFG_BULK_FLAT_TO_NESTED_UPSERT = BASE / "mongo_bulk_flat_to_nested_upsert.json"
 CFG_BULK_NESTED_TO_FLAT = BASE / "mongo_bulk_nested_to_flat.json"
 CFG_BULK_JOIN = BASE / "mongo_bulk_join_people_orders.json"
 
-# Placeholder token used inside the JSON files
 CONTEXT_ID_TOKEN = "${MONGO_EXAMPLE_CONTEXT_ID}"
 
 
@@ -100,5 +99,4 @@ def run_job_from_json(cfg_path: Path, env: Environment = Environment.TEST) -> No
 if __name__ == "__main__":
 
     autodiscover_components("etl_core.components")
-    # Run one of the example jobs with your own MongoDB credentials:
     run_job_from_json(CFG_BULK_FLAT_TO_NESTED_UPSERT)

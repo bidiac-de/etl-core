@@ -16,7 +16,6 @@ from etl_core.persistence.handlers.execution_records_handler import (
 from etl_core.persistence.table_definitions import ExecutionTable, ExecutionAttemptTable
 from tests.helpers import runtime_job_from_config
 
-# Ensure tests can build the "test" component by name
 runtimejob_module.TestComponent = StubComponent
 
 
@@ -34,7 +33,6 @@ def mem_engine():
 
 @pytest.fixture()
 def records_handler(mem_engine) -> ExecutionRecordsHandler:
-    # Inject engine into handler so it uses the test DB
     return ExecutionRecordsHandler(engine_=mem_engine)
 
 
@@ -139,7 +137,6 @@ def test_persist_success_single_attempt(
     execution = handler.execute_job(job)
     exec_row, attempts = _fetch_exec_and_attempts(mem_engine, execution.id)
 
-    # Execution persisted as SUCCESS with timestamps
     assert exec_row.status == "SUCCESS"
     assert exec_row.error is None
     assert exec_row.started_at is not None
@@ -202,12 +199,10 @@ def test_persist_retry_then_success(
     assert len(attempts) == 2
     first, second = attempts
 
-    # First attempt failed and was finished with FAILED (and error)
     assert first.attempt_index == 1
     assert first.status == "FAILED"
     assert first.error
 
-    # Second attempt succeeded and was finished with SUCCESS (no error)
     assert second.attempt_index == 2
     assert second.status == "SUCCESS"
     assert second.error is None
@@ -230,7 +225,6 @@ def test_handler_queries_filter_and_order(
     ok_exec = handler.execute_job(ok_job)
     fail_exec = handler.execute_job(fail_job)
 
-    # list_executions: filter by status
     ok_rows, ok_total = records_handler.list_executions(status="SUCCESS")
     fail_rows, fail_total = records_handler.list_executions(status="FAILED")
     assert ok_total >= 1 and any(r.id == ok_exec.id for r in ok_rows)

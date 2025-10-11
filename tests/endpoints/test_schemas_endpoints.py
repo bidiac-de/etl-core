@@ -25,16 +25,13 @@ def test_get_job_schema_structure(client: TestClient) -> None:
     assert response.status_code == 200
     schema = response.json()
 
-    # 1) properties exist and are now an ordered LIST of entries
     assert "properties" in schema
     assert isinstance(schema["properties"], list)
 
-    # 2) check a few expected fields by name
     prop_names = _prop_names_list(schema)
     for expected in {"name", "file_logging", "num_of_retries", "strategy_type"}:
         assert expected in prop_names
 
-    # 3) Job schema keeps $defs (router does not inline at this endpoint)
     assert "$defs" in schema
 
 
@@ -55,7 +52,6 @@ def test_get_specific_schema_valid_form(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert isinstance(payload, dict)
-    # class variables should be attached for GUI
     assert "x-class" in payload
     assert isinstance(payload["x-class"], dict)
 
@@ -77,7 +73,6 @@ def test_get_specific_schema_full_and_hidden(client: TestClient) -> None:
     hidden_schema = r_hidden.json()
     assert isinstance(hidden_schema, dict)
     assert "x-class" in hidden_schema
-    # Hidden-only schema should be an object with (possibly empty) properties
     assert (
         hidden_schema.get("type") in (None, "object") or "properties" in hidden_schema
     )

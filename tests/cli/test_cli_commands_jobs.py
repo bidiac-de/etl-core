@@ -26,12 +26,10 @@ class TestJobsCLIExtra:
         monkeypatch.setattr(
             "etl_core.api.cli.commands.jobs.pick_clients", lambda: (jobs, None, None)
         )
-        # success
         res = runner.invoke(app, ["jobs", "update", "jid", str(temp_config_file)])
         assert res.exit_code == 0
         assert "Updated job updated-id" in res.stdout
 
-        # not found
         jobs.update.side_effect = PersistNotFoundError("x")
         res = runner.invoke(app, ["jobs", "update", "jid", str(temp_config_file)])
         assert res.exit_code == 1
@@ -42,12 +40,10 @@ class TestJobsCLIExtra:
         monkeypatch.setattr(
             "etl_core.api.cli.commands.jobs.pick_clients", lambda: (jobs, None, None)
         )
-        # success
         res = runner.invoke(app, ["jobs", "delete", "jid"])
         assert res.exit_code == 0
         assert "Deleted job jid" in res.stdout
 
-        # not found
         jobs.delete.side_effect = PersistNotFoundError("x")
         res = runner.invoke(app, ["jobs", "delete", "jid"])
         assert res.exit_code == 1

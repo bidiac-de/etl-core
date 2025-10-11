@@ -1,4 +1,3 @@
-# tests/components/data_operations/aggregation/test_aggregation_component.py
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -20,7 +19,6 @@ from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_
 
 
 def _schema_for(*names: str) -> Dict[str, object]:
-    # Keep it simple: tests only need field names; data types don’t matter here.
     return {
         "fields": [{"name": n, "data_type": "string", "nullable": True} for n in names]
     }

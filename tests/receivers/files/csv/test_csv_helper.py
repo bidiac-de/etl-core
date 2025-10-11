@@ -107,7 +107,7 @@ def test_write_csv_bigdata_result_with_compute_method(
     path = tmp_path / "file.csv"
 
     class Dummy:
-        def compute(self):  # noqa: D401
+        def compute(self):
             Dummy.computed = True
 
     def fake_to_csv(*_, **__):

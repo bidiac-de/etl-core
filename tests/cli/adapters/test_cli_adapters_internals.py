@@ -25,7 +25,7 @@ def _resp(
         reason=reason,
         request=req,
         json=lambda: {"ok": True},
-        raise_for_status=lambda: None,  # can be overwritten in tests
+        raise_for_status=lambda: None,
     )
     return r  # type: ignore[return-value]
 
@@ -85,7 +85,6 @@ def test__raise_for_status_404_raises_persist_not_found() -> None:
     base = adapters._RestBase("http://api")
     with pytest.raises(PersistNotFoundError) as exc:
         base._raise_for_status(r)  # type: ignore[arg-type]
-    # message contains masked URL and method
     msg = str(exc.value)
     assert "Resource not found" in msg
     assert "***@" in msg
@@ -114,7 +113,6 @@ def test__raise_for_status_other_http_error_rewraps(
 def test__raise_for_status_ok_and_missing_request_url_is_safe() -> None:
     r = _resp(status=200, url=None)
     base = adapters._RestBase("http://api")
-    # Should not raise
     base._raise_for_status(r)  # type: ignore[arg-type]
 
 

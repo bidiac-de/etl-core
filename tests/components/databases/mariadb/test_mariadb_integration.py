@@ -112,7 +112,6 @@ class TestMariaDBIntegration:
                 context_id=persisted_mapping_context_id,
             )
 
-        # Sanity: both components resolved credentials ID
         assert read_comp._get_credentials()["__credentials_id__"]
         assert write_comp._get_credentials()["__credentials_id__"]
 

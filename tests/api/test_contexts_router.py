@@ -104,14 +104,12 @@ def test_get_secret_provider_errors_to_http(monkeypatch):
 
 
 def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
-    # patch adapter and secret provider
     monkeypatch.setattr(C, "SecureContextAdapter", FakeAdapter)
     monkeypatch.setattr(C, "create_secret_provider", lambda: FakeSecretProvider())
 
     ctx_handler = FakeContextHandler()
     creds_handler = FakeCredsHandler()
 
-    # create credentials (dict to match router's model type path)
     creds_payload = {
         "name": "conn",
         "user": "u",
@@ -128,7 +126,6 @@ def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
     )
     assert resp_creds.kind == "credentials" and resp_creds.id in creds_handler.rows
 
-    # create context
     ctx = C.Context(environment=Environment.DEV, parameters={}, name="n")
     body_ctx = C.ContextCreateRequest(context=ctx)
     resp_ctx = C.create_context_provider(
@@ -136,18 +133,15 @@ def test_create_credentials_and_context_and_list_get_delete(monkeypatch):
     )
     assert resp_ctx.kind == "context" and resp_ctx.id in ctx_handler.rows
 
-    # list providers contains both
     providers = C.list_providers(ctx_handler=ctx_handler, creds_handler=creds_handler)
     kinds = {p.kind for p in providers}
     assert kinds == {"context", "credentials"}
 
-    # get provider for context id
     info = C.get_provider(
         resp_ctx.id, ctx_handler=ctx_handler, creds_handler=creds_handler
     )
     assert info.kind == "context"
 
-    # delete should return a success message dict (HTTP 200 handled by router decorator)
     out = C.delete_provider(
         resp_ctx.id, creds_handler=creds_handler, ctx_handler=ctx_handler
     )

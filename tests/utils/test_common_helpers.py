@@ -118,13 +118,11 @@ def test_leaf_field_paths_and_map():
     leaves = [p for p, _ in leaves_with_defs]
     assert set(leaves) == {"a.b", "a.c.d", "e", "f", "p"}
 
-    # Check mapping
     mp = get_leaf_field_map(schema, ".")
     assert set(mp.keys()) == set(leaves)
     assert mp["a.b"].data_type == DataType.INTEGER
     assert mp["e"].data_type == DataType.ARRAY
 
-    # Convenience wrapper
     assert set(leaf_field_paths(schema, ".")) == set(leaves)
 
 
@@ -138,11 +136,11 @@ def test_type_ok_scalar_and_enum_ok():
 
     fd_int = FieldDef(name="i", data_type=DataType.INTEGER)
     assert type_ok_scalar(3, fd_int) is True
-    assert type_ok_scalar(False, fd_int) is False  # bool is subclass of int -> reject
+    assert type_ok_scalar(False, fd_int) is False
 
     fd_float = FieldDef(name="f", data_type=DataType.FLOAT)
     assert type_ok_scalar(2.5, fd_float) is True
-    assert type_ok_scalar(2, fd_float) is True  # ints ok for float
+    assert type_ok_scalar(2, fd_float) is True
     assert type_ok_scalar(True, fd_float) is False
 
     fd_bool = FieldDef(name="b", data_type=DataType.BOOLEAN)
@@ -161,7 +159,6 @@ def test_type_ok_scalar_and_enum_ok():
         name="e2", data_type=DataType.ENUM, enum_values=[], nullable=True
     )
     assert enum_ok("anything", fd_enum_empty) is False
-    # Nulls allowed for enum
     assert enum_ok(None, fd_enum) is True
     assert type_ok_scalar(None, fd_enum) is True
 
@@ -190,11 +187,9 @@ def test_pandas_flatten_and_unflatten():
         "p",
     }
 
-    # empty input
     df_empty = pandas_flatten_docs([], sep=".")
     assert df_empty.empty
 
-    # unflatten
     flat = {"a.b": 1, "a.c.d": 2, "e": [1, 2]}
     nested = unflatten_record(flat, sep=".")
     assert nested == {"a": {"b": 1, "c": {"d": 2}}, "e": [1, 2]}

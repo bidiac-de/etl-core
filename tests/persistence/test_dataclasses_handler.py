@@ -41,7 +41,6 @@ class FakeSession:
 
 
 def _dummy_job() -> JobTable:
-    # Only id is needed for FK; other fields get defaults in the model.
     return JobTable(id=str(uuid4()))
 
 
@@ -96,13 +95,11 @@ def test_update_metadata_entry_by_row_and_by_id(
     job = _dummy_job()
     meta = handler.create_metadata_for_job(session, job, data={})
 
-    # Update by passing object
     out1 = handler.update_metadata_entry(
         session, meta, {"user_id": "alice", "unknown": 123}
     )
     assert out1.user_id == "alice"  # unknown is ignored
 
-    # Update by id
     out2 = handler.update_metadata_entry(session, out1.id, {"user_id": "bob"})
     assert out2.user_id == "bob"
 
@@ -115,13 +112,11 @@ def test_update_layout_entry_by_row_and_by_id(
         session, comp, data={"x_coordinate": 1, "y_coordinate": 2}
     )
 
-    # by row
     out1 = handler.update_layout_entry(
         session, layout, {"x_coordinate": 11, "unknown": "nope"}
     )
     assert out1.x_coordinate == 11
 
-    # by id
     out2 = handler.update_layout_entry(session, out1.id, {"y_coordinate": 22})
     assert out2.y_coordinate == 22
 

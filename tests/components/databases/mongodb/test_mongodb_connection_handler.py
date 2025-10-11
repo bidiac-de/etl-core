@@ -12,7 +12,6 @@ import etl_core.components.databases.mongodb.mongodb_connection_handler as mch
 def _decoded_inline_creds(uri: str) -> str | None:
     """Return decoded 'user[:pass]' if creds are inline, else None."""
     try:
-        # split 'mongodb://<creds>@host...'
         after_scheme = uri.split("://", 1)[1]
         if "@" not in after_scheme:
             return None
@@ -88,15 +87,12 @@ def fake_registry(monkeypatch: pytest.MonkeyPatch) -> _FakeRegistry:
 
 
 def test_build_uri_variants() -> None:
-    # no credentials
     u1 = mch.MongoConnectionHandler.build_uri(host="h", port=27017)
     assert u1 == "mongodb://h:27017"
 
-    # user only — accept either form depending on impl choice
     u2 = mch.MongoConnectionHandler.build_uri(host="h", port=1, user="u")
     assert u2 in {"mongodb://u@h:1", "mongodb://h:1"}
 
-    # user + password + auth DB + params — some impls still omit credentials
     u3 = mch.MongoConnectionHandler.build_uri(
         host="h",
         port=2,
@@ -108,7 +104,6 @@ def test_build_uri_variants() -> None:
     assert u3.startswith("mongodb://h:2/")
     assert "authSource=admin" in u3 and "replicaSet=rs0" in u3
 
-    # replica set style host list + empty params
     u4 = mch.MongoConnectionHandler.build_uri(host="h1,h2", port=27017, params={})
     assert u4 == "mongodb://h1,h2:27017"
 
@@ -135,7 +130,6 @@ def test_connect_and_lease_and_close(
     key, client = h.connect(uri="mongodb://h:1", client_kwargs={})
     assert key.startswith("key:") and client is not None
 
-    # Patch instance methods to operate on (key, client) without relying on privates.
     @contextmanager
     def _patched_lease_collection(
         *, database: str, collection: str
@@ -216,7 +210,6 @@ def test_real_lease_collection_uses_registry_and_releases(
         assert isinstance(coll, _FakeCollection)
         assert coll.name == "people"
 
-    # ensure the context manager leased and then released once
     assert fake_registry._leased == 1 and fake_registry._released == 1
 
 
@@ -324,14 +317,14 @@ def test_build_uri_user_only_then_base_query_empty_returns_base() -> None:
         host="h",
         port=27017,
         user="only user",
-        password="",  # empty -> user-only branch
+        password="",
         auth_db=None,
         params=None,
     )
 
     assert uri.startswith("mongodb://") and uri.endswith("h:27017")
     decoded = _decoded_inline_creds(uri)
-    assert decoded == "only user"  # user only, no password
+    assert decoded == "only user"
 
 
 def test_build_uri_no_user_params_only() -> None:

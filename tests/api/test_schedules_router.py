@@ -29,7 +29,6 @@ class FakeHandler:
 
 
 def test_list_and_get_schedule(monkeypatch):
-    # monkeypatch singleton to return our fake handler
     monkeypatch.setattr(S, "_schedule_handler_singleton", lambda: FakeHandler())
 
     out = S.list_schedules()
@@ -52,7 +51,6 @@ class FakeCmd:
 
 
 def test_create_update_delete_pause_resume(monkeypatch):
-    # Patch command classes
     monkeypatch.setattr(S, "CreateScheduleCommand", lambda **kw: FakeCmd(**kw))
     monkeypatch.setattr(S, "UpdateScheduleCommand", lambda **kw: FakeCmd(**kw))
     monkeypatch.setattr(

@@ -13,24 +13,19 @@ def test_local_jobs_client_crud(monkeypatch, mock_job_handler):
     monkeypatch.setattr(adapters, "_jh_singleton", lambda: mock_job_handler)
     client = LocalJobsClient()
 
-    # create
     job_id = client.create({"name": "test"})
     assert job_id == "test-job-id-123"
 
-    # get
     job = client.get("test-job-id-123")
     assert job["id"] == "test-job-id-123"
     assert "name" in job
 
-    # update
     job_id2 = client.update("test-job-id-123", {"name": "updated"})
     assert job_id2 == "test-job-id-123"
 
-    # delete (no return)
     client.delete("test-job-id-123")
     mock_job_handler.delete.assert_called_once()
 
-    # list_brief
     jobs = client.list_brief()
     assert len(jobs) == 2
 
@@ -44,18 +39,15 @@ def test_local_execution_client_start_and_get(
 
     client = LocalExecutionClient()
 
-    # start
     result = client.start("test-job-id-123")
     assert result["status"] == "started"
     assert "execution_id" in result
 
-    # get with missing row raises
     records = client._records
     records.get_execution.return_value = (None, [])
     with pytest.raises(adapters.PersistNotFoundError):
         client.get("missing-id")
 
-    # get with row
     row = Mock(
         id="exec-1",
         job_id="j1",
@@ -103,12 +95,10 @@ def test_local_execution_list_and_attempts(monkeypatch):
     data = client.list_executions()
     assert data["data"][0]["id"] == "exec-2"
 
-    # attempts raises if no row
     records.get_execution.return_value = (None, [])
     with pytest.raises(adapters.PersistNotFoundError):
         client.attempts("x")
 
-    # valid attempts
     records.get_execution.return_value = (row, [])
     out = client.attempts("exec-2")
     assert out[0]["id"] == "exec-2"
@@ -144,14 +134,12 @@ def test_local_contexts_create_and_get(monkeypatch):
 
     client = LocalContextsClient()
 
-    # create context (ENV MUST BE UPPERCASE: DEV|TEST|PROD)
     out = client.create_context(
         {"name": "ctx", "environment": "DEV", "parameters": {}},
         None,
     )
     assert out["kind"] == "context"
 
-    # create credentials
     out2 = client.create_credentials(
         {
             "name": "c",
@@ -165,7 +153,6 @@ def test_local_contexts_create_and_get(monkeypatch):
     )
     assert out2["kind"] == "credentials"
 
-    # context mapping with unknown creds
     creds_handler.get_by_id.return_value = None
     with pytest.raises(adapters.PersistNotFoundError):
         client.create_context_mapping(

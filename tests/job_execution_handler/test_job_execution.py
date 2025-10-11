@@ -22,7 +22,6 @@ from etl_core.persistence.handlers.execution_records_handler import (
 from tests.helpers import get_component_by_name, runtime_job_from_config
 
 
-# ensure Job._build_components() can find TestComponent
 runtimejob_module.TestComponent = StubComponent
 
 
@@ -91,7 +90,7 @@ class ExplodingSource(MultiSource):
     fail_message: str = "boom"
 
     async def process_row(self, payload, metrics):  # type: ignore[override]
-        if False:  # pragma: no cover - ensure async generator semantics
+        if False:  # pragma: no cover
             yield None
         await asyncio.sleep(0)
         raise RuntimeError(self.fail_message)

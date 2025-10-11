@@ -605,7 +605,7 @@ class TestParseSyncInterval:
     def test_parse_sync_interval_none(self):
         """Test parse_sync_interval with None input."""
         result = scheduler_service.parse_sync_interval(None)
-        assert result == 30  # Default value
+        assert result == 30
 
     def test_parse_sync_interval_disable_sentinels(self):
         """Test parse_sync_interval with disable sentinel values."""
@@ -617,7 +617,7 @@ class TestParseSyncInterval:
     def test_parse_sync_interval_invalid_string(self):
         """Test parse_sync_interval with invalid string."""
         result = scheduler_service.parse_sync_interval("invalid_string")
-        assert result == 30  # Default value
+        assert result == 30
 
     def test_parse_sync_interval_negative_int(self):
         """Test parse_sync_interval with negative integer."""
@@ -637,12 +637,12 @@ class TestParseSyncInterval:
     def test_parse_sync_interval_empty_string(self):
         """Test parse_sync_interval with empty string."""
         result = scheduler_service.parse_sync_interval("")
-        assert result == 30  # Default value
+        assert result == 30
 
     def test_parse_sync_interval_whitespace_string(self):
         """Test parse_sync_interval with whitespace string."""
         result = scheduler_service.parse_sync_interval("   ")
-        assert result == 30  # Default value
+        assert result == 30
 
     def test_resolve_sync_interval_seconds_env_var(self, monkeypatch):
         """Test _resolve_sync_interval_seconds with environment variable."""

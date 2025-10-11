@@ -17,7 +17,6 @@ from etl_core.components.wiring.ports import OutPortSpec, InPortSpec
 async def test_merge_component_process_row_forwards_to_single_output(
     data_ops_metrics: DataOperationsMetrics,
 ):
-    # Define explicit input & output ports
     in_port = InPortSpec(name="in", required=True, fanin="many")
     out_port = OutPortSpec(name="out")
 
@@ -34,7 +33,6 @@ async def test_merge_component_process_row_forwards_to_single_output(
     async for o in comp.process_row(row=row, metrics=data_ops_metrics):
         outs.append(o)
 
-    # Component should forward every incoming row to the single output port
     assert len(outs) == 1
     assert outs[0].port == "out"
     assert outs[0].payload == row
@@ -62,13 +60,11 @@ async def test_merge_component_process_bulk_forwards_dataframe_copy(
     async for o in comp.process_bulk(dataframe=df, metrics=data_ops_metrics):
         outs.append(o)
 
-    # Should forward the DataFrame as-is
     assert len(outs) == 1
     assert outs[0].port == "merged"
     assert isinstance(outs[0].payload, pd.DataFrame)
     df.loc[0, "k"] = 999
     assert outs[0].payload.iloc[0]["k"] == 1
 
-    # Metrics should match number of rows
     assert data_ops_metrics.lines_received == 2
     assert data_ops_metrics.lines_forwarded == 2

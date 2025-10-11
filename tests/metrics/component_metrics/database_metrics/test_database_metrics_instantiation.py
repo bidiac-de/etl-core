@@ -16,13 +16,11 @@ def started_and_proc():
 def test_database_metrics_instantiation_and_repr(started_and_proc):
     started, proc = started_and_proc
     m = DatabaseMetrics.model_construct()
-    # set through property setters for validation
     m.started_at = started
     m.processing_time = proc
     m.error_count = 1
     m.lines_received = 2
     m.lines_forwarded = 3
-    # direct attributes: use object.__setattr__ to avoid pydantic field handling
     object.__setattr__(m, "query_execution_time", 1.5)
 
     assert m.started_at == started
@@ -88,6 +86,6 @@ def test_component_metrics_validation_errors():
     with pytest.raises(ValueError):
         m.error_count = -3
     with pytest.raises(ValueError):
-        m.processing_time = 123  # not a timedelta
+        m.processing_time = 123
     with pytest.raises(ValueError):
-        m.started_at = "not a datetime"  # not a datetime
+        m.started_at = "not a datetime"

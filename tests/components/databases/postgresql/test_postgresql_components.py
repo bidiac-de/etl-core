@@ -97,7 +97,6 @@ class TestPostgreSQLComponents:
 
         assert comp.query == "SELECT * FROM users"
         assert comp.params == {"limit": 10}
-        # Active credentials id should come from the resolved mapping
         active_id = comp._get_credentials()["__credentials_id__"]
         _, credentials_id = persisted_credentials
         assert active_id == credentials_id

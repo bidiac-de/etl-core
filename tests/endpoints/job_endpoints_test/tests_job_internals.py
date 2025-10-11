@@ -26,12 +26,10 @@ def test_invalidate_job_caches_clears(monkeypatch):
 
 
 def test_serialize_components_from_variants():
-    # dict input
     d = {"components": [{"a": 1}]}
     out = J._serialize_components_from(d)
     assert out == [{"a": 1}]
 
-    # simple object path
     class C:
         def __init__(self):
             self.y = 2
@@ -40,7 +38,6 @@ def test_serialize_components_from_variants():
     out2 = J._serialize_components_from(o)
     assert isinstance(out2[0], dict) and "y" in out2[0]
 
-    # None path
     assert J._serialize_components_from({}) is None
 
 
@@ -76,12 +73,10 @@ def test_cached_job_errors(monkeypatch):
 
 
 def test_cached_job_list_cache_and_errors(monkeypatch):
-    # cache hit
     J._JOB_LIST_CACHE = [{"id": "1"}]
     out = J._cached_job_list(Mock())
     assert out == [{"id": "1"}]
 
-    # SQLAlchemyError
     J._JOB_LIST_CACHE = None
     handler = Mock()
     handler.list_jobs_brief.side_effect = SQLAlchemyError("x")

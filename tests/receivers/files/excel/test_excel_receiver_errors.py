@@ -24,37 +24,25 @@ def metrics() -> ComponentMetrics:
     )
 
 
-# --------------------------
-# read_row: wrap error path
-# --------------------------
-
-
 @pytest.mark.asyncio
 async def test_read_row_wraps_error(
     tmp_path: Path, metrics: ComponentMetrics, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # create a real empty xlsx so ensure_file_exists passes
     fp = tmp_path / "ok.xlsx"
     pd.DataFrame({"A": [1]}).to_excel(fp, index=False)
 
     def boom(*_args: Any, **_kwargs: Any):
         raise RuntimeError("kaboom")
 
-    # IMPORTANT: patch the symbol as imported in the receiver module
     monkeypatch.setattr(Rcv, "read_excel_rows", boom, raising=True)
 
     recv = ExcelReceiver()
     with pytest.raises(
         Rcv.FileReceiverError, match="Failed to open excel for row-read:"
     ):
-        # consume one iteration to trigger the wrapped exception at iterator creation
         async for _ in recv.read_row(fp, metrics):
-            pass  # pragma: no cover
+            pass
 
-
-# ------------------------------
-# read_bigdata: both error paths
-# ------------------------------
 
 
 @pytest.mark.asyncio
@@ -82,7 +70,6 @@ async def test_read_bigdata_count_fallback_to_zero(
     pd.DataFrame({"a": [1, 2, 3]}).to_excel(fp, index=False)
 
     class _DDFFailCompute:
-        # ddf.map_partitions(len).sum().compute() -> raises
         def map_partitions(self, _func):
             class _Sum:
                 def sum(self):
@@ -100,24 +87,16 @@ async def test_read_bigdata_count_fallback_to_zero(
 
     recv = ExcelReceiver()
     ddf = await recv.read_bigdata(fp, metrics)
-    # count branch fell back to zero; still returns the object (we don't assert type)
     assert metrics.lines_received == 0
     assert hasattr(ddf, "map_partitions")
 
 
-# --------------------------
-# write_row / write_bulk err
-# --------------------------
-
-
 @pytest.mark.asyncio
 async def test_write_row_wraps_error(tmp_path: Path, metrics: ComponentMetrics) -> None:
-    # using .xls makes helper raise -> wrapper should translate to FileReceiverError
     fp = tmp_path / "out.xls"
     recv = ExcelReceiver()
     with pytest.raises(Rcv.FileReceiverError, match="Failed to write excel row:"):
         await recv.write_row(fp, metrics, row={"a": 1})
-    # lines_received increments before error; forwarded stays 0
     assert metrics.lines_received == 1
     assert metrics.lines_forwarded == 0
 
@@ -135,11 +114,6 @@ async def test_write_bulk_wraps_error(
     assert metrics.lines_forwarded == 0
 
 
-# --------------------------------------
-# write_bigdata: persist/count/outer/fn
-# --------------------------------------
-
-
 class _FakeDDF:
     """
     Tiny ddf stub controllable via flags to hit branches in write_bigdata.
@@ -152,13 +126,11 @@ class _FakeDDF:
         self._row_count = row_count
         self._unpersist_raises = unpersist_raises
 
-    # called first
     def persist(self):
         if not self._persist_ok:
             raise RuntimeError("persist failed")
         return self
 
-    # used in row_count calculation
     def map_partitions(self, _func):
         class _Sum:
             def sum(self_inner):
@@ -170,7 +142,6 @@ class _FakeDDF:
 
         return _Sum()
 
-    # called in finally when persisted True
     def unpersist(self):
         if self._unpersist_raises:
             raise RuntimeError("unpersist failed")
@@ -189,12 +160,10 @@ async def test_write_bigdata_persist_fails_then_succeeds_to_write(
 
     ddf = _FakeDDF(persist_ok=False, row_count=3)
 
-    # make write_excel_bigdata a no-op so we don't touch the FS
     monkeypatch.setattr(Rcv, "write_excel_bigdata", lambda *_: None, raising=True)
 
     recv = ExcelReceiver()
     await recv.write_bigdata(fp, metrics, data=ddf)
-    # row_count computed as 3 and forwarded
     assert metrics.lines_forwarded == 3
 
 
@@ -207,10 +176,8 @@ async def test_write_bigdata_row_limit_exceeded_raises(
     """
     fp = tmp_path / "too_many.xlsx"
 
-    # persist ok so finally branch runs; row_count above limit to raise
     ddf = _FakeDDF(persist_ok=True, row_count=1_048_576 + 1)
 
-    # write should not be called (but patch anyway to be safe)
     monkeypatch.setattr(Rcv, "write_excel_bigdata", lambda *_: None, raising=True)
 
     recv = ExcelReceiver()

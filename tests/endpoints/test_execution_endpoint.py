@@ -14,7 +14,6 @@ def _create_job(shared_job_handler, cfg: JobConfig) -> str:
 
 
 def test_start_execution_minimal_ok(client: TestClient, shared_job_handler) -> None:
-    # Real handler, minimal job (no components)
     job_id = _create_job(shared_job_handler, JobConfig())
 
     resp = client.post(f"/execution/{job_id}")
@@ -30,7 +29,6 @@ def test_start_execution_minimal_ok(client: TestClient, shared_job_handler) -> N
 def test_start_execution_simple_chain_ok(
     client: TestClient, shared_job_handler, schema_row_min
 ) -> None:
-    # Real handler, real test components
     cfg = JobConfig(
         components=[
             {
@@ -71,6 +69,5 @@ def test_start_execution_not_found(client: TestClient) -> None:
     body = resp.json()
     assert "not found" in detail_message(body).lower()
 
-    # If structured, assert the machine-readable code
     if isinstance(body.get("detail"), dict):
         assert body["detail"].get("code") in {"JOB_NOT_FOUND"}

@@ -17,7 +17,6 @@ class TestDatabaseMetricsImports:
         assert hasattr(DatabaseMetrics, "__init__")
         assert hasattr(DatabaseMetrics, "__repr__")
 
-        # Test that the class has the expected signature
         sig = inspect.signature(DatabaseMetrics.__init__)
         params = list(sig.parameters.keys())
         expected_params = [
@@ -37,10 +36,8 @@ class TestDatabaseMetricsImports:
         assert hasattr(ReadMetrics, "__init__")
         assert hasattr(ReadMetrics, "__repr__")
 
-        # Test inheritance
         assert issubclass(ReadMetrics, DatabaseMetrics)
 
-        # Test that the class has the expected signature
         sig = inspect.signature(ReadMetrics.__init__)
         params = list(sig.parameters.keys())
         expected_params = [
@@ -61,10 +58,8 @@ class TestDatabaseMetricsImports:
         assert hasattr(WriteMetrics, "__init__")
         assert hasattr(WriteMetrics, "__repr__")
 
-        # Test inheritance
         assert issubclass(WriteMetrics, DatabaseMetrics)
 
-        # Test that the class has the expected signature
         sig = inspect.signature(WriteMetrics.__init__)
         params = list(sig.parameters.keys())
         expected_params = [
@@ -81,17 +76,13 @@ class TestDatabaseMetricsImports:
 
     def test_database_metrics_constructor_parameters(self):
         """Test the constructor parameters are correctly defined."""
-        # This test verifies the constructor exists and has correct defaults
-        # without actually calling it due to the BaseModel integration issue
 
         sig = inspect.signature(DatabaseMetrics.__init__)
 
-        # Verify default values
         assert sig.parameters["lines_received"].default == 0
         assert sig.parameters["lines_forwarded"].default == 0
         assert sig.parameters["query_execution_time"].default == 0.0
 
-        # Verify required parameters have no defaults
         assert sig.parameters["started_at"].default == inspect.Parameter.empty
         assert sig.parameters["processing_time"].default == inspect.Parameter.empty
         assert sig.parameters["error_count"].default == inspect.Parameter.empty
@@ -100,10 +91,8 @@ class TestDatabaseMetricsImports:
         """Test the ReadMetrics constructor parameters."""
         sig = inspect.signature(ReadMetrics.__init__)
 
-        # Verify lines_read default
         assert sig.parameters["lines_read"].default == 0
 
-        # Verify inherited defaults
         assert sig.parameters["lines_received"].default == 0
         assert sig.parameters["lines_forwarded"].default == 0
         assert sig.parameters["query_execution_time"].default == 0.0
@@ -112,10 +101,8 @@ class TestDatabaseMetricsImports:
         """Test the WriteMetrics constructor parameters."""
         sig = inspect.signature(WriteMetrics.__init__)
 
-        # Verify lines_written default
         assert sig.parameters["lines_written"].default == 0
 
-        # Verify inherited defaults
         assert sig.parameters["lines_received"].default == 0
         assert sig.parameters["lines_forwarded"].default == 0
         assert sig.parameters["query_execution_time"].default == 0.0
@@ -142,15 +129,12 @@ class TestDatabaseMetricsStructure:
     def test_repr_methods_exist(self):
         """Test that all classes have custom __repr__ methods."""
 
-        # DatabaseMetrics should have custom __repr__
         db_repr_source = inspect.getsource(DatabaseMetrics.__repr__)
         assert "query_execution_time=" in db_repr_source
 
-        # ReadMetrics should have custom __repr__
         read_repr_source = inspect.getsource(ReadMetrics.__repr__)
         assert "lines_read=" in read_repr_source
 
-        # WriteMetrics should have custom __repr__
         write_repr_source = inspect.getsource(WriteMetrics.__repr__)
         assert "lines_written=" in write_repr_source
 
@@ -164,18 +148,15 @@ class TestMetricsIntegration:
             ComponentMetrics,
         )
 
-        # Test inheritance chain
         assert issubclass(DatabaseMetrics, ComponentMetrics)
         assert issubclass(ReadMetrics, DatabaseMetrics)
         assert issubclass(WriteMetrics, DatabaseMetrics)
 
-        # Test that ReadMetrics and WriteMetrics are siblings, not parent/child
         assert not issubclass(ReadMetrics, WriteMetrics)
         assert not issubclass(WriteMetrics, ReadMetrics)
 
     def test_all_classes_importable(self):
         """Test that all classes can be imported successfully."""
-        # This test ensures the module structure is correct
         from etl_core.metrics.component_metrics.database_metrics.database_metrics import (  # noqa: E501
             DatabaseMetrics as DB,
             ReadMetrics as RM,
@@ -199,20 +180,17 @@ class TestMetricsIntegration:
 
     def test_method_resolution_order(self):
         """Test the method resolution order for inheritance."""
-        # DatabaseMetrics MRO
         db_mro = DatabaseMetrics.__mro__
-        assert len(db_mro) >= 3  # DatabaseMetrics, ComponentMetrics, BaseModel, ...
+        assert len(db_mro) >= 3
 
-        # ReadMetrics MRO
         read_mro = ReadMetrics.__mro__
         assert (
             len(read_mro) >= 4
-        )  # ReadMetrics, DatabaseMetrics, ComponentMetrics, BaseModel, ...
+        )
         assert DatabaseMetrics in read_mro
 
-        # WriteMetrics MRO
         write_mro = WriteMetrics.__mro__
         assert (
             len(write_mro) >= 4
-        )  # WriteMetrics, DatabaseMetrics, ComponentMetrics, BaseModel, ...
+        )
         assert DatabaseMetrics in write_mro

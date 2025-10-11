@@ -90,7 +90,6 @@ class TestConnectionPoolRegistry:
     """Test cases for ConnectionPoolRegistry class."""
 
     def setup_method(self) -> None:
-        # Reset the singleton instance before each test.
         ConnectionPoolRegistry._instance = None  # type: ignore[attr-defined]
 
     def test_singleton_pattern(self) -> None:
@@ -109,7 +108,6 @@ class TestConnectionPoolRegistry:
         assert isinstance(key, PoolKey)
         assert key.kind == "sql"
         assert isinstance(engine, Engine)
-        # str(engine.url) is observable behavior of created engine
         assert str(engine.url).startswith("sqlite://")
 
     def test_get_sql_engine_existing_connection(self) -> None:
@@ -153,20 +151,15 @@ class TestConnectionPoolRegistry:
     def test_release_sql_nonexistent(self) -> None:
         registry = ConnectionPoolRegistry()
         key = PoolKey(kind="sql", dsn="nonexistent")
-        # should not raise
         registry.release_sql(key)
 
     def test_close_pool_sql_success(self) -> None:
         registry = ConnectionPoolRegistry()
         key, engine = registry.get_sql_engine(url="sqlite:///:memory:")
-        # close without active leases
         result = registry.close_pool(key)
         assert result is True
-        # engine has been disposed and removed from stats
         stats = registry.stats()
         assert key.dsn not in stats["sql"]
-        # engine.dispose() is idempotent; calling again shouldn't be necessary,
-        # but ensure the object still has the attribute
         assert hasattr(engine, "dispose")
 
     def test_close_pool_sql_with_leases(self) -> None:
@@ -174,7 +167,7 @@ class TestConnectionPoolRegistry:
         key, _ = registry.get_sql_engine(url="sqlite:///:memory:")
         registry.lease_sql(key)
         result = registry.close_pool(key)
-        assert result is False  # active leases prevent close
+        assert result is False
 
     def test_close_pool_sql_force_close(self) -> None:
         registry = ConnectionPoolRegistry()
@@ -235,13 +228,10 @@ class TestConnectionPoolRegistry:
     def test_close_pool_mongo_success(self) -> None:
         registry = ConnectionPoolRegistry()
         key, client = registry.get_mongo_client(uri="mongodb://localhost:27017")
-        # Close without active leases
         result = registry.close_pool(key)
         assert result is True
-        # removed from stats
         stats = registry.stats()
         assert key.dsn not in stats["mongo"]
-        # client exposes .close()
         assert hasattr(client, "close")
 
     def test_close_pool_nonexistent(self) -> None:

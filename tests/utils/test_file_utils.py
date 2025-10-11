@@ -146,15 +146,12 @@ class TestFileExists:
 
     def test_file_exists_whitespace_only(self):
         """Test file_exists with whitespace-only string."""
-        # Whitespace-only strings are valid paths, so they might exist
         result = file_exists("   ")
-        # The result depends on whether the path actually exists
         assert isinstance(result, bool)
 
     def test_file_exists_invalid_path(self):
         """Test file_exists with invalid path returns False."""
-        # Create a path that would cause an error when resolved
-        invalid_path = "/" + "a" * 1000  # Very long path that might cause issues
+        invalid_path = "/" + "a" * 1000
 
         result = file_exists(invalid_path)
         assert result is False
@@ -163,23 +160,18 @@ class TestFileExists:
         """Test file_exists with symbolic link."""
         import platform
 
-        # Skip symlink test on Windows if we don't have permission
         if platform.system() == "Windows":
             try:
-                # Test if we can create symlinks on Windows
                 with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                     temp_path = temp_file.name
                     symlink_path = temp_path + "_link"
 
-                    # Try to create a symlink to test permissions
                     os.symlink(temp_path, symlink_path)
-                    os.unlink(symlink_path)  # Clean up test symlink
-                    os.unlink(temp_path)  # Clean up test file
+                    os.unlink(symlink_path)
+                    os.unlink(temp_path)
 
-                    # If we get here, we have permission - run the full test
                     pass
             except (OSError, PermissionError):
-                # No permission for symlinks on Windows - skip this test
                 pytest.skip(
                     "Windows: No permission to create symlinks "
                     "(run as Administrator or enable Developer Mode)"
@@ -189,12 +181,10 @@ class TestFileExists:
             # On Linux/macOS, symlinks should work
             pass
 
-        # Run the actual symlink test
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_path = temp_file.name
 
         try:
-            # Create a symlink
             symlink_path = temp_path + "_link"
             os.symlink(temp_path, symlink_path)
 
@@ -208,7 +198,6 @@ class TestFileExists:
 
     def test_file_exists_relative_path(self):
         """Test file_exists with relative path."""
-        # Create a file in current directory
         test_file = "test_file_exists.txt"
         with open(test_file, "w") as f:
             f.write("test content")
@@ -241,7 +230,6 @@ class TestEnsureDirectory:
 
             ensure_directory(new_dir)
 
-            # ensure_directory creates the parent directory, not the file path itself
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -249,7 +237,6 @@ class TestEnsureDirectory:
     def test_ensure_directory_existing_directory(self):
         """Test ensure_directory with existing directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Directory already exists
             ensure_directory(temp_dir)
 
             assert os.path.exists(temp_dir)
@@ -262,7 +249,6 @@ class TestEnsureDirectory:
 
             ensure_directory(nested_path)
 
-            # ensure_directory creates the parent directory structure
             parent_dir = os.path.dirname(nested_path)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -274,7 +260,6 @@ class TestEnsureDirectory:
 
             ensure_directory(str(new_dir))
 
-            # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -286,7 +271,6 @@ class TestEnsureDirectory:
 
             ensure_directory(new_dir)
 
-            # ensure_directory creates the parent directory
             parent_dir = new_dir.parent
             assert parent_dir.exists()
             assert parent_dir.is_dir()
@@ -298,12 +282,10 @@ class TestEnsureDirectory:
 
             ensure_directory(file_path)
 
-            # Parent directory should be created
             parent_dir = os.path.dirname(file_path)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
 
-            # File itself should not exist
             assert not os.path.exists(file_path)
 
     def test_ensure_directory_multiple_calls(self):
@@ -311,12 +293,10 @@ class TestEnsureDirectory:
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "multi_call_test")
 
-            # First call
             ensure_directory(new_dir)
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
 
-            # Second call (should not fail)
             ensure_directory(new_dir)
             assert os.path.exists(parent_dir)
 
@@ -327,7 +307,6 @@ class TestEnsureDirectory:
 
             ensure_directory(new_dir)
 
-            # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -339,7 +318,6 @@ class TestEnsureDirectory:
 
             ensure_directory(new_dir)
 
-            # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -351,17 +329,14 @@ class TestEnsureDirectory:
 
             ensure_directory(new_dir)
 
-            # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(new_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
 
-            # Check that directory is writable
             test_file = os.path.join(parent_dir, "test.txt")
             with open(test_file, "w") as f:
                 f.write("test")
 
-            # Clean up
             os.unlink(test_file)
 
     def test_ensure_directory_empty_string(self):
@@ -376,9 +351,7 @@ class TestEnsureDirectory:
 
     def test_ensure_directory_whitespace_only(self):
         """Test ensure_directory with whitespace-only string."""
-        # Whitespace-only strings are not empty, so they don't raise ValueError
         ensure_directory("   ")
-        # Should not raise an error
 
     def test_ensure_directory_root_path(self):
         """
@@ -392,7 +365,6 @@ class TestEnsureDirectory:
         try:
             ensure_directory(nested_path)
 
-            # ensure_directory should create the parent directory (test_root_dir)
             parent_dir = os.path.dirname(nested_path)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -407,7 +379,6 @@ class TestEnsureDirectory:
 
             ensure_directory(unicode_dir)
 
-            # ensure_directory creates the parent directory
             parent_dir = os.path.dirname(unicode_dir)
             assert os.path.exists(parent_dir)
             assert os.path.isdir(parent_dir)
@@ -415,15 +386,12 @@ class TestEnsureDirectory:
     def test_ensure_directory_existing_file(self):
         """Test ensure_directory when parent path is a file."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a file
             file_path = os.path.join(temp_dir, "test_file.txt")
             with open(file_path, "w") as f:
                 f.write("test content")
 
-            # Try to create a directory with the same name as parent
             nested_path = os.path.join(file_path, "nested_dir")
 
             ensure_directory(nested_path)
 
-            # Clean up
             os.unlink(file_path)

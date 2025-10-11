@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-# Ensure components are registered
 import etl_core.components.file_components.csv.read_csv  # noqa: F401
 import etl_core.components.file_components.csv.write_csv  # noqa: F401
 import etl_core.components.file_components.json.read_json  # noqa: F401
@@ -24,7 +23,6 @@ from tests.config_helpers import (
 
 
 def _cfg_dir() -> Path:
-    # JSON configs live next to this test file
     return Path(__file__).with_suffix("").parent
 
 
@@ -61,7 +59,6 @@ def test_csv_row_aggregation_count_by_name_to_csv(
     )
 
     out = read_output("write_csv", cfg["strategy_type"], out_fp).sort_values("name")
-    # Expect one row per name with count == 1
     assert list(out["name"]) == ["Alice", "Bob", "Charlie"]
     assert list(out["n"]) == [1, 1, 1]
 
@@ -106,7 +103,6 @@ def test_excel_bulk_aggregation_nunique_names_to_json(
     )
 
     out = read_output("write_json", cfg["strategy_type"], out_fp)
-    # Distinct names: Alice, Bob, Charlie
     assert out.shape[0] == 1
     assert int(out.loc[0, "names"]) == 3
 

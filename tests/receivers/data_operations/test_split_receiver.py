@@ -23,12 +23,10 @@ async def test_map_row_fanout_and_copy(data_ops_metrics: DataOperationsMetrics):
     ):
         outs.append((port, payload))
 
-    # two outputs, port objects returned and payloads are deep copies (fanout>1)
     assert len(outs) == 2
     names = [p.name for p, _ in outs]
     assert set(names) == {"a", "b"}
 
-    # modify original row -> outputs unchanged (deepcopy)
     row["nested"]["x"] = 42
     for _, payload in outs:
         assert payload["nested"]["x"] == 1
@@ -52,7 +50,6 @@ async def test_map_row_single_fanout_no_copy(data_ops_metrics: DataOperationsMet
 
     assert len(outs) == 1
     _, payload = outs[0]
-    # single fanout -> payload may be same object (no deepcopy)
     assert payload is row or payload == row
 
     assert data_ops_metrics.lines_received >= 1
@@ -74,7 +71,6 @@ async def test_map_row_second_fanout(data_ops_metrics: DataOperationsMetrics):
     names = [p.name for p, _ in outs]
     assert set(names) == {"single", "second"}
 
-    # modify original row -> outputs unchanged (deepcopy)
     row["name"] = "Charlie"
     for _, payload in outs:
         assert payload["name"] == "Bob"
