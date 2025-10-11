@@ -20,8 +20,6 @@ from etl_core.components.wiring.column_definition import FieldDef, DataType
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
 
-# Generic job and testing utils
-
 
 def get_component_by_name(job: Any, name: str) -> Component:
     """
@@ -70,8 +68,6 @@ def assert_unique(
             raise ValueError(f"Duplicate {context} found: {value!r} (at index {idx})")
         seen.add(value)
 
-
-# Schema walking and validation
 
 
 def required_names(children: Sequence[FieldDef]) -> Set[str]:
@@ -144,7 +140,6 @@ def type_ok_scalar(v: Any, fd: FieldDef) -> bool:
     if t == DataType.BOOLEAN:
         return isinstance(v, bool)
     if t == DataType.ENUM:
-        # enums accept primitive scalars; domain check happens elsewhere
         return isinstance(v, (str, int, float, bool)) or v is None
     return True
 

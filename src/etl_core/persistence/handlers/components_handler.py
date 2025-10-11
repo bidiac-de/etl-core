@@ -58,12 +58,10 @@ def _coerce_base_types(base: Dict[str, Any]) -> None:
     if isinstance(meta, dict):
         ts = meta.get("timestamp")
         if isinstance(ts, str):
-            # Support both plain ISO 8601 and the 'Z' suffix
             iso = ts.replace("Z", "+00:00") if ts.endswith("Z") else ts
             try:
                 meta["timestamp"] = datetime.fromisoformat(iso)
             except ValueError:
-                # Leave as is, DB layer will surface clear error
                 pass
 
 
@@ -143,7 +141,6 @@ class ComponentHandler:
 
         base_fields, payload_fields = _split_base_and_payload(raw)
 
-        # Convert types to what the DB layer expects(datetime, paths etc)
         _coerce_base_types(base_fields)
 
         ct = ComponentTable(
@@ -204,14 +201,12 @@ class ComponentHandler:
     def create_all_from_configs(
         self, session: Session, job_record: JobTable, component_cfgs: List[Component]
     ) -> Dict[str, str]:
-        # Insert all components, collect ids
         name_to_id: Dict[str, str] = {}
         for cfg in component_cfgs:
             ct = self._insert_component_row(session, job_record, cfg)
             session.flush()
             name_to_id[cfg.name] = ct.id
 
-        # Insert all links using resolved ids
         self._create_links(session, job_record, component_cfgs, name_to_id)
         return name_to_id
 
@@ -227,7 +222,6 @@ class ComponentHandler:
         if not job_record.components:
             return
         with session.no_autoflush:
-            # deleting components cascades
             job_record.components.clear()
         session.flush()
         session.expire(job_record, ["components"])
@@ -239,7 +233,6 @@ class ComponentHandler:
         Do NOT wire next/prev; RuntimeJob wires via `routes`.
         """
         comps: List[Component] = []
-        # Build a map id --> name to write "to" by name in EdgeRef
         id_to_name: Dict[str, str] = {ct.id: ct.name for ct in job_record.components}
 
         for ct in job_record.components:
@@ -255,7 +248,6 @@ class ComponentHandler:
             }
             data = {**ct.payload, **base}
 
-            # rehydrate routes from outgoing_links
             routes: Dict[str, List[EdgeRef]] = {}
             for link in sorted(
                 ct.outgoing_links or [],
@@ -263,9 +255,7 @@ class ComponentHandler:
             ):
                 to_name = id_to_name.get(link.dst_component_id)
                 if not to_name:
-                    # If dangling (shouldn't happen due to FK), skip safely
                     continue
-                # empty string in DB means "unspecified" in config
                 in_port = link.dst_in_port or None
                 routes.setdefault(link.src_out_port, []).append(
                     EdgeRef(to=to_name, in_port=in_port)

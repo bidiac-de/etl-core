@@ -22,7 +22,6 @@ from etl_core.persistence.table_definitions import (
     ScheduleTable,
 )
 
-# Force imports so tables get registered
 _, _, _, _, _ = JobTable, ComponentTable, MetaDataTable, LayoutTable, ComponentLinkTable
 _, _, _, _ = (
     CredentialsTable,
@@ -32,7 +31,6 @@ _, _, _, _ = (
 )
 _ = ScheduleTable
 
-# --- Database setup ---
 load_dotenv()
 db_path = os.getenv("DB_PATH")
 
@@ -63,7 +61,6 @@ def _set_sqlite_pragmas(dbapi_conn: Any, _: Any) -> None:
 _SCHEMA_LOCK = threading.Lock()
 _SCHEMA_READY = False
 
-# --- Known tables cache ---
 _KNOWN_TABLES = {t.lower() for t in SQLModel.metadata.tables.keys()}
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -151,7 +148,6 @@ def ensure_schema() -> None:
         SQLModel.metadata.create_all(engine)
         _migrate_schedules_add_job_id()
 
-        # Refresh known table cache in case metadata gained new tables.
         _KNOWN_TABLES = {t.lower() for t in SQLModel.metadata.tables.keys()}
 
         _SCHEMA_READY = True

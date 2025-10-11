@@ -61,7 +61,6 @@ class ContextHandler:
             s.add(row)
             s.flush()
 
-            # Replace parameters in one go for simplicity and correctness
             existing: List[ContextParameterTable] = s.exec(
                 select(ContextParameterTable).where(
                     ContextParameterTable.context_id == context_id
@@ -121,7 +120,6 @@ class ContextHandler:
             s.add(row)
             s.flush()
 
-            # Replace mapping rows atomically
             existing = s.exec(
                 select(ContextCredentialsMapTable).where(
                     ContextCredentialsMapTable.context_id == context_id
@@ -192,7 +190,6 @@ class ContextHandler:
         (Secrets should be removed separately by the caller.)
         """
         with self._session() as s:
-            # Remove parameters first (safe even if none exist)
             params = s.exec(
                 select(ContextParameterTable).where(
                     ContextParameterTable.context_id == context_id
@@ -214,7 +211,6 @@ class ContextHandler:
             ).first()
 
             if row is None:
-                # Nothing to delete
                 s.commit()
                 return False
 
@@ -222,7 +218,6 @@ class ContextHandler:
                 s.delete(row)
                 s.commit()
             except IntegrityError:
-                # Propagate so the API can return 409
                 s.rollback()
                 raise
 

@@ -35,7 +35,6 @@ _DISABLE_SENTINELS = {
 }
 _NOT_SET = object()
 
-# Reserve IDs for internal/housekeeping jobs that should never be removed by DB sync.
 _SYNC_JOB_ID = "__schedules_sync__"
 _INTERNAL_JOB_IDS = {_SYNC_JOB_ID}
 
@@ -100,7 +99,6 @@ class SchedulerService:
                 self._started = False
             raise
 
-        # Initial sync before scheduling the periodic sync task.
         self.sync_from_db()
         interval = _resolve_sync_interval_seconds(sync_seconds)
         if interval is None:
@@ -169,7 +167,6 @@ class SchedulerService:
         schedules = self._deps.schedules.list()
         existing_ids = {s.id for s in schedules}
 
-        # Remove APS jobs that no longer exist in DB (but never touch internal jobs)
         for job in scheduler.get_jobs() or []:
             if job.id in _INTERNAL_JOB_IDS:
                 continue
@@ -178,12 +175,10 @@ class SchedulerService:
                 try:
                     scheduler.remove_job(job.id)
                 except JobLookupError:
-                    # Job removed concurrently; safe to continue
                     self._log.debug("Job %s already removed", job.id)
                 except Exception:
                     self._log.exception("Failed to remove stale job %s", job.id)
 
-        # Upsert all schedules from DB
         for sch in schedules:
             self._upsert_aps_job(sch)
 
@@ -265,7 +260,6 @@ class SchedulerService:
                 )
             return
 
-        # Run in a thread to avoid blocking the loop
         try:
             runtime_job = await asyncio.to_thread(
                 self._deps.jobs.load_runtime_job, sch.job_id

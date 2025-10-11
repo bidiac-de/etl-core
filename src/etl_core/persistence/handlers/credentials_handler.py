@@ -76,7 +76,6 @@ class CredentialsHandler:
             s.commit()
             s.refresh(row)
 
-        # Persist secret after we know the final id
         if creds.decrypted_password:
             self.secret_store.set(self._password_key(row.id), creds.decrypted_password)
 
@@ -155,7 +154,6 @@ class CredentialsHandler:
                     s.rollback()
                     raise
 
-        # Secrets: best-effort cleanup — don't fail if the secret didn't exist
         try:
             self.secret_store.delete(self._password_key(credentials_id))
         except Exception:

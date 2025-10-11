@@ -103,7 +103,6 @@ class ScheduleHandler:
     def set_paused(self, schedule_id: str, paused: bool) -> ScheduleTable:
         return self.update(schedule_id, is_paused=paused)
 
-    # utilities
     def get_by_name(self, name: str) -> Optional[ScheduleTable]:
         with self._session() as s:
             stmt = select(ScheduleTable).where(ScheduleTable.name == name)

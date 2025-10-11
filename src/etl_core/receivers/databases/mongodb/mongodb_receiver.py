@@ -16,7 +16,6 @@ from etl_core.utils.common_helpers import pandas_flatten_docs, unflatten_many
 
 
 def _to_serializable(doc: Dict[str, Any]) -> Dict[str, Any]:
-    # Convert ObjectId to string for downstream portability
     out: Dict[str, Any] = {}
     for k, v in doc.items():
         out[k] = str(v) if isinstance(v, ObjectId) else v
@@ -36,7 +35,6 @@ def _build_match_filter(
     key_fields: Sequence[str],
     match_filter: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    # Explicit match_filter wins, otherwise derive from key_fields present in the row
     if match_filter:
         return dict(match_filter)
     if key_fields:
@@ -56,7 +54,6 @@ def _build_update_ops(
     for row in rows:
         flt = _build_match_filter(row, key_fields, match_filter)
         if not flt and not upsert:
-            # UPDATE without any filter is not allowed
             raise ValueError("UPDATE requires match_filter or key_fields")
         doc = {"$set": _pick_update_fields(row, update_fields)}
         ops.append(UpdateOne(flt, doc, upsert=upsert))
@@ -73,7 +70,6 @@ def _build_cursor(
     limit: Optional[int],
     batch_size: int,
 ) -> Any:
-    # Build an AsyncIOMotorCursor for async iteration
     cursor = coll.find(
         filter=query_filter or {},
         projection=projection,
@@ -416,7 +412,6 @@ class MongoDBReceiver:
                     )
                     metrics.lines_forwarded += n_rows
 
-                # final yield, all partitions processed
                 yield frame
         except PyMongoError as exc:
             raise RuntimeError(f"Mongo write_bigdata failed: {exc}") from exc

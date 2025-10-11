@@ -299,7 +299,7 @@ class ExecutionTable(SQLModel, table=True):
     One persisted job execution (a run). Attempts are tracked separately.
     """
 
-    id: str = Field(primary_key=True)  # we store the runtime execution.id here
+    id: str = Field(primary_key=True)
     job_id: str = Field(
         sa_column=Column(
             ForeignKey("jobtable.id", ondelete="CASCADE"),
@@ -350,7 +350,6 @@ class ScheduleTable(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     name: str = Field(nullable=False, index=True)
 
-    # reference job by id to avoid name lookups
     job_id: str = Field(
         sa_column=Column(
             ForeignKey(_FOREIGN_KEY_JOB_TABLE, ondelete="CASCADE"),
@@ -359,7 +358,6 @@ class ScheduleTable(SQLModel, table=True):
         )
     )
 
-    # execution context gate (DEV/TEST/PROD)
     environment: str = Field(nullable=False, index=True)
 
     trigger_type: TriggerType = Field(sa_column=Column(String, nullable=False))
@@ -367,9 +365,7 @@ class ScheduleTable(SQLModel, table=True):
         default_factory=dict, sa_column=Column(JSON, nullable=False)
     )
 
-    # scheduling status
     is_paused: bool = Field(default=False, nullable=False)
 
-    # audit fields
     created_at: datetime = Field(default_factory=datetime.now, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.now, nullable=False)

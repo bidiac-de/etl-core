@@ -85,7 +85,7 @@ class SQLServerReceiver(SQLReceiver):
         row: Dict[str, Any],
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        query: str,  # Query is always required now
+        query: str,
         table: str | None = None,
     ) -> Dict[str, Any]:
         """Write a single row and return the result."""
@@ -106,7 +106,7 @@ class SQLServerReceiver(SQLReceiver):
         frame: pd.DataFrame,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        query: str,  # Query is always required now
+        query: str,
         table: str | None = None,
     ) -> pd.DataFrame:
         """Write a pandas DataFrame and return it."""
@@ -117,7 +117,6 @@ class SQLServerReceiver(SQLReceiver):
 
         def _execute_query():
             with connection_handler.lease() as conn:
-                # Execute custom query for each row
                 for _, row in frame.iterrows():
                     conn.execute(text(query), row.to_dict())
                 conn.commit()
@@ -132,7 +131,7 @@ class SQLServerReceiver(SQLReceiver):
         frame: dd.DataFrame,
         metrics: Any,
         connection_handler: SQLConnectionHandler,
-        query: str,  # Query is always required now
+        query: str,
         table: str | None = None,
     ) -> dd.DataFrame:
         """Write a Dask DataFrame and return it."""
@@ -140,7 +139,6 @@ class SQLServerReceiver(SQLReceiver):
 
         def _execute_query():
             with connection_handler.lease() as conn:
-                # Execute custom query for each partition
                 for partition in frame.map_partitions(lambda pdf: pdf).partitions:
                     pdf = partition.compute()
                     if not pdf.empty:

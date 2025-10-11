@@ -167,7 +167,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     try:
-        # Hand control to the application
         yield
     finally:
         await SchedulerService.instance().shutdown_gracefully()
@@ -183,10 +182,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS: handle both simple and preflight requests properly
 allowed_origins = _parse_origins(config("CORS_ALLOW_ORIGINS", cast=str, default="*"))
 
-# If "*" is used, credentials cannot be allowed by browsers
 allow_credentials = allowed_origins != ["*"]
 
 app.add_middleware(
@@ -196,10 +193,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
-    max_age=600,  # cache preflight for 10 minutes
+    max_age=600,
 )
 
-# Routers
 app.include_router(schemas.router)
 app.include_router(setup.router)
 app.include_router(jobs.router)

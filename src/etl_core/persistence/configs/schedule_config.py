@@ -88,7 +88,6 @@ class ScheduleConfig(BaseModel):
             "jitter",
         ]
         _ensure_allowed_keys(args, allowed)
-        # at least one duration key must be present
         if not any(k in args for k in ["weeks", "days", "hours", "minutes", "seconds"]):
             raise ValueError(
                 "interval trigger requires one of weeks/days/hours/minutes/seconds"
@@ -120,7 +119,6 @@ class ScheduleConfig(BaseModel):
             "jitter",
         ]
         _ensure_allowed_keys(args, allowed)
-        # should specify at least one time field
         if not any(
             k in args
             for k in [
@@ -136,7 +134,6 @@ class ScheduleConfig(BaseModel):
         ):
             raise ValueError("cron trigger requires at least one scheduling field")
 
-        # Light type checks: allow int/str/list[int|str]
         def _ok(v: Any) -> bool:
             if isinstance(v, (int, str)):
                 return True
@@ -156,7 +153,6 @@ class ScheduleConfig(BaseModel):
 
     @staticmethod
     def _validate_date(args: Dict[str, Any]) -> Dict[str, Any]:
-        # allow alias 'date' -> 'run_date'
         if "date" in args and "run_date" not in args:
             args = dict(args)
             args["run_date"] = args.pop("date")
@@ -226,7 +222,6 @@ class SchedulePatchConfig(BaseModel):
     @model_validator(mode="after")
     def _maybe_validate_trigger(self) -> "SchedulePatchConfig":
         if self.trigger_type is not None and self.trigger_args is not None:
-            # validate the combination by constructing a minimal ScheduleConfig
             try:
                 ScheduleConfig(
                     name=self.name or "_placeholder_",
@@ -236,6 +231,6 @@ class SchedulePatchConfig(BaseModel):
                     trigger_args=self.trigger_args,
                     paused=self.paused or False,
                 )
-            except ValidationError as e:  # re-raise as ValueError for uniformity
+            except ValidationError as e:
                 raise ValueError(str(e))
         return self
