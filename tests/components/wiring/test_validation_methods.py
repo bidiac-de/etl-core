@@ -183,9 +183,7 @@ def test_dask_missing_unknown_enum_and_null_failures() -> None:
 
     ddf_extra = dd.from_pandas(pdf.assign(extra=[0, 1]), npartitions=1)
     with pytest.raises(ValueError) as ex2:
-        validate_dack_dataframe_against_schema = (
-            validate_dask_dataframe_against_schema
-        )
+        validate_dack_dataframe_against_schema = validate_dask_dataframe_against_schema
         validate_dack_dataframe_against_schema(
             ddf_extra, _schema(), schema_name="ddf-unknown"
         )

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 import etl_core.components.databases.database as db
 
+
 class DummyCreds:
     """Minimal stand-in for etl_core.context.credentials.Credentials."""
 

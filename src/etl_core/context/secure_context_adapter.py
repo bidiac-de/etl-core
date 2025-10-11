@@ -39,7 +39,6 @@ class SecureContextAdapter(IContextProvider):
         self._context = context
         self._credentials = credentials
 
-    # lifecycle
     def bootstrap_to_store(self) -> BootstrapResult:
         """
         Persist secure values to the secret store, verify writes, and blank
@@ -58,7 +57,6 @@ class SecureContextAdapter(IContextProvider):
             if getattr(param, "is_secure", False) and param.value:
                 self._store_secret(result, key, param.value)
 
-        # Blank only keys that we actually persisted for this context
         for key in result.stored:
             if key in self._context.parameters:
                 self._context.parameters[key].value = ""
@@ -80,7 +78,6 @@ class SecureContextAdapter(IContextProvider):
 
             self._secret_store.set(skey, plaintext)
 
-            # Read-back verification
             if self._secret_store.get(skey) != plaintext:
                 raise RuntimeError("verification failed")
 
@@ -106,8 +103,6 @@ class SecureContextAdapter(IContextProvider):
             except Exception:
                 pass
 
-    # IContextProvider
-
     def get_parameter(self, key: str) -> Any:
         # Context path
         if self._context:
@@ -115,14 +110,11 @@ class SecureContextAdapter(IContextProvider):
             if param.is_secure:
                 return self._secret_store.get(self._secret_key(key))
             return param.value
-        # Credentials path
         if self._credentials:
             if key == "password":
                 return self._secret_store.get(self._secret_key("password"))
             return self._credentials.get_parameter(key)
         raise RuntimeError("SecureContextAdapter not initialized correctly.")
-
-    # helpers
 
     def _secret_key(self, key: str) -> str:
         return f"{self._provider_id}/{key}"

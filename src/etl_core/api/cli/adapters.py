@@ -145,7 +145,6 @@ class LocalExecutionClient(ExecutionPort):
         rows = self._records.list_attempts(execution_id)
         return [self._row_to_attempt_out(r) for r in rows]
 
-    # keep tiny and readable; no heavy parsing here
     @staticmethod
     def _parse_dt(value: str):
         from datetime import datetime

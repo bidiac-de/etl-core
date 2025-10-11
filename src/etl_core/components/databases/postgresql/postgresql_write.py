@@ -77,7 +77,7 @@ class PostgreSQLWrite(PostgreSQLComponent, DatabaseOperationMixin):
             where_clause = " AND ".join(self.where_conditions)
             return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
 
-        else:  # INSERT (default)
+        else:
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
     @model_validator(mode="after")

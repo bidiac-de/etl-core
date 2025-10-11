@@ -475,7 +475,7 @@ def test_stream_json_array_to_ndjson_on_error_handler_continues(tmp_path: Path) 
     after_lines = [
         json.loads(s) for s in out.read_text(encoding="utf-8").splitlines() if s.strip()
     ]
-    assert len(after_lines) > 0 
+    assert len(after_lines) > 0
 
 
 def test_append_ndjson_record_plain_file(tmp_path: Path) -> None:

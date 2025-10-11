@@ -32,7 +32,6 @@ class SQLConnectionHandler:
         port: Optional[int] = None,
         database: Optional[str] = None,
     ) -> str:
-        # Map database types to SQLAlchemy driver prefixes
         driver_map = {
             "read_postgresql": "postgresql+psycopg2",
             "write_postgresql": "postgresql+psycopg2",
@@ -46,7 +45,6 @@ class SQLConnectionHandler:
             "write_sqlserver": "mssql+pyodbc",
         }
 
-        # Use the mapped driver or fall back to the original db_type
         driver = driver_map.get(comp_type, comp_type)
 
         if not all([user, password, host, port, database]):

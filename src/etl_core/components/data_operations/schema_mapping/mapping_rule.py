@@ -158,7 +158,7 @@ def validate_field_mappings(
     out_leaf_cache: Dict[str, Dict[str, FieldDef]] = {}
 
     for dst_port, fields in rules_by_dest.items():
-        # Ensure destination port exists (and cache its leaves once)
+        # Ensure destination port exists
         _ensure_leaf_map(
             out_leaf_cache,
             port=dst_port,
@@ -171,7 +171,6 @@ def validate_field_mappings(
         for dst_path, src_rule in fields.items():
             key = (dst_port, dst_path)
             if key in validated:
-                # Nested dict already enforces uniqueness, keep this guard
                 raise ValueError(f"{component_name}: duplicate mapping for {key!r}")
 
             fm = _build_mapping_for_dest(

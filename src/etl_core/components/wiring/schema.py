@@ -15,7 +15,6 @@ class Schema(BaseModel):
 
     @model_validator(mode="after")
     def _reject_empty(self) -> "Schema":
-        # Keep it simple and explicit: empty schemas are invalid.
         if not self.fields:
             raise ValueError("Schema.fields must contain at least one FieldDef.")
         return self

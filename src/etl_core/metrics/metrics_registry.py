@@ -4,7 +4,6 @@ from typing import Type
 
 from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
 
-# Simple in-memory registry: comp_type -> Metrics subclass
 metrics_registry: dict[str, Type[ComponentMetrics]] = {}
 
 

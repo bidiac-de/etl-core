@@ -247,9 +247,7 @@ class TestSecureContextAdapter:
 
         self.mock_secret_store.exists.return_value = False
         self.mock_secret_store.set.return_value = None
-        self.mock_secret_store.get.return_value = (
-            "different_value"
-        )
+        self.mock_secret_store.get.return_value = "different_value"
 
         adapter = SecureContextAdapter(
             provider_id=self.provider_id,

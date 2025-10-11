@@ -57,7 +57,6 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
             ({columns_str}) VALUES ({placeholders})"
 
         elif operation == DatabaseOperation.UPSERT:
-            # Use MERGE for upsert in SQL Server
             conflict_columns = kwargs.get("conflict_columns", ["id"])
             update_columns = kwargs.get("update_columns", columns)
 
@@ -82,7 +81,6 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
             return merge_query.strip()
 
         elif operation == DatabaseOperation.UPDATE:
-            # Pure update operation
             if not self.where_conditions:
                 raise ValueError("UPDATE operation requires where_conditions")
 
@@ -90,7 +88,7 @@ class SQLServerWrite(SQLServerComponent, DatabaseOperationMixin):
             where_clause = " AND ".join(self.where_conditions)
             return f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
 
-        else:  # INSERT (default)
+        else:
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
     @model_validator(mode="after")

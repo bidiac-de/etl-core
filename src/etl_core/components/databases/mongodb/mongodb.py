@@ -32,7 +32,6 @@ class MongoDBComponent(DatabaseComponent, ABC):
         description=("Authentication database name"),
     )
 
-    # Lazily-initialized connection bits
     _connection_handler: Optional[MongoConnectionHandler] = PrivateAttr(default=None)
     _mongo_uri: Optional[str] = PrivateAttr(default=None)
     _database_name: Optional[str] = PrivateAttr(default=None)

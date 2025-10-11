@@ -184,13 +184,9 @@ class TestMetricsIntegration:
         assert len(db_mro) >= 3
 
         read_mro = ReadMetrics.__mro__
-        assert (
-            len(read_mro) >= 4
-        )
+        assert len(read_mro) >= 4
         assert DatabaseMetrics in read_mro
 
         write_mro = WriteMetrics.__mro__
-        assert (
-            len(write_mro) >= 4
-        )
+        assert len(write_mro) >= 4
         assert DatabaseMetrics in write_mro

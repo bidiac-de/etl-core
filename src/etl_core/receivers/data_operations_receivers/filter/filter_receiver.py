@@ -5,6 +5,7 @@ from typing import Any, AsyncGenerator, Dict, Tuple
 import pandas as pd
 import dask.dataframe as dd
 from dask.dataframe.utils import make_meta
+from functools import partial
 
 from etl_core.receivers.base_receiver import Receiver
 from etl_core.components.data_operations.filter.comparison_rule import ComparisonRule
@@ -88,22 +89,17 @@ class FilterReceiver(Receiver):
         rule: ComparisonRule,
         metrics: FilterMetrics,
     ) -> AsyncGenerator[Tuple[str, dd.DataFrame], None]:
-        # Use a partial function to bind the rule parameter to the instance method
-        from functools import partial
 
-        # Create filtered and failed DataFrames
         filtered = ddf.map_partitions(
             partial(self._filter_partition, rule=rule),
             meta=make_meta(ddf),
         )
 
-        # Create failed DataFrame (rows that don't match the rule)
         failed = ddf.map_partitions(
             partial(_apply_remainder_partition, rule=rule),
             meta=make_meta(ddf),
         )
 
-        # Best-effort metrics (safe-guarded)
         try:
             total_received = int(ddf.map_partitions(len).sum().compute())
             total_pass = int(filtered.map_partitions(len).sum().compute())

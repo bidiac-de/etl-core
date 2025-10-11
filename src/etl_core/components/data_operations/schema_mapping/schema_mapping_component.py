@@ -90,7 +90,6 @@ class SchemaMappingComponent(DataOperationsComponent):
         return self
 
     def requires_tagged_input(self) -> bool:
-        # Needed when join is defined and more than one input port is active
         return bool(self.join_plan.steps) and len(self.expected_in_port_names()) > 1
 
     async def process_row(
@@ -98,13 +97,11 @@ class SchemaMappingComponent(DataOperationsComponent):
         row: Union[Dict[str, Any], InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Join-mode row processing uses tagged envelopes
         if self._is_tagged_join(row):
             async for out in self._process_row_tagged_join(row, metrics):
                 yield out
             return
 
-        # Mapping-only: transform a single row by rules
         if isinstance(row, dict):
             async for out in self._process_row_mapping(row, metrics):
                 yield out
@@ -114,7 +111,6 @@ class SchemaMappingComponent(DataOperationsComponent):
         row: Union[Dict[str, Any], InTagged],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
-        # Normalize via
         in_port, payload = unwrap(row, default_port="")
         if payload is Ellipsis:
             self._closed_ports.add(in_port)

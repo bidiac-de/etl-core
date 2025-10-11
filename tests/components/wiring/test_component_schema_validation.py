@@ -24,7 +24,6 @@ def stub() -> StubComponent:
     return c
 
 
-
 def test_validate_in_payload_row_ok(stub: StubComponent) -> None:
     stub.validate_in_payload("in", {"id": 1, "name": "Nina"})
 
@@ -77,7 +76,6 @@ def test_validate_in_payload_custom_separator_affects_df(stub: StubComponent) ->
     StubComponent._schema_path_separator = ":"
     df_ok = pd.DataFrame([{"id": 1, "name": "A"}])
     stub.validate_in_payload("in", df_ok)
-
 
 
 def test_validate_out_payload_ok(stub: StubComponent) -> None:

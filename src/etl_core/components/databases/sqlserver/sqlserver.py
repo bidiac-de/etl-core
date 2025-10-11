@@ -20,7 +20,6 @@ class SQLServerComponent(SQLDatabaseComponent):
 
         try:
             with self._connection_handler.lease() as conn:
-                # Set common SQL Server session variables
                 conn.execute("SET ANSI_NULLS ON")
                 conn.execute("SET ANSI_WARNINGS ON")
                 conn.execute("SET QUOTED_IDENTIFIER ON")

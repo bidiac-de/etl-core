@@ -135,7 +135,7 @@ def test__open_or_create_wb_ws_move_sheet_fallback(
 
     from openpyxl.workbook.workbook import Workbook as OB
 
-    def boom(self, *args, **kwargs):
+    def boom(self, *args, **kwargs):  # noqa: D401
         raise RuntimeError("boom")
 
     monkeypatch.setattr(OB, "move_sheet", boom, raising=True)

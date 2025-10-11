@@ -42,7 +42,6 @@ class TestRealDatabaseConnection:
         credentials_id = CredentialsHandler().upsert(creds)
         return creds, credentials_id
 
-
     @pytest.fixture
     def test_table_name(self):
         """Name for test table."""

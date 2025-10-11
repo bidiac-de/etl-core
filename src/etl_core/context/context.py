@@ -28,7 +28,6 @@ class Context(BaseModel, IContextProvider):
     environment: Environment
     parameters: Dict[str, ContextParameter] = Field(default_factory=dict)
 
-    # credentials storage
     _credentials: Dict[str, Credentials] = {}
     _credentials_repo: Optional[CredentialsHandler] = None
 

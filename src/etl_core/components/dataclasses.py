@@ -68,14 +68,12 @@ class MetaData(MetaDataBase):
         if not isinstance(value, datetime):
             raise ValueError("Timestamp must be a datetime.")
 
-        # If naive, assume local timezone
         if value.tzinfo is None:
             local_tz = datetime.now().astimezone().tzinfo
             value_local = value.replace(tzinfo=local_tz)
         else:
             value_local = value
 
-        # Compare in UTC
         candidate_utc = value_local.astimezone(timezone.utc)
         now_utc = datetime.now(timezone.utc)
         if candidate_utc > now_utc:

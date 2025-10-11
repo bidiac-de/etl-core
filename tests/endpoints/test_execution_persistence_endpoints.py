@@ -202,7 +202,6 @@ def test_endpoints_persist_retry_then_success_and_time_filters(
     data = r.json()["data"]
     assert any(row["id"] == exec_id for row in data)
 
-
     r = client.get(f"/execution/executions/{exec_id}")
     assert r.status_code == 200
     det = r.json()

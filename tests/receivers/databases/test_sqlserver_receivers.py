@@ -406,7 +406,7 @@ class TestSQLServerReceivers:
         [
             (2, 2, True),
             (1, 1, False),
-            (1, 1, True), 
+            (1, 1, True),
         ],
     )
     @pytest.mark.asyncio
@@ -678,7 +678,6 @@ class TestSQLServerReceivers:
             params={},
         )
 
-
     @pytest.mark.asyncio
     async def test_large_data_handling(self, mock_connection_handler, mock_metrics):
         """Test handling of large datasets."""
@@ -837,7 +836,7 @@ class TestSQLServerReceivers:
         "has_data,expected_execute_calls,expected_commit_calls",
         [
             (True, 1, 1),
-            (False, 0, 0),  
+            (False, 0, 0),
         ],
     )
     @pytest.mark.asyncio
@@ -856,17 +855,15 @@ class TestSQLServerReceivers:
         else:
             partition_df = pd.DataFrame()
 
-
         mock_result = Mock()
         mock_result.rowcount = len(partition_df) if has_data else 0
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
-
 
         table = "test_table"
         with mock_connection_handler.lease() as conn:
             rows = partition_df.to_dict("records")
 
-            if rows: 
+            if rows:
                 columns = list(rows[0].keys())
                 placeholders = ", ".join([f":{key}" for key in columns])
                 query = (
@@ -877,7 +874,6 @@ class TestSQLServerReceivers:
                 conn.execute(text(query), rows)
                 conn.commit()
 
-
         assert (
             mock_connection_handler.lease().__enter__().execute.call_count
             == expected_execute_calls
@@ -886,7 +882,6 @@ class TestSQLServerReceivers:
             mock_connection_handler.lease().__enter__().commit.call_count
             == expected_commit_calls
         )
-
 
         if has_data:
             call_args = mock_connection_handler.lease().__enter__().execute.call_args
@@ -898,13 +893,9 @@ class TestSQLServerReceivers:
     def test_partition_processing_column_logic(self, mock_connection_handler):
         """Test the column and placeholder generation logic from _process_partition."""
 
-
         test_cases = [
-
             pd.DataFrame({"id": [1, 2]}),
-
             pd.DataFrame({"id": [1, 2], "name": ["A", "B"], "age": [25, 30]}),
-
             pd.DataFrame({"id": [1], "active": [True], "score": [98.5]}),
         ]
 
@@ -917,7 +908,6 @@ class TestSQLServerReceivers:
             )
 
             table = f"test_table_{i}"
-
 
             with mock_connection_handler.lease() as conn:
                 rows = partition_df.to_dict("records")
@@ -932,7 +922,6 @@ class TestSQLServerReceivers:
 
                     conn.execute(text(query), rows)
                     conn.commit()
-
 
             expected_calls = i + 1
             assert (

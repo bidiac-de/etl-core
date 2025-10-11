@@ -274,9 +274,7 @@ class TestScheduleHandlerSimple:
 
             mock_session.add.assert_called_once()
             call_args = mock_session.add.call_args[0][0]
-            assert (
-                hasattr(call_args, "is_paused") or True
-            )
+            assert hasattr(call_args, "is_paused") or True
 
     def test_context_manager_usage(self):
         """Test that the session context manager is used properly."""

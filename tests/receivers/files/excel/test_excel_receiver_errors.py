@@ -44,7 +44,6 @@ async def test_read_row_wraps_error(
             pass
 
 
-
 @pytest.mark.asyncio
 async def test_read_bigdata_open_raises(
     tmp_path: Path, metrics: ComponentMetrics, monkeypatch: pytest.MonkeyPatch

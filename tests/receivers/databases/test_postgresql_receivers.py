@@ -468,7 +468,6 @@ class TestPostgreSQLReceiver:
                 connection_handler=mock_connection_handler,
             )
 
-
     @pytest.mark.asyncio
     async def test_dask_dataframe_partitioning(
         self, mock_connection_handler, mock_metrics
@@ -625,7 +624,6 @@ class TestPostgreSQLReceiver:
             params={},
         )
 
-
     @pytest.mark.asyncio
     async def test_large_data_handling(self, mock_connection_handler, mock_metrics):
         """Test handling of large datasets."""
@@ -740,7 +738,6 @@ class TestPostgreSQLReceiver:
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         assert result == {"affected_rows": 1, "row": boolean_data}
 
-
     @pytest.mark.asyncio
     async def test_write_bigdata_partition_processing(
         self, mock_connection_handler, mock_metrics
@@ -748,19 +745,15 @@ class TestPostgreSQLReceiver:
         """Test Dask DataFrame partition processing in write_bigdata."""
         receiver = PostgreSQLReceiver()
 
-
         df = pd.DataFrame({"id": [1, 2, 3, 4], "name": ["A", "B", "C", "D"]})
         ddf = dd.from_pandas(df, npartitions=2)
-
 
         mock_result = Mock()
         mock_result.rowcount = 2
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
-
 
             result = await receiver.write_bigdata(
                 entity_name="test_table",
@@ -770,7 +763,6 @@ class TestPostgreSQLReceiver:
                 table="test_table",
                 connection_handler=mock_connection_handler,
             )
-
 
             assert mock_compute.call_count == 2
 
@@ -784,14 +776,11 @@ class TestPostgreSQLReceiver:
         """Test write_bigdata with empty partition data."""
         receiver = PostgreSQLReceiver()
 
-
         df = pd.DataFrame()
         ddf = dd.from_pandas(df, npartitions=1)
 
-
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
-
 
             result = await receiver.write_bigdata(
                 entity_name="test_table",
@@ -801,7 +790,6 @@ class TestPostgreSQLReceiver:
                 connection_handler=mock_connection_handler,
                 table="test_table",
             )
-
 
             assert mock_compute.call_count >= 1
 
@@ -815,19 +803,15 @@ class TestPostgreSQLReceiver:
         """Test write_bigdata with single partition."""
         receiver = PostgreSQLReceiver()
 
-
         df = pd.DataFrame({"id": [1], "name": ["A"]})
         ddf = dd.from_pandas(df, npartitions=1)
-
 
         mock_result = Mock()
         mock_result.rowcount = 1
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-
         with patch("dask.dataframe.DataFrame.compute") as mock_compute:
             mock_compute.return_value = df
-
 
             result = await receiver.write_bigdata(
                 entity_name="test_table",
@@ -837,7 +821,6 @@ class TestPostgreSQLReceiver:
                 connection_handler=mock_connection_handler,
                 table="test_table",
             )
-
 
             assert mock_compute.call_count >= 1
 
@@ -851,9 +834,7 @@ class TestPostgreSQLReceiver:
         """Test write_bulk early return for empty DataFrame."""
         receiver = PostgreSQLReceiver()
 
-
         empty_df = pd.DataFrame()
-
 
         result = await receiver.write_bulk(
             entity_name="users",
@@ -863,7 +844,6 @@ class TestPostgreSQLReceiver:
             table="users",
             connection_handler=mock_connection_handler,
         )
-
 
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
@@ -877,7 +857,6 @@ class TestPostgreSQLReceiver:
         """Test write_bulk early return for empty list."""
         receiver = PostgreSQLReceiver()
 
-
         empty_df = pd.DataFrame()
         result = await receiver.write_bulk(
             entity_name="users",
@@ -887,7 +866,6 @@ class TestPostgreSQLReceiver:
             connection_handler=mock_connection_handler,
             table="users",
         )
-
 
         mock_connection_handler.lease().__enter__().execute.assert_not_called()
         mock_connection_handler.lease().__enter__().commit.assert_not_called()
@@ -909,12 +887,10 @@ class TestPostgreSQLReceiver:
         mock_result.__iter__ = Mock(return_value=iter([mock_row1, mock_row2]))
         mock_connection_handler.lease().__enter__().execute.return_value = mock_result
 
-
         with patch("dask.dataframe.from_pandas") as mock_from_pandas:
             mock_ddf = Mock()
             mock_ddf.npartitions = 4
             mock_from_pandas.return_value = mock_ddf
-
 
             await receiver.read_bigdata(
                 entity_name="users",

@@ -30,9 +30,9 @@ def dump_records_auto(
 ) -> None:
     def _write(tmp_path: Path):
         if is_ndjson_path(path):
-            dump_ndjson_records(tmp_path, records)  # uses sanitizer
+            dump_ndjson_records(tmp_path, records)
         else:
-            dump_json_records(tmp_path, records, indent=indent)  # uses sanitizer
+            dump_json_records(tmp_path, records, indent=indent)
 
     _atomic_write_textfile(path, _write)
 
@@ -197,7 +197,7 @@ def _iter_array_stream(
             buf += more
             continue
 
-        # Try to decode one JSON value, read more if incomplete
+        # Try to decode one JSON value
         try:
             obj, end = dec.raw_decode(buf)
         except json.JSONDecodeError:
@@ -397,7 +397,7 @@ def _parse_path_escaped(path: str):
     i = 0
 
     def flush_name():
-        # append name-part if there is content or if parts empty (to anchor)
+        # append name-part if there is content or if parts empty
         if name_buf or not parts:
             parts.append([_unescape_key("".join(name_buf)), None])
             name_buf.clear()
@@ -416,7 +416,6 @@ def _parse_path_escaped(path: str):
             continue
 
         if c == "[":
-            # try parse numeric index
             j = i + 1
             k = j
             while k < len(path) and path[k].isdigit():

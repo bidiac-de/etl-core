@@ -43,7 +43,7 @@ def inline_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
 
     inlined = _inline_node(root, defs, path_stack=())
     if _contains_local_ref(inlined):
-        # Keep $defs if any local refs remain (e.g., because of cycles).
+        # Keep $defs if any local refs remain
         inlined[_DEFS] = defs
     else:
         inlined.pop(_DEFS, None)
@@ -86,19 +86,19 @@ def _expand_local_ref(
     defs: Dict[str, Any],
     path_stack: LocalRef,
 ) -> Dict[str, Any]:
-    # Cycle? keep the $ref to avoid infinite recursion.
+    # keep the $ref to avoid infinite recursion.
     if ref_name in path_stack:
         return node
 
     target = defs.get(ref_name)
     if not isinstance(target, dict):
-        # Unknown or malformed target; keep the original $ref.
+        # Unknown or malformed target: keep the original $ref
         return node
 
-    # Expand the target, then merge any sibling keys on the $ref site.
+    # Expand the target, then merge any sibling keys on the $ref site
     expanded = _inline_node(copy.deepcopy(target), defs, path_stack + (ref_name,))
     if not isinstance(expanded, dict):
-        # Defensive: if target isn't an object, we can't merge.
+        # if target isn't an object, we can't merge
         return node
 
     extras = {k: v for k, v in node.items() if k != "$ref"}

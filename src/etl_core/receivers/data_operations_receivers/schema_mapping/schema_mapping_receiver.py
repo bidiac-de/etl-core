@@ -76,7 +76,6 @@ class SchemaMappingReceiver:
         path_separator: str,
         metrics: DataOperationsMetrics,
     ) -> Iterable[Tuple[str, pd.DataFrame]]:
-        # Count incoming rows from this batch
         metrics.lines_received += int(dataframe.shape[0])
 
         # Rules can target different output ports, handle each separately
@@ -107,7 +106,6 @@ class SchemaMappingReceiver:
         in_len = self._safe_ddf_len(ddf)
         metrics.lines_received += in_len
 
-        # Same grouping as bulk, apply per partition
         rules_by_dst: Dict[str, List[Tuple[str, str]]] = {}
         for _sp, src_path, dst_port, dst_path in rules:
             rules_by_dst.setdefault(dst_port, []).append((src_path, dst_path))
@@ -130,7 +128,6 @@ class SchemaMappingReceiver:
         join_plan: JoinPlan,
         metrics: DataOperationsMetrics,
     ) -> Dict[str, List[Dict[str, Any]]]:
-        # Count all buffered inputs that participate in this join
         metrics.lines_received += sum(len(v) for v in buffers.values())
 
         # Work on a copy, each step can feed later steps via its port
@@ -167,7 +164,6 @@ class SchemaMappingReceiver:
         path_separator: str,
         metrics: DataOperationsMetrics,
     ) -> Dict[str, pd.DataFrame]:
-        # Count buffered rows for all inputs
         metrics.lines_received += sum(int(df.shape[0]) for df in buffers.values())
 
         dfs: Dict[str, pd.DataFrame] = dict(buffers)
@@ -204,7 +200,6 @@ class SchemaMappingReceiver:
         path_separator: str,
         metrics: DataOperationsMetrics,
     ) -> Dict[str, dd.DataFrame]:
-        # Count buffered DDF rows defensively
         metrics.lines_received += sum(self._safe_ddf_len(v) for v in buffers.values())
 
         dfs: Dict[str, dd.DataFrame] = dict(buffers)
@@ -213,7 +208,6 @@ class SchemaMappingReceiver:
             left = dfs.get(step.left_port)
             right = dfs.get(step.right_port)
 
-            # Ensure both sides exist so merge is safe
             if left is None and right is None:
                 dfs[step.output_port] = dd.from_pandas(pd.DataFrame(), npartitions=1)
                 continue
@@ -279,7 +273,6 @@ class SchemaMappingReceiver:
 
     @staticmethod
     def _dict_key_by_path(data: Dict[str, Any], dotted: str) -> Any:
-        # Read a value from a nested dict by a dotted path
         path = SchemaPath.parse(dotted)
         cur: Any = data
         for part in path.parts:
@@ -345,7 +338,6 @@ class SchemaMappingReceiver:
                 for rrow in ir[k]:
                     result.append(self._merge_nested_dicts(lrow, rrow))
 
-        # Include non-matches based on join type
         if how in ("left", "outer"):
             for k in left_only:
                 result.extend(il[k])
@@ -356,7 +348,6 @@ class SchemaMappingReceiver:
 
     @staticmethod
     def _safe_ddf_len(ddf: dd.DataFrame) -> int:
-        # Compute row count defensively; some Dask graphs can fail here
         try:
             return int(ddf.map_partitions(len).sum().compute())
         except Exception:
@@ -388,7 +379,6 @@ def _map_dataframe(
     df: pd.DataFrame,
     pairs: List[Tuple[str, str]],
 ) -> pd.DataFrame:
-    # Build new frame with destination names, missing columns become None
     out_cols: Dict[str, Any] = {}
     for src_col, dst_col in pairs:
         out_cols[dst_col] = df[src_col] if src_col in df.columns else None

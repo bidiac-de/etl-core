@@ -637,7 +637,6 @@ class TestMariaDBReceivers:
             params={},
         )
 
-
     @pytest.mark.asyncio
     async def test_large_data_handling(self, mock_connection_handler, mock_metrics):
         """Test handling of large datasets."""
@@ -751,7 +750,6 @@ class TestMariaDBReceivers:
 
         mock_connection_handler.lease().__enter__().execute.assert_called_once()
         assert result == {"affected_rows": 1, "row": boolean_data}
-
 
     @pytest.mark.asyncio
     async def test_write_bigdata_partition_processing(

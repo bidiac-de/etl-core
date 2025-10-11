@@ -255,7 +255,6 @@ def test_build_mask_variants_and_errors() -> None:
             ],
         )
 
-
     fake_xor = SimpleNamespace(
         logical_operator="XOR",
         rules=[rule_leaf],

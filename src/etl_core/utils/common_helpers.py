@@ -69,7 +69,6 @@ def assert_unique(
         seen.add(value)
 
 
-
 def required_names(children: Sequence[FieldDef]) -> Set[str]:
     """Return names of non-nullable children."""
     return {c.name for c in children if not c.nullable}

@@ -56,7 +56,6 @@ class DatabaseOperationMixin:
             ({columns_str}) VALUES ({placeholders})"
 
         elif operation == DatabaseOperation.UPSERT:
-            # Default upsert behavior - subclasses should override
             return f"INSERT INTO {table} ({columns_str}) VALUES ({placeholders})"
 
         elif operation == DatabaseOperation.UPDATE:

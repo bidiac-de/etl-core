@@ -17,7 +17,6 @@ import dask.dataframe as dd
 
 class StubReceiver(Receiver):
     def execute(self, data: Any, **kwargs: Any) -> Any:
-        # trivial pass-through
         return data
 
 
@@ -118,7 +117,7 @@ class MultiSource(StubComponent):
     Emits `count` rows.
     """
 
-    # Source: explicitly no inputs, and must opt-in to allow this.
+    # Source: explicitly no inputs, and must opt-in to allow this
     INPUT_PORTS = ()
     ALLOW_NO_INPUTS: ClassVar[bool] = True
     OUTPUT_PORTS = (OutPortSpec(name="out"),)

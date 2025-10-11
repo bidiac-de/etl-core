@@ -7,7 +7,6 @@ class IContextProvider(ABC):
         """Retrieve a parameter value by key."""
         pass
 
-    # Optional lifecycle hook: providers that write secrets can override this.
     def delete_from_store(self) -> None:
         """
         Optional cleanup hook to remove provider-owned secrets from the backing

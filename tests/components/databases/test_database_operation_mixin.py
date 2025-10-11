@@ -270,9 +270,7 @@ class TestDatabaseOperationIntegration:
 
     def test_operation_enum_coverage(self):
         """Test that all DatabaseOperation enum values are handled."""
-        component = DatabaseOperationMixinComponent(
-            where_conditions=["id = 1"]
-        )
+        component = DatabaseOperationMixinComponent(where_conditions=["id = 1"])
 
         table = "test_table"
         columns = ["id", "name"]

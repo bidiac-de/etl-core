@@ -27,7 +27,7 @@ class MongoDBRead(MongoDBComponent):
     OUTPUT_PORTS = (OutPortSpec(name="out", required=True, fanout="many"),)
     ALLOW_NO_INPUTS = True
 
-    # Query controls (user-configurable)
+    # Query controls
     query_filter: Dict[str, Any] = Field(
         default_factory=dict, description="find() filter"
     )

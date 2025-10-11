@@ -43,7 +43,6 @@ class Credentials(BaseModel, IContextProvider):
             "host": self.host,
             "port": self.port,
             "database": self.database,
-            # expose portable pool settings via provider API
             "pool_max_size": self.pool_max_size,
             "pool_timeout_s": self.pool_timeout_s,
         }

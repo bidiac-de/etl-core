@@ -77,7 +77,6 @@ class DatabaseComponent(Component, ABC):
         Provide a stable mapping for receivers, using the already resolved creds.
         """
         if self._credentials is None:
-            # Should not happen after _build_objects, keep a guard for safety
             ctx = self.get_resolved_context()
             assert isinstance(ctx, CredentialsMappingContext)
             self._credentials, self._cred_id = ctx.resolve_active_credentials()

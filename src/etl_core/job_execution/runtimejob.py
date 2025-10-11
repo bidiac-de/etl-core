@@ -73,7 +73,6 @@ class RuntimeJob(JobBase):
         for c in self.components:
             c.next_components = []
             c.prev_components = []
-            # Some components store these privately; make sure they exist/reset
             if hasattr(c, "_out_routes"):
                 c._out_routes = {}  # type: ignore[attr-defined]
             if hasattr(c, "_out_edges_in_ports"):
@@ -89,10 +88,8 @@ class RuntimeJob(JobBase):
         incoming: Dict[Tuple[str, str], int] = {}
         for src in self.components:
             targets, inports = self._resolve_src_routes(src, name_map, incoming)
-            # persist per-source routing so the runtime can use it
             setattr(src, "_out_routes", targets)
             setattr(src, "_out_edges_in_ports", inports)
-            # link graph next/prev without duplicates
             self._link_runtime_edges(src, targets)
         return incoming
 
@@ -311,7 +308,6 @@ class RuntimeJob(JobBase):
             ensure(used_in_ports=used_in, used_out_ports=used_out)
             return
 
-        # Fallback: look at common dict attributes
         out_schemas: Dict[str, object] = getattr(comp, "out_port_schemas", {})
         in_schemas: Dict[str, object] = getattr(comp, "in_port_schemas", {})
         for p, n in used_out.items():
@@ -327,7 +323,6 @@ class RuntimeJob(JobBase):
         After wiring, give every component the Job’s strategy.
         """
         for comp in self.components:
-            # override whatever was on the component; use job-level strategy_type
             comp.strategy = get_strategy(self.strategy_type)
 
         return self

@@ -64,4 +64,4 @@ class FieldDef(BaseModel):
         return v
 
 
-FieldDef.model_rebuild()  # resolve forward refs
+FieldDef.model_rebuild()

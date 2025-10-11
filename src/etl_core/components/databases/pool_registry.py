@@ -84,7 +84,7 @@ class ConnectionPoolRegistry:
             closed = self.close_pool(key)
             if closed:
                 self._log.debug("Closed idle %s pool %s", key.kind, key.dsn)
-        except Exception:  # pragma: no cover - cleanup should not crash caller
+        except Exception:  # pragma: no cover
             self._log.exception("Failed to close idle pool %s", key.dsn)
 
     def _schedule_idle_close(self, key: PoolKey, slot: Dict[str, Any]) -> None:

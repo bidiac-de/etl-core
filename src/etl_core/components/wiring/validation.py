@@ -24,9 +24,6 @@ class _Ctx:
     sep: str
 
 
-# tiny helpers
-
-
 def _require_map(obj: Any, ctx: _Ctx, path: str) -> Dict[str, Any]:
     if not isinstance(obj, dict):
         raise ValueError(f"{ctx.schema_name}: '{path}' must be an object (dict)")
@@ -37,9 +34,6 @@ def _require_list(obj: Any, ctx: _Ctx, path: str) -> List[Any]:
     if not isinstance(obj, list):
         raise ValueError(f"{ctx.schema_name}: '{path}' must be an array (list)")
     return obj
-
-
-# row validation helpers
 
 
 def _validate_object_row(value: Any, fd: FieldDef, ctx: _Ctx, path: str) -> None:
@@ -85,7 +79,6 @@ def _validate_array_row(value: Any, fd: FieldDef, ctx: _Ctx, path: str) -> None:
         return
 
     if fd.item is None:
-        # structure-only arrays: we've already asserted it's a list
         return
 
     for idx, el in enumerate(arr):
@@ -123,11 +116,7 @@ def _validate_value_row(value: Any, fd: FieldDef, ctx: _Ctx, path: str) -> None:
         _validate_array_row(value, fd, ctx, path)
         return
 
-    # Scalars and enums come here
     _validate_scalar_row(value, fd, ctx, path)
-
-
-# public validator entry points
 
 
 def validate_row_against_schema(

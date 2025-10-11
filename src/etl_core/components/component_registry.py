@@ -23,7 +23,7 @@ _component_meta: Dict[str, ComponentMeta] = {}
 class RegistryMode(str, Enum):
     PRODUCTION = "production"
     TEST = "test"
-    ALL = "all"  # helpful override, could be used if tests differ
+    ALL = "all"
 
 
 # Default to PRODUCTION unless set at startup
@@ -73,7 +73,6 @@ def _is_visible(type_name: str, mode: RegistryMode) -> bool:
     meta = _component_meta.get(type_name, ComponentMeta())
     if mode == RegistryMode.PRODUCTION:
         return not meta.hidden
-    # TEST and ALL expose everything
     return True
 
 

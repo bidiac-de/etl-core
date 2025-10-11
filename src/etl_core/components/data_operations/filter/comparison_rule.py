@@ -20,7 +20,7 @@ class ComparisonRule(BaseModel):
     - a *leaf* rule (column/operator/value), or
     - a *logical node* (AND / OR / NOT) with sub-rules.
 
-    The actual evaluation (mask building) is implemented in `filter_helper.py`.
+    The actual evaluation is implemented in `filter_helper.py`.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
