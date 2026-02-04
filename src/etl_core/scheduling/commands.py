@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
+from etl_core.persistence.handlers.schedule_handler import (
+    ScheduleHandler,
+    ScheduleNotFoundError,
+)
 from etl_core.persistence.table_definitions import TriggerType, ScheduleTable
 from etl_core.scheduling.scheduler_service import SchedulerService
 from etl_core.singletons import schedule_handler as _schedule_handler_singleton
@@ -102,7 +106,11 @@ class ResumeScheduleCommand(Command):
 @dataclass
 class RunNowScheduleCommand(Command):
     schedule_id: str
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
     scheduler: SchedulerService = field(default_factory=SchedulerService.instance)
 
     async def execute(self) -> None:  # type: ignore[override]
+        schedule = await asyncio.to_thread(self.schedules.get, self.schedule_id)
+        if schedule is None:
+            raise ScheduleNotFoundError(self.schedule_id)
         await self.scheduler.run_now(self.schedule_id)

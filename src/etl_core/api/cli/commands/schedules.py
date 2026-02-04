@@ -8,6 +8,7 @@ import requests
 
 from etl_core.api.cli.adapters import api_base_url
 
+from etl_core.persistence.handlers.schedule_handler import ScheduleNotFoundError
 from etl_core.persistence.table_definitions import TriggerType
 import etl_core.scheduling.commands as schedule_commands
 from etl_core.singletons import schedule_handler as _schedule_handler_singleton
@@ -241,4 +242,7 @@ def run_now_cmd(schedule_id: str):
         return
     import asyncio
 
-    asyncio.run(schedule_commands.RunNowScheduleCommand(schedule_id).execute())
+    try:
+        asyncio.run(schedule_commands.RunNowScheduleCommand(schedule_id).execute())
+    except ScheduleNotFoundError:
+        raise typer.Exit(code=1)

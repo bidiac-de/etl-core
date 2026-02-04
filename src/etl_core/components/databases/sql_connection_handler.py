@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, Optional, Tuple
 
 from sqlalchemy.engine import Connection, Engine
 
@@ -21,6 +21,9 @@ class SQLConnectionHandler:
         self._registry = ConnectionPoolRegistry.instance()
         self._key: Optional[PoolKey] = None
         self._engine: Optional[Engine] = None
+        self._url: Optional[str] = None
+        self._engine_kwargs: Dict[str, Any] = {}
+        self._session_initializer: Optional[Callable[[Connection], None]] = None
 
     @staticmethod
     def build_url(
@@ -54,22 +57,45 @@ class SQLConnectionHandler:
         return f"{driver}://{user}:{password}@{host}:{port}/{database}"
 
     def connect(
-        self, *, url: str, engine_kwargs: Optional[Dict[str, Any]] = None
-    ) -> Tuple[PoolKey, Engine]:
-        self._key, self._engine = self._registry.get_sql_engine(
-            url=url, engine_kwargs=engine_kwargs
-        )
+        self,
+        *,
+        url: str,
+        engine_kwargs: Optional[Dict[str, Any]] = None,
+        session_initializer: Optional[Callable[[Connection], None]] = None,
+        eager: bool = True,
+    ) -> Tuple[PoolKey, Optional[Engine]]:
+        self._url = url
+        self._engine_kwargs = dict(engine_kwargs or {})
+        self._session_initializer = session_initializer
+        self._key = PoolKey.for_sql(url=url, engine_kwargs=self._engine_kwargs)
+        if eager:
+            self._key, self._engine = self._registry.get_sql_engine(
+                url=url, engine_kwargs=engine_kwargs
+            )
+        else:
+            self._engine = None
         return self._key, self._engine
 
-    @contextmanager
-    def lease(self) -> Generator[Connection, None, None]:
-        if not self._key or not self._engine:
-            raise RuntimeError(
-                "SQLConnectionHandler.connect() must be called before lease()."
+    def _ensure_engine(self) -> Engine:
+        if self._engine is None:
+            if not self._url:
+                raise RuntimeError(
+                    "SQLConnectionHandler.connect() must be called before lease()."
+                )
+            self._key, self._engine = self._registry.get_sql_engine(
+                url=self._url, engine_kwargs=self._engine_kwargs or None
             )
+        return self._engine
+
+    @contextmanager
+    def lease(self, *, initialize_session: bool = True) -> Generator[Connection, None, None]:
+        if not self._key or not self._engine:
+            self._ensure_engine()
         self._registry.lease_sql(self._key)
         try:
             with self._engine.connect() as conn:
+                if initialize_session and self._session_initializer:
+                    self._session_initializer(conn)
                 yield conn
         finally:
             self._registry.release_sql(self._key)

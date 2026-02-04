@@ -135,5 +135,8 @@ def resume_schedule(schedule_id: str) -> ScheduleOut:
 
 @router.post("/{schedule_id}/run-now", response_model=dict)
 async def run_now(schedule_id: str) -> Dict[str, str]:
-    await RunNowScheduleCommand(schedule_id).execute()
-    return {"status": "started"}
+    try:
+        await RunNowScheduleCommand(schedule_id).execute()
+        return {"status": "started"}
+    except ScheduleNotFoundError:
+        raise HTTPException(status_code=404, detail="Schedule not found")

@@ -12,20 +12,12 @@ class MariaDBComponent(SQLDatabaseComponent):
     )
     ICON = "devicon-mariadb-plain"
 
-    def _setup_session_variables(self):
-        """Setup MariaDB-specific session variables."""
-        if not self._connection_handler or not self.charset:
-            return
-
-        try:
-            with self._connection_handler.lease() as conn:
-                if self.charset:
-                    conn.execute(f"SET NAMES {self.charset}")
-                if self.collation:
-                    conn.execute(f"SET collation_connection = {self.collation}")
-                conn.commit()
-        except Exception as e:
-            print(f"Warning: Could not set MariaDB session variables: {e}")
+    def _apply_session_variables(self, conn):
+        """Apply MariaDB-specific session variables to a live connection."""
+        if self.charset:
+            conn.execute(f"SET NAMES {self.charset}")
+        if self.collation:
+            conn.execute(f"SET collation_connection = {self.collation}")
 
     def _build_objects(self):
         """Build MariaDB-specific objects after validation."""

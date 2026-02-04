@@ -67,16 +67,45 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
         engine_kwargs = build_sql_engine_kwargs(self._credentials)
 
-        self._connection_handler.connect(url=url, engine_kwargs=engine_kwargs)
+        self._connection_handler.connect(
+            url=url,
+            engine_kwargs=engine_kwargs,
+            session_initializer=self._initialize_session,
+            eager=False,
+        )
 
-        # Force subclasses to set their own session variables
-        self._setup_session_variables()
+    def _initialize_session(self, conn: Any) -> None:
+        """Apply session variables on a live connection."""
+        try:
+            self._apply_session_variables(conn)
+            conn.commit()
+        except Exception:
+            self._log.warning(
+                "%s: Could not set SQL session variables.", self.name, exc_info=True
+            )
+
+    def _setup_session_variables(self) -> None:
+        """Apply session variables via a leased connection (for tests/tools)."""
+        handler = self._connection_handler
+        if handler is None:
+            return
+        try:
+            try:
+                lease_ctx = handler.lease(initialize_session=False)
+            except TypeError:
+                lease_ctx = handler.lease()
+            with lease_ctx as conn:
+                self._initialize_session(conn)
+        except Exception:
+            self._log.warning(
+                "%s: Could not set SQL session variables.", self.name, exc_info=True
+            )
 
     @abstractmethod
-    def _setup_session_variables(self):
+    def _apply_session_variables(self, conn: Any) -> None:
         """
-        Setup database-specific session variables.
-        Must be implemented by subclasses (MariaDB, PostgreSQL, etc.).
+        Apply database-specific session variables to an active connection.
+        Must be implemented by subclasses (MariaDB, PostgreSQL, SQL Server, etc.).
         """
         raise NotImplementedError
 
