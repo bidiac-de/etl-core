@@ -94,7 +94,7 @@ def list_cmd():
                     ]
                 )
                 + f"\tpaused={rj['is_paused']}"
-        )
+            )
         return
     rows = schedule_commands.ListSchedulesCommand(
         schedules=_schedule_handler_singleton()

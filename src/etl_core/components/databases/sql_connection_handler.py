@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Generator, Optional, Tuple
+from urllib.parse import quote_plus
 
 from sqlalchemy.engine import Connection, Engine
 
@@ -54,7 +55,9 @@ class SQLConnectionHandler:
             raise ValueError(
                 f"{comp_type} requires user, password, host, port, and database."
             )
-        return f"{driver}://{user}:{password}@{host}:{port}/{database}"
+        safe_user = quote_plus(user)
+        safe_password = quote_plus(password)
+        return f"{driver}://{safe_user}:{safe_password}@{host}:{port}/{database}"
 
     def connect(
         self,
@@ -88,7 +91,9 @@ class SQLConnectionHandler:
         return self._engine
 
     @contextmanager
-    def lease(self, *, initialize_session: bool = True) -> Generator[Connection, None, None]:
+    def lease(
+        self, *, initialize_session: bool = True
+    ) -> Generator[Connection, None, None]:
         if not self._key or not self._engine:
             self._ensure_engine()
         self._registry.lease_sql(self._key)
