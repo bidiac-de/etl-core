@@ -9,109 +9,27 @@ import pytest
 import pandas as pd
 import dask.dataframe as dd
 from unittest.mock import Mock, patch
-from sqlalchemy.engine import Connection as SQLConnection
 from sqlalchemy import text
 
-from src.etl_core.receivers.databases.postgresql.postgresql_receiver import (
+from etl_core.receivers.databases.postgresql.postgresql_receiver import (
     PostgreSQLReceiver,
-)
-from src.etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from src.etl_core.components.databases.sql_connection_handler import (
-    SQLConnectionHandler,
 )
 
 
 class TestPostgreSQLReceiver:
     """Test cases for PostgreSQL receiver."""
 
-    @pytest.fixture
-    def mock_connection_handler(self):
-        """Create a mock connection handler."""
-        handler = Mock(spec=SQLConnectionHandler)
-        mock_connection = Mock()
-        mock_connection.execute.return_value = Mock()
-        mock_connection.commit = Mock(return_value=None)
-        mock_connection.rollback = Mock(return_value=None)
-        mock_connection.__class__ = SQLConnection
-
-        mock_context_manager = Mock()
-        mock_context_manager.__enter__ = Mock(return_value=mock_connection)
-        mock_context_manager.__exit__ = Mock(return_value=None)
-        handler.lease.return_value = mock_context_manager
-
-        return handler
-
-    @pytest.fixture
-    def mock_metrics(self):
-        """Create mock component metrics."""
-        metrics = Mock(spec=ComponentMetrics)
-        metrics.set_started = Mock()
-        metrics.set_completed = Mock()
-        metrics.set_failed = Mock()
-        return metrics
-
-    @pytest.fixture
-    def sample_data(self):
-        """Sample data for testing."""
-        return [
-            {"id": 1, "name": "John", "email": "john@example.com"},
-            {"id": 2, "name": "Jane", "email": "jane@example.com"},
-        ]
-
-    @pytest.fixture
-    def sample_dataframe(self):
-        """Sample pandas DataFrame for testing."""
-        return pd.DataFrame(
-            {
-                "id": [1, 2, 3],
-                "name": ["John", "Jane", "Bob"],
-                "email": ["john@example.com", "jane@example.com", "bob@example.com"],
-                "age": [25, 30, 35],
-            }
-        )
-
-    @pytest.fixture
-    def sample_dask_dataframe(self):
-        """Sample Dask DataFrame for testing."""
-        df = pd.DataFrame(
-            {
-                "id": [1, 2, 3, 4, 5],
-                "name": ["John", "Jane", "Bob", "Alice", "Charlie"],
-                "email": [
-                    "john@example.com",
-                    "jane@example.com",
-                    "bob@example.com",
-                    "alice@example.com",
-                    "charlie@example.com",
-                ],
-                "age": [25, 30, 35, 28, 32],
-            }
-        )
-        return dd.from_pandas(df, npartitions=2)
-
     def test_postgresql_receiver_get_connection(self, mock_connection_handler):
         """Test PostgreSQLReceiver _get_connection method."""
         receiver = PostgreSQLReceiver()
+        expected_connection = (
+            mock_connection_handler.lease.return_value.__enter__.return_value
+        )
         connection = receiver._get_connection(mock_connection_handler)
-        assert connection == mock_connection_handler.lease().__enter__()
+        assert connection == expected_connection
 
-        # Verify that lease() was called (it's called twice: once in _get_connection
-        # and once in lease().__enter__)
-        assert mock_connection_handler.lease.call_count == 2
-
-    def test_postgresql_receiver_get_connection_invalid_type(
-        self, mock_connection_handler
-    ):
-        """Test PostgreSQLReceiver _get_connection with invalid type."""
-        receiver = PostgreSQLReceiver()
-
-        # Test that the connection is properly retrieved through the lease
-        connection = receiver._get_connection(mock_connection_handler)
-        assert connection == mock_connection_handler.lease().__enter__()
-
-        # Verify that lease() was called (it's called twice: once in _get_connection
-        # and once in lease().__enter__)
-        assert mock_connection_handler.lease.call_count == 2
+        # Verify that lease() was called once inside _get_connection.
+        assert mock_connection_handler.lease.call_count == 1
 
     def test_postgresql_receiver_initialization(self):
         """Test PostgreSQL receiver initialization."""
@@ -267,7 +185,7 @@ class TestPostgreSQLReceiver:
 
     @pytest.mark.asyncio
     async def test_write_bulk_success(
-        self, mock_connection_handler, mock_metrics, sample_dataframe
+        self, mock_connection_handler, mock_metrics, sample_dataframe_with_age
     ):
         """Test successful bulk writing."""
         receiver = PostgreSQLReceiver()
@@ -278,7 +196,7 @@ class TestPostgreSQLReceiver:
 
         result = await receiver.write_bulk(
             entity_name="users",
-            frame=sample_dataframe,
+            frame=sample_dataframe_with_age,
             metrics=mock_metrics,
             query=(
                 "INSERT INTO users (id, name, email, age) "
@@ -290,33 +208,11 @@ class TestPostgreSQLReceiver:
         assert mock_connection_handler.lease().__enter__().execute.call_count == 3
         assert mock_connection_handler.lease().__enter__().commit.call_count == 1
 
-        assert result.equals(sample_dataframe)
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_empty_data(self, mock_connection_handler, mock_metrics):
-        """Test write_bulk method with empty data."""
-        receiver = PostgreSQLReceiver()
-
-        empty_df = pd.DataFrame()
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query=(
-                "INSERT INTO users (id, name, email, age) "
-                "VALUES (:id, :name, :email, :age)"
-            ),
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_not_called()
-        mock_connection_handler.lease().__enter__().commit.assert_not_called()
-
-        assert result.equals(empty_df)
+        assert result.equals(sample_dataframe_with_age)
 
     @pytest.mark.asyncio
     async def test_write_bigdata_success(
-        self, mock_connection_handler, mock_metrics, sample_dask_dataframe
+        self, mock_connection_handler, mock_metrics, sample_dask_dataframe_with_age
     ):
         """Test successful bigdata writing."""
         receiver = PostgreSQLReceiver()
@@ -328,7 +224,7 @@ class TestPostgreSQLReceiver:
         try:
             result = await receiver.write_bigdata(
                 entity_name="users",
-                frame=sample_dask_dataframe,
+                frame=sample_dask_dataframe_with_age,
                 metrics=mock_metrics,
                 query=(
                     "INSERT INTO users (id, name, email, age) "
@@ -468,6 +364,13 @@ class TestPostgreSQLReceiver:
                 connection_handler=mock_connection_handler,
             )
 
+        mock_context_manager = mock_connection_handler.lease.return_value
+        mock_context_manager.__exit__.assert_called_once()
+        exit_args, _ = mock_context_manager.__exit__.call_args
+        assert exit_args[0] is Exception
+        assert str(exit_args[1]) == "Database error"
+        assert exit_args[2] is not None
+
     @pytest.mark.asyncio
     async def test_dask_dataframe_partitioning(
         self, mock_connection_handler, mock_metrics
@@ -490,52 +393,6 @@ class TestPostgreSQLReceiver:
             )
 
             assert mock_compute.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_with_empty_dataframe(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk with empty DataFrame."""
-        receiver = PostgreSQLReceiver()
-
-        empty_df = pd.DataFrame()
-
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_not_called()
-        mock_connection_handler.lease().__enter__().commit.assert_not_called()
-        assert result.equals(empty_df)
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_with_single_row(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk with single row data."""
-        receiver = PostgreSQLReceiver()
-
-        single_row_df = pd.DataFrame([{"name": "John", "email": "john@example.com"}])
-
-        mock_result = Mock()
-        mock_result.rowcount = 1
-        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
-
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=single_row_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (name, email) VALUES (:name, :email)",
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        mock_connection_handler.lease().__enter__().commit.assert_called_once()
-        assert result.equals(single_row_df)
 
     @pytest.mark.asyncio
     async def test_read_row_with_empty_result(
@@ -826,51 +683,6 @@ class TestPostgreSQLReceiver:
 
             assert result is not None
             assert hasattr(result, "npartitions")
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_empty_dataframe_early_return(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk early return for empty DataFrame."""
-        receiver = PostgreSQLReceiver()
-
-        empty_df = pd.DataFrame()
-
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            table="users",
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_not_called()
-        mock_connection_handler.lease().__enter__().commit.assert_not_called()
-
-        assert result.equals(empty_df)
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_empty_list_early_return(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk early return for empty list."""
-        receiver = PostgreSQLReceiver()
-
-        empty_df = pd.DataFrame()
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            connection_handler=mock_connection_handler,
-            table="users",
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_not_called()
-        mock_connection_handler.lease().__enter__().commit.assert_not_called()
-
-        assert result.equals(empty_df)
 
     @pytest.mark.asyncio
     async def test_read_bigdata_default_partitions(

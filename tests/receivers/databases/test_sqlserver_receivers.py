@@ -10,111 +10,41 @@ import pandas as pd
 import dask.dataframe as dd
 
 from unittest.mock import Mock, patch
-from sqlalchemy.engine import Connection as SQLConnection
 from sqlalchemy import text
 
+from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
+from etl_core.receivers.databases.postgresql.postgresql_receiver import (
+    PostgreSQLReceiver,
+)
 from etl_core.receivers.databases.sqlserver.sqlserver_receiver import (
     SQLServerReceiver,
 )
-from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.components.databases.sql_connection_handler import (
-    SQLConnectionHandler,
-)
+
+
+def _empty_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=["id", "name", "email"])
+
+
+def _single_row_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"id": 1, "name": "John", "email": "john@example.com"}]
+    )
 
 
 class TestSQLServerReceivers:
     """Test cases for SQL Server receivers."""
 
-    @pytest.fixture
-    def mock_context(self):
-        """Create a mock context with credentials."""
-        context = Mock()
-        mock_credentials = Mock()
-        mock_credentials.get_parameter.side_effect = lambda param: {
-            "user": "testuser",
-            "password": "testpass",
-            "database": "testdb",
-            "host": "localhost",
-            "port": 1433,
-        }.get(param)
-        mock_credentials.decrypted_password = "testpass"
-        context.get_credentials.return_value = mock_credentials
-        return context
-
-    @pytest.fixture
-    def mock_connection_handler(self):
-        """Create a mock connection handler."""
-        handler = Mock(spec=SQLConnectionHandler)
-        mock_connection = Mock()
-        mock_connection.execute.return_value = Mock()
-        mock_connection.commit = Mock(return_value=None)
-        mock_connection.rollback = Mock(return_value=None)
-        mock_connection.__class__ = SQLConnection
-
-        mock_context_manager = Mock()
-        mock_context_manager.__enter__ = Mock(return_value=mock_connection)
-        mock_context_manager.__exit__ = Mock(return_value=None)
-        handler.lease.return_value = mock_context_manager
-
-        return handler
-
-    @pytest.fixture
-    def mock_metrics(self):
-        """Create mock component metrics."""
-        metrics = Mock(spec=ComponentMetrics)
-        metrics.set_started = Mock()
-        metrics.set_completed = Mock()
-        metrics.set_failed = Mock()
-        return metrics
-
-    @pytest.fixture
-    def sample_data(self):
-        """Sample data for testing."""
-        return [
-            {"id": 1, "name": "John", "email": "john@example.com"},
-            {"id": 2, "name": "Jane", "email": "jane@example.com"},
-        ]
-
-    @pytest.fixture
-    def sample_dataframe(self):
-        """Sample pandas DataFrame for testing."""
-        return pd.DataFrame(
-            {
-                "id": [1, 2],
-                "name": ["John", "Jane"],
-                "email": ["john@example.com", "jane@example.com"],
-            }
-        )
-
-    @pytest.fixture
-    def sample_dask_dataframe(self):
-        """Sample Dask DataFrame for testing."""
-        df = pd.DataFrame(
-            {
-                "id": [1, 2, 3, 4],
-                "name": ["John", "Jane", "Bob", "Alice"],
-                "email": [
-                    "john@example.com",
-                    "jane@example.com",
-                    "bob@example.com",
-                    "alice@example.com",
-                ],
-            }
-        )
-        return dd.from_pandas(df, npartitions=2)
-
     def test_sqlserver_receiver_get_connection(self, mock_connection_handler):
         """Test SQLServerReceiver connection handling."""
         receiver = SQLServerReceiver()
+        expected_connection = (
+            mock_connection_handler.lease.return_value.__enter__.return_value
+        )
+        connection = receiver._get_connection(mock_connection_handler)
+        assert connection == expected_connection
 
-        assert hasattr(receiver, "read_row")
-        assert hasattr(receiver, "read_bulk")
-        assert hasattr(receiver, "read_bigdata")
-        assert hasattr(receiver, "write_row")
-        assert hasattr(receiver, "write_bulk")
-        assert hasattr(receiver, "write_bigdata")
-
-        assert mock_connection_handler.lease is not None
+        # Verify that lease() was called once inside _get_connection.
+        assert mock_connection_handler.lease.call_count == 1
 
     @pytest.mark.asyncio
     async def test_sqlserver_receiver_read_row(
@@ -247,24 +177,6 @@ class TestSQLServerReceivers:
         )
 
         assert result.equals(sample_dataframe)
-
-    @pytest.mark.asyncio
-    async def test_sqlserver_receiver_write_bulk_empty_data(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test SQLServerReceiver write_bulk method with empty data."""
-        receiver = SQLServerReceiver()
-
-        empty_df = pd.DataFrame()
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            connection_handler=mock_connection_handler,
-        )
-
-        assert result.equals(empty_df)
 
     @pytest.mark.parametrize(
         "test_type,has_custom_query,has_chunk_size,expected_rowcount",
@@ -511,9 +423,17 @@ class TestSQLServerReceivers:
                 entity_name="users",
                 row={"name": "John"},
                 metrics=mock_metrics,
+                query="INSERT INTO users (name) VALUES (:name)",
                 table="users",
                 connection_handler=mock_connection_handler,
             )
+
+        mock_context_manager = mock_connection_handler.lease.return_value
+        mock_context_manager.__exit__.assert_called_once()
+        exit_args, _ = mock_context_manager.__exit__.call_args
+        assert exit_args[0] is Exception
+        assert str(exit_args[1]) == "Database error"
+        assert exit_args[2] is not None
 
     @pytest.mark.asyncio
     async def test_dask_dataframe_partitioning(
@@ -537,52 +457,6 @@ class TestSQLServerReceivers:
             )
 
             assert mock_compute.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_with_empty_dataframe(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk with empty DataFrame."""
-        receiver = SQLServerReceiver()
-
-        empty_df = pd.DataFrame()
-
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_not_called()
-        mock_connection_handler.lease().__enter__().commit.assert_not_called()
-        assert result.equals(empty_df)
-
-    @pytest.mark.asyncio
-    async def test_write_bulk_with_single_row(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk with single row data."""
-        receiver = SQLServerReceiver()
-
-        single_row_df = pd.DataFrame([{"name": "John", "email": "john@example.com"}])
-
-        mock_result = Mock()
-        mock_result.rowcount = 1
-        mock_connection_handler.lease().__enter__().execute.return_value = mock_result
-
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=single_row_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (name, email) VALUES (:name, :email)",
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_called_once()
-        mock_connection_handler.lease().__enter__().commit.assert_called_once()
-        assert result.equals(single_row_df)
 
     @pytest.mark.asyncio
     async def test_read_row_with_empty_result(
@@ -788,27 +662,6 @@ class TestSQLServerReceivers:
         assert result == {"affected_rows": 1, "row": boolean_data}
 
     @pytest.mark.asyncio
-    async def test_write_bulk_empty_dataframe_early_return(
-        self, mock_connection_handler, mock_metrics
-    ):
-        """Test write_bulk early return for empty DataFrame."""
-        receiver = SQLServerReceiver()
-
-        empty_df = pd.DataFrame()
-
-        result = await receiver.write_bulk(
-            entity_name="users",
-            frame=empty_df,
-            metrics=mock_metrics,
-            query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
-            connection_handler=mock_connection_handler,
-        )
-
-        mock_connection_handler.lease().__enter__().execute.assert_not_called()
-        mock_connection_handler.lease().__enter__().commit.assert_not_called()
-        assert result.equals(empty_df)
-
-    @pytest.mark.asyncio
     async def test_write_bulk_dataframe_to_dict_conversion(
         self, mock_connection_handler, mock_metrics
     ):
@@ -932,6 +785,62 @@ class TestSQLServerReceivers:
                 mock_connection_handler.lease().__enter__().commit.call_count
                 == expected_calls
             )
+
+
+@pytest.mark.parametrize(
+    "_backend,receiver_cls",
+    [
+        pytest.param("mariadb", MariaDBReceiver, id="mariadb"),
+        pytest.param("postgresql", PostgreSQLReceiver, id="postgresql"),
+        pytest.param("sqlserver", SQLServerReceiver, id="sqlserver"),
+    ],
+)
+@pytest.mark.parametrize(
+    "frame_factory,expected_execute_calls,expected_commit_calls",
+    [
+        pytest.param(_empty_frame, 0, 0, id="empty-frame"),
+        pytest.param(_single_row_frame, 1, 1, id="single-row"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_write_bulk_empty_and_single_row(
+    _backend,
+    receiver_cls,
+    frame_factory,
+    expected_execute_calls,
+    expected_commit_calls,
+    mock_connection_handler,
+    mock_metrics,
+):
+    """Shared write_bulk behavior across SQL receivers."""
+    receiver = receiver_cls()
+    frame = frame_factory()
+
+    mock_context = mock_connection_handler.lease.return_value
+    mock_conn = mock_context.__enter__.return_value
+
+    if expected_execute_calls:
+        mock_result = Mock()
+        mock_result.rowcount = expected_execute_calls
+        mock_conn.execute.return_value = mock_result
+
+    result = await receiver.write_bulk(
+        entity_name="users",
+        frame=frame,
+        metrics=mock_metrics,
+        query="INSERT INTO users (id, name, email) VALUES (:id, :name, :email)",
+        connection_handler=mock_connection_handler,
+    )
+
+    assert result.equals(frame)
+
+    if expected_execute_calls == 0:
+        mock_connection_handler.lease.assert_not_called()
+        mock_conn.execute.assert_not_called()
+        mock_conn.commit.assert_not_called()
+    else:
+        assert mock_conn.execute.call_count == expected_execute_calls
+        assert mock_conn.commit.call_count == expected_commit_calls
 
 
 if __name__ == "__main__":
