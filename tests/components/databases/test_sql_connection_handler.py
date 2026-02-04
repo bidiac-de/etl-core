@@ -111,18 +111,14 @@ class TestSQLConnectionHandler:
             database="testdb",
         )
         assert url1 != url2
-        assert (
-            url1 == "POSTGRESQL+PSYCOPG2://testuser:testpass@localhost:5432/testdb"
-        )
+        assert url1 == "POSTGRESQL+PSYCOPG2://testuser:testpass@localhost:5432/testdb"
         assert url2 == "postgresql+psycopg2://testuser:testpass@localhost:5432/testdb"
 
     @patch(
         "src.etl_core.components.databases."
         "sql_connection_handler.ConnectionPoolRegistry"
     )
-    def test_connect_with_credentials_uses_receiver_dialect(
-        self, mock_registry_class
-    ):
+    def test_connect_with_credentials_uses_receiver_dialect(self, mock_registry_class):
         """Test connecting via credentials + receiver-selected dialect."""
 
         class _FakeCreds:

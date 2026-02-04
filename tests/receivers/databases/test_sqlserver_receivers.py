@@ -26,9 +26,7 @@ def _empty_frame() -> pd.DataFrame:
 
 
 def _single_row_frame() -> pd.DataFrame:
-    return pd.DataFrame(
-        [{"id": 1, "name": "John", "email": "john@example.com"}]
-    )
+    return pd.DataFrame([{"id": 1, "name": "John", "email": "john@example.com"}])
 
 
 class TestSQLServerReceivers:
