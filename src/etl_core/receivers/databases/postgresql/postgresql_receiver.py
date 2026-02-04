@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, AsyncIterator
+from typing import Any, Dict, AsyncIterator, ClassVar
 
 import pandas as pd
 import dask.dataframe as dd
@@ -13,6 +13,8 @@ from etl_core.receivers.databases.sql_receiver import SQLReceiver
 
 class PostgreSQLReceiver(SQLReceiver):
     """PostgreSQL receiver for database operations."""
+
+    SQL_DIALECT: ClassVar[str] = "postgresql+psycopg2"
 
     async def read_row(
         self,

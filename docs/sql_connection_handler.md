@@ -2,14 +2,14 @@
 
 ## 🎯 **Overview**
 
-The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for all SQL databases in the ETL-Core. It uses SQLAlchemy as a universal database engine and provides a unified API for PostgreSQL, MySQL, MariaDB and SQLite.
+The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for all SQL databases in the ETL-Core. It uses SQLAlchemy as a universal database engine and provides a unified API for PostgreSQL, MySQL, MariaDB and SQL Server.
 
 ## 🏗️ **Architecture Principles**
 
 ### **1. Database-Agnostic Design**
 - The handler doesn't know which specific database is behind it
 - Unified API for all supported databases
-- Automatic driver selection based on `db_type`
+- The SQL dialect is provided by the receiver via `SQL_DIALECT`
 
 ### **2. Layered Architecture**
 ```
@@ -36,7 +36,6 @@ The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for al
 | **PostgreSQL** | `postgresql+psycopg2` | psycopg2 | Bulk operations, COPY FROM |
 | **MySQL** | `mysql+mysqlconnector` | mysql-connector-python | Replication, Clustering |
 | **MariaDB** | `mysql+mysqlconnector` | mysql-connector-python | MySQL compatibility |
-| **SQLite** | `sqlite` | built-in | File-based, single application |
 
 ## 📋 **Core Functionalities**
 
@@ -45,7 +44,7 @@ The `SQLConnectionHandler` is a **central interface** (Abstraction Layer) for al
 @staticmethod
 def build_url(
     *,
-    db_type: str,
+    dialect: str,
     user: Optional[str] = None,
     password: Optional[str] = None,
     host: Optional[str] = None,
@@ -58,7 +57,7 @@ def build_url(
 ```python
 # PostgreSQL
 url = SQLConnectionHandler.build_url(
-    db_type="postgres",
+    dialect="postgresql+psycopg2",
     user="myuser",
     password="mypass",
     host="localhost",
@@ -66,13 +65,6 @@ url = SQLConnectionHandler.build_url(
     database="mydb"
 )
 # Result: "postgresql+psycopg2://myuser:mypass@localhost:5432/mydb"
-
-# SQLite
-url = SQLConnectionHandler.build_url(
-    db_type="sqlite",
-    database="/path/to/database.db"
-)
-# Result: "sqlite:////path/to/database.db"
 ```
 
 ### **2. Connection Setup**
@@ -91,6 +83,18 @@ handler = SQLConnectionHandler()
 key, engine = handler.connect(
     url="postgresql+psycopg2://user:pass@localhost:5432/db",
     engine_kwargs={"pool_size": 10, "max_overflow": 20}
+)
+```
+
+Or, using credentials + receiver dialect:
+```python
+from etl_core.receivers.databases.postgresql.postgresql_receiver import PostgreSQLReceiver
+
+handler = SQLConnectionHandler()
+key, engine = handler.connect_with_credentials(
+    credentials=creds,
+    receiver=PostgreSQLReceiver(),
+    engine_kwargs={"pool_size": 10, "max_overflow": 20},
 )
 ```
 
@@ -124,7 +128,7 @@ handler = SQLConnectionHandler()
 
 # Create connection URL
 url = handler.build_url(
-    db_type="postgres",
+    dialect="postgresql+psycopg2",
     user="etl_user",
     password="secure_password",
     host="db.example.com",

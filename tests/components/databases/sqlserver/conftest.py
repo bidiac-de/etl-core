@@ -81,8 +81,11 @@ def _stub_sql_connection_handler(monkeypatch: pytest.MonkeyPatch) -> None:
 
             yield _Conn()
 
-        def close_pool(self) -> bool:
+        def close_pool(self, *, force: bool = False) -> bool:
             return True
+
+        def connect_with_credentials(self, *args, **kwargs):
+            return None, None
 
     monkeypatch.setattr(
         SQL_CONNECTION_HANDLER_PATH,

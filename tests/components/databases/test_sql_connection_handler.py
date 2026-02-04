@@ -29,7 +29,7 @@ class TestSQLConnectionHandler:
     def test_build_url_postgres(self):
         """Test building PostgreSQL URL."""
         url = SQLConnectionHandler.build_url(
-            comp_type="write_postgresql",
+            dialect="postgresql+psycopg2",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -42,7 +42,7 @@ class TestSQLConnectionHandler:
     def test_build_url_mysql(self):
         """Test building MySQL URL."""
         url = SQLConnectionHandler.build_url(
-            comp_type="write_mysql",
+            dialect="mysql+mysqlconnector",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -55,7 +55,7 @@ class TestSQLConnectionHandler:
     def test_build_url_mariadb(self):
         """Test building MariaDB URL."""
         url = SQLConnectionHandler.build_url(
-            comp_type="write_mariadb",
+            dialect="mysql+mysqlconnector",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -69,17 +69,20 @@ class TestSQLConnectionHandler:
         """Test building URL with missing required parameters."""
         with pytest.raises(
             ValueError,
-            match="write_postgresql requires user, password, host, port, and database",
+            match=(
+                "postgresql\\+psycopg2 requires user, password, host, port, "
+                "and database"
+            ),
         ):
             SQLConnectionHandler.build_url(
-                comp_type="write_postgresql",
+                dialect="postgresql+psycopg2",
                 user="testuser",
             )
 
     def test_build_url_unsupported_dialect(self):
         """Test building URL with any database type (all are supported)."""
         url = SQLConnectionHandler.build_url(
-            comp_type="oracle",
+            dialect="oracle",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -90,9 +93,9 @@ class TestSQLConnectionHandler:
         assert url == expected
 
     def test_build_url_case_insensitive(self):
-        """Test that database type is case sensitive (as per current implementation)."""
+        """Test that dialect is used as-is (case sensitive)."""
         url1 = SQLConnectionHandler.build_url(
-            comp_type="WRITE_POSTGRESQL",
+            dialect="POSTGRESQL+PSYCOPG2",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -100,7 +103,7 @@ class TestSQLConnectionHandler:
             database="testdb",
         )
         url2 = SQLConnectionHandler.build_url(
-            comp_type="write_postgresql",
+            dialect="postgresql+psycopg2",
             user="testuser",
             password="testpass",
             host="localhost",
@@ -108,8 +111,50 @@ class TestSQLConnectionHandler:
             database="testdb",
         )
         assert url1 != url2
-        assert url1 == "WRITE_POSTGRESQL://testuser:testpass@localhost:5432/testdb"
+        assert (
+            url1 == "POSTGRESQL+PSYCOPG2://testuser:testpass@localhost:5432/testdb"
+        )
         assert url2 == "postgresql+psycopg2://testuser:testpass@localhost:5432/testdb"
+
+    @patch(
+        "src.etl_core.components.databases."
+        "sql_connection_handler.ConnectionPoolRegistry"
+    )
+    def test_connect_with_credentials_uses_receiver_dialect(
+        self, mock_registry_class
+    ):
+        """Test connecting via credentials + receiver-selected dialect."""
+
+        class _FakeCreds:
+            user = "u"
+            host = "h"
+            port = 5432
+            database = "db"
+
+            @property
+            def decrypted_password(self):
+                return "pw"
+
+        class _FakeReceiver:
+            SQL_DIALECT = "postgresql+psycopg2"
+
+        mock_registry = Mock()
+        mock_registry_class.instance.return_value = mock_registry
+
+        mock_key = Mock(spec=PoolKey)
+        mock_engine = Mock(spec=Engine)
+        mock_registry.get_sql_engine.return_value = (mock_key, mock_engine)
+
+        handler = SQLConnectionHandler()
+        key, engine = handler.connect_with_credentials(
+            credentials=_FakeCreds(), receiver=_FakeReceiver()
+        )
+
+        assert key == mock_key
+        assert engine == mock_engine
+        mock_registry.get_sql_engine.assert_called_once_with(
+            url="postgresql+psycopg2://u:pw@h:5432/db", engine_kwargs=None
+        )
 
     @patch(
         "src.etl_core.components.databases."
@@ -313,7 +358,7 @@ class TestSQLConnectionHandler:
         """Test edge cases in URL building."""
         with pytest.raises(ValueError):
             SQLConnectionHandler.build_url(
-                comp_type="write_postgresql",
+                dialect="postgresql+psycopg2",
                 user=None,
                 password="testpass",
                 host="localhost",
@@ -323,7 +368,7 @@ class TestSQLConnectionHandler:
 
         with pytest.raises(ValueError):
             SQLConnectionHandler.build_url(
-                comp_type="write_postgresql",
+                dialect="postgresql+psycopg2",
                 user="",
                 password="testpass",
                 host="localhost",
@@ -334,14 +379,16 @@ class TestSQLConnectionHandler:
     def test_build_url_special_characters(self):
         """Test URL building with special characters in credentials."""
         url = SQLConnectionHandler.build_url(
-            comp_type="write_postgresql",
+            dialect="postgresql+psycopg2",
             user="user@domain",
             password="pass@word!",
             host="localhost",
             port=5432,
             database="test-db",
         )
-        expected = "postgresql+psycopg2://user@domain:pass@word!@localhost:5432/test-db"
+        expected = (
+            "postgresql+psycopg2://user%40domain:pass%40word%21@localhost:5432/test-db"
+        )
         assert url == expected
 
     @patch(

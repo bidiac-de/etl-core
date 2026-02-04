@@ -51,24 +51,19 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
 
     def _setup_connection(self):
         """Setup the SQL database connection with credentials and specific settings."""
+        self._get_credentials()
 
-        creds = self._get_credentials()
+        if self._receiver is None:
+            raise RuntimeError(
+                f"{self.name}: receiver not initialized; cannot resolve SQL dialect."
+            )
 
         self._connection_handler = SQLConnectionHandler()
-
-        url = SQLConnectionHandler.build_url(
-            comp_type=self.comp_type,
-            user=creds["user"],
-            password=creds["password"],
-            host=creds["host"],
-            port=creds["port"],
-            database=creds["database"],
-        )
-
         engine_kwargs = build_sql_engine_kwargs(self._credentials)
 
-        self._connection_handler.connect(
-            url=url,
+        self._connection_handler.connect_with_credentials(
+            credentials=self._credentials,
+            receiver=self._receiver,
             engine_kwargs=engine_kwargs,
             session_initializer=self._initialize_session,
             eager=False,

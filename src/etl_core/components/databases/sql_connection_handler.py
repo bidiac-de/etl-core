@@ -29,35 +29,56 @@ class SQLConnectionHandler:
     @staticmethod
     def build_url(
         *,
-        comp_type: str,
+        dialect: str,
         user: Optional[str] = None,
         password: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[int] = None,
         database: Optional[str] = None,
     ) -> str:
-        driver_map = {
-            "read_postgresql": "postgresql+psycopg2",
-            "write_postgresql": "postgresql+psycopg2",
-            "read_mariadb": "mysql+mysqlconnector",
-            "write_mariadb": "mysql+mysqlconnector",
-            "read_mysql": "mysql+mysqlconnector",
-            "write_mysql": "mysql+mysqlconnector",
-            "read_sqlite": "sqlite",
-            "write_sqlite": "sqlite",
-            "read_sqlserver": "mssql+pyodbc",
-            "write_sqlserver": "mssql+pyodbc",
-        }
-
-        driver = driver_map.get(comp_type, comp_type)
-
         if not all([user, password, host, port, database]):
             raise ValueError(
-                f"{comp_type} requires user, password, host, port, and database."
+                f"{dialect} requires user, password, host, port, and database."
             )
         safe_user = quote_plus(user)
         safe_password = quote_plus(password)
-        return f"{driver}://{safe_user}:{safe_password}@{host}:{port}/{database}"
+        return f"{dialect}://{safe_user}:{safe_password}@{host}:{port}/{database}"
+
+    @staticmethod
+    def _resolve_dialect(receiver: Any) -> str:
+        dialect = getattr(receiver, "SQL_DIALECT", None)
+        if dialect is None:
+            dialect = getattr(getattr(receiver, "__class__", None), "SQL_DIALECT", None)
+        if not dialect:
+            raise ValueError(
+                "Receiver must define SQL_DIALECT to resolve SQL connection driver."
+            )
+        return dialect
+
+    def connect_with_credentials(
+        self,
+        *,
+        credentials: Any,
+        receiver: Any,
+        engine_kwargs: Optional[Dict[str, Any]] = None,
+        session_initializer: Optional[Callable[[Connection], None]] = None,
+        eager: bool = True,
+    ) -> Tuple[PoolKey, Optional[Engine]]:
+        dialect = self._resolve_dialect(receiver)
+        url = self.build_url(
+            dialect=dialect,
+            user=credentials.user,
+            password=credentials.decrypted_password,
+            host=credentials.host,
+            port=credentials.port,
+            database=credentials.database,
+        )
+        return self.connect(
+            url=url,
+            engine_kwargs=engine_kwargs,
+            session_initializer=session_initializer,
+            eager=eager,
+        )
 
     def connect(
         self,
