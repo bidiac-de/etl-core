@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from etl_core.persistence.handlers.schedule_handler import (
     ScheduleHandler,
@@ -65,6 +65,26 @@ class UpdateScheduleCommand(Command):
             is_paused=self.paused,
         )
         self.scheduler.add_schedule(row)
+        return row
+
+
+@dataclass
+class ListSchedulesCommand(Command):
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
+
+    def execute(self) -> List[ScheduleTable]:
+        return self.schedules.list()
+
+
+@dataclass
+class GetScheduleCommand(Command):
+    schedule_id: str
+    schedules: ScheduleHandler = field(default_factory=_schedule_handler_singleton)
+
+    def execute(self) -> ScheduleTable:
+        row = self.schedules.get(self.schedule_id)
+        if row is None:
+            raise ScheduleNotFoundError(self.schedule_id)
         return row
 
 

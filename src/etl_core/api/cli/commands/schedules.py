@@ -94,9 +94,11 @@ def list_cmd():
                     ]
                 )
                 + f"\tpaused={rj['is_paused']}"
-            )
+        )
         return
-    rows = _schedule_handler_singleton().list()
+    rows = schedule_commands.ListSchedulesCommand(
+        schedules=_schedule_handler_singleton()
+    ).execute()
     for r in rows:
         typer.echo(
             "\t".join(
@@ -122,8 +124,11 @@ def get_cmd(schedule_id: str):
         r.raise_for_status()
         typer.echo(json.dumps(r.json(), indent=2))
         return
-    r = _schedule_handler_singleton().get(schedule_id)
-    if r is None:
+    try:
+        r = schedule_commands.GetScheduleCommand(
+            schedule_id=schedule_id, schedules=_schedule_handler_singleton()
+        ).execute()
+    except ScheduleNotFoundError:
         raise typer.Exit(code=1)
     typer.echo(
         json.dumps(

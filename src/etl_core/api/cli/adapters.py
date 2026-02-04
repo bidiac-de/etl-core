@@ -13,6 +13,10 @@ from etl_core.context.secrets.secret_provider import SecretProvider
 from etl_core.context.secure_context_adapter import SecureContextAdapter
 from etl_core.context.secrets.secret_utils import create_secret_provider
 from etl_core.persistence.errors import PersistNotFoundError
+from etl_core.api.helpers.execution_serializers import (
+    serialize_attempt_row,
+    serialize_execution_row,
+)
 from etl_core.singletons import (
     job_handler as _jh_singleton,
     execution_handler as _eh_singleton,
@@ -72,30 +76,6 @@ class LocalExecutionClient(ExecutionPort):
             "environment": environment.value if environment else None,
         }
 
-    @staticmethod
-    def _row_to_exec_out(row: Any) -> Dict[str, Any]:
-        return {
-            "id": row.id,
-            "job_id": row.job_id,
-            "environment": row.environment,
-            "status": row.status,
-            "error": row.error,
-            "started_at": row.started_at.isoformat(),
-            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
-        }
-
-    @staticmethod
-    def _row_to_attempt_out(row: Any) -> Dict[str, Any]:
-        return {
-            "id": row.id,
-            "execution_id": row.execution_id,
-            "attempt_index": row.attempt_index,
-            "status": row.status,
-            "error": row.error,
-            "started_at": row.started_at.isoformat(),
-            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
-        }
-
     def list_executions(
         self,
         *,
@@ -127,15 +107,15 @@ class LocalExecutionClient(ExecutionPort):
             limit=limit,
             offset=offset,
         )
-        return {"data": [self._row_to_exec_out(r) for r in rows]}
+        return {"data": [serialize_execution_row(r, as_iso=True) for r in rows]}
 
     def get(self, execution_id: str) -> Dict[str, Any]:
         row, attempts = self._records.get_execution(execution_id)
         if row is None:
             raise PersistNotFoundError(f"Execution {execution_id!r} not found")
         return {
-            "execution": self._row_to_exec_out(row),
-            "attempts": [self._row_to_attempt_out(a) for a in attempts],
+            "execution": serialize_execution_row(row, as_iso=True),
+            "attempts": [serialize_attempt_row(a, as_iso=True) for a in attempts],
         }
 
     def attempts(self, execution_id: str) -> List[Dict[str, Any]]:
@@ -143,7 +123,7 @@ class LocalExecutionClient(ExecutionPort):
         if row is None:
             raise PersistNotFoundError(f"Execution {execution_id!r} not found")
         rows = self._records.list_attempts(execution_id)
-        return [self._row_to_attempt_out(r) for r in rows]
+        return [serialize_attempt_row(r, as_iso=True) for r in rows]
 
     @staticmethod
     def _parse_dt(value: str):

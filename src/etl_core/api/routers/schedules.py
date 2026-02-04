@@ -5,10 +5,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from etl_core.api.helpers import _error_payload, _exc_meta
 from etl_core.persistence.handlers.schedule_handler import ScheduleNotFoundError
 from etl_core.persistence.table_definitions import ScheduleTable, TriggerType
 from etl_core.scheduling.commands import (
     CreateScheduleCommand,
+    ListSchedulesCommand,
+    GetScheduleCommand,
     UpdateScheduleCommand,
     DeleteScheduleCommand,
     PauseScheduleCommand,
@@ -63,30 +66,72 @@ class ScheduleOut(BaseModel):
 
 @router.post("/", response_model=str, status_code=status.HTTP_201_CREATED)
 def create_schedule(body: ScheduleIn) -> str:
-    cmd = CreateScheduleCommand(
-        name=body.name,
-        job_id=body.job_id,
-        environment=body.environment,
-        trigger_type=body.trigger_type,
-        trigger_args=body.trigger_args,
-        paused=body.paused,
-    )
-    row = cmd.execute()
-    return row.id
+    try:
+        cmd = CreateScheduleCommand(
+            name=body.name,
+            job_id=body.job_id,
+            environment=body.environment,
+            trigger_type=body.trigger_type,
+            trigger_args=body.trigger_args,
+            paused=body.paused,
+        )
+        row = cmd.execute()
+        return row.id
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_CREATE_FAILED",
+                "Failed to create schedule.",
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.get("/", response_model=List[ScheduleOut])
 def list_schedules() -> List[ScheduleOut]:
-    rows = _schedule_handler_singleton().list()
-    return [ScheduleOut.from_row(r) for r in rows]
+    try:
+        rows = ListSchedulesCommand(schedules=_schedule_handler_singleton()).execute()
+        return [ScheduleOut.from_row(r) for r in rows]
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_LIST_FAILED",
+                "Failed to list schedules.",
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.get("/{schedule_id}", response_model=ScheduleOut)
 def get_schedule(schedule_id: str) -> ScheduleOut:
-    row = _schedule_handler_singleton().get(schedule_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-    return ScheduleOut.from_row(row)
+    try:
+        row = GetScheduleCommand(
+            schedule_id=schedule_id, schedules=_schedule_handler_singleton()
+        ).execute()
+        return ScheduleOut.from_row(row)
+    except ScheduleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEDULE_NOT_FOUND",
+                "Schedule not found.",
+                schedule_id=schedule_id,
+            ),
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_GET_FAILED",
+                "Failed to load schedule.",
+                schedule_id=schedule_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.put("/{schedule_id}", response_model=str)
@@ -102,8 +147,25 @@ def update_schedule(schedule_id: str, patch: SchedulePatch) -> str:
             paused=patch.paused,
         ).execute()
         return row.id
-    except ScheduleNotFoundError:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    except ScheduleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEDULE_NOT_FOUND",
+                "Schedule not found.",
+                schedule_id=schedule_id,
+            ),
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_UPDATE_FAILED",
+                "Failed to update schedule.",
+                schedule_id=schedule_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.delete("/{schedule_id}", response_model=dict)
@@ -111,8 +173,25 @@ def delete_schedule(schedule_id: str) -> Dict[str, str]:
     try:
         DeleteScheduleCommand(schedule_id).execute()
         return {"message": f"Schedule {schedule_id} deleted"}
-    except ScheduleNotFoundError:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    except ScheduleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEDULE_NOT_FOUND",
+                "Schedule not found.",
+                schedule_id=schedule_id,
+            ),
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_DELETE_FAILED",
+                "Failed to delete schedule.",
+                schedule_id=schedule_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.post("/{schedule_id}/pause", response_model=ScheduleOut)
@@ -120,8 +199,25 @@ def pause_schedule(schedule_id: str) -> ScheduleOut:
     try:
         row = PauseScheduleCommand(schedule_id).execute()
         return ScheduleOut.from_row(row)
-    except ScheduleNotFoundError:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    except ScheduleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEDULE_NOT_FOUND",
+                "Schedule not found.",
+                schedule_id=schedule_id,
+            ),
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_PAUSE_FAILED",
+                "Failed to pause schedule.",
+                schedule_id=schedule_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.post("/{schedule_id}/resume", response_model=ScheduleOut)
@@ -129,8 +225,25 @@ def resume_schedule(schedule_id: str) -> ScheduleOut:
     try:
         row = ResumeScheduleCommand(schedule_id).execute()
         return ScheduleOut.from_row(row)
-    except ScheduleNotFoundError:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    except ScheduleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEDULE_NOT_FOUND",
+                "Schedule not found.",
+                schedule_id=schedule_id,
+            ),
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_RESUME_FAILED",
+                "Failed to resume schedule.",
+                schedule_id=schedule_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc
 
 
 @router.post("/{schedule_id}/run-now", response_model=dict)
@@ -138,5 +251,22 @@ async def run_now(schedule_id: str) -> Dict[str, str]:
     try:
         await RunNowScheduleCommand(schedule_id).execute()
         return {"status": "started"}
-    except ScheduleNotFoundError:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    except ScheduleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_payload(
+                "SCHEDULE_NOT_FOUND",
+                "Schedule not found.",
+                schedule_id=schedule_id,
+            ),
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_payload(
+                "SCHEDULE_RUN_NOW_FAILED",
+                "Failed to start schedule.",
+                schedule_id=schedule_id,
+                **_exc_meta(exc),
+            ),
+        ) from exc

@@ -19,6 +19,10 @@ from etl_core.persistence.handlers.execution_records_handler import (
 )
 from etl_core.persistence.handlers.job_handler import JobHandler
 from etl_core.api.helpers import _error_payload, _exc_meta
+from etl_core.api.helpers.execution_serializers import (
+    serialize_attempt_row,
+    serialize_execution_row,
+)
 from etl_core.context.environment import Environment
 
 router = APIRouter(prefix="/execution", tags=["execution"])
@@ -103,30 +107,6 @@ class ExecutionDetailOut(BaseModel):
     attempts: list[ExecutionAttemptOut]
 
 
-def _to_exec_out(row) -> ExecutionOut:
-    return ExecutionOut(
-        id=row.id,
-        job_id=row.job_id,
-        environment=row.environment,
-        status=row.status,
-        error=row.error,
-        started_at=row.started_at,
-        finished_at=row.finished_at,
-    )
-
-
-def _to_attempt_out(row) -> ExecutionAttemptOut:
-    return ExecutionAttemptOut(
-        id=row.id,
-        execution_id=row.execution_id,
-        attempt_index=row.attempt_index,
-        status=row.status,
-        error=row.error,
-        started_at=row.started_at,
-        finished_at=row.finished_at,
-    )
-
-
 @router.get(
     "/executions",
     response_model=ExecutionListOut,
@@ -160,7 +140,7 @@ def list_executions(
         offset=offset,
     )
     return ExecutionListOut(
-        data=[_to_exec_out(r) for r in rows],
+        data=[ExecutionOut(**serialize_execution_row(r)) for r in rows],
     )
 
 
@@ -179,8 +159,8 @@ def get_execution(
     if row is None:
         raise HTTPException(status_code=404, detail="Execution not found")
     return ExecutionDetailOut(
-        execution=_to_exec_out(row),
-        attempts=[_to_attempt_out(a) for a in attempts],
+        execution=ExecutionOut(**serialize_execution_row(row)),
+        attempts=[ExecutionAttemptOut(**serialize_attempt_row(a)) for a in attempts],
     )
 
 
@@ -199,4 +179,4 @@ def list_attempts(
     if exec_row is None:
         raise HTTPException(status_code=404, detail="Execution not found")
     rows = _records.list_attempts(execution_id)
-    return [_to_attempt_out(r) for r in rows]
+    return [ExecutionAttemptOut(**serialize_attempt_row(r)) for r in rows]
