@@ -96,15 +96,6 @@ class MongoDBComponent(DatabaseComponent, ABC):
             return
 
         creds_map = self._get_credentials()
-        if self._credentials is None:
-            ctx = self.get_resolved_context()
-            if ctx is None:
-                self._log.debug(
-                    "%s: credentials context not resolved yet; deferring setup.",
-                    self.name,
-                )
-                return
-            self._credentials = ctx.resolve_active_credentials()
 
         self._database_name = creds_map["database"]
         self._log.debug(
