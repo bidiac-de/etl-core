@@ -51,7 +51,11 @@ def _ensure_string(series: pd.Series) -> pd.Series:
     try:
         return series.astype("string")
     except Exception:
-        return series.astype(str)
+        if not isinstance(series, pd.Series):
+            return series.astype(str)
+
+        values = series.to_numpy(dtype=object, copy=False)
+        return pd.Series([str(v) for v in values], index=series.index, dtype=object)
 
 
 def _leaf_mask(

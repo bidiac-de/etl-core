@@ -203,7 +203,11 @@ def test_convert_frame_top_level_generic_block_by_disabling_dtype() -> None:
     original = H._PD_DTYPES.pop(DataType.STRING, None)
     try:
         out = H.convert_frame_top_level(df, [rule])
-        assert list(out["x"]) == ["1", pd.NA, "3"]
+        got = out["x"]
+
+        assert got.iloc[0] == "1"
+        assert pd.isna(got.iloc[1])
+        assert got.iloc[2] == "3"
     finally:
         if original is not None:
             H._PD_DTYPES[DataType.STRING] = original
