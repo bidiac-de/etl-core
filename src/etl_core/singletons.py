@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Optional
 
 from etl_core.persistence.handlers.execution_records_handler import (
@@ -13,6 +14,8 @@ from etl_core.persistence.handlers.schedule_handler import ScheduleHandler
 from etl_core.scheduling.scheduler_service import SchedulerService
 
 
+_lock = threading.Lock()
+
 _job_handler_singleton: Optional[JobHandler] = None
 _execution_records_handler_singleton: Optional[ExecutionRecordsHandler] = None
 _execution_handler_singleton: Optional[JobExecutionHandler] = None
@@ -25,47 +28,87 @@ _schedule_handler_singleton: Optional[ScheduleHandler] = None
 def execution_records_handler() -> ExecutionRecordsHandler:
     global _execution_records_handler_singleton
     if _execution_records_handler_singleton is None:
-        _execution_records_handler_singleton = ExecutionRecordsHandler()
+        with _lock:
+            if _execution_records_handler_singleton is None:
+                _execution_records_handler_singleton = ExecutionRecordsHandler()
     return _execution_records_handler_singleton
 
 
 def job_handler() -> JobHandler:
     global _job_handler_singleton
     if _job_handler_singleton is None:
-        _job_handler_singleton = JobHandler()
+        with _lock:
+            if _job_handler_singleton is None:
+                _job_handler_singleton = JobHandler()
     return _job_handler_singleton
 
 
 def execution_handler() -> JobExecutionHandler:
     global _execution_handler_singleton
     if _execution_handler_singleton is None:
-        _execution_handler_singleton = JobExecutionHandler()
+        with _lock:
+            if _execution_handler_singleton is None:
+                _execution_handler_singleton = JobExecutionHandler()
     return _execution_handler_singleton
 
 
 def context_handler() -> ContextHandler:
     global _context_handler_singleton
     if _context_handler_singleton is None:
-        _context_handler_singleton = ContextHandler()
+        with _lock:
+            if _context_handler_singleton is None:
+                _context_handler_singleton = ContextHandler()
     return _context_handler_singleton
 
 
 def credentials_handler() -> CredentialsHandler:
     global _credentials_handler_singleton
     if _credentials_handler_singleton is None:
-        _credentials_handler_singleton = CredentialsHandler()
+        with _lock:
+            if _credentials_handler_singleton is None:
+                _credentials_handler_singleton = CredentialsHandler()
     return _credentials_handler_singleton
 
 
 def scheduler_handler() -> SchedulerService:
     global _scheduler_handler_singleton
     if _scheduler_handler_singleton is None:
-        _scheduler_handler_singleton = SchedulerService.instance()
+        with _lock:
+            if _scheduler_handler_singleton is None:
+                _scheduler_handler_singleton = SchedulerService.instance()
     return _scheduler_handler_singleton
 
 
 def schedule_handler() -> ScheduleHandler:
     global _schedule_handler_singleton
     if _schedule_handler_singleton is None:
-        _schedule_handler_singleton = ScheduleHandler()
+        with _lock:
+            if _schedule_handler_singleton is None:
+                _schedule_handler_singleton = ScheduleHandler()
     return _schedule_handler_singleton
+
+
+def reset_singletons() -> None:
+    """
+    Reset all singletons to None. For testing purposes only.
+
+    This function is thread-safe and should be called between tests
+    to ensure a clean state.
+    """
+    global _job_handler_singleton
+    global _execution_records_handler_singleton
+    global _execution_handler_singleton
+    global _context_handler_singleton
+    global _credentials_handler_singleton
+    global _scheduler_handler_singleton
+    global _schedule_handler_singleton
+
+    with _lock:
+        _job_handler_singleton = None
+        _execution_records_handler_singleton = None
+        _execution_handler_singleton = None
+        _context_handler_singleton = None
+        _credentials_handler_singleton = None
+        _scheduler_handler_singleton = None
+        _schedule_handler_singleton = None
+
