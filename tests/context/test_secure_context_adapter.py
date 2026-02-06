@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import Mock
 
-from src.etl_core.context.secure_context_adapter import (
+from etl_core.context.secure_context_adapter import (
     SecureContextAdapter,
     BootstrapResult,
 )
-from src.etl_core.context.secrets.secret_provider import SecretProvider
+from etl_core.context.secrets.secret_provider import SecretProvider
 
 
 class TestBootstrapResult:

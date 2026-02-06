@@ -5,7 +5,7 @@ from typing import List
 
 import pytest
 
-from src.etl_core.components.databases.pool_registry import ConnectionPoolRegistry
+from etl_core.components.databases.pool_registry import ConnectionPoolRegistry
 
 
 class _FakeTimer:
@@ -68,7 +68,7 @@ def test_sql_timer_scheduled_and_canceled_on_reuse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "src.etl_core.components.databases.pool_registry.threading.Timer", _FakeTimer
+        "etl_core.components.databases.pool_registry.threading.Timer", _FakeTimer
     )
 
     monkeypatch.setenv("ETL_POOL_IDLE_TIMEOUT_SECONDS", "10")
@@ -90,7 +90,7 @@ def test_mongo_timer_scheduled_and_canceled_on_reuse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "src.etl_core.components.databases.pool_registry.threading.Timer", _FakeTimer
+        "etl_core.components.databases.pool_registry.threading.Timer", _FakeTimer
     )
 
     monkeypatch.setenv("ETL_POOL_IDLE_TIMEOUT_SECONDS", "10")

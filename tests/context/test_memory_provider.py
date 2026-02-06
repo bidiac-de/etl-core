@@ -2,7 +2,7 @@ import pytest
 import threading
 import time
 
-from src.etl_core.context.secrets.memory_provider import InMemorySecretProvider
+from etl_core.context.secrets.memory_provider import InMemorySecretProvider
 
 
 class TestInMemorySecretProvider:

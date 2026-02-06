@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from src.etl_core.api.routers import schemas
+from etl_core.api.routers import schemas
 
 
 @pytest.fixture(autouse=True)

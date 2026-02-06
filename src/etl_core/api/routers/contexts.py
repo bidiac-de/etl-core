@@ -7,20 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy.exc import IntegrityError
 
-from src.etl_core.context.context import Context
-from src.etl_core.context.environment import Environment
-from src.etl_core.context.credentials import Credentials
-from src.etl_core.context.credentials_mapping_context import (
+from etl_core.context.context import Context
+from etl_core.context.environment import Environment
+from etl_core.context.credentials import Credentials
+from etl_core.context.credentials_mapping_context import (
     CredentialsMappingContext,
 )
-from src.etl_core.context.context_registry import ContextRegistry
-from src.etl_core.context.secure_context_adapter import SecureContextAdapter
+from etl_core.context.context_registry import ContextRegistry
+from etl_core.context.secure_context_adapter import SecureContextAdapter
 
-from src.etl_core.context.secrets.secret_provider import SecretProvider
-from src.etl_core.context.secrets.secret_utils import create_secret_provider
+from etl_core.context.secrets.secret_provider import SecretProvider
+from etl_core.context.secrets.secret_utils import create_secret_provider
 
-from src.etl_core.persistence.handlers.credentials_handler import CredentialsHandler
-from src.etl_core.persistence.handlers.context_handler import ContextHandler
+from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
+from etl_core.persistence.handlers.context_handler import ContextHandler
 
 from etl_core.api.dependencies import (
     get_context_handler,

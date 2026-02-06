@@ -10,7 +10,7 @@ import sys
 import types
 from typing import Any
 
-import src.etl_core.receivers.files.excel.excel_helper as EH
+import etl_core.receivers.files.excel.excel_helper as EH
 
 
 def _mk_wb_with_rows(fp: Path, rows: List[List[object]], title: str = "Sheet1") -> None:

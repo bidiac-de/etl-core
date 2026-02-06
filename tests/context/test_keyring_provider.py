@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 import pytest
 from keyring.errors import KeyringError, PasswordDeleteError
 
-from src.etl_core.context.secrets.keyring_provider import KeyringSecretProvider
+from etl_core.context.secrets.keyring_provider import KeyringSecretProvider
 
 
 class TestKeyringSecretProvider:

@@ -332,7 +332,7 @@ class TestRealDatabaseConnection:
     @pytest.mark.skip(reason="manually deactivated right now")
     def test_database_schema_operations(self, persisted_real_credentials):
         """Test database schema operations."""
-        from src.etl_core.components.databases.sql_connection_handler import (
+        from etl_core.components.databases.sql_connection_handler import (
             SQLConnectionHandler,
         )
         from sqlalchemy import text

@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from tests.async_mongomock import AsyncMongoMockClient
 
-from src.etl_core.components.databases.pool_registry import (
+from etl_core.components.databases.pool_registry import (
     ConnectionPoolRegistry,
     PoolKey,
 )

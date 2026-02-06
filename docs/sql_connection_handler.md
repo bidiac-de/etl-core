@@ -121,7 +121,7 @@ def stats(self) -> dict
 
 ### **Basic Usage**
 ```python
-from src.etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
+from etl_core.components.databases.sql_connection_handler import SQLConnectionHandler
 
 # Initialize handler
 handler = SQLConnectionHandler()

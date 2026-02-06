@@ -92,7 +92,7 @@ Key features include:
     The ETL Core Engine can be run using Uvicorn, which serves the FastAPI application.
 
     ```bash
-    uvicorn src.etl_core.main:app --reload
+    uvicorn etl_core.main:app --reload
     ```
 
     This command starts the ETL Core Engine in development mode, allowing for hot-reloading of code changes.

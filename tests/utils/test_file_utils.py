@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, Mock
 
-from src.etl_core.utils.file_utils import resolve_path, file_exists, ensure_directory
+from etl_core.utils.file_utils import resolve_path, file_exists, ensure_directory
 
 
 class TestResolvePath:
