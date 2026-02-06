@@ -19,7 +19,8 @@ def create_context(
     ),
 ) -> None:
     _, __, ctxs = pick_clients()
-    payload = json.load(open(path, encoding="utf-8"))
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
     resp = ctxs.create_context(payload, keyring_service)
     typer.echo(json.dumps(resp, indent=2))
 
@@ -32,7 +33,8 @@ def create_credentials(
     ),
 ) -> None:
     _, __, ctxs = pick_clients()
-    payload = json.load(open(path, encoding="utf-8"))
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
     resp = ctxs.create_credentials(payload, keyring_service)
     typer.echo(json.dumps(resp, indent=2))
 
@@ -42,7 +44,8 @@ def create_context_mapping(
     path: str = typer.Argument(..., help="JSON file for CredentialsMappingContext."),
 ) -> None:
     _, __, ctxs = pick_clients()
-    payload = json.load(open(path, encoding="utf-8"))
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
     try:
         resp = ctxs.create_context_mapping(payload)
     except PersistNotFoundError as exc:

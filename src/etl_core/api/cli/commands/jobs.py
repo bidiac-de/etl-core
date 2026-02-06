@@ -13,7 +13,8 @@ jobs_app = typer.Typer(help="Manage jobs.")
 
 @jobs_app.command("create")
 def create_job(path: str) -> None:
-    cfg: Dict[str, Any] = json.load(open(path, encoding="utf-8"))
+    with open(path, encoding="utf-8") as f:
+        cfg: Dict[str, Any] = json.load(f)
     jobs, _, _ = pick_clients()
     job_id = jobs.create(cfg)
     typer.echo(f"Created job {job_id}")
@@ -32,7 +33,8 @@ def get_job(job_id: str) -> None:
 
 @jobs_app.command("update")
 def update_job(job_id: str, path: str) -> None:
-    cfg: Dict[str, Any] = json.load(open(path, encoding="utf-8"))
+    with open(path, encoding="utf-8") as f:
+        cfg: Dict[str, Any] = json.load(f)
     jobs, _, _ = pick_clients()
     try:
         updated_id = jobs.update(job_id, cfg)
