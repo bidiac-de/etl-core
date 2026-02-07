@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Optional, Tuple, List
 
-from sqlmodel import Session, select
+from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 
-from etl_core.persistence.db import engine, ensure_schema
+from etl_core.persistence.handlers.base_handler import BaseHandler
 from etl_core.persistence.table_definitions import CredentialsTable
 from etl_core.context.credentials import Credentials
 from etl_core.context.secrets.secret_utils import create_secret_provider
@@ -24,15 +24,17 @@ def _mask_secret(secret: Optional[str]) -> str:
     return f"{head}***{tail}"
 
 
-class CredentialsHandler:
+class CredentialsHandler(BaseHandler):
     """
     CRUD for credentials metadata; secrets are stored/retrieved via secret backend.
     Identifier model: system generates and returns the UUID string.
     """
 
-    def __init__(self, engine_=engine) -> None:
-        ensure_schema()
-        self.engine = engine_
+    _table = CredentialsTable
+
+    def __init__(self, engine_=None) -> None:
+        from etl_core.persistence.db import engine as default_engine
+        super().__init__(engine_=engine_ or default_engine)
         self.secret_store = create_secret_provider()
         self._log = logging.getLogger("etl_core.persistence.credentials")
 
@@ -48,7 +50,7 @@ class CredentialsHandler:
         If "credentials_id" is provided, upsert that row;
          otherwise a new row is created.
         """
-        with Session(self.engine) as s:
+        with self._session() as s:
             existing_row: Optional[CredentialsTable] = None
             if credentials_id:
                 existing_row = s.exec(
@@ -98,7 +100,7 @@ class CredentialsHandler:
         Returns (hydrated Credentials, credentials_id) or None.
         Hydration pulls password from secret backend into the domain model.
         """
-        with Session(self.engine) as s:
+        with self._session() as s:
             row = s.exec(
                 select(CredentialsTable).where(CredentialsTable.id == credentials_id)
             ).first()
@@ -131,8 +133,7 @@ class CredentialsHandler:
         return model, row.id
 
     def list_all(self) -> List[CredentialsTable]:
-        with Session(self.engine) as s:
-            return list(s.exec(select(CredentialsTable)).all())
+        return self._list_all()
 
     def delete_by_id(self, credentials_id: str) -> bool:
         """
@@ -141,7 +142,7 @@ class CredentialsHandler:
         Raises IntegrityError if the delete is blocked by FK constraints.
         """
         deleted = False
-        with Session(self.engine) as s:
+        with self._session() as s:
             row = s.exec(
                 select(CredentialsTable).where(CredentialsTable.id == credentials_id)
             ).first()

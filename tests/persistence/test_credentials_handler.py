@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import SQLModel, Session, create_engine, select
 
 import etl_core.persistence.handlers.credentials_handler as H
+import etl_core.persistence.handlers.base_handler as bh
 from etl_core.context.credentials import Credentials
 from etl_core.persistence.table_definitions import CredentialsTable
 
@@ -57,8 +58,8 @@ def handler(monkeypatch) -> H.CredentialsHandler:
     def _ensure_schema() -> None:
         SQLModel.metadata.create_all(engine)
 
-    monkeypatch.setattr(H, "engine", engine, raising=True)
-    monkeypatch.setattr(H, "ensure_schema", _ensure_schema, raising=True)
+    monkeypatch.setattr(bh, "engine", engine, raising=True)
+    monkeypatch.setattr(bh, "ensure_schema", _ensure_schema, raising=True)
 
     sp = FakeSecretProvider()
     monkeypatch.setattr(H, "create_secret_provider", lambda: sp, raising=True)

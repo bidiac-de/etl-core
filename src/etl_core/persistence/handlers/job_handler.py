@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from etl_core.job_execution.runtimejob import RuntimeJob
 from etl_core.persistence.configs.job_config import JobConfig
-from etl_core.persistence.db import engine, ensure_schema
 from etl_core.persistence.errors import PersistNotFoundError
+from etl_core.persistence.handlers.base_handler import BaseHandler
 from etl_core.persistence.handlers.components_handler import ComponentHandler
 from etl_core.persistence.handlers.dataclasses_handler import DataClassHandler
 from etl_core.persistence.table_definitions import (
@@ -20,17 +19,15 @@ from etl_core.persistence.table_definitions import (
 )
 
 
-class JobHandler:
-    def __init__(self, engine_=engine) -> None:
-        ensure_schema()
-        self.engine = engine_
+class JobHandler(BaseHandler):
+    _table = JobTable
+
+    def __init__(self, engine_=None) -> None:
+        from etl_core.persistence.db import engine as default_engine
+        super().__init__(engine_=engine_ or default_engine)
         self.dc = DataClassHandler()
         self.ch = ComponentHandler(self.dc)
 
-    @contextmanager
-    def _session(self) -> Session:
-        with Session(self.engine) as session:
-            yield session
 
     def create_job_entry(self, cfg: JobConfig) -> JobTable:
         with self._session() as session:
@@ -80,12 +77,10 @@ class JobHandler:
             return row
 
     def get_by_id(self, job_id: str) -> Optional[JobTable]:
-        with self._session() as session:
-            return session.get(JobTable, job_id)
+        return self._get_by_id(job_id)
 
     def get_all(self) -> List[JobTable]:
-        with self._session() as session:
-            return list(session.exec(select(JobTable)).all())
+        return self._list_all()
 
     def get_by_name(self, name: str) -> Optional[JobTable]:
         with self._session() as session:

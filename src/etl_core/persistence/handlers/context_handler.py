@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
-from sqlmodel import Session, select
+from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 
-from etl_core.persistence.db import engine, ensure_schema
+from etl_core.persistence.handlers.base_handler import BaseHandler
 from etl_core.persistence.table_definitions import (
     ContextParameterTable,
     ContextTable,
@@ -15,7 +14,7 @@ from etl_core.persistence.table_definitions import (
 from etl_core.context.credentials_mapping_context import CredentialsMappingContext
 
 
-class ContextHandler:
+class ContextHandler(BaseHandler):
     """
     Persistence for contexts:
       - Stores non-secret metadata (name, environment) in ContextTable.
@@ -25,14 +24,7 @@ class ContextHandler:
         CredentialsMappingContext.
     """
 
-    def __init__(self) -> None:
-        ensure_schema()
-        self.engine = engine
-
-    @contextmanager
-    def _session(self) -> Iterator[Session]:
-        with Session(self.engine) as s:
-            yield s
+    _table = ContextTable
 
     def upsert(
         self,
@@ -155,8 +147,7 @@ class ContextHandler:
 
     def list_all(self) -> List[ContextTable]:
         """Return all persisted contexts (no secrets)."""
-        with self._session() as s:
-            return list(s.exec(select(ContextTable)).all())
+        return self._list_all()
 
     def get_by_id(
         self, context_id: str

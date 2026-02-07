@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import select
 
-from etl_core.persistence.db import engine, ensure_schema
+from etl_core.persistence.handlers.base_handler import BaseHandler
 from etl_core.persistence.table_definitions import ScheduleTable, TriggerType
 
 
@@ -14,15 +13,8 @@ class ScheduleNotFoundError(Exception):
     pass
 
 
-class ScheduleHandler:
-    def __init__(self, engine_=engine) -> None:
-        ensure_schema()
-        self.engine = engine_
-
-    @contextmanager
-    def _session(self) -> Session:
-        with Session(self.engine) as s:
-            yield s
+class ScheduleHandler(BaseHandler):
+    _table = ScheduleTable
 
     # CRUD
     def create(
@@ -85,20 +77,13 @@ class ScheduleHandler:
             return row
 
     def list(self) -> List[ScheduleTable]:
-        with self._session() as s:
-            return list(s.exec(select(ScheduleTable)).all())
+        return self._list_all()
 
     def get(self, schedule_id: str) -> Optional[ScheduleTable]:
-        with self._session() as s:
-            return s.get(ScheduleTable, schedule_id)
+        return self._get_by_id(schedule_id)
 
     def delete(self, schedule_id: str) -> None:
-        with self._session() as s:
-            row = s.get(ScheduleTable, schedule_id)
-            if row is None:
-                raise ScheduleNotFoundError(schedule_id)
-            s.delete(row)
-            s.commit()
+        self._delete_by_id(schedule_id, not_found_error=ScheduleNotFoundError)
 
     def set_paused(self, schedule_id: str, paused: bool) -> ScheduleTable:
         return self.update(schedule_id, is_paused=paused)

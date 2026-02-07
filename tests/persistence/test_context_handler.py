@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import SQLModel, Session, create_engine, select
 
 import etl_core.persistence.handlers.context_handler as ch
+import etl_core.persistence.handlers.base_handler as bh
 from etl_core.persistence.table_definitions import (
     ContextCredentialsMapTable,
     ContextParameterTable,
@@ -46,8 +47,8 @@ def handler(monkeypatch) -> ch.ContextHandler:
     def _ensure_schema() -> None:
         SQLModel.metadata.create_all(engine)
 
-    monkeypatch.setattr(ch, "engine", engine, raising=True)
-    monkeypatch.setattr(ch, "ensure_schema", _ensure_schema, raising=True)
+    monkeypatch.setattr(bh, "engine", engine, raising=True)
+    monkeypatch.setattr(bh, "ensure_schema", _ensure_schema, raising=True)
 
     return ch.ContextHandler()
 

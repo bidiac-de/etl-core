@@ -1,31 +1,23 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional, Iterable
 
-from sqlmodel import Session, select, asc, desc
+from sqlmodel import select, asc, desc
 
-from etl_core.persistence.db import engine, ensure_schema
+from etl_core.persistence.handlers.base_handler import BaseHandler
 from etl_core.persistence.table_definitions import (
     ExecutionAttemptTable,
     ExecutionTable,
 )
 
 
-class ExecutionRecordsHandler:
+class ExecutionRecordsHandler(BaseHandler):
     """
     Thin persistence layer for executions & attempts.
     """
 
-    def __init__(self, engine_=engine) -> None:
-        ensure_schema()
-        self.engine = engine_
-
-    @contextmanager
-    def _session(self) -> Session:
-        with Session(self.engine) as session:
-            yield session
+    _table = ExecutionTable
 
     def create_execution(
         self,

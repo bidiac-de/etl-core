@@ -20,7 +20,7 @@ class TestScheduleHandlerSimple:
         error = ScheduleNotFoundError("test_schedule_id")
         assert str(error) == "test_schedule_id"
 
-    @patch("etl_core.persistence.handlers.schedule_handler.ensure_schema")
+    @patch("etl_core.persistence.handlers.base_handler.ensure_schema")
     def test_handler_initialization(self, mock_ensure_schema):
         """Test that handler initializes properly."""
         mock_engine = MagicMock()
@@ -32,7 +32,7 @@ class TestScheduleHandlerSimple:
     def test_create_schedule_trigger_args_handling(self):
         """Test that create properly handles None and empty trigger_args."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -62,7 +62,7 @@ class TestScheduleHandlerSimple:
     def test_update_schedule_not_found(self):
         """Test update when schedule is not found."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -76,7 +76,7 @@ class TestScheduleHandlerSimple:
     def test_delete_schedule_not_found(self):
         """Test delete when schedule is not found."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -90,7 +90,7 @@ class TestScheduleHandlerSimple:
     def test_update_schedule_partial_updates(self):
         """Test update with partial parameter updates."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -115,7 +115,7 @@ class TestScheduleHandlerSimple:
     def test_update_schedule_trigger_args_update(self):
         """Test update with trigger_args update."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -146,7 +146,7 @@ class TestScheduleHandlerSimple:
     def test_list_schedules(self):
         """Test list method calls correct database operations."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -163,7 +163,7 @@ class TestScheduleHandlerSimple:
     def test_get_schedule(self):
         """Test get method calls correct database operations."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -180,7 +180,7 @@ class TestScheduleHandlerSimple:
     def test_get_by_name(self):
         """Test get_by_name method calls correct database operations."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -197,7 +197,7 @@ class TestScheduleHandlerSimple:
     def test_all_trigger_types_supported(self):
         """Test that all trigger types are supported in create method."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -235,7 +235,7 @@ class TestScheduleHandlerSimple:
     def test_update_timestamp_always_updated(self):
         """Test that updated_at is always updated during update operations."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -257,7 +257,7 @@ class TestScheduleHandlerSimple:
     def test_create_schedule_default_values(self):
         """Test create method with default values."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value.__enter__.return_value = mock_session
@@ -279,7 +279,7 @@ class TestScheduleHandlerSimple:
     def test_context_manager_usage(self):
         """Test that the session context manager is used properly."""
         with patch(
-            "etl_core.persistence.handlers.schedule_handler.Session"
+            "etl_core.persistence.handlers.base_handler.Session"
         ) as mock_session_class:
             mock_session = MagicMock()
             mock_session_instance = MagicMock()
