@@ -156,8 +156,14 @@ class CredentialsHandler:
 
         try:
             self.secret_store.delete(self._password_key(credentials_id))
-        except Exception:
-            # Ignore missing/other secret backend issues on delete
+        except KeyError:
+            # Secret already gone -> treat as deleted
             pass
+        except Exception:
+            self._log.warning(
+                "Failed to delete secret for credentials_id=%s",
+                credentials_id,
+                exc_info=True,
+            )
 
         return deleted
