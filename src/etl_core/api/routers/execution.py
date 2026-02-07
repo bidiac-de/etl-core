@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, Annotated, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 
 from etl_core.api.dependencies import (
@@ -18,7 +18,7 @@ from etl_core.persistence.handlers.execution_records_handler import (
     ExecutionRecordsHandler,
 )
 from etl_core.persistence.handlers.job_handler import JobHandler
-from etl_core.api.helpers import _error_payload, _exc_meta
+from etl_core.api.http_errors import http_404, http_500_exc
 from etl_core.api.helpers.execution_serializers import (
     serialize_attempt_row,
     serialize_execution_row,
@@ -46,15 +46,9 @@ def start_execution(
     try:
         runtime_job = job_handler.load_runtime_job(job_id)
     except PersistNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload("JOB_NOT_FOUND", str(exc), job_id=job_id),
-        ) from exc
+        raise http_404("JOB_NOT_FOUND", str(exc), job_id=job_id) from exc
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload("DB_ERROR", "Failed to load job.", **_exc_meta(exc)),
-        ) from exc
+        raise http_500_exc("DB_ERROR", "Failed to load job.", exc) from exc
 
     try:
         env = body.environment if body else None
@@ -67,14 +61,11 @@ def start_execution(
             "environment": env.value if isinstance(env, Environment) else None,
         }
     except Exception as exc:  # pragma: no cover
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "EXECUTION_START_FAILED",
-                "Failed to start job execution.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+        raise http_500_exc(
+            "EXECUTION_START_FAILED",
+            "Failed to start job execution.",
+            exc,
+            job_id=job_id,
         ) from exc
 
 
@@ -157,7 +148,11 @@ def get_execution(
 ) -> ExecutionDetailOut:
     row, attempts = _records.get_execution(execution_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise http_404(
+            "EXECUTION_NOT_FOUND",
+            "Execution not found.",
+            execution_id=execution_id,
+        )
     return ExecutionDetailOut(
         execution=ExecutionOut(**serialize_execution_row(row)),
         attempts=[ExecutionAttemptOut(**serialize_attempt_row(a)) for a in attempts],
@@ -177,6 +172,10 @@ def list_attempts(
 ) -> list[ExecutionAttemptOut]:
     exec_row, _ = _records.get_execution(execution_id)
     if exec_row is None:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise http_404(
+            "EXECUTION_NOT_FOUND",
+            "Execution not found.",
+            execution_id=execution_id,
+        )
     rows = _records.list_attempts(execution_id)
     return [ExecutionAttemptOut(**serialize_attempt_row(r)) for r in rows]

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from etl_core.api.routers import jobs as R
+from etl_core.api import http_errors as HE
 from etl_core.api.dependencies import get_job_handler
 from etl_core.persistence.errors import PersistLinkageError, PersistNotFoundError
 
@@ -149,8 +150,8 @@ def test_create_job_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_create_job_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = DummyJobHandler()
-    monkeypatch.setattr(R, "_sanitize_errors", lambda e: [])
-    monkeypatch.setattr(R, "_exc_meta", lambda e: {})
+    monkeypatch.setattr(HE, "_sanitize_errors", lambda e: [])
+    monkeypatch.setattr(HE, "_exc_meta", lambda e: {})
 
     handler._errors["create"] = ValidationError.from_exception_data("X", [])
     with pytest.raises(HTTPException) as ei:
@@ -162,7 +163,7 @@ def test_create_job_integrity_and_sa_and_generic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     handler = DummyJobHandler()
-    monkeypatch.setattr(R, "_exc_meta", lambda e: {})
+    monkeypatch.setattr(HE, "_exc_meta", lambda e: {})
 
     handler._errors["create"] = IntegrityError("bad", None, None)
     with pytest.raises(HTTPException) as ei1:
@@ -188,8 +189,8 @@ def test_update_job_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_update_job_all_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = DummyJobHandler()
-    monkeypatch.setattr(R, "_sanitize_errors", lambda e: [])
-    monkeypatch.setattr(R, "_exc_meta", lambda e: {})
+    monkeypatch.setattr(HE, "_sanitize_errors", lambda e: [])
+    monkeypatch.setattr(HE, "_exc_meta", lambda e: {})
 
     handler._errors["update"] = ValidationError.from_exception_data("X", [])
     with pytest.raises(HTTPException) as e1:

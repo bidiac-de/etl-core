@@ -3,12 +3,19 @@ from __future__ import annotations
 from threading import RLock
 from typing import Annotated, Dict, List, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from etl_core.api.dependencies import get_job_handler
-from etl_core.api.helpers import _error_payload, _exc_meta, _sanitize_errors
+from etl_core.api.http_errors import (
+    http_404,
+    http_409_exc,
+    http_422_validation,
+    http_422_exc,
+    http_500,
+    http_500_exc,
+)
 from etl_core.persistence.errors import (
     PersistLinkageError,
     PersistNotFoundError,
@@ -114,15 +121,9 @@ def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
     try:
         job = job_handler.load_runtime_job(job_id)
     except PersistNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
-        ) from exc
+        raise http_404("JOB_NOT_FOUND", str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "DB_ERROR", "message": "Failed to load job."},
-        ) from exc
+        raise http_500("DB_ERROR", "Failed to load job.") from exc
 
     # Robust payload construction
     payload = _job_to_payload(job, job_id)
@@ -142,10 +143,7 @@ def _cached_job_list(job_handler: JobHandler) -> List[Dict[str, Any]]:
     try:
         rows = job_handler.list_jobs_brief()
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload("DB_ERROR", "Failed to list jobs.", **_exc_meta(exc)),
-        ) from exc
+        raise http_500_exc("DB_ERROR", "Failed to list jobs.", exc) from exc
 
     # write back under lock after computing and return a copy
     with _CACHE_LOCK:
@@ -166,50 +164,34 @@ def create_job(
     try:
         entry = job_handler.create_job_entry(job_cfg)
     except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_payload(
-                "JOB_CONFIG_INVALID",
-                "JobConfig validation failed.",
-                errors=_sanitize_errors(exc),
-                **_exc_meta(exc),
-            ),
+        raise http_422_validation(
+            "JOB_CONFIG_INVALID",
+            "JobConfig validation failed.",
+            exc,
         ) from exc
     except PersistLinkageError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_payload(
-                "COMPONENT_REFERENCE_INVALID",
-                "Invalid component linkage in configuration.",
-                **_exc_meta(exc),
-            ),
+        raise http_422_exc(
+            "COMPONENT_REFERENCE_INVALID",
+            "Invalid component linkage in configuration.",
+            exc,
         ) from exc
     except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=_error_payload(
-                "DB_INTEGRITY_ERROR",
-                "Database integrity error while persisting a job.",
-                **_exc_meta(exc),
-            ),
+        raise http_409_exc(
+            "DB_INTEGRITY_ERROR",
+            "Database integrity error while persisting a job.",
+            exc,
         ) from exc
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "DB_ERROR",
-                "Database error while persisting a job.",
-                **_exc_meta(exc),
-            ),
+        raise http_500_exc(
+            "DB_ERROR",
+            "Database error while persisting a job.",
+            exc,
         ) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "JOB_PERSIST_FAILED",
-                "Failed to persist job.",
-                **_exc_meta(exc),
-            ),
+        raise http_500_exc(
+            "JOB_PERSIST_FAILED",
+            "Failed to persist job.",
+            exc,
         ) from exc
 
     # New job changes listing --> clear caches.
@@ -240,49 +222,33 @@ def update_job(
     try:
         row = job_handler.update(job_id, job_cfg)
     except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_payload(
-                "JOB_CONFIG_INVALID",
-                "JobConfig validation failed.",
-                errors=_sanitize_errors(exc),
-                **_exc_meta(exc),
-            ),
+        raise http_422_validation(
+            "JOB_CONFIG_INVALID",
+            "JobConfig validation failed.",
+            exc,
         ) from exc
     except PersistNotFoundError as not_found:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_payload("JOB_NOT_FOUND", str(not_found), job_id=job_id),
-        ) from not_found
+        raise http_404("JOB_NOT_FOUND", str(not_found), job_id=job_id) from not_found
     except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=_error_payload(
-                "DB_INTEGRITY_ERROR",
-                "Database integrity error while updating a job.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+        raise http_409_exc(
+            "DB_INTEGRITY_ERROR",
+            "Database integrity error while updating a job.",
+            exc,
+            job_id=job_id,
         ) from exc
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "DB_ERROR",
-                "Database error while updating a job.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+        raise http_500_exc(
+            "DB_ERROR",
+            "Database error while updating a job.",
+            exc,
+            job_id=job_id,
         ) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_payload(
-                "JOB_UPDATE_FAILED",
-                "Failed to update job.",
-                job_id=job_id,
-                **_exc_meta(exc),
-            ),
+        raise http_500_exc(
+            "JOB_UPDATE_FAILED",
+            "Failed to update job.",
+            exc,
+            job_id=job_id,
         ) from exc
 
     # Updated job invalidates list and this jobs cache entry
@@ -303,15 +269,9 @@ def delete_job(
     try:
         job_handler.delete(job_id)
     except PersistNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "JOB_NOT_FOUND", "message": str(exc)},
-        ) from exc
+        raise http_404("JOB_NOT_FOUND", str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "DB_ERROR", "message": "Failed to delete job."},
-        ) from exc
+        raise http_500("DB_ERROR", "Failed to delete job.") from exc
 
     # Deletion changes listing and removes this id
     invalidate_job_caches(job_id)

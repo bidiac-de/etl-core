@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 from typing import Optional, Literal, Iterable, Union, Annotated, Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy.exc import IntegrityError
 
@@ -27,6 +27,8 @@ from etl_core.api.dependencies import (
     get_credentials_handler,
 )
 
+from etl_core.api.http_errors import http_400, http_404, http_409, http_500
+
 router = APIRouter(prefix="/contexts", tags=["contexts"])
 
 
@@ -38,9 +40,9 @@ def get_secret_provider() -> SecretProvider:
     try:
         provider = create_secret_provider()
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"failed to initialize secret provider: {exc}",
+        raise http_500(
+            "SECRET_PROVIDER_INIT_FAILED",
+            f"Failed to initialize secret provider: {exc}",
         ) from exc
     return provider
 
@@ -168,9 +170,9 @@ def create_context_provider(
             parameters_registered=secure_count,
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to register context: {exc}",
+        raise http_400(
+            "CONTEXT_REGISTER_FAILED",
+            f"Failed to register context: {exc}",
         ) from exc
 
 
@@ -222,9 +224,9 @@ def create_credentials_mapping_context(
             parameters_registered=len(mapping),
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to register credentials mapping context: {exc}",
+        raise http_400(
+            "CREDENTIALS_MAPPING_REGISTER_FAILED",
+            f"Failed to register credentials mapping context: {exc}",
         ) from exc
 
 
@@ -252,9 +254,9 @@ def create_credentials_provider(
         result = adapter.bootstrap_to_store()
         if result.errors:
             problems = ", ".join(f"{k}: {v}" for k, v in result.errors.items())
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to store credentials securely ({problems})",
+            raise http_400(
+                "CREDENTIALS_STORE_FAILED",
+                f"Failed to store credentials securely ({problems})",
             )
 
         saved_id = creds_handler.upsert(creds, credentials_id=credentials_id)
@@ -269,9 +271,9 @@ def create_credentials_provider(
             parameters_registered=1,
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to register credentials: {exc}",
+        raise http_400(
+            "CREDENTIALS_REGISTER_FAILED",
+            f"Failed to register credentials: {exc}",
         ) from exc
 
 
@@ -351,8 +353,10 @@ def get_provider(
             password=creds.password,
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider '{id}' not found"
+    raise http_404(
+        "PROVIDER_NOT_FOUND",
+        f"Provider '{id}' not found.",
+        provider_id=id,
     )
 
 
@@ -388,34 +392,25 @@ def delete_provider(
         deleted_ctx = ctx_handler.delete_by_id(id)
     except IntegrityError as exc:
         # Likely FK reference from jobs/links/etc
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "DB_INTEGRITY_ERROR",
-                "message": "Delete blocked by database constraints.",
-                "id": id,
-            },
+        raise http_409(
+            "DB_INTEGRITY_ERROR",
+            "Delete blocked by database constraints.",
+            id=id,
         ) from exc
     except Exception as exc:  # noqa: BLE001
         # Unexpected database/runtime error
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": "DB_ERROR",
-                "message": "Unexpected error while deleting provider.",
-                "id": id,
-            },
+        raise http_500(
+            "DB_ERROR",
+            "Unexpected error while deleting provider.",
+            id=id,
         ) from exc
 
     if not (deleted_creds or deleted_ctx):
         # Nothing matched this id
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "PROVIDER_NOT_FOUND",
-                "message": f"No provider found for id {id!r}.",
-                "id": id,
-            },
+        raise http_404(
+            "PROVIDER_NOT_FOUND",
+            f"No provider found for id {id!r}.",
+            id=id,
         )
 
     if deleted_ctx:
