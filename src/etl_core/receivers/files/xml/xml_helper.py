@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Generator, Iterator, Tuple, Optional
 import xml.etree.ElementTree as ET
 import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
+from etl_core.utils.record_transform import has_flat_paths as _has_flat_paths
 import re
 import os
 import contextlib
@@ -271,15 +272,6 @@ def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _row_to_element(record_tag: str, row: Dict[str, Any]) -> ET.Element:
     payload = build_payload(row)
     return nested_to_element(record_tag, payload)
-
-
-def _has_flat_paths(d: Dict[str, Any]) -> bool:
-    for k in d.keys():
-        if "." in k:
-            return True
-        if "[" in k and "]" in k:
-            return True
-    return False
 
 
 def write_xml_bulk(

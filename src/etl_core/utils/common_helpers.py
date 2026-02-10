@@ -16,6 +16,7 @@ import pandas as pd
 
 from etl_core.components.wiring.schema import Schema
 from etl_core.components.wiring.column_definition import FieldDef, DataType
+from etl_core.utils.record_transform import unflatten_record
 
 if TYPE_CHECKING:
     from etl_core.components.base_component import Component
@@ -180,34 +181,6 @@ def pandas_flatten_docs(docs: List[Dict[str, Any]], sep: str = ".") -> pd.DataFr
     if not docs:
         return pd.DataFrame()
     return pd.json_normalize(docs, sep=sep)
-
-
-def unflatten_record(flat: Dict[str, Any], sep: str = ".") -> Dict[str, Any]:
-    """
-    Convert a flat dict with dotted keys into a nested dict.
-
-    Example:
-        {'a.b': 1, 'a.c.d': 2} -> {'a': {'b': 1, 'c': {'d': 2}}}
-    """
-    nested: Dict[str, Any] = {}
-    for key, value in flat.items():
-        if not key or sep not in key:
-            nested[key] = value
-            continue
-
-        parts = [p for p in key.split(sep) if p]
-        if not parts:
-            continue
-
-        cursor: Dict[str, Any] = nested
-        for part in parts[:-1]:
-            nxt = cursor.get(part)
-            if not isinstance(nxt, dict):
-                nxt = {}
-                cursor[part] = nxt
-            cursor = nxt
-        cursor[parts[-1]] = value
-    return nested
 
 
 def unflatten_many(
