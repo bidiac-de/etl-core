@@ -4,7 +4,10 @@ from typing import Any, Dict, List, Generator, Iterator, Tuple, Optional
 import xml.etree.ElementTree as ET
 import pandas as pd
 from etl_core.receivers.files.file_helper import resolve_file_path, open_file
-from etl_core.utils.record_transform import has_flat_paths as _has_flat_paths
+from etl_core.utils.record_transform import (
+    has_flat_paths as _has_flat_paths,
+    build_payload as _build_payload_base,
+)
 import re
 import os
 import contextlib
@@ -234,39 +237,21 @@ def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-_LIST_INDEX_RE = re.compile(r"\[\d+\]")
-
-
-def _is_nullish(v: Any) -> bool:
-    try:
-        return v is None or pd.isna(v)
-    except Exception:
-        return v is None
 
 
 def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
+    XML-specific wrapper for build_payload that drops nullish list items.
+
     Accepts either:
       - flat dict with dotted / [i] keys  -> unflatten_record(...)
       - nested dict                       -> passthrough
 
-    Drop policy (aligned with JSON helper):
+    Drop policy:
       - Drop list-indexed keys (e.g. 'tags[1]') if their value is "nullish"
         (None or pandas-missing via pd.isna). Non-list keys are kept as-is.
     """
-    if not isinstance(payload, dict):
-        raise TypeError(
-            f"Expected dict payload, got {type(payload).__name__}: {payload}"
-        )
-
-    if _has_flat_paths(payload):
-        flat: Dict[str, Any] = {}
-        for k, v in payload.items():
-            if _LIST_INDEX_RE.search(k) and _is_nullish(v):
-                continue
-            flat[k] = v
-        return unflatten_record(flat)
-    return payload
+    return _build_payload_base(payload, drop_nullish_list_items=True)
 
 
 def _row_to_element(record_tag: str, row: Dict[str, Any]) -> ET.Element:

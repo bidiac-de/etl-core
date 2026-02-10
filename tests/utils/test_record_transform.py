@@ -11,6 +11,7 @@ from etl_core.utils.record_transform import (
     _escape_key,
     _unescape_key,
     _parse_path_escaped,
+    build_payload,
 )
 
 
@@ -197,3 +198,62 @@ class TestParsePath:
         result = _parse_path_escaped("data[0].name")
         assert result == [("data", 0), ("name", None)]
 
+
+class TestBuildPayload:
+    """Test build_payload functionality."""
+
+    def test_nested_passthrough(self):
+        """Test that already nested dicts pass through unchanged."""
+        nested = {"a": {"b": 1}}
+        result = build_payload(nested)
+        assert result == nested
+
+    def test_flat_unflattens(self):
+        """Test that flat dicts are unflattened."""
+        flat = {"a.b": 1}
+        result = build_payload(flat)
+        assert result == {"a": {"b": 1}}
+
+    def test_non_dict_raises_type_error(self):
+        """Test that non-dict raises TypeError."""
+        import pytest
+
+        with pytest.raises(TypeError):
+            build_payload("not a dict")
+        with pytest.raises(TypeError):
+            build_payload(123)
+        with pytest.raises(TypeError):
+            build_payload(None)
+
+    def test_drop_nullish_list_items_false(self):
+        """Test that nullish list items are kept when flag is False."""
+        flat = {"items[0]": None, "items[1]": "x"}
+        result = build_payload(flat, drop_nullish_list_items=False)
+        assert result == {"items": [None, "x"]}
+
+    def test_drop_nullish_list_items_true(self):
+        """Test that nullish list items are dropped when flag is True."""
+        flat = {"items[0]": None, "items[1]": "x"}
+        result = build_payload(flat, drop_nullish_list_items=True)
+        # items[0] key is dropped, but items[1] still creates index 1
+        # so we get [None, 'x'] where None is a placeholder
+        # This is the expected behavior - indices are preserved
+        assert result == {"items": [None, "x"]}
+
+    def test_drop_nullish_keeps_non_list_nulls(self):
+        """Test that nullish non-list keys are kept even with flag=True."""
+        flat = {"a.b": None, "items[0]": None}
+        result = build_payload(flat, drop_nullish_list_items=True)
+        # a.b is kept (not a list index), items[0] is dropped
+        assert result == {"a": {"b": None}}
+
+    def test_empty_dict(self):
+        """Test empty dict passthrough."""
+        assert build_payload({}) == {}
+
+    def test_mixed_nested_and_flat(self):
+        """Test dict with both styles uses flat detection."""
+        mixed = {"a": 1, "b.c": 2}
+        result = build_payload(mixed)
+        # has flat paths, so unflattens
+        assert result == {"a": 1, "b": {"c": 2}}

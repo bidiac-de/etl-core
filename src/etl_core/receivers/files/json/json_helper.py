@@ -16,6 +16,7 @@ from etl_core.utils.record_transform import (
     _escape_key,
     _unescape_key,
     _parse_path_escaped,
+    build_payload,
 )
 
 # Re-export for backward compatibility
@@ -25,6 +26,7 @@ __all__ = [
     "_escape_key",
     "_unescape_key",
     "_parse_path_escaped",
+    "build_payload",
 ]
 
 
@@ -265,16 +267,6 @@ def read_json_row(path: Path, chunk_size: int = 65536) -> Iterator[Dict[str, Any
             raise ValueError("Top-level JSON must be '[' or '{'.")
 
         yield from _iter_array_stream(f, buf[1:], dec, chunk_size)
-
-
-def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(payload, dict):
-        raise TypeError(
-            f"Expected dict payload, got {type(payload).__name__}: {payload}"
-        )
-    if _has_flat_paths(payload):
-        return unflatten_record(payload)
-    return payload
 
 
 def ensure_nested_for_read(payload: Dict[str, Any]) -> Dict[str, Any]:

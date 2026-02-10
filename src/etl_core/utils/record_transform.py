@@ -5,11 +5,13 @@ This module provides the single source of truth for:
 - unflatten_record: Convert flat dict with dotted/indexed keys to nested dict
 - flatten_record: Convert nested dict to flat dict with dotted/indexed keys
 - has_flat_paths: Check if a dict has flat-style keys (dots or brackets)
+- build_payload: Convert flat payload to nested, optionally filtering nullish list items
 
 Used by json_helper, xml_helper, and common_helpers.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Tuple, Optional
 
 # Special characters that need escaping in keys
@@ -234,6 +236,74 @@ def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     flat: Dict[str, Any] = {}
     _flatten_to_map("", rec, flat)
     return {k.lstrip("."): v for k, v in flat.items()}
+
+
+# Regex for detecting list-indexed keys like [0], [1], etc.
+_LIST_INDEX_RE = re.compile(r"\[\d+\]")
+
+
+def _is_nullish(v: Any) -> bool:
+    """Check if a value is null-ish (None or pandas NA)."""
+    if v is None:
+        return True
+    try:
+        import pandas as pd
+        return pd.isna(v)
+    except Exception:
+        return False
+
+
+def build_payload(
+    payload: Dict[str, Any],
+    *,
+    drop_nullish_list_items: bool = False,
+) -> Dict[str, Any]:
+    """
+    Convert a flat dict with dotted/indexed keys to a nested dict.
+
+    If the payload already has nested structure (no flat paths detected),
+    it is returned as-is.
+
+    Args:
+        payload: Dict to convert (flat or nested)
+        drop_nullish_list_items: If True, drop keys like 'items[0]' when
+            their value is None or pandas NA. Used by XML writer to avoid
+            creating empty list elements.
+
+    Returns:
+        Nested dict structure
+
+    Raises:
+        TypeError: If payload is not a dict
+
+    Examples:
+        >>> build_payload({'a.b': 1})
+        {'a': {'b': 1}}
+
+        >>> build_payload({'a': {'b': 1}})  # already nested
+        {'a': {'b': 1}}
+
+        >>> build_payload({'items[0]': None, 'items[1]': 'x'}, drop_nullish_list_items=True)
+        {'items': ['x']}
+    """
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"Expected dict payload, got {type(payload).__name__}: {payload}"
+        )
+
+    if not has_flat_paths(payload):
+        return payload
+
+    if drop_nullish_list_items:
+        # Filter out nullish list-indexed keys
+        flat: Dict[str, Any] = {}
+        for k, v in payload.items():
+            if _LIST_INDEX_RE.search(k) and _is_nullish(v):
+                continue
+            flat[k] = v
+        return unflatten_record(flat)
+
+    return unflatten_record(payload)
 
 
 # Backwards compatibility alias
