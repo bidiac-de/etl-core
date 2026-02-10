@@ -6,6 +6,7 @@ from etl_core.components.databases.mariadb.mariadb import MariaDBComponent
 from etl_core.components.component_registry import register_component
 from etl_core.receivers.databases.mariadb.mariadb_receiver import MariaDBReceiver
 from etl_core.components.wiring.ports import OutPortSpec
+from typing import ClassVar
 
 
 @register_component("read_mariadb")
@@ -16,4 +17,4 @@ class MariaDBRead(SQLReaderBase, MariaDBComponent):
 
     ALLOW_NO_INPUTS = True
 
-    receiver_class = MariaDBReceiver
+    receiver_class: ClassVar[type] = MariaDBReceiver

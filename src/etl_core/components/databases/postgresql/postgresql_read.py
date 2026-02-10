@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from etl_core.components.databases.sql_reader_base import SQLReaderBase
 
 from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
@@ -16,4 +18,4 @@ class PostgreSQLRead(SQLReaderBase, PostgreSQLComponent):
 
     ALLOW_NO_INPUTS = True
 
-    receiver_class = PostgreSQLReceiver
+    receiver_class: ClassVar[type] = PostgreSQLReceiver

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional  # noqa: F401
+from typing import ClassVar, Optional  # noqa: F401
 from pydantic import model_validator
 
 from etl_core.components.component_registry import register_component
@@ -28,7 +28,7 @@ class MariaDBWrite(SQLWriterBase, MariaDBComponent, DatabaseOperationMixin):
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    receiver_class = MariaDBReceiver
+    receiver_class: ClassVar[type] = MariaDBReceiver
 
     def _build_query(
         self, table: str, columns: list, operation: DatabaseOperation, **kwargs

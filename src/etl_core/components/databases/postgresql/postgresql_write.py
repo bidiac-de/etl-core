@@ -1,4 +1,4 @@
-from typing import Optional  # noqa: F401
+from typing import ClassVar, Optional  # noqa: F401
 from pydantic import model_validator
 
 from etl_core.components.databases.postgresql.postgresql import PostgreSQLComponent
@@ -28,7 +28,7 @@ class PostgreSQLWrite(SQLWriterBase, PostgreSQLComponent, DatabaseOperationMixin
     INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="many"),)
     OUTPUT_PORTS = (OutPortSpec(name="out", required=False, fanout="many"),)
 
-    receiver_class = PostgreSQLReceiver
+    receiver_class: ClassVar[type] = PostgreSQLReceiver
 
     def _build_query(
         self, table: str, columns: list, operation: DatabaseOperation, **kwargs

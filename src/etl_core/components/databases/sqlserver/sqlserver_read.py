@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from etl_core.components.databases.sql_reader_base import SQLReaderBase
 
 from etl_core.components.databases.sqlserver.sqlserver import SQLServerComponent
@@ -16,4 +18,4 @@ class SQLServerRead(SQLReaderBase, SQLServerComponent):
 
     ALLOW_NO_INPUTS = True
 
-    receiver_class = SQLServerReceiver
+    receiver_class: ClassVar[type] = SQLServerReceiver
