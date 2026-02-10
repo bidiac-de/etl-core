@@ -36,12 +36,20 @@ class SQLConnectionHandler:
         port: Optional[int] = None,
         database: Optional[str] = None,
     ) -> str:
-        if not all([user, password, host, port, database]):
+        missing_required = any(
+            [
+                user in (None, ""),
+                host in (None, ""),
+                port is None,
+                database in (None, ""),
+            ]
+        )
+        if missing_required:
             raise ValueError(
-                f"{dialect} requires user, password, host, port, and database."
+                f"{dialect} requires user, host, port, and database."
             )
         safe_user = quote_plus(user)
-        safe_password = quote_plus(password)
+        safe_password = quote_plus(password or "")
         return f"{dialect}://{safe_user}:{safe_password}@{host}:{port}/{database}"
 
     @staticmethod

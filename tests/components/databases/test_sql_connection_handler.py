@@ -70,8 +70,7 @@ class TestSQLConnectionHandler:
         with pytest.raises(
             ValueError,
             match=(
-                "postgresql\\+psycopg2 requires user, password, host, port, "
-                "and database"
+                "postgresql\\+psycopg2 requires user, host, port, and database"
             ),
         ):
             SQLConnectionHandler.build_url(
@@ -371,6 +370,28 @@ class TestSQLConnectionHandler:
                 port=5432,
                 database="testdb",
             )
+
+    def test_build_url_passwordless(self):
+        """Test building URL with missing or empty passwords."""
+        url_none = SQLConnectionHandler.build_url(
+            dialect="postgresql+psycopg2",
+            user="testuser",
+            password=None,
+            host="localhost",
+            port=5432,
+            database="testdb",
+        )
+        assert url_none == "postgresql+psycopg2://testuser:@localhost:5432/testdb"
+
+        url_empty = SQLConnectionHandler.build_url(
+            dialect="postgresql+psycopg2",
+            user="testuser",
+            password="",
+            host="localhost",
+            port=5432,
+            database="testdb",
+        )
+        assert url_empty == "postgresql+psycopg2://testuser:@localhost:5432/testdb"
 
     def test_build_url_special_characters(self):
         """Test URL building with special characters in credentials."""
