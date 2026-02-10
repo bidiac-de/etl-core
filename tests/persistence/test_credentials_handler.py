@@ -147,6 +147,42 @@ def test_get_by_id_when_secret_missing(handler: H.CredentialsHandler) -> None:
     assert creds.decrypted_password is None
 
 
+def test_upsert_clears_secret_when_password_removed(
+    handler: H.CredentialsHandler,
+) -> None:
+    cid = handler.upsert(
+        Credentials(
+            name="c3",
+            user="u",
+            host="h",
+            port=10,
+            database="db",
+            password="secret",
+            pool_max_size=1,
+            pool_timeout_s=1,
+        )
+    )
+
+    handler.upsert(
+        Credentials(
+            name="c3",
+            user="u",
+            host="h",
+            port=10,
+            database="db",
+            password=None,
+            pool_max_size=1,
+            pool_timeout_s=1,
+        ),
+        credentials_id=cid,
+    )
+
+    model = handler.get_by_id(cid)
+    assert model is not None
+    creds, _ = model
+    assert creds.decrypted_password is None
+
+
 def test_delete_by_id_missing_and_success_and_secret_cleanup(
     handler: H.CredentialsHandler, monkeypatch
 ) -> None:

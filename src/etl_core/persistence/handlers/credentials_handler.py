@@ -80,6 +80,11 @@ class CredentialsHandler(BaseHandler):
 
         if creds.decrypted_password:
             self.secret_store.set(self._password_key(row.id), creds.decrypted_password)
+        else:
+            try:
+                self.secret_store.delete(self._password_key(row.id))
+            except KeyError:
+                pass
 
         masked_password = _mask_secret(creds.decrypted_password)
         action = "updated" if is_update else "created"
