@@ -7,6 +7,7 @@ from etl_core.receivers.files.file_helper import resolve_file_path, open_file
 from etl_core.utils.record_transform import (
     has_flat_paths as _has_flat_paths,
     build_payload as _build_payload_base,
+    flatten_record as _flatten_record_base,
 )
 import re
 import os
@@ -171,45 +172,39 @@ def read_xml_row(path: Path, record_tag: str) -> Generator[Dict[str, Any], None,
     return _iter_records(path, record_tag)
 
 
-def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
-    """Flatten nested structures into dot / index paths."""
-    if isinstance(value, dict):
-        _flatten_dict(prefix, value, out)
-    elif isinstance(value, list):
-        _flatten_list(prefix, value, out)
-    else:
-        out[prefix] = value
-
-
-def _flatten_dict(prefix: str, d: Dict[str, Any], out: Dict[str, Any]) -> None:
+def _xml_dict_handler(prefix: str, d: Dict[str, Any], out: Dict[str, Any], join_fn, recurse) -> bool:
+    """
+    XML-specific dict handler for flatten_record.
+    Handles @attrs and #text as special keys.
+    Returns True to indicate the dict was fully processed.
+    """
+    # Handle @attrs specially
     attrs = d.get(ATTRS)
     if isinstance(attrs, dict):
-        base = _join(prefix, ATTRS)
+        base = join_fn(prefix, ATTRS)
         for ak, av in attrs.items():
-            out[_join(base, ak)] = av
+            out[join_fn(base, ak)] = av
 
+    # Handle #text specially
     if TEXT in d:
-        out[_join(prefix, TEXT)] = d[TEXT]
+        out[join_fn(prefix, TEXT)] = d[TEXT]
 
+    # Process remaining keys (skip @attrs and #text)
     for k, v in d.items():
         if k in (ATTRS, TEXT):
             continue
-        _flatten_to_map(_join(prefix, k), v, out)
+        recurse(join_fn(prefix, k), v)
 
-
-def _flatten_list(prefix: str, lst: list, out: Dict[str, Any]) -> None:
-    for i, item in enumerate(lst):
-        _flatten_to_map(f"{prefix}[{i}]", item, out)
-
-
-def _join(prefix: str, key: str) -> str:
-    return f"{prefix}.{key}" if prefix else key
+    return True  # We handled it completely
 
 
 def _flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
-    flat: Dict[str, Any] = {}
-    _flatten_to_map("", rec, flat)
-    return {k.lstrip("."): v for k, v in flat.items()}
+    """XML-specific flatten that handles @attrs and #text."""
+    return _flatten_record_base(
+        rec,
+        dict_handler=_xml_dict_handler,
+        escape_keys=False,  # XML doesn't need key escaping
+    )
 
 
 def read_xml_bulk_chunks(

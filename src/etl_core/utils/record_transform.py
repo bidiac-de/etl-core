@@ -201,20 +201,58 @@ def _join(prefix: str, key: str) -> str:
     return f"{prefix}.{ekey}" if prefix else ekey
 
 
-def _flatten_to_map(prefix: str, value: Any, out: Dict[str, Any]) -> None:
-    """Recursively flatten a nested structure into out dict."""
+def _join_simple(prefix: str, key: str) -> str:
+    """Join prefix and key with dot, no escaping (for XML compatibility)."""
+    return f"{prefix}.{key}" if prefix else key
+
+
+def _flatten_to_map(
+    prefix: str,
+    value: Any,
+    out: Dict[str, Any],
+    *,
+    dict_handler: Optional[callable] = None,
+    join_fn: Optional[callable] = None,
+) -> None:
+    """
+    Recursively flatten a nested structure into out dict.
+
+    Args:
+        prefix: Current path prefix
+        value: Value to flatten
+        out: Output dict to write to
+        dict_handler: Optional callback for dict processing. If provided, it receives
+            (prefix, dict_value, out, join_fn, recurse_fn) and should return True if
+            it handled the dict, False to use default processing.
+        join_fn: Function to join prefix and key (default: _join with escaping)
+    """
+    jf = join_fn or _join
+
     if isinstance(value, dict):
+        if dict_handler is not None:
+            # Let handler try first
+            def recurse(p, v):
+                _flatten_to_map(p, v, out, dict_handler=dict_handler, join_fn=jf)
+            handled = dict_handler(prefix, value, out, jf, recurse)
+            if handled:
+                return
+        # Default dict processing
         for k, v in value.items():
-            _flatten_to_map(_join(prefix, str(k)), v, out)
+            _flatten_to_map(jf(prefix, str(k)), v, out, dict_handler=dict_handler, join_fn=jf)
     elif isinstance(value, list):
         for i, item in enumerate(value):
             new_prefix = f"{prefix}[{i}]" if prefix else f"[{i}]"
-            _flatten_to_map(new_prefix, item, out)
+            _flatten_to_map(new_prefix, item, out, dict_handler=dict_handler, join_fn=jf)
     else:
         out[prefix] = value
 
 
-def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
+def flatten_record(
+    rec: Dict[str, Any],
+    *,
+    dict_handler: Optional[callable] = None,
+    escape_keys: bool = True,
+) -> Dict[str, Any]:
     """
     Convert a nested dict to a flat dict with dotted/indexed keys.
 
@@ -222,6 +260,10 @@ def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         rec: Nested dict structure
+        dict_handler: Optional callback for custom dict processing (e.g., XML @attrs/#text).
+            Receives (prefix, dict_value, out, join_fn, recurse_fn) and should return True
+            if it handled the dict completely, False for default processing.
+        escape_keys: If True, escape special chars (. [ ] \\) in keys. Default True.
 
     Returns:
         Flat dict with dotted keys for nested dicts and [i] for lists
@@ -234,7 +276,8 @@ def flatten_record(rec: Dict[str, Any]) -> Dict[str, Any]:
         {'items[0]': 'x', 'items[1]': 'y'}
     """
     flat: Dict[str, Any] = {}
-    _flatten_to_map("", rec, flat)
+    join_fn = _join if escape_keys else _join_simple
+    _flatten_to_map("", rec, flat, dict_handler=dict_handler, join_fn=join_fn)
     return {k.lstrip("."): v for k, v in flat.items()}
 
 

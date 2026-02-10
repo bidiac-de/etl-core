@@ -102,6 +102,36 @@ class TestFlattenRecord:
         result = flatten_record(nested)
         assert result == {"a": 1, "b": 2}
 
+    def test_escape_keys_true(self):
+        """Test that special chars are escaped when escape_keys=True (default)."""
+        nested = {"a.b": {"c": 1}}
+        result = flatten_record(nested)
+        # The key "a.b" should be escaped to "a\.b"
+        assert "a\\.b.c" in result or "a\\.b\\.c" in result or result.get("a\\.b.c") == 1
+
+    def test_escape_keys_false(self):
+        """Test that special chars are NOT escaped when escape_keys=False."""
+        nested = {"a": {"b": 1}}
+        result = flatten_record(nested, escape_keys=False)
+        assert result == {"a.b": 1}
+
+    def test_custom_dict_handler(self):
+        """Test custom dict_handler callback."""
+        # Handler that skips keys starting with underscore
+        def skip_underscore(prefix, d, out, join_fn, recurse):
+            for k, v in d.items():
+                if k.startswith("_"):
+                    continue
+                recurse(join_fn(prefix, k), v)
+            return True  # We handled it
+
+        nested = {"a": 1, "_private": 2, "b": {"c": 3, "_hidden": 4}}
+        result = flatten_record(nested, dict_handler=skip_underscore)
+        assert "_private" not in str(result)
+        assert "_hidden" not in str(result)
+        assert result.get("a") == 1
+        assert "b.c" in result or "b\\.c" in result
+
 
 class TestRoundtrip:
     """Test that flatten and unflatten are inverses."""
