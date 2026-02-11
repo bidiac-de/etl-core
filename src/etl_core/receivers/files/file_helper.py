@@ -2,14 +2,22 @@ from pathlib import Path
 from typing import IO
 from typing import Any
 
+from etl_core.utils.file_utils import resolve_path
+
 
 class FileReceiverError(Exception):
     pass
 
 
 def resolve_file_path(filepath: Path) -> Path:
-    """Resolve a relative or user path and return an absolute path."""
-    return filepath.expanduser().resolve()
+    """
+    Resolve a relative or user path and return an absolute path.
+
+    .. deprecated::
+        Use :func:`etl_core.utils.file_utils.resolve_path` instead.
+        This function is kept for backward compatibility.
+    """
+    return resolve_path(filepath)
 
 
 def ensure_file_exists(filepath: Path):
