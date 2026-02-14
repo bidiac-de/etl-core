@@ -54,6 +54,11 @@ def test_get_specific_schema_valid_form(client: TestClient) -> None:
     assert isinstance(payload, dict)
     assert "x-class" in payload
     assert isinstance(payload["x-class"], dict)
+    assert "x-ui" in payload
+    assert isinstance(payload["x-ui"], dict)
+    assert "context_selector" in payload["x-ui"]
+    assert "rule_builder" in payload["x-ui"]
+    assert "port_schema_editor" in payload["x-ui"]
 
 
 def test_get_specific_schema_full_and_hidden(client: TestClient) -> None:
@@ -81,4 +86,29 @@ def test_get_specific_schema_full_and_hidden(client: TestClient) -> None:
 def test_get_specific_schema_invalid_form(client: TestClient) -> None:
     response = client.get("/configs/unknown/form")
     assert response.status_code == 404
-    assert "detail" in response.json()
+    payload = response.json()
+    assert "error" in payload
+    assert isinstance(payload["error"], dict)
+    assert payload["error"]["code"] == "SCHEMA_COMPONENT_UNKNOWN"
+
+
+def test_merge_split_form_does_not_expose_class_port_specs(client: TestClient) -> None:
+    merge_form = client.get("/configs/merge/form")
+    if merge_form.status_code == 200:
+        merge_props = {
+            entry["name"]
+            for entry in merge_form.json().get("properties", [])
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+        }
+        assert "INPUT_PORTS" not in merge_props
+        assert "OUTPUT_PORTS" not in merge_props
+
+    split_form = client.get("/configs/split/form")
+    if split_form.status_code == 200:
+        split_props = {
+            entry["name"]
+            for entry in split_form.json().get("properties", [])
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+        }
+        assert "INPUT_PORTS" not in split_props
+        assert "OUTPUT_PORTS" not in split_props

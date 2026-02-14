@@ -332,12 +332,23 @@ def get_provider(
             id=id,
             kind="context",
             name=name or "",
-            environment=str(environment) if environment is not None else "",
+            environment=(
+                environment.value
+                if isinstance(environment, Environment)
+                else str(environment) if environment is not None else ""
+            ),
             parameters=getattr(ctx_obj, "parameters", {}),
             credentials_ids=getattr(ctx_obj, "credentials_ids", {}),
         )
 
-    row_creds = creds_handler.get_by_id(id)
+    try:
+        row_creds = creds_handler.get_by_id(id)
+    except Exception as exc:  # noqa: BLE001
+        raise http_500(
+            "CREDENTIALS_LOAD_FAILED",
+            "Failed to load credentials provider.",
+            provider_id=id,
+        ) from exc
     if row_creds is not None:
         creds, _creds_id = row_creds
         return CredentialsResponse(

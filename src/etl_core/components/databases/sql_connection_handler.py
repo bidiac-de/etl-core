@@ -45,9 +45,7 @@ class SQLConnectionHandler:
             ]
         )
         if missing_required:
-            raise ValueError(
-                f"{dialect} requires user, host, port, and database."
-            )
+            raise ValueError(f"{dialect} requires user, host, port, and database.")
         safe_user = quote_plus(user)
         safe_password = quote_plus(password or "")
         return f"{dialect}://{safe_user}:{safe_password}@{host}:{port}/{database}"

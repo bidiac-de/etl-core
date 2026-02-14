@@ -65,33 +65,45 @@ def http_500(code: str, msg: str, **extra: Any) -> HTTPException:
 
 def http_400(code: str, msg: str, **extra: Any) -> HTTPException:
     """Create a 400 Bad Request HTTPException with structured detail."""
-    return HTTPException(status.HTTP_400_BAD_REQUEST, detail=_payload(code, msg, **extra))
+    return HTTPException(
+        status.HTTP_400_BAD_REQUEST, detail=_payload(code, msg, **extra)
+    )
 
 
 # --- HTTP error factories with exception metadata ---
 
 
-def http_404_exc(code: str, msg: str, exc: BaseException, **extra: Any) -> HTTPException:
+def http_404_exc(
+    code: str, msg: str, exc: BaseException, **extra: Any
+) -> HTTPException:
     """Create a 404 with exception metadata merged into detail."""
     return http_404(code, msg, **extra, **_exc_meta(exc))
 
 
-def http_409_exc(code: str, msg: str, exc: BaseException, **extra: Any) -> HTTPException:
+def http_409_exc(
+    code: str, msg: str, exc: BaseException, **extra: Any
+) -> HTTPException:
     """Create a 409 with exception metadata merged into detail."""
     return http_409(code, msg, **extra, **_exc_meta(exc))
 
 
-def http_422_exc(code: str, msg: str, exc: BaseException, **extra: Any) -> HTTPException:
+def http_422_exc(
+    code: str, msg: str, exc: BaseException, **extra: Any
+) -> HTTPException:
     """Create a 422 with exception metadata merged into detail."""
     return http_422(code, msg, **extra, **_exc_meta(exc))
 
 
-def http_500_exc(code: str, msg: str, exc: BaseException, **extra: Any) -> HTTPException:
+def http_500_exc(
+    code: str, msg: str, exc: BaseException, **extra: Any
+) -> HTTPException:
     """Create a 500 with exception metadata merged into detail."""
     return http_500(code, msg, **extra, **_exc_meta(exc))
 
 
-def http_400_exc(code: str, msg: str, exc: BaseException, **extra: Any) -> HTTPException:
+def http_400_exc(
+    code: str, msg: str, exc: BaseException, **extra: Any
+) -> HTTPException:
     """Create a 400 with exception metadata merged into detail."""
     return http_400(code, msg, **extra, **_exc_meta(exc))
 
@@ -110,4 +122,3 @@ def http_422_validation(
     and exception metadata.
     """
     return http_422(code, msg, errors=_sanitize_errors(exc), **extra, **_exc_meta(exc))
-

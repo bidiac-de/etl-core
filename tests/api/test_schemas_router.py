@@ -140,6 +140,10 @@ def test_get_component_schema_form_ok(app_client: TestClient, monkeypatch):
         payload.get("properties", {}).get("name", {}).get("default") == "DummyComponent"
     )
     assert payload.get("icon") == "mdi:test-icon"
+    assert "x-ui" in payload
+    assert payload["x-ui"]["context_selector"]["field"] is None
+    assert payload["x-ui"]["rule_builder"]["field"] is None
+    assert payload["x-ui"]["port_schema_editor"]["fields"] == []
 
 
 def test_get_component_schema_form_404_when_hidden_in_production(

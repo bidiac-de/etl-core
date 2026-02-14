@@ -9,6 +9,7 @@ This module provides the single source of truth for:
 
 Used by json_helper, xml_helper, and common_helpers.
 """
+
 from __future__ import annotations
 
 import re
@@ -233,16 +234,21 @@ def _flatten_to_map(
             # Let handler try first
             def recurse(p, v):
                 _flatten_to_map(p, v, out, dict_handler=dict_handler, join_fn=jf)
+
             handled = dict_handler(prefix, value, out, jf, recurse)
             if handled:
                 return
         # Default dict processing
         for k, v in value.items():
-            _flatten_to_map(jf(prefix, str(k)), v, out, dict_handler=dict_handler, join_fn=jf)
+            _flatten_to_map(
+                jf(prefix, str(k)), v, out, dict_handler=dict_handler, join_fn=jf
+            )
     elif isinstance(value, list):
         for i, item in enumerate(value):
             new_prefix = f"{prefix}[{i}]" if prefix else f"[{i}]"
-            _flatten_to_map(new_prefix, item, out, dict_handler=dict_handler, join_fn=jf)
+            _flatten_to_map(
+                new_prefix, item, out, dict_handler=dict_handler, join_fn=jf
+            )
     else:
         out[prefix] = value
 
@@ -260,9 +266,10 @@ def flatten_record(
 
     Args:
         rec: Nested dict structure
-        dict_handler: Optional callback for custom dict processing (e.g., XML @attrs/#text).
-            Receives (prefix, dict_value, out, join_fn, recurse_fn) and should return True
-            if it handled the dict completely, False for default processing.
+        dict_handler: Optional callback for custom dict processing
+            (e.g., XML @attrs/#text). Receives
+            (prefix, dict_value, out, join_fn, recurse_fn) and should return
+            True if it handled the dict completely, False for default processing.
         escape_keys: If True, escape special chars (. [ ] \\) in keys. Default True.
 
     Returns:
@@ -291,6 +298,7 @@ def _is_nullish(v: Any) -> bool:
         return True
     try:
         import pandas as pd
+
         return pd.isna(v)
     except Exception:
         return False
@@ -326,7 +334,10 @@ def build_payload(
         >>> build_payload({'a': {'b': 1}})  # already nested
         {'a': {'b': 1}}
 
-        >>> build_payload({'items[0]': None, 'items[1]': 'x'}, drop_nullish_list_items=True)
+        >>> build_payload(
+        ...     {'items[0]': None, 'items[1]': 'x'},
+        ...     drop_nullish_list_items=True,
+        ... )
         {'items': ['x']}
     """
     if not isinstance(payload, dict):
@@ -351,4 +362,3 @@ def build_payload(
 
 # Backwards compatibility alias
 _has_flat_paths = has_flat_paths
-

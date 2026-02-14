@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, Tuple, Union
+from typing import Any, AsyncIterator, Dict, ClassVar, Tuple, Union
 
 import dask.dataframe as dd
 import pandas as pd
@@ -36,10 +36,10 @@ class MergeComponent(DataOperationsComponent):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
-    INPUT_PORTS: Tuple[InPortSpec, ...] = (
+    INPUT_PORTS: ClassVar[Tuple[InPortSpec, ...]] = (
         InPortSpec(name="in", required=True, fanin="many"),
     )
-    OUTPUT_PORTS: Tuple[OutPortSpec, ...] = (
+    OUTPUT_PORTS: ClassVar[Tuple[OutPortSpec, ...]] = (
         OutPortSpec(name="merge", required=True, fanout="one"),
     )
 
@@ -48,14 +48,22 @@ class MergeComponent(DataOperationsComponent):
         self._receiver = MergeReceiver()
         return self
 
+    def _selected_output_port(self) -> OutPortSpec:
+        ports = self.expected_ports()
+        if not ports:
+            raise ValueError(f"{self.name}: merge requires at least one output port.")
+        # Prefer explicit runtime overrides when provided.
+        return ports[-1]
+
     async def process_row(
         self,
         row: Dict[str, Any],
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         """Forward a single row (or tagged envelope) to the single output port."""
+        selected_out_port = self._selected_output_port()
         async for port_spec, payload_out in self._receiver.process_row(
-            out_port=self.OUTPUT_PORTS[0], row=row, metrics=metrics
+            out_port=selected_out_port, row=row, metrics=metrics
         ):
             yield Out(port=port_spec.name, payload=payload_out)
 
@@ -65,9 +73,10 @@ class MergeComponent(DataOperationsComponent):
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         """Forward a DataFrame (or tagged envelope) to the single output port."""
+        selected_out_port = self._selected_output_port()
 
         async for port_spec, payload_out in self._receiver.process_bulk(
-            out_port=self.OUTPUT_PORTS[0], dataframe=dataframe, metrics=metrics
+            out_port=selected_out_port, dataframe=dataframe, metrics=metrics
         ):
             yield Out(port=port_spec.name, payload=payload_out)
 
@@ -77,8 +86,9 @@ class MergeComponent(DataOperationsComponent):
         metrics: DataOperationsMetrics,
     ) -> AsyncIterator[Out]:
         """Forward a Dask DataFrame (or tagged envelope) to the single output port."""
+        selected_out_port = self._selected_output_port()
 
         async for port_spec, payload_out in self._receiver.process_bigdata(
-            out_port=self.OUTPUT_PORTS[0], ddf=ddf, metrics=metrics
+            out_port=selected_out_port, ddf=ddf, metrics=metrics
         ):
             yield Out(port=port_spec.name, payload=payload_out)

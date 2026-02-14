@@ -79,7 +79,7 @@ def test_update_job_invalid_data(client: TestClient) -> None:
     job_id = client.post("/jobs/", json={}).json()
     response = client.put(f"/jobs/{job_id}", json={"name": ""})
     assert response.status_code == 422
-    detail = response.json().get("detail")
+    detail = response.json().get("error", {}).get("details")
     assert isinstance(detail, list)
     assert any(
         "value must be a non-empty string" in err.get("msg", "").lower()

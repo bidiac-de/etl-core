@@ -184,6 +184,36 @@ def _attach_class_vars(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str
     return enriched
 
 
+def _attach_ui_hints(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str, Any]:
+    """
+    Attach mandatory UI widget hints for studio integration.
+    """
+    fields = getattr(cls, "model_fields", {}) or {}
+    context_field = "context_id" if "context_id" in fields else None
+    rule_field = "rule" if "rule" in fields else None
+    port_schema_fields = [
+        key for key in ("out_port_schemas", "in_port_schemas") if key in fields
+    ]
+
+    enriched = dict(schema)
+    enriched["x-ui"] = {
+        "context_selector": {
+            "field": context_field,
+            "source_endpoint": "/contexts/",
+            "widget": "context-select",
+        },
+        "rule_builder": {
+            "field": rule_field,
+            "widget": "rule-builder",
+        },
+        "port_schema_editor": {
+            "fields": port_schema_fields,
+            "widget": "port-schema-editor",
+        },
+    }
+    return enriched
+
+
 def _inject_name_default(
     schema: Dict[str, Any], cls: Type[Component]
 ) -> Dict[str, Any]:
@@ -282,6 +312,7 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
     enriched = _attach_class_vars(ordered, cls)
     enriched["comp-type"] = comp_type  # convenience for GUI
     enriched = _inject_name_default(enriched, cls)
+    enriched = _attach_ui_hints(enriched, cls)
     with_icon = _inject_icon_hint(enriched, cls)
 
     processed = schema_post_processing(with_icon, strip_order=True)

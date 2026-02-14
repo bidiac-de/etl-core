@@ -147,6 +147,32 @@ def test_get_by_id_when_secret_missing(handler: H.CredentialsHandler) -> None:
     assert creds.decrypted_password is None
 
 
+def test_get_by_id_when_secret_backend_fails(
+    handler: H.CredentialsHandler, monkeypatch
+) -> None:
+    cid = handler.upsert(
+        Credentials(
+            name="c2b",
+            user="u",
+            host="h",
+            port=5,
+            database="db",
+            password="pw",
+            pool_max_size=1,
+            pool_timeout_s=1,
+        )
+    )
+
+    def boom(_key: str) -> str:
+        raise RuntimeError("keyring unavailable")
+
+    monkeypatch.setattr(handler.secret_store, "get", boom, raising=True)
+    model = handler.get_by_id(cid)
+    assert model is not None
+    creds, _ = model
+    assert creds.decrypted_password is None
+
+
 def test_upsert_clears_secret_when_password_removed(
     handler: H.CredentialsHandler,
 ) -> None:

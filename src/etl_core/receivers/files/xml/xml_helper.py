@@ -172,7 +172,9 @@ def read_xml_row(path: Path, record_tag: str) -> Generator[Dict[str, Any], None,
     return _iter_records(path, record_tag)
 
 
-def _xml_dict_handler(prefix: str, d: Dict[str, Any], out: Dict[str, Any], join_fn, recurse) -> bool:
+def _xml_dict_handler(
+    prefix: str, d: Dict[str, Any], out: Dict[str, Any], join_fn, recurse
+) -> bool:
     """
     XML-specific dict handler for flatten_record.
     Handles @attrs and #text as special keys.
@@ -230,8 +232,6 @@ def read_xml_bulk_chunks(
 def read_xml_bulk_once(path: Path, record_tag: str) -> pd.DataFrame:
     parts = list(read_xml_bulk_chunks(path, record_tag, chunk_size=10_000))
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-
-
 
 
 def build_payload(payload: Dict[str, Any]) -> Dict[str, Any]:

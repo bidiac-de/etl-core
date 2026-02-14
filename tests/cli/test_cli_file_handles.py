@@ -1,6 +1,7 @@
 """
 Tests for verifying that file handles are properly closed when loading config files.
 """
+
 from __future__ import annotations
 
 import builtins
@@ -115,7 +116,9 @@ class TestContextsFileHandles:
         )
 
         with _track_open("etl_core.api.cli.commands.contexts.open") as opened_files:
-            result = runner.invoke(app, ["contexts", "create-context", str(config_path)])
+            result = runner.invoke(
+                app, ["contexts", "create-context", str(config_path)]
+            )
 
         assert result.exit_code == 0
         _assert_all_closed(opened_files)
@@ -186,7 +189,9 @@ class TestContextsFileHandles:
         )
 
         with _track_open("etl_core.api.cli.commands.contexts.open") as opened_files:
-            result = runner.invoke(app, ["contexts", "create-context", str(invalid_json)])
+            result = runner.invoke(
+                app, ["contexts", "create-context", str(invalid_json)]
+            )
 
         assert result.exit_code != 0
         _assert_all_closed(opened_files)
@@ -229,9 +234,7 @@ class TestFileHandleEdgeCases:
         assert result.exit_code == 0
         _assert_all_closed(opened_files)
 
-    def test_unicode_json_file_closes_handle(
-        self, tmp_path: Path, monkeypatch
-    ) -> None:
+    def test_unicode_json_file_closes_handle(self, tmp_path: Path, monkeypatch) -> None:
         unicode_cfg = {
             "name": "unicode-job-日本語",
             "description": "Descripción con caracteres especiales: äöü ñ 中文",

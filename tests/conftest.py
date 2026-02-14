@@ -29,33 +29,57 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from sqlmodel import Session, delete
 
-from etl_core.main import app
-from etl_core.api.dependencies import get_execution_handler, get_job_handler
-from etl_core.metrics.component_metrics.component_metrics import ComponentMetrics
-from etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics import (  # noqa: E501
-    DataOperationsMetrics,
-)
-from etl_core.persistence.db import engine, ensure_schema
-from etl_core.persistence.table_definitions import (
-    ComponentTable,
-    JobTable,
-    LayoutTable,
-    MetaDataTable,
-)
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_SRC_PATH = _PROJECT_ROOT / "src"
+if str(_SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(_SRC_PATH))
 
-from etl_core.components.databases.mongodb.mongodb_connection_handler import (
-    MongoConnectionHandler,
-)
-from etl_core.components.databases import pool_args
-from etl_core.components.databases.pool_args import build_mongo_client_kwargs
+_TEST_DB_DIR = Path(tempfile.mkdtemp(prefix="etl-core-db-")).resolve()
+os.environ.setdefault("DB_PATH", str(_TEST_DB_DIR / "etl-core-test.db"))
 
+_main_mod = importlib.import_module("etl_core.main")
+app = _main_mod.app
 
-from etl_core.context.environment import Environment
-from etl_core.context.credentials import Credentials
-from etl_core.singletons import (
-    credentials_handler as _crh_singleton,
-    context_handler as _ch_singleton,
+_deps_mod = importlib.import_module("etl_core.api.dependencies")
+get_execution_handler = _deps_mod.get_execution_handler
+get_job_handler = _deps_mod.get_job_handler
+
+_metrics_mod = importlib.import_module(
+    "etl_core.metrics.component_metrics.component_metrics"
 )
+ComponentMetrics = _metrics_mod.ComponentMetrics
+_data_metrics_mod = importlib.import_module(
+    "etl_core.metrics.component_metrics.data_operations_metrics.data_operations_metrics"
+)
+DataOperationsMetrics = _data_metrics_mod.DataOperationsMetrics
+
+_db_mod = importlib.import_module("etl_core.persistence.db")
+engine = _db_mod.engine
+ensure_schema = _db_mod.ensure_schema
+
+_tables_mod = importlib.import_module("etl_core.persistence.table_definitions")
+ComponentTable = _tables_mod.ComponentTable
+JobTable = _tables_mod.JobTable
+LayoutTable = _tables_mod.LayoutTable
+MetaDataTable = _tables_mod.MetaDataTable
+
+_mongo_mod = importlib.import_module(
+    "etl_core.components.databases.mongodb.mongodb_connection_handler"
+)
+MongoConnectionHandler = _mongo_mod.MongoConnectionHandler
+
+pool_args = importlib.import_module("etl_core.components.databases.pool_args")
+build_mongo_client_kwargs = pool_args.build_mongo_client_kwargs
+
+_env_mod = importlib.import_module("etl_core.context.environment")
+Environment = _env_mod.Environment
+
+_credentials_mod = importlib.import_module("etl_core.context.credentials")
+Credentials = _credentials_mod.Credentials
+
+_singletons_mod = importlib.import_module("etl_core.singletons")
+_crh_singleton = _singletons_mod.credentials_handler
+_ch_singleton = _singletons_mod.context_handler
 
 _TEST_LOG_DIR = Path(tempfile.mkdtemp(prefix="etl-core-logs-")).resolve()
 os.environ.setdefault("LOG_DIR", str(_TEST_LOG_DIR))
@@ -108,6 +132,7 @@ def _cleanup_test_logs() -> Generator[None, None, None]:
         yield
     finally:
         shutil.rmtree(_TEST_LOG_DIR, ignore_errors=True)
+        shutil.rmtree(_TEST_DB_DIR, ignore_errors=True)
 
 
 @pytest.fixture

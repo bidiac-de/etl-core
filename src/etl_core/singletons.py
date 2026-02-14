@@ -111,4 +111,3 @@ def reset_singletons() -> None:
         _credentials_handler_singleton = None
         _scheduler_handler_singleton = None
         _schedule_handler_singleton = None
-

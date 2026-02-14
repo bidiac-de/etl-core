@@ -7,7 +7,10 @@ from typing import Any, AsyncIterator, Dict, Optional, Tuple, List
 
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.config import Config
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -181,6 +184,107 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+def _canonical_error(
+    code: str,
+    message: str,
+    *,
+    details: Optional[List[Dict[str, Any]]] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "details": details or [],
+            "context": context or {},
+        }
+    }
+
+
+def _sanitize_validation_errors(
+    raw_errors: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    sanitized: List[Dict[str, Any]] = []
+    for err in raw_errors:
+        filtered: Dict[str, Any] = {}
+        for key in ("type", "loc", "msg", "url"):
+            if key in err:
+                filtered[key] = err[key]
+        sanitized.append(filtered)
+    return sanitized
+
+
+def _extract_http_error_parts(
+    detail: Any,
+    status_code: int,
+) -> Tuple[str, str, List[Dict[str, Any]], Dict[str, Any]]:
+    code = f"HTTP_{status_code}"
+    message = "Request failed."
+    details: List[Dict[str, Any]] = []
+    context: Dict[str, Any] = {}
+
+    if isinstance(detail, dict):
+        code = str(detail.get("code") or code)
+        message = str(detail.get("message") or detail.get("detail") or message)
+        if isinstance(detail.get("errors"), list):
+            details = [d for d in detail["errors"] if isinstance(d, dict)]
+
+        nested_context = detail.get("context")
+        if isinstance(nested_context, dict):
+            context.update(nested_context)
+
+        for key, value in detail.items():
+            if key in {"code", "message", "errors", "context"}:
+                continue
+            context[key] = value
+        return code, message, details, context
+
+    if isinstance(detail, list):
+        code = "VALIDATION_ERROR"
+        message = "Request validation failed."
+        details = [d for d in detail if isinstance(d, dict)]
+        return code, message, details, context
+
+    if isinstance(detail, str):
+        message = detail
+
+    return code, message, details, context
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    _request, exc: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content=_canonical_error(
+            "VALIDATION_ERROR",
+            "Request validation failed.",
+            details=_sanitize_validation_errors(exc.errors()),
+        ),
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(_request, exc: StarletteHTTPException) -> JSONResponse:
+    code, message, details, context = _extract_http_error_parts(
+        exc.detail, exc.status_code
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_canonical_error(code, message, details=details, context=context),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request, _exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=500,
+        content=_canonical_error("INTERNAL_ERROR", "Unexpected server error."),
+    )
+
 
 allowed_origins = _parse_origins(config("CORS_ALLOW_ORIGINS", cast=str, default="*"))
 

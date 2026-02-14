@@ -24,7 +24,7 @@ async def test_merge_component_process_row_forwards_to_single_output(
         name="merge1",
         description="test merge",
         comp_type="merge",
-        OUTPUT_PORTS=(out_port,),
+        extra_output_ports=(out_port,),
         extra_input_ports=(in_port,),
     )
 
@@ -51,7 +51,7 @@ async def test_merge_component_process_bulk_forwards_dataframe_copy(
         name="merge2",
         description="test merge bulk",
         comp_type="merge",
-        OUTPUT_PORTS=(out_port,),
+        extra_output_ports=(out_port,),
         extra_input_ports=(in_port,),
     )
 

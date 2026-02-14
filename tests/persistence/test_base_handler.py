@@ -10,6 +10,7 @@ from etl_core.persistence.handlers.base_handler import BaseHandler
 
 class DummyTable(SQLModel, table=True):
     """Dummy table for testing generic CRUD operations."""
+
     __tablename__ = "dummy_test_table"
     id: Optional[str] = Field(default=None, primary_key=True)
 
@@ -33,6 +34,7 @@ class TestBaseHandlerInit:
         # so we need to check that the handler uses the module's engine when
         # no engine_ is explicitly passed. We verify this by checking the type.
         from etl_core.persistence.db import engine as default_engine
+
         handler = BaseHandler()
         # Should use the actual default engine from the db module
         assert handler.engine is default_engine
@@ -101,7 +103,9 @@ class TestBaseHandlerGenericCrud:
 
     @patch("etl_core.persistence.handlers.base_handler.ensure_schema")
     @patch("etl_core.persistence.handlers.base_handler.Session")
-    def test_get_by_id_returns_none_when_not_found(self, mock_session_cls, mock_ensure_schema):
+    def test_get_by_id_returns_none_when_not_found(
+        self, mock_session_cls, mock_ensure_schema
+    ):
         """_get_by_id returns None when row not found."""
         mock_session = MagicMock()
         mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -144,7 +148,9 @@ class TestBaseHandlerGenericCrud:
 
     @patch("etl_core.persistence.handlers.base_handler.ensure_schema")
     @patch("etl_core.persistence.handlers.base_handler.Session")
-    def test_delete_by_id_not_found_returns_false(self, mock_session_cls, mock_ensure_schema):
+    def test_delete_by_id_not_found_returns_false(
+        self, mock_session_cls, mock_ensure_schema
+    ):
         """_delete_by_id returns False when row not found."""
         mock_session = MagicMock()
         mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -158,7 +164,9 @@ class TestBaseHandlerGenericCrud:
 
     @patch("etl_core.persistence.handlers.base_handler.ensure_schema")
     @patch("etl_core.persistence.handlers.base_handler.Session")
-    def test_delete_by_id_raises_custom_error(self, mock_session_cls, mock_ensure_schema):
+    def test_delete_by_id_raises_custom_error(
+        self, mock_session_cls, mock_ensure_schema
+    ):
         """_delete_by_id raises custom error when specified."""
         mock_session = MagicMock()
         mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -217,7 +225,9 @@ class TestBaseHandlerWithTableAttribute:
 
     @patch("etl_core.persistence.handlers.base_handler.ensure_schema")
     @patch("etl_core.persistence.handlers.base_handler.Session")
-    def test_delete_by_id_uses_table_attribute(self, mock_session_cls, mock_ensure_schema):
+    def test_delete_by_id_uses_table_attribute(
+        self, mock_session_cls, mock_ensure_schema
+    ):
         """_delete_by_id uses _table attribute when table_cls not provided."""
         mock_session = MagicMock()
         mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -233,5 +243,3 @@ class TestBaseHandlerWithTableAttribute:
         mock_session.get.assert_called_once_with(DummyTable, "test-id")
         mock_session.delete.assert_called_once_with(mock_row)
         assert result is True
-
-

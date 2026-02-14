@@ -143,6 +143,19 @@ def test_get_provider_credentials_and_not_found() -> None:
     assert e.value.status_code == 404
 
 
+def test_get_provider_credentials_load_failure_returns_500() -> None:
+    ctx_handler = Mock()
+    ctx_handler.get_by_id.return_value = None
+
+    creds_handler = Mock()
+    creds_handler.get_by_id.side_effect = RuntimeError("keyring failure")
+
+    with pytest.raises(HTTPException) as e:
+        C.get_provider("idc", ctx_handler=ctx_handler, creds_handler=creds_handler)
+    assert e.value.status_code == 500
+    assert e.value.detail.get("code") == "CREDENTIALS_LOAD_FAILED"
+
+
 def test_delete_provider_with_adapter_success(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx_handler = Mock(delete_by_id=Mock(return_value=True))
     creds_handler = Mock(delete_by_id=Mock(return_value=False))

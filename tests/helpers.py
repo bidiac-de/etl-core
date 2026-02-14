@@ -44,6 +44,10 @@ def runtime_job_from_config(
 
 
 def detail_message(payload: Dict[str, Any]) -> str:
+    error = payload.get("error")
+    if isinstance(error, dict):
+        return str(error.get("message", ""))
+
     detail = payload.get("detail")
     if isinstance(detail, str):
         return detail

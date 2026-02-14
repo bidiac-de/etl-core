@@ -69,9 +69,7 @@ class TestSQLConnectionHandler:
         """Test building URL with missing required parameters."""
         with pytest.raises(
             ValueError,
-            match=(
-                "postgresql\\+psycopg2 requires user, host, port, and database"
-            ),
+            match=("postgresql\\+psycopg2 requires user, host, port, and database"),
         ):
             SQLConnectionHandler.build_url(
                 dialect="postgresql+psycopg2",
@@ -114,8 +112,7 @@ class TestSQLConnectionHandler:
         assert url2 == "postgresql+psycopg2://testuser:testpass@localhost:5432/testdb"
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_connect_with_credentials_uses_receiver_dialect(self, mock_registry_class):
         """Test connecting via credentials + receiver-selected dialect."""
@@ -152,8 +149,7 @@ class TestSQLConnectionHandler:
         )
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_connect(self, mock_registry_class):
         """Test connecting to database."""
@@ -177,8 +173,7 @@ class TestSQLConnectionHandler:
         )
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_connect_with_engine_kwargs(self, mock_registry_class):
         """Test connecting with custom engine kwargs."""
@@ -200,8 +195,7 @@ class TestSQLConnectionHandler:
         )
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_lease_not_connected(self, mock_registry_class):
         """Test that lease raises error when not connected."""
@@ -220,8 +214,7 @@ class TestSQLConnectionHandler:
             handler.lease().__enter__()
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_lease_success(self, mock_registry_class):
         """Test successful connection lease."""
@@ -249,8 +242,7 @@ class TestSQLConnectionHandler:
         mock_registry.release_sql.assert_called_once_with(mock_key)
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_lease_exception_handling(self, mock_registry_class):
         """Test that lease properly handles exceptions and releases connection."""
@@ -278,8 +270,7 @@ class TestSQLConnectionHandler:
         mock_registry.release_sql.assert_called_once_with(mock_key)
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_close_pool_success(self, mock_registry_class):
         """Test successfully closing pool."""
@@ -297,8 +288,7 @@ class TestSQLConnectionHandler:
         mock_registry.close_pool.assert_called_once_with(mock_key, force=False)
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_close_pool_force(self, mock_registry_class):
         """Test force closing pool."""
@@ -316,8 +306,7 @@ class TestSQLConnectionHandler:
         mock_registry.close_pool.assert_called_once_with(mock_key, force=True)
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_close_pool_no_key(self, mock_registry_class):
         """Test closing pool when no key exists."""
@@ -332,8 +321,7 @@ class TestSQLConnectionHandler:
         mock_registry.close_pool.assert_not_called()
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_stats(self, mock_registry_class):
         """Test getting stats from registry."""
@@ -409,8 +397,7 @@ class TestSQLConnectionHandler:
         assert url == expected
 
     @patch(
-        "etl_core.components.databases."
-        "sql_connection_handler.ConnectionPoolRegistry"
+        "etl_core.components.databases." "sql_connection_handler.ConnectionPoolRegistry"
     )
     def test_multiple_connections(self, mock_registry_class):
         """Test handling multiple connections."""

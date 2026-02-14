@@ -3,6 +3,7 @@ Tests for the centralized record_transform module.
 
 These tests ensure the unified unflatten_record and flatten_record work correctly.
 """
+
 import pytest
 from etl_core.utils.record_transform import (
     unflatten_record,
@@ -107,7 +108,9 @@ class TestFlattenRecord:
         nested = {"a.b": {"c": 1}}
         result = flatten_record(nested)
         # The key "a.b" should be escaped to "a\.b"
-        assert "a\\.b.c" in result or "a\\.b\\.c" in result or result.get("a\\.b.c") == 1
+        assert (
+            "a\\.b.c" in result or "a\\.b\\.c" in result or result.get("a\\.b.c") == 1
+        )
 
     def test_escape_keys_false(self):
         """Test that special chars are NOT escaped when escape_keys=False."""
@@ -117,6 +120,7 @@ class TestFlattenRecord:
 
     def test_custom_dict_handler(self):
         """Test custom dict_handler callback."""
+
         # Handler that skips keys starting with underscore
         def skip_underscore(prefix, d, out, join_fn, recurse):
             for k, v in d.items():
@@ -246,8 +250,6 @@ class TestBuildPayload:
 
     def test_non_dict_raises_type_error(self):
         """Test that non-dict raises TypeError."""
-        import pytest
-
         with pytest.raises(TypeError):
             build_payload("not a dict")
         with pytest.raises(TypeError):

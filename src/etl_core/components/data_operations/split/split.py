@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, Tuple
+from typing import Any, AsyncIterator, ClassVar, Dict, Tuple
 
 import dask.dataframe as dd
 import pandas as pd
@@ -35,15 +35,17 @@ class SplitComponent(DataOperationsComponent):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
-    INPUT_PORTS = (InPortSpec(name="in", required=True, fanin="one"),)
-    OUTPUT_PORTS: Tuple[OutPortSpec, ...] = ()
+    INPUT_PORTS: ClassVar[Tuple[InPortSpec, ...]] = (
+        InPortSpec(name="in", required=True, fanin="one"),
+    )
+    OUTPUT_PORTS: ClassVar[Tuple[OutPortSpec, ...]] = ()
 
     _receiver: SplitReceiver = PrivateAttr()
 
     @model_validator(mode="after")
     def _build_objects(self) -> "SplitComponent":
         self._receiver = SplitReceiver()
-        if not self.OUTPUT_PORTS:
+        if not self.expected_ports():
             raise ValueError(
                 f"SplitComponent '{self.name}' requires at least one OUTPUT_PORT."
             )
@@ -52,21 +54,24 @@ class SplitComponent(DataOperationsComponent):
     async def process_row(
         self, row: Dict[str, Any], metrics: DataOperationsMetrics
     ) -> AsyncIterator[Out]:
+        branches = self.expected_ports()
         async for port, dup in self._receiver.process_row(
-            row=row, branches=self.OUTPUT_PORTS, metrics=metrics
+            row=row, branches=branches, metrics=metrics
         ):
             yield Out(port=port.name, payload=dup)
 
     async def process_bulk(
         self, dataframe: pd.DataFrame, metrics: DataOperationsMetrics
     ) -> AsyncIterator[Out]:
+        branches = self.expected_ports()
         async for port, dup in self._receiver.process_bulk(
-            dataframe=dataframe, branches=self.OUTPUT_PORTS, metrics=metrics
+            dataframe=dataframe, branches=branches, metrics=metrics
         ):
             yield Out(port=port.name, payload=dup)
 
     async def process_bigdata(self, ddf: dd.DataFrame) -> AsyncIterator[Out]:
+        branches = self.expected_ports()
         async for port, dup in self._receiver.process_bigdata(
-            ddf=ddf, branches=self.OUTPUT_PORTS
+            ddf=ddf, branches=branches
         ):
             yield Out(port=port.name, payload=dup)

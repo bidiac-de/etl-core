@@ -24,10 +24,10 @@ class JobHandler(BaseHandler):
 
     def __init__(self, engine_=None) -> None:
         from etl_core.persistence.db import engine as default_engine
+
         super().__init__(engine_=engine_ or default_engine)
         self.dc = DataClassHandler()
         self.ch = ComponentHandler(self.dc)
-
 
     def create_job_entry(self, cfg: JobConfig) -> JobTable:
         with self._session() as session:

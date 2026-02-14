@@ -68,6 +68,5 @@ def test_start_execution_not_found(client: TestClient) -> None:
 
     body = resp.json()
     assert "not found" in detail_message(body).lower()
-
-    if isinstance(body.get("detail"), dict):
-        assert body["detail"].get("code") in {"JOB_NOT_FOUND"}
+    if isinstance(body.get("error"), dict):
+        assert body["error"].get("code") in {"JOB_NOT_FOUND"}

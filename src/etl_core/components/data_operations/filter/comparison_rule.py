@@ -11,6 +11,9 @@ except Exception:
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+RULE_OPERATORS = ("==", "!=", ">", "<", ">=", "<=", "contains")
+RULE_LOGICAL_OPERATORS = ("AND", "OR", "NOT")
+
 
 class ComparisonRule(BaseModel):
     """

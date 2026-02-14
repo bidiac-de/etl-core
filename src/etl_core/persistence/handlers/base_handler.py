@@ -35,9 +35,7 @@ class BaseHandler:
 
     # --- Generic CRUD helpers (use when _table is set or pass table_cls) ---
 
-    def _get_by_id(
-        self, id_: str, table_cls: Type[T] | None = None
-    ) -> Optional[T]:
+    def _get_by_id(self, id_: str, table_cls: Type[T] | None = None) -> Optional[T]:
         """
         Fetch a single row by primary key.
         Uses `table_cls` if provided, otherwise falls back to `self._table`.
@@ -82,5 +80,3 @@ class BaseHandler:
             s.delete(row)
             s.commit()
             return True
-
-

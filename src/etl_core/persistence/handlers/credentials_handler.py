@@ -34,6 +34,7 @@ class CredentialsHandler(BaseHandler):
 
     def __init__(self, engine_=None) -> None:
         from etl_core.persistence.db import engine as default_engine
+
         super().__init__(engine_=engine_ or default_engine)
         self.secret_store = create_secret_provider()
         self._log = logging.getLogger("etl_core.persistence.credentials")
@@ -115,6 +116,14 @@ class CredentialsHandler(BaseHandler):
         try:
             password = self.secret_store.get(self._password_key(row.id))
         except KeyError:
+            password = None
+        except Exception:
+            self._log.warning(
+                "Failed to resolve secret for credentials_id=%s; "
+                "returning password as unset",
+                row.id,
+                exc_info=True,
+            )
             password = None
 
         model = Credentials(

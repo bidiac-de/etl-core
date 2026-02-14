@@ -1,6 +1,7 @@
 """
 Tests for verifying thread-safety of the singleton pattern in singletons.py
 """
+
 from __future__ import annotations
 
 import threading
@@ -152,18 +153,14 @@ class TestSingletonWithDelayedInit:
             time.sleep(0.05)  # Simulate slow initialization
             original_init(self, *args, **kwargs)
 
-        with patch.object(
-            singletons_module.ContextHandler, "__init__", slow_init
-        ):
+        with patch.object(singletons_module.ContextHandler, "__init__", slow_init):
             instances: List[Any] = []
             num_threads = 10
 
             def get_handler():
                 instances.append(context_handler())
 
-            threads = [
-                threading.Thread(target=get_handler) for _ in range(num_threads)
-            ]
+            threads = [threading.Thread(target=get_handler) for _ in range(num_threads)]
             for t in threads:
                 t.start()
             for t in threads:
@@ -232,6 +229,7 @@ class TestDoubleCheckedLocking:
 
         # measure time for many accesses (fast, no lock)
         import time
+
         start = time.perf_counter()
         for _ in range(10000):
             h = job_handler()
@@ -239,7 +237,9 @@ class TestDoubleCheckedLocking:
         elapsed = time.perf_counter() - start
 
         # should complete very quickly (< 1 second for 10000 calls)
-        assert elapsed < 1.0, f"Access took too long: {elapsed}s - possible lock contention"
+        assert (
+            elapsed < 1.0
+        ), f"Access took too long: {elapsed}s - possible lock contention"
 
     def test_singleton_identity_preserved_across_threads(self) -> None:
         """
@@ -312,6 +312,7 @@ class TestThreadPoolConcurrency:
 
         # Group by handler name and verify all instances are the same
         from collections import defaultdict
+
         by_name: dict = defaultdict(list)
         for name, instance in results:
             by_name[name].append(instance)

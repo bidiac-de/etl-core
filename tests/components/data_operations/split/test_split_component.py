@@ -15,7 +15,7 @@ async def test_split_component_process_row(data_ops_metrics: DataOperationsMetri
         name="split1",
         description="test splitter",
         comp_type="split",
-        OUTPUT_PORTS=(OutPortSpec(name="one"), OutPortSpec(name="two")),
+        extra_output_ports=(OutPortSpec(name="one"), OutPortSpec(name="two")),
     )
 
     row = {"id": 1, "name": "Alice"}
@@ -35,7 +35,7 @@ async def test_split_component_process_bulk(data_ops_metrics: DataOperationsMetr
         name="split2",
         description="bulk splitter",
         comp_type="split",
-        OUTPUT_PORTS=(OutPortSpec(name="A"), OutPortSpec(name="B")),
+        extra_output_ports=(OutPortSpec(name="A"), OutPortSpec(name="B")),
     )
 
     df = pd.DataFrame([{"id": i, "name": f"U{i}"} for i in range(3)])
