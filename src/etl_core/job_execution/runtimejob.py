@@ -15,7 +15,6 @@ from etl_core.job_execution.retry_strategy import RetryStrategy, ConstantRetrySt
 from etl_core.persistence.base_models.job_base import JobBase
 from etl_core.components.wiring.ports import EdgeRef
 from etl_core.utils.common_helpers import assert_unique
-from etl_core.context.environment import Environment
 from uuid import uuid4
 import logging
 
@@ -340,14 +339,14 @@ class JobExecution:
     Runtime state for one execution of a JobDefinition.
     """
 
-    def __init__(self, job: RuntimeJob, environment: Optional[Environment] = None):
+    def __init__(self, job: RuntimeJob, environment: Optional[str] = None):
         self._id: str = str(uuid4())
         self._job = job
         # each execution carries its own retry strategy
         self._retry_strategy = ConstantRetryStrategy(job.num_of_retries)
         self._max_attempts = job.num_of_retries + 1
         self._attempts: List[ExecutionAttempt] = []
-        self._environment: Optional[Environment] = environment
+        self._environment: Optional[str] = environment
 
         # each component gets its own sentinel instance
         self._sentinels: Dict[str, Sentinel] = {
@@ -389,7 +388,7 @@ class JobExecution:
         return self._retry_strategy
 
     @property
-    def environment(self) -> Optional[Environment]:
+    def environment(self) -> Optional[str]:
         return self._environment
 
     @property

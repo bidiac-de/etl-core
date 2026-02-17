@@ -3,7 +3,7 @@ from etl_core.metrics.component_metrics.component_metrics import ComponentMetric
 from etl_core.metrics.metrics_registry import register_metrics
 
 
-@register_metrics("schema_mapping", "aggregation")
+@register_metrics("schema_mapping", "aggregation", "split", "merge")
 class DataOperationsMetrics(ComponentMetrics):
     """
     A class that offers metrics for data processing components.

@@ -226,7 +226,7 @@ class TestDatabaseOperationMixin:
         """Test that mixin fields have proper descriptions."""
         component = DatabaseOperationMixinComponent()
 
-        fields = component.model_fields
+        fields = type(component).model_fields
 
         assert "where_conditions" in fields
         assert "operation" in fields

@@ -1,119 +1,97 @@
-# ETL Core Engine
+# ETL Core
 
-The ETL Core Engine is a modular Python-based tool that interprets JSON configurations to execute ETL (Extract, Transform, Load) workflows. Built on the **Command Pattern**, it allows for clear orchestration of ETL jobs with support for component-based execution, metrics tracking, and extensibility for various data backends and operations.
+ETL Core is the execution engine behind ETL Studio. It loads jobs from persisted JSON configuration, validates component wiring/schemas, and executes pipelines with row/bulk/bigdata strategies.
 
----
+## Scope
 
-## Table of Contents
+- Repository: `/Users/conradhofstede/Projects/UNI/SEP/ETL/etl-core`
+- UI repository: `/Users/conradhofstede/Projects/UNI/SEP/ETL/etl-studio`
+- Studio and Core are deployed as a strict pair via `contract_version`.
 
-- [Overview](#overview)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Development Setup](#development-setup)
-- [Contributions](#contributions)
-- [License](#license)
+## Core/Studio API Contract (Current)
 
----
+Studio expects these endpoints:
 
-## Overview
+- `GET /setup/capabilities`
+- `POST /setup/validate`
+- `GET /configs/component_types`
+- `GET /configs/{comp_type}/form`
+- `GET /configs/{comp_type}/full`
+- `GET /configs/job`
+- `GET/POST/PUT/DELETE /jobs/*`
+- `POST /execution/{job_id}`
+- `GET /contexts/`
+- `POST /contexts/credentials`
+- `POST /contexts/credentials-mapping-context`
 
-The ETL Core Engine is responsible for interpreting a structured configuration (in JSON format) and executing the described job directly, without generating Python code.
+Key contract guarantees:
 
-Key features include:
+- `GET /setup/capabilities` returns `contract_version`, environments, rule operators, data types, and setup-validation metadata.
+- `POST /setup/validate` accepts `{"key":"..."}` and returns `{"valid": bool}`.
+- `GET /configs/{comp_type}/form` includes mandatory `x-ui` and `x-class` metadata for dynamic Studio rendering.
+- Errors use a canonical envelope:
+  - `{"error": {"code": str, "message": str, "details": [], "context": {}}}`
 
-- Command-based execution of ETL steps
-- Support for various sources and sinks (CSV, SQL, etc.)
-- Component-level metrics and structured job tracking
-- Designed for integration with external UIs via JSON configuration
+Detailed spec: `docs/studio_core_contract.md`.
 
----
+## Local Start (macOS)
 
-## Project Structure
+```bash
+cd /Users/conradhofstede/Projects/UNI/SEP/ETL/etl-core
+mkdir -p data logs
+cp -n .env_demo .env
+PYTHONPATH=src /Users/conradhofstede/Projects/UNI/SEP/ETL/etl-core/.conda/bin/uvicorn etl_core.main:app --host 127.0.0.1 --port 8000 --reload
+```
 
-- **src/etl_core**
-  Contains the main interpreter logic, command implementations, component classes, and orchestration logic.
+Or helper:
 
-- **tests/**
-  Unit and integration tests covering all key engine behaviors.
+```bash
+cd /Users/conradhofstede/Projects/UNI/SEP/ETL/etl-core
+./scripts/demo/start_core.sh
+```
 
-- **docs/**
-  Documentation and configuration examples.
+OpenAPI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
----
+## Demo Stack Helpers
 
-## Getting Started
+In this repo:
 
-### Prerequisites
+- `scripts/demo/start_core.sh`
+- `scripts/demo/docker_up.sh`
+- `scripts/demo/docker_seed.sh`
+- `scripts/demo/create_three_jobs.sh`
+- `scripts/demo/verify_three_jobs.sh`
+- `scripts/demo/create_complex_story_job.sh`
+- `scripts/demo/verify_complex_story_job.sh`
+- `scripts/demo/docker_down.sh`
 
-- **Python 3.8+**
-- Install all required dependencies via [`requirements.txt`](requirements.txt)
+In Studio repo:
 
-### Development Setup
+- `/Users/conradhofstede/Projects/UNI/SEP/ETL/etl-studio/scripts/demo/start_studio.sh`
+- `/Users/conradhofstede/Projects/UNI/SEP/ETL/etl-studio/scripts/demo/prepare_setup_db.sh`
 
-1. **Clone the Repository:**
+Full walkthrough: `docs/mac_demo_runbook.md`.
 
-    ```bash
-    git clone https://github.com/bidiac-de/etl-core.git
-    cd etl-core
-    ```
+## Testing
 
-2. **Set Up Virtual Environment:**
+Run all core tests:
 
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-    ```
+```bash
+cd /Users/conradhofstede/Projects/UNI/SEP/ETL/etl-core
+PYTHONPATH=src /Users/conradhofstede/Projects/UNI/SEP/ETL/etl-core/.conda/bin/pytest -q
+```
 
-3. **Install Dependencies:**
+## Documentation
 
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4. **Install Python Module:**
-
-    ```bash
-    Pip install -e.
-    ```
-
-5. **Create .env**
-
-    ```plaintext
-    Create a `.env` file in the root, filling in values for the placeholder values found in:
-    etl-core/.env_example
-   ETL_COMPONENT_MODE excluding certain Components only used for testing
-   EXECUTION_ENV setting a default Environment for resolving the Components Context configurations
-    ```
-
-### Starting the Core
-- **Run the ETL Core Engine:**
-
-    The ETL Core Engine can be run using Uvicorn, which serves the FastAPI application.
-
-    ```bash
-    uvicorn etl_core.main:app --reload
-    ```
-
-    This command starts the ETL Core Engine in development mode, allowing for hot-reloading of code changes.
-
-### Scheduler Sync Configuration
-
-- The in-process scheduler refreshes persisted schedules every 30 seconds by default.
-- Set `ETL_SCHEDULES_SYNC_SECONDS` in your `.env` file or environment to change the cadence.
-- Use values like `off`, `false`, or `0` to disable the periodic sync entirely when external control is preferred.
-
-
-## Contributions
-
-Contributions are welcome! Please review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests. Your input is highly appreciated as we continuously work to enhance the ETL Core Engine.
-
----
+- `docs/documentation.md` (index + Nuclino page map)
+- `docs/studio_core_contract.md` (strict interlock contract)
+- `docs/mac_demo_runbook.md` (end-to-end local demo)
+- `docs/cli.md` (CLI reference)
+- `docs/postgresql_components.md`
+- `docs/mariadb_components.md`
+- `docs/sql_connection_handler.md`
+- `docs/filter_system.md`
 
 ## License
 
-This project is licensed under the [AGPL](LICENSE).
-
----
-
-Happy ETLing!
+AGPL. See `LICENSE`.

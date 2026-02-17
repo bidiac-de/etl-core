@@ -184,6 +184,11 @@ class MongoDBComponent(DatabaseComponent, ABC):
             except Exception:
                 pass
 
+    def prepare_for_execution(self, environment: Optional[str] = None) -> None:
+        super().prepare_for_execution(environment)
+        self.cleanup_after_execution(force=True)
+        self._setup_connection()
+
     @abstractmethod
     async def process_row(self, *args: Any, **kwargs: Any) -> dict:
         raise NotImplementedError

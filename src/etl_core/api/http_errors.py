@@ -52,7 +52,7 @@ def http_409(code: str, msg: str, **extra: Any) -> HTTPException:
 def http_422(code: str, msg: str, **extra: Any) -> HTTPException:
     """Create a 422 Unprocessable Entity HTTPException with structured detail."""
     return HTTPException(
-        status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_payload(code, msg, **extra)
+        status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_payload(code, msg, **extra)
     )
 
 

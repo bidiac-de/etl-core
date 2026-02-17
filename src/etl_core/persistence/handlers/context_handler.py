@@ -3,10 +3,15 @@ from __future__ import annotations
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlmodel import select
+
 from sqlalchemy.exc import IntegrityError
 
+from etl_core.context.context import Context
+from etl_core.context.context_parameter import ContextParameter
+from etl_core.context.environment import normalize_environment
 from etl_core.persistence.handlers.base_handler import BaseHandler
 from etl_core.persistence.table_definitions import (
+    ComponentTable,
     ContextParameterTable,
     ContextTable,
     ContextCredentialsMapTable,
@@ -149,12 +154,42 @@ class ContextHandler(BaseHandler):
         """Return all persisted contexts (no secrets)."""
         return self._list_all()
 
-    def get_by_id(
-        self, context_id: str
-    ) -> Optional[Tuple[CredentialsMappingContext, str]]:
+    def list_distinct_environments(self) -> List[str]:
+        """Return sorted unique environment values from all persisted contexts."""
+        with self._session() as s:
+            rows = s.exec(select(ContextTable.environment).distinct()).all()
+            envs = sorted(
+                {normalize_environment(r) for r in rows if r},
+            )
+            return envs
+
+    def _get_parameter_rows(self, context_id: str) -> List[ContextParameterTable]:
+        with self._session() as s:
+            return s.exec(
+                select(ContextParameterTable).where(
+                    ContextParameterTable.context_id == context_id
+                )
+            ).all()
+
+    def _context_parameters_map(self, context_id: str) -> Dict[str, ContextParameter]:
+        rows = self._get_parameter_rows(context_id)
+        params: Dict[str, ContextParameter] = {}
+        for row in rows:
+            param_id = row.id if row.id is not None else len(params) + 1
+            params[row.key] = ContextParameter(
+                id=int(param_id),
+                key=row.key,
+                value=row.value,
+                type="string",
+                is_secure=row.is_secure,
+            )
+        return params
+
+    def get_by_id(self, context_id: str) -> Optional[Tuple[Context, str]]:
         """
-        Return a hydrated CredentialsMappingContext and its id.
-        The mapping uses raw env values (e.g. "TEST") mapped to credentials ids.
+        Return a hydrated context object and its id.
+        If env->credentials mapping rows are present, returns
+        CredentialsMappingContext; otherwise returns Context with parameters.
         """
         with self._session() as s:
             row = s.exec(
@@ -164,14 +199,52 @@ class ContextHandler(BaseHandler):
                 return None
 
         env_to_creds = self.get_credentials_map(context_id)
+        env_value = normalize_environment(row.environment) if row.environment else "DEV"
 
-        ctx = CredentialsMappingContext(
-            id=context_id,
+        if env_to_creds:
+            ctx = CredentialsMappingContext(
+                name=row.name,
+                environment=env_value,
+                credentials_ids=env_to_creds,
+            )
+            from etl_core.persistence.handlers.credentials_handler import (
+                CredentialsHandler,
+            )
+
+            ctx.attach_credentials_repository(CredentialsHandler())
+            return ctx, context_id
+
+        ctx = Context(
             name=row.name,
-            environment=row.environment,
-            credentials_ids=env_to_creds,
+            environment=env_value,
+            parameters=self._context_parameters_map(context_id),
         )
+        from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
+
+        ctx.attach_credentials_repository(CredentialsHandler())
         return ctx, context_id
+
+    def find_component_context_references(
+        self, context_id: str
+    ) -> List[Dict[str, str]]:
+        """
+        Return component references that point to the given context id.
+        """
+        refs: List[Dict[str, str]] = []
+        with self._session() as s:
+            rows = s.exec(select(ComponentTable)).all()
+            for row in rows:
+                payload = row.payload if isinstance(row.payload, dict) else {}
+                if payload.get("context_id") != context_id:
+                    continue
+                refs.append(
+                    {
+                        "job_id": str(row.job_id),
+                        "component_id": str(row.id),
+                        "component_name": str(row.name),
+                    }
+                )
+        return refs
 
     def delete_by_id(self, context_id: str) -> bool:
         """

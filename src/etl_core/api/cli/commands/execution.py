@@ -5,7 +5,8 @@ from typing import Optional
 
 import typer
 
-from etl_core.context.environment import Environment
+
+from etl_core.context.environment import normalize_environment
 from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.api.cli.wiring import pick_clients
 
@@ -15,15 +16,15 @@ execution_app = typer.Typer(help="Start and control executions.")
 @execution_app.command("start")
 def start_execution(
     job_id: str,
-    environment: Optional[Environment] = typer.Option(
+    environment: Optional[str] = typer.Option(
         None,
-        case_sensitive=False,
-        help="Optional environment (e.g. TEST, DEV, PROD).",
+        help="Optional environment (e.g. TEST, DEV, PROD, or custom).",
     ),
 ) -> None:
     _, execs, _ = pick_clients()
+    env = normalize_environment(environment) if environment else None
     try:
-        info = execs.start(job_id, environment)
+        info = execs.start(job_id, env)
     except PersistNotFoundError:
         typer.echo(f"Job with ID {job_id} not found")
         raise typer.Exit(code=1)

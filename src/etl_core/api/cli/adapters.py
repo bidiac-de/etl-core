@@ -8,7 +8,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from etl_core.context.context import Context
 from etl_core.context.credentials import Credentials
 from etl_core.context.credentials_mapping_context import CredentialsMappingContext
-from etl_core.context.environment import Environment
+from etl_core.context.environment import normalize_environment
 from etl_core.context.secrets.secret_provider import SecretProvider
 from etl_core.context.secure_context_adapter import SecureContextAdapter
 from etl_core.context.secrets.secret_utils import create_secret_provider
@@ -63,17 +63,16 @@ class LocalExecutionClient(ExecutionPort):
         self.jobs = LocalJobsClient()
         self._records = _erh_singleton()
 
-    def start(
-        self, job_id: str, environment: Optional[Environment] = None
-    ) -> Dict[str, Any]:
+    def start(self, job_id: str, environment: Optional[str] = None) -> Dict[str, Any]:
         runtime_job = self.jobs.job_handler.load_runtime_job(job_id)
-        execution = self.exec_handler.execute_job(runtime_job, environment=environment)
+        env = normalize_environment(environment) if environment else None
+        execution = self.exec_handler.execute_job(runtime_job, environment=env)
         return {
             "job_id": job_id,
             "status": "started",
             "execution_id": execution.id,
             "max_attempts": execution.max_attempts,
-            "environment": environment.value if environment else None,
+            "environment": env,
         }
 
     def list_executions(
@@ -167,14 +166,14 @@ class LocalContextsClient(ContextsPort):
         self.ctx_handler.upsert(
             context_id=context_id,
             name=ctx.name,
-            environment=ctx.environment.value,
+            environment=ctx.environment,
             non_secure_params=non_secure,
             secure_param_keys=secure_keys,
         )
         return {
             "id": context_id,
             "kind": "context",
-            "environment": ctx.environment.value,
+            "environment": ctx.environment,
             "parameters_registered": len(secure_keys),
         }
 
@@ -221,13 +220,13 @@ class LocalContextsClient(ContextsPort):
         self.ctx_handler.upsert_credentials_mapping_context(
             context_id=context_id,
             name=cmc.name,
-            environment=cmc.environment.value,
+            environment=cmc.environment,
             mapping_env_to_credentials_id=mapping,
         )
         return {
             "id": context_id,
             "kind": "context",
-            "environment": cmc.environment.value,
+            "environment": cmc.environment,
             "parameters_registered": len(mapping),
         }
 
@@ -375,10 +374,8 @@ class RemoteJobsClient(_RestBase, JobsPort):
 
 
 class RemoteExecutionClient(_RestBase, ExecutionPort):
-    def start(
-        self, job_id: str, environment: Optional[Environment] = None
-    ) -> Dict[str, Any]:
-        body = {"environment": environment.value} if environment else None
+    def start(self, job_id: str, environment: Optional[str] = None) -> Dict[str, Any]:
+        body = {"environment": environment} if environment else None
         r = self.session.post(f"{self.base}/execution/{job_id}", json=body)
         self._raise_for_status(r)
         return r.json()

@@ -144,6 +144,7 @@ def test_get_component_schema_form_ok(app_client: TestClient, monkeypatch):
     assert payload["x-ui"]["context_selector"]["field"] is None
     assert payload["x-ui"]["rule_builder"]["field"] is None
     assert payload["x-ui"]["port_schema_editor"]["fields"] == []
+    assert payload["x-ui"]["dynamic_port_editor"]["fields"] == []
 
 
 def test_get_component_schema_form_404_when_hidden_in_production(

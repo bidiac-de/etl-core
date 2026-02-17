@@ -47,6 +47,19 @@ class DummyJobHandler:
         self.calls.delete += 1
 
 
+class DummyPersistedJobHandler(DummyJobHandler):
+    def __init__(self):
+        super().__init__()
+        self.calls.persisted = 0
+
+    def load_job_config(self, job_id: str):
+        self.calls.persisted += 1
+        return {"id": job_id, "name": "Persisted Job", "components": []}
+
+    def load_runtime_job(self, job_id: str):
+        raise RuntimeError("runtime path should not be used")
+
+
 def test_cached_job_list_and_invalidation(monkeypatch):
     handler = DummyJobHandler()
     handler._rows = [{"id": "a"}, {"id": "b"}]
@@ -81,6 +94,18 @@ def test_cached_job_successful_and_caches():
     before = handler.calls.load
     out2 = R._cached_job("j1", handler)
     assert out2 == out and handler.calls.load == before
+
+
+def test_cached_job_prefers_persisted_load_when_available():
+    handler = DummyPersistedJobHandler()
+    out = R._cached_job("jx", handler)
+    assert out["id"] == "jx"
+    assert out["name"] == "Persisted Job"
+    assert handler.calls.persisted == 1
+
+    out2 = R._cached_job("jx", handler)
+    assert out2 == out
+    assert handler.calls.persisted == 1
 
 
 def test_list_jobs_db_error_maps_to_http(monkeypatch):

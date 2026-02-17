@@ -224,12 +224,13 @@ class TestValidatorFunctions:
             ScheduleConfig._non_empty("")
 
     def test_context_validator(self):
-        """Test the _validate_context field validator."""
+        """Test the _validate_context field validator accepts any non-empty string."""
         assert ScheduleConfig._validate_context("dev") == "DEV"
         assert ScheduleConfig._validate_context("PROD") == "PROD"
+        assert ScheduleConfig._validate_context("staging") == "STAGING"
 
-        with pytest.raises(ValueError, match="context must be one of DEV/TEST/PROD"):
-            ScheduleConfig._validate_context("INVALID")
+        with pytest.raises(ValueError, match="context must be a non-empty string"):
+            ScheduleConfig._validate_context("")
 
 
 class TestSchedulePatchConfig:
@@ -265,10 +266,14 @@ class TestSchedulePatchConfig:
         assert "must be a non-empty string" in str(exc_info.value)
 
     def test_schedule_patch_config_context_validation(self):
-        """Test context validation in patch config."""
+        """Test context validation in patch config rejects empty strings."""
         with pytest.raises(ValidationError) as exc_info:
-            SchedulePatchConfig(context="INVALID")
-        assert "context must be one of DEV/TEST/PROD" in str(exc_info.value)
+            SchedulePatchConfig(context="")
+        assert "context must be a non-empty string" in str(exc_info.value)
+
+        # Custom environments are now accepted
+        config = SchedulePatchConfig(context="STAGING")
+        assert config.context == "STAGING"
 
 
 class TestTriggerTypes:

@@ -76,8 +76,7 @@ def test_remote_execution_start_with_environment_payload(
 
     client = adapters.RemoteExecutionClient("http://api")
     client._raise_for_status = lambda r: None  # type: ignore[method-assign]
-    env = SimpleNamespace(value="PROD")
-    out = client.start("jid-123", environment=env)  # type: ignore[arg-type]
+    out = client.start("jid-123", environment="PROD")
 
     assert out == {"status": "ok"}
     assert session.post.called
@@ -197,7 +196,6 @@ def test_local_execution_start_with_environment(
     monkeypatch.setattr(adapters, "_erh_singleton", lambda: records)
 
     client = adapters.LocalExecutionClient()
-    env = SimpleNamespace(value="TEST")
-    result = client.start("j1", environment=env)  # type: ignore[arg-type]
+    result = client.start("j1", environment="TEST")
     assert result["environment"] == "TEST"
     assert result["execution_id"] == "e1"

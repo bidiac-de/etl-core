@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import List, Literal
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
 from etl_core.components.data_operations.filter.comparison_rule import (
@@ -11,7 +11,13 @@ from etl_core.components.data_operations.filter.comparison_rule import (
     RULE_OPERATORS,
 )
 from etl_core.components.wiring.column_definition import DataType
-from etl_core.context.environment import Environment
+from etl_core.context.environment import (
+    DEFAULT_ENVIRONMENTS,
+    ENVIRONMENT_ICONS,
+    ENVIRONMENT_LABELS,
+)
+from etl_core.api.dependencies import get_context_handler
+from etl_core.persistence.handlers.context_handler import ContextHandler
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
@@ -19,16 +25,9 @@ CONTRACT_VERSION = "core-studio-v1"
 CORE_VERSION = "0.1.0"
 _SETUP_KEY_ENV = "ETL_SETUP_ACCESS_KEY"
 
-_ENV_LABELS = {
-    Environment.DEV: "Development",
-    Environment.TEST: "Test",
-    Environment.PROD: "Production",
-}
-_ENV_ICONS = {
-    Environment.DEV: "fa-solid fa-bug",
-    Environment.TEST: "fa-solid fa-flask-vial",
-    Environment.PROD: "fa-solid fa-shield",
-}
+# Default icon and label for environments not in the built-in map.
+_DEFAULT_ICON = "fa-solid fa-globe"
+_DEFAULT_LABEL_PREFIX = ""
 
 
 class SetupValidationConfig(BaseModel):
@@ -77,16 +76,42 @@ def _validation_config() -> SetupValidationConfig:
     return SetupValidationConfig(mode="shared_key", required=True)
 
 
-def _environment_capabilities() -> List[EnvironmentCapability]:
+def _environment_capabilities(
+    ctx_handler: ContextHandler,
+) -> List[EnvironmentCapability]:
+    """Return built-in environments merged with any custom ones from contexts."""
+    seen: set[str] = set()
     items: List[EnvironmentCapability] = []
-    for env in Environment:
+
+    # Built-in defaults first (preserves order).
+    for env_value in DEFAULT_ENVIRONMENTS:
+        seen.add(env_value)
         items.append(
             EnvironmentCapability(
-                value=env.value,
-                label=_ENV_LABELS[env],
-                icon=_ENV_ICONS[env],
+                value=env_value,
+                label=ENVIRONMENT_LABELS.get(env_value, env_value.title()),
+                icon=ENVIRONMENT_ICONS.get(env_value, _DEFAULT_ICON),
             )
         )
+
+    # Custom environments discovered from persisted contexts.
+    try:
+        context_envs = ctx_handler.list_distinct_environments()
+    except Exception:  # noqa: BLE001
+        context_envs = []
+
+    for env_value in context_envs:
+        if env_value in seen:
+            continue
+        seen.add(env_value)
+        items.append(
+            EnvironmentCapability(
+                value=env_value,
+                label=ENVIRONMENT_LABELS.get(env_value, env_value.title()),
+                icon=ENVIRONMENT_ICONS.get(env_value, _DEFAULT_ICON),
+            )
+        )
+
     return items
 
 
@@ -96,10 +121,12 @@ def _environment_capabilities() -> List[EnvironmentCapability]:
     status_code=status.HTTP_200_OK,
     summary="Get studio integration capabilities",
 )
-def setup_capabilities() -> SetupCapabilitiesResponse:
+def setup_capabilities(
+    ctx_handler: ContextHandler = Depends(get_context_handler),
+) -> SetupCapabilitiesResponse:
     return SetupCapabilitiesResponse(
         setup_validation=_validation_config(),
-        environments=_environment_capabilities(),
+        environments=_environment_capabilities(ctx_handler),
         rule_operators=list(RULE_OPERATORS),
         rule_logical_operators=list(RULE_LOGICAL_OPERATORS),
         data_types=[item.value for item in DataType],

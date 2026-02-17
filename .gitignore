@@ -274,3 +274,6 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux
 
 *.db*
+
+# Auto-generated demo port mapping
+scripts/demo/.demo_ports

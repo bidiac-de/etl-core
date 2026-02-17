@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Iterator, Tuple
 
 import pytest
@@ -14,6 +15,19 @@ from etl_core.persistence.handlers.execution_records_handler import (
 from etl_core.singletons import execution_records_handler
 from etl_core.api.routers import execution as execution_router
 from etl_core.api.dependencies import get_execution_handler
+
+
+def _wait_for_execution(client, exec_id, expected_status, timeout=30.0, interval=0.2):
+    """Poll until the execution reaches the expected status or timeout."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        r = client.get(f"/execution/executions/{exec_id}")
+        if r.status_code == 200:
+            body = r.json()
+            if body["execution"]["status"] == expected_status:
+                return body
+        time.sleep(interval)
+    return None
 
 
 def _cfg_success(schema_row_min: dict | None = None) -> JobConfig:
@@ -119,6 +133,12 @@ def test_endpoints_persist_success_and_list_filters(
     assert started["status"] == "started" and started["job_id"] == ok_id
     exec_id = started["execution_id"]
 
+    # Wait for background execution to complete
+    wait_res = _wait_for_execution(client, exec_id, "SUCCESS")
+    assert (
+        wait_res is not None
+    ), f"Timed out waiting for execution {exec_id} to reach SUCCESS"
+
     r = client.get("/execution/executions", params={"status": "SUCCESS"})
     assert r.status_code == 200
     payload = r.json()
@@ -153,6 +173,12 @@ def test_endpoints_persist_failure_and_404s(
     assert r.status_code == 200
     exec_id = r.json()["execution_id"]
 
+    # Wait for background execution to complete
+    wait_res = _wait_for_execution(client, exec_id, "FAILED")
+    assert (
+        wait_res is not None
+    ), f"Timed out waiting for execution {exec_id} to reach FAILED"
+
     r = client.get("/execution/executions", params={"status": "FAILED"})
     assert r.status_code == 200
     data = r.json()["data"]
@@ -185,6 +211,12 @@ def test_endpoints_persist_retry_then_success_and_time_filters(
     r = client.post(f"/execution/{job_id}")
     assert r.status_code == 200
     exec_id = r.json()["execution_id"]
+
+    # Wait for background execution to complete
+    wait_res = _wait_for_execution(client, exec_id, "SUCCESS")
+    assert (
+        wait_res is not None
+    ), f"Timed out waiting for execution {exec_id} to reach SUCCESS"
 
     r = client.get(
         "/execution/executions",

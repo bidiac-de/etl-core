@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from etl_core.context.credentials import Credentials
+from etl_core.context.credentials_mapping_context import CredentialsMappingContext
 from etl_core.context.environment import Environment
 from etl_core.job_execution.job_execution_handler import (
     ExecutionAlreadyRunning,
@@ -85,9 +87,9 @@ async def test_maybe_wait_before_retry_sleeps(monkeypatch):
 
 def test_normalize_environment_variants():
     handler = JobExecutionHandler()
-    assert handler._normalize_environment(Environment.DEV) == Environment.DEV
-    assert handler._normalize_environment("DEV") == Environment.DEV
-    assert handler._normalize_environment("invalid") is None
+    assert handler._normalize_environment(Environment.DEV) == "DEV"
+    assert handler._normalize_environment("DEV") == "DEV"
+    assert handler._normalize_environment("custom") == "CUSTOM"
     assert handler._normalize_environment(None) is None
 
 
@@ -104,20 +106,54 @@ def test_begin_execution_and_release_guard():
     )
 
     handler._exec_records_handler = DummyExecRecords()  # type: ignore[attr-defined]
-    execution = handler._begin_execution(job, None)
-    assert execution.job.id in handler._running_jobs
+    _ = handler._begin_execution(job, None)
+    assert (job.id, None) in handler._running_jobs
 
     with pytest.raises(ExecutionAlreadyRunning):
         handler._begin_execution(job, None)
 
-    handler._release_execution(job.id)
-    assert job.id not in handler._running_jobs
+    handler._release_execution(job.id, None)
+    assert (job.id, None) not in handler._running_jobs
     handler._exec_records_handler = SimpleNamespace(
         create_execution=lambda **_: None
     )  # type: ignore[attr-defined]
     execution2 = handler._begin_execution(job, None)
-    assert execution2.job.id in handler._running_jobs
-    handler._release_execution(job.id)
+    assert (execution2.job.id, None) in handler._running_jobs
+    handler._release_execution(job.id, None)
+
+
+def test_concurrent_different_environments():
+    """Same job can run in DEV and PROD simultaneously."""
+    handler = JobExecutionHandler()
+    handler._exec_records_handler = SimpleNamespace(
+        create_execution=lambda **_: None
+    )  # type: ignore[attr-defined]
+
+    job = RuntimeJob(
+        name="concurrent-job",
+        num_of_retries=0,
+        file_logging=False,
+        strategy_type="row",
+        components=[],
+        metadata={},
+    )
+
+    _ = handler._begin_execution(job, "DEV")
+    assert (job.id, "DEV") in handler._running_jobs
+
+    _ = handler._begin_execution(job, "PROD")
+    assert (job.id, "PROD") in handler._running_jobs
+
+    # Same job same env should still fail
+    with pytest.raises(ExecutionAlreadyRunning):
+        handler._begin_execution(job, "DEV")
+
+    handler._release_execution(job.id, "DEV")
+    assert (job.id, "DEV") not in handler._running_jobs
+    assert (job.id, "PROD") in handler._running_jobs
+
+    handler._release_execution(job.id, "PROD")
+    assert (job.id, "PROD") not in handler._running_jobs
 
 
 def test_cleanup_after_execution_calls_cleanup(monkeypatch):
@@ -145,6 +181,57 @@ def test_cleanup_after_execution_calls_cleanup(monkeypatch):
     )
     handler._cleanup_after_execution(execution)
     assert called == {"c1": True, "c2": True}
+
+
+def test_prepare_components_resolves_ctx_templates_and_calls_prepare(monkeypatch):
+    class DummyRepo:
+        def get_by_id(self, credentials_id: str):
+            if credentials_id != "cred-prod":
+                return None
+            return (
+                Credentials(
+                    name="prod",
+                    user="prod_user",
+                    host="h",
+                    port=5432,
+                    database="d",
+                    password="pw",
+                ),
+                credentials_id,
+            )
+
+    class DummyComp:
+        model_fields = {"context_id": None, "value": None}
+
+        def __init__(self) -> None:
+            self.name = "dummy"
+            self.context_id = "ctx-1"
+            self.value = "${ctx.user}"
+            self._ctx = CredentialsMappingContext(
+                name="mapping",
+                environment=Environment.DEV,
+                credentials_ids={"PROD": "cred-prod"},
+            )
+            self.prepared: list[Environment | None] = []
+
+        def get_resolved_context(self):
+            return self._ctx
+
+        def prepare_for_execution(self, environment: Environment | None) -> None:
+            self.prepared.append(environment)
+
+    monkeypatch.setattr(
+        "etl_core.singletons.credentials_handler",
+        lambda: DummyRepo(),
+    )
+
+    handler = JobExecutionHandler()
+    comp = DummyComp()
+    job = SimpleNamespace(components=[comp])
+    handler._prepare_comps_for_execution(job, Environment.PROD)
+
+    assert comp.value == "prod_user"
+    assert comp.prepared == [Environment.PROD]
 
 
 @pytest.mark.asyncio
@@ -182,6 +269,7 @@ async def test_broadcast_and_worker_cancel():
         pass
 
     execution = SimpleNamespace(
+        id="exec-test",
         latest_attempt=lambda: SimpleNamespace(current_tasks={}),
         sentinels={comp.id: Sentinel()},
     )

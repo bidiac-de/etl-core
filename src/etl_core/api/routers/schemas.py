@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from threading import RLock
 from typing import Any, Dict, List, Tuple, Type, Optional
 
@@ -194,6 +195,7 @@ def _attach_ui_hints(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str, 
     port_schema_fields = [
         key for key in ("out_port_schemas", "in_port_schemas") if key in fields
     ]
+    dynamic_port_fields = _dynamic_port_form_fields(cls)
 
     enriched = dict(schema)
     enriched["x-ui"] = {
@@ -210,8 +212,70 @@ def _attach_ui_hints(schema: Dict[str, Any], cls: Type[Component]) -> Dict[str, 
             "fields": port_schema_fields,
             "widget": "port-schema-editor",
         },
+        "dynamic_port_editor": {
+            "fields": dynamic_port_fields,
+            "widget": "dynamic-port-editor",
+        },
     }
     return enriched
+
+
+def _dynamic_port_form_fields(cls: Type[Component]) -> List[str]:
+    """
+    Select dynamic port fields that should be editable in form schemas.
+
+    Rules:
+      - expose extra_output_ports only if no static output ports exist
+      - expose extra_input_ports only if no static input ports exist and the
+        component is not declared as ALLOW_NO_INPUTS root component
+    """
+    fields = getattr(cls, "model_fields", {}) or {}
+    class_meta = _class_vars_payload(cls)
+    input_port_names = class_meta.get("input_port_names") or []
+    output_port_names = class_meta.get("output_port_names") or []
+    allow_no_inputs = bool(class_meta.get("allow_no_inputs"))
+
+    dynamic_fields: List[str] = []
+    if "extra_output_ports" in fields and not output_port_names:
+        dynamic_fields.append("extra_output_ports")
+    if "extra_input_ports" in fields and not input_port_names and not allow_no_inputs:
+        dynamic_fields.append("extra_input_ports")
+    return dynamic_fields
+
+
+def _restore_selected_hidden_fields(
+    *,
+    filtered_schema: Dict[str, Any],
+    full_schema: Dict[str, Any],
+    field_names: List[str],
+) -> Dict[str, Any]:
+    """
+    Add a selected subset of hidden fields back into form schema properties.
+    """
+    if not field_names:
+        return filtered_schema
+
+    filtered_props = filtered_schema.get("properties")
+    full_props = full_schema.get("properties")
+    if not isinstance(filtered_props, dict) or not isinstance(full_props, dict):
+        return filtered_schema
+
+    for field_name in field_names:
+        if field_name in full_props and field_name not in filtered_props:
+            filtered_props[field_name] = full_props[field_name]
+
+    filtered_required = filtered_schema.get("required")
+    full_required = full_schema.get("required")
+    if isinstance(full_required, list):
+        merged_required = (
+            list(filtered_required) if isinstance(filtered_required, list) else []
+        )
+        for field_name in field_names:
+            if field_name in full_required and field_name not in merged_required:
+                merged_required.append(field_name)
+        filtered_schema["required"] = merged_required
+
+    return filtered_schema
 
 
 def _inject_name_default(
@@ -306,8 +370,15 @@ def _cached_component_schema_form(comp_type: str) -> Dict[str, Any]:
 
     cls = _resolve_component_class(comp_type)
     full = cls.model_json_schema()
+    full_for_restore = deepcopy(full)
     hidden = _hidden_fields_for_class(cls)
     filtered = _strip_hidden(full, hidden)
+    dynamic_port_fields = _dynamic_port_form_fields(cls)
+    filtered = _restore_selected_hidden_fields(
+        filtered_schema=filtered,
+        full_schema=full_for_restore,
+        field_names=dynamic_port_fields,
+    )
     ordered = _apply_field_ordering(filtered, cls)
     enriched = _attach_class_vars(ordered, cls)
     enriched["comp-type"] = comp_type  # convenience for GUI
@@ -401,7 +472,7 @@ def get_job_schema() -> Dict[str, Any]:
         return schema_post_processing(raw)
     except ValidationError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_error_payload(
                 "SCHEMA_JOB_INVALID",
                 "JobBase schema validation failed.",
@@ -450,7 +521,7 @@ def get_component_schema(comp_type: str) -> Dict[str, Any]:
         raise
     except ValidationError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_error_payload(
                 "SCHEMA_COMPONENT_INVALID",
                 f"Component {comp_type!r} schema validation failed.",
@@ -482,7 +553,7 @@ def get_component_schema_full(comp_type: str) -> Dict[str, Any]:
         raise
     except ValidationError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_error_payload(
                 "SCHEMA_COMPONENT_FULL_INVALID",
                 f"Full component {comp_type!r} schema validation failed.",
@@ -514,7 +585,7 @@ def get_component_schema_hidden(comp_type: str) -> Dict[str, Any]:
         raise
     except ValidationError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_error_payload(
                 "SCHEMA_COMPONENT_HIDDEN_INVALID",
                 f"Hidden-only component {comp_type!r} schema validation failed.",

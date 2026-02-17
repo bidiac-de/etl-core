@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import dask.dataframe as dd
@@ -95,6 +95,11 @@ class SQLDatabaseComponent(DatabaseComponent, ABC):
             self._log.warning(
                 "%s: Could not set SQL session variables.", self.name, exc_info=True
             )
+
+    def prepare_for_execution(self, environment: Optional[str] = None) -> None:
+        super().prepare_for_execution(environment)
+        self.cleanup_after_execution(force=True)
+        self._setup_connection()
 
     @abstractmethod
     def _apply_session_variables(self, conn: Any) -> None:

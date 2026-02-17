@@ -101,6 +101,7 @@ class LoggingHandler:
     _base_log_dir: Path
     _job_name: str
     _logger: logging.Logger
+    _current_log_path: Optional[Path]
 
     def __init__(
         self,
@@ -117,6 +118,7 @@ class LoggingHandler:
         self._logger = logging.getLogger(f"job.{job_name}")
         self._logger.setLevel(logging.DEBUG)
         self._handler_configured = False
+        self._current_log_path = None
 
     def _ensure_configured(self) -> None:
         if not self._handler_configured:
@@ -142,6 +144,7 @@ class LoggingHandler:
 
         self._logger.addHandler(fh)
         self._handler_configured = True
+        self._current_log_path = log_path
 
     def log(self, information) -> None:
         """
@@ -173,6 +176,10 @@ class LoggingHandler:
     @property
     def job_name(self) -> str:
         return self._job_name
+
+    @property
+    def current_log_path(self) -> Optional[Path]:
+        return self._current_log_path
 
     @property
     def logger(self) -> logging.Logger:

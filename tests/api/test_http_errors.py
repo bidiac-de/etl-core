@@ -80,7 +80,7 @@ class TestHttpExceptions:
         exc = http_422("VALIDATION_ERROR", "Invalid input data")
 
         assert isinstance(exc, HTTPException)
-        assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert exc.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert exc.detail == {
             "code": "VALIDATION_ERROR",
             "message": "Invalid input data",
@@ -93,7 +93,7 @@ class TestHttpExceptions:
         )
 
         assert isinstance(exc, HTTPException)
-        assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert exc.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert exc.detail == {
             "code": "VALIDATION_ERROR",
             "message": "Invalid input",

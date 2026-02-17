@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from etl_core.context.environment import Environment
+
 from etl_core.persistence.errors import PersistNotFoundError
 from etl_core.api.cli.cli_app import app
 from contextlib import contextmanager
@@ -25,15 +25,13 @@ class _FakeExecClient:
         self.last_list_kwargs: Dict[str, Any] = {}
         self.started: List[Dict[str, Any]] = []
 
-    def start(
-        self, job_id: str, environment: Optional[Environment] = None
-    ) -> Dict[str, Any]:
+    def start(self, job_id: str, environment: Optional[str] = None) -> Dict[str, Any]:
         payload = {
             "job_id": job_id,
             "status": "started",
             "execution_id": "exec-ok-1",
             "max_attempts": 1,
-            "environment": environment.value if environment else None,
+            "environment": environment,
         }
         self.started.append(payload)
         return payload

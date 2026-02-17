@@ -15,9 +15,12 @@ from starlette.config import Config
 
 from fastapi.middleware.cors import CORSMiddleware
 from .api.helpers import autodiscover_components
+from .api.error_mapper import canonical_error_payload
 from .api.routers import contexts, execution, jobs, schedules, schemas, setup
 from .components.component_registry import RegistryMode, set_registry_mode
 from .components.databases.pool_registry import ConnectionPoolRegistry
+from .errors import ETLCoreError
+from .context.secrets.secret_utils import validate_secret_backend_configuration
 from .logger.logging_setup import setup_logging
 from .scheduling.scheduler_service import SchedulerService
 from etl_core.persistence.db import ensure_schema
@@ -118,6 +121,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     )
 
+    app.state.startup_block_error = None
+    try:
+        validate_secret_backend_configuration()
+    except Exception as exc:  # noqa: BLE001
+        _LOG.exception("Secret backend validation failed during startup")
+        app.state.startup_block_error = {
+            "code": "SECRET_BACKEND_UNAVAILABLE",
+            "message": "Secret backend is unavailable or misconfigured.",
+            "context": {"type": exc.__class__.__name__},
+        }
+
     ensure_schema()
 
     set_registry_mode(_resolve_registry_mode())
@@ -186,6 +200,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(lifespan=lifespan)
 
 
+@app.middleware("http")
+async def startup_block_middleware(request, call_next):
+    startup_error = getattr(request.app.state, "startup_block_error", None)
+    if isinstance(startup_error, dict):
+        return JSONResponse(
+            status_code=500,
+            content=_canonical_error(
+                str(startup_error.get("code") or "STARTUP_BLOCKED"),
+                str(startup_error.get("message") or "Startup validation failed."),
+                context=(
+                    startup_error.get("context")
+                    if isinstance(startup_error.get("context"), dict)
+                    else {}
+                ),
+            ),
+        )
+    return await call_next(request)
+
+
 def _canonical_error(
     code: str,
     message: str,
@@ -193,14 +226,12 @@ def _canonical_error(
     details: Optional[List[Dict[str, Any]]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return {
-        "error": {
-            "code": code,
-            "message": message,
-            "details": details or [],
-            "context": context or {},
-        }
-    }
+    return canonical_error_payload(
+        code,
+        message,
+        details=details,
+        context=context,
+    )
 
 
 def _sanitize_validation_errors(
@@ -263,6 +294,19 @@ async def request_validation_exception_handler(
             "VALIDATION_ERROR",
             "Request validation failed.",
             details=_sanitize_validation_errors(exc.errors()),
+        ),
+    )
+
+
+@app.exception_handler(ETLCoreError)
+async def etl_core_exception_handler(_request, exc: ETLCoreError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.http_status,
+        content=_canonical_error(
+            exc.code,
+            exc.message,
+            details=exc.details,
+            context=exc.context,
         ),
     )
 

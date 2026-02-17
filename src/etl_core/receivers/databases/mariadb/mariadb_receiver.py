@@ -36,6 +36,7 @@ class MariaDBReceiver(SQLReceiver):
                 return [dict(row._mapping) for row in result]
 
         rows = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += len(rows)
         for row in rows:
             yield row
 
@@ -57,7 +58,9 @@ class MariaDBReceiver(SQLReceiver):
                 result = conn.execute(text(query), params)
                 return pd.DataFrame([dict(row._mapping) for row in result])
 
-        return await asyncio.to_thread(_execute_query)
+        df = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += len(df)
+        return df
 
     async def read_bigdata(
         self,
@@ -78,7 +81,23 @@ class MariaDBReceiver(SQLReceiver):
                 df = pd.DataFrame([dict(row._mapping) for row in result])
                 return dd.from_pandas(df, npartitions=1)
 
-        return await asyncio.to_thread(_execute_query)
+        ddf = await asyncio.to_thread(_execute_query)
+        # For BigData, we might not want to compute length as it triggers computation
+        # But FilterReceiver does it with try-except. Let's follow that pattern if possible,
+        # or at least count partitions?
+        # The FilterReceiver creates a dask graph.
+        # Here we are returning a dask dataframe.
+        # Computing length of ddf might be expensive but required for metrics?
+        # Let's try to be consistent with FilterReceiver but maybe safer.
+        # Actually, reading *all* data into memory to count it defeats the purpose of BigData if we aren't careful.
+        # But _execute_query above already reads it into pandas and converts to dask (npartitions=1).
+        # So it IS in memory anyway in this implementation (which seems like a known limitation/choice in this receiver).
+        # So we can safely count it.
+        try:
+            metrics.lines_received += len(ddf)
+        except Exception:
+            pass
+        return ddf
 
     async def write_row(
         self,
@@ -99,7 +118,10 @@ class MariaDBReceiver(SQLReceiver):
                 conn.commit()
                 return {"affected_rows": result.rowcount, "row": row}
 
-        return await asyncio.to_thread(_execute_query)
+        result = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += 1
+        metrics.lines_forwarded += result["affected_rows"]
+        return result
 
     async def write_bulk(
         self,
@@ -124,7 +146,11 @@ class MariaDBReceiver(SQLReceiver):
                 conn.commit()
                 return frame
 
-        return await asyncio.to_thread(_execute_query)
+        result = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += len(frame)
+        # assuming all succeeded if no error raised
+        metrics.lines_forwarded += len(frame)
+        return result
 
     async def write_bigdata(
         self,
@@ -149,4 +175,11 @@ class MariaDBReceiver(SQLReceiver):
                 conn.commit()
                 return frame
 
-        return await asyncio.to_thread(_execute_query)
+        result = await asyncio.to_thread(_execute_query)
+        try:
+            count = len(result)
+            metrics.lines_received += count
+            metrics.lines_forwarded += count
+        except Exception:
+            pass
+        return result

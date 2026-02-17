@@ -35,12 +35,12 @@ class DummyMapping:
         self._cid = cid
         self.called = False
 
-    def resolve_active_credentials(self) -> tuple[DummyCreds, str]:
+    def resolve_active_credentials(self, override_env=None) -> tuple[DummyCreds, str]:
         self.called = True
         return self._creds, self._cid
 
 
-class TestableDB(db.DatabaseComponent):
+class StubDB(db.DatabaseComponent):
     ALLOW_NO_INPUTS = True
     CTX: Any = None
 
@@ -57,12 +57,12 @@ class TestableDB(db.DatabaseComponent):
         return dd.from_pandas(pd.DataFrame([{"x": 1}]), npartitions=1)
 
 
-def _new_db(cls: type[TestableDB], name: str) -> TestableDB:
+def _new_db(cls: type[StubDB], name: str) -> StubDB:
     return cls(name=name, description="t", comp_type="db_test")
 
 
 def test_build_objects_with_none_context() -> None:
-    class NoCtx(TestableDB):
+    class NoCtx(StubDB):
         pass
 
     NoCtx.CTX = None
@@ -74,11 +74,11 @@ def test_build_objects_with_none_context() -> None:
 
 
 def test_build_objects_with_wrong_context_type() -> None:
-    class WrongCtx(TestableDB):
+    class WrongCtx(StubDB):
         pass
 
     WrongCtx.CTX = "not-a-mapping"
-    with pytest.raises(TypeError) as ei:
+    with pytest.raises(ValidationError) as ei:
         _new_db(WrongCtx, "x")
     assert "context must be a CredentialsMappingContext" in str(ei.value)
 
@@ -86,7 +86,7 @@ def test_build_objects_with_wrong_context_type() -> None:
 def test_build_objects_and_get_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(db, "CredentialsMappingContext", DummyMapping, raising=True)
 
-    class GoodCtx(TestableDB):
+    class GoodCtx(StubDB):
         pass
 
     mapping = DummyMapping()
@@ -115,7 +115,7 @@ def test_get_credentials_resolves_when_cache_empty(
 ) -> None:
     monkeypatch.setattr(db, "CredentialsMappingContext", DummyMapping, raising=True)
 
-    class GoodCtx(TestableDB):
+    class GoodCtx(StubDB):
         pass
 
     mapping = DummyMapping()

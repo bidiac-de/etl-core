@@ -119,14 +119,21 @@ def _cached_job(job_id: str, job_handler: JobHandler) -> Dict[str, Any]:
 
     # Compute outside of lock to reduce contention
     try:
-        job = job_handler.load_runtime_job(job_id)
+        if hasattr(job_handler, "load_job_config"):
+            payload = job_handler.load_job_config(job_id)
+        else:
+            job = job_handler.load_runtime_job(job_id)
+            payload = _job_to_payload(job, job_id)
     except PersistNotFoundError as exc:
         raise http_404("JOB_NOT_FOUND", str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise http_500("DB_ERROR", "Failed to load job.") from exc
-
-    # Robust payload construction
-    payload = _job_to_payload(job, job_id)
+        raise http_500_exc(
+            "JOB_LOAD_FAILED",
+            "Failed to load job.",
+            exc,
+            job_id=job_id,
+            endpoint="/jobs/{job_id}",
+        ) from exc
 
     with _CACHE_LOCK:
         _JOB_BY_ID_CACHE[job_id] = payload
@@ -143,7 +150,19 @@ def _cached_job_list(job_handler: JobHandler) -> List[Dict[str, Any]]:
     try:
         rows = job_handler.list_jobs_brief()
     except SQLAlchemyError as exc:
-        raise http_500_exc("DB_ERROR", "Failed to list jobs.", exc) from exc
+        raise http_500_exc(
+            "JOB_LIST_DB_ERROR",
+            "Failed to list jobs.",
+            exc,
+            endpoint="/jobs/",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise http_500_exc(
+            "JOB_LIST_FAILED",
+            "Failed to list jobs.",
+            exc,
+            endpoint="/jobs/",
+        ) from exc
 
     # write back under lock after computing and return a copy
     with _CACHE_LOCK:
@@ -289,3 +308,17 @@ def list_jobs(
 ) -> List[Dict]:
     # Cached listing
     return _cached_job_list(job_handler)
+
+
+@router.post(
+    "/cache/invalidate",
+    response_model=Dict,
+    summary="Invalidate job caches",
+    description=(
+        "Flush all in-memory job caches so the next request re-reads from "
+        "the database. Useful after a manual DB reset."
+    ),
+)
+def invalidate_caches() -> Dict[str, str]:
+    invalidate_job_caches()
+    return {"message": "Job caches invalidated"}

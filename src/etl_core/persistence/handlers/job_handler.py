@@ -133,22 +133,73 @@ class JobHandler(BaseHandler):
 
     def list_jobs_brief(self) -> List[Dict[str, Any]]:
         with self._session() as session:
-            stmt = select(JobTable).options(
-                selectinload(JobTable.metadata_),
-                selectinload(JobTable.components).selectinload(ComponentTable.layout),
-                selectinload(JobTable.components).selectinload(
-                    ComponentTable.metadata_
-                ),
-            )
+            stmt = select(JobTable).options(selectinload(JobTable.metadata_))
             records = session.exec(stmt).all()
 
             result: List[Dict[str, Any]] = []
             for rec in records:
-                job = self._build_runtime_from_record(rec)
-                data = job.model_dump(exclude={"components"})
-                data["id"] = job.id
+                strategy = (
+                    rec.strategy_type.value
+                    if hasattr(rec.strategy_type, "value")
+                    else rec.strategy_type
+                )
+                data: Dict[str, Any] = {
+                    "id": rec.id,
+                    "name": rec.name,
+                    "num_of_retries": rec.num_of_retries,
+                    "file_logging": rec.file_logging,
+                    "strategy_type": strategy,
+                    "metadata_": (
+                        self.dc.dump_metadata(rec.metadata_)
+                        if rec.metadata_ is not None
+                        else {}
+                    ),
+                }
                 result.append(data)
             return result
+
+    def load_job_config(self, job_id: str) -> Dict[str, Any]:
+        """
+        Load a persisted job as API-friendly JSON without instantiating
+        runtime component classes.
+        """
+        with self._session() as session:
+            stmt = (
+                select(JobTable)
+                .where(JobTable.id == job_id)
+                .options(
+                    selectinload(JobTable.metadata_),
+                    selectinload(JobTable.components).selectinload(
+                        ComponentTable.layout
+                    ),
+                    selectinload(JobTable.components).selectinload(
+                        ComponentTable.metadata_
+                    ),
+                    selectinload(JobTable.components)
+                    .selectinload(ComponentTable.outgoing_links)
+                    .selectinload(ComponentLinkTable.dst_component),
+                )
+            )
+            rec = session.exec(stmt).first()
+            if rec is None:
+                raise PersistNotFoundError(f"Job with id {job_id!r} not found")
+
+            strategy = (
+                rec.strategy_type.value
+                if hasattr(rec.strategy_type, "value")
+                else rec.strategy_type
+            )
+            return {
+                "id": rec.id,
+                "name": rec.name,
+                "num_of_retries": rec.num_of_retries,
+                "file_logging": rec.file_logging,
+                "strategy_type": strategy,
+                "metadata_": (
+                    self.dc.dump_metadata(rec.metadata_) if rec.metadata_ else {}
+                ),
+                "components": self.ch.dump_configs_for_all(rec),
+            }
 
     def delete(self, job_id: str) -> None:
         with self._session() as session:

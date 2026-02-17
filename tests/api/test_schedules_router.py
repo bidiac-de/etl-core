@@ -13,7 +13,7 @@ class FakeRow:
         self.job_id = "j"
         self.environment = "DEV"
         self.trigger_type = "cron"  # type: ignore[assignment]
-        self.trigger_args = {"cron": "* * * * *"}
+        self.trigger_args = {"minute": "*/5"}
         self.is_paused = False
 
 
@@ -53,6 +53,7 @@ class FakeCmd:
 def test_create_update_delete_pause_resume(monkeypatch):
     monkeypatch.setattr(S, "CreateScheduleCommand", lambda **kw: FakeCmd(**kw))
     monkeypatch.setattr(S, "UpdateScheduleCommand", lambda **kw: FakeCmd(**kw))
+    monkeypatch.setattr(S, "GetScheduleCommand", lambda **kw: FakeCmd(**kw))
     monkeypatch.setattr(
         S,
         "DeleteScheduleCommand",
@@ -71,7 +72,7 @@ def test_create_update_delete_pause_resume(monkeypatch):
             job_id="j",
             environment="DEV",
             trigger_type="cron",
-            trigger_args={},
+            trigger_args={"minute": "*/5"},
         )
     )  # type: ignore[arg-type]
     assert new_id == "X"
@@ -87,3 +88,28 @@ def test_create_update_delete_pause_resume(monkeypatch):
 
     resumed = S.resume_schedule("Z")
     assert resumed.id == "X"
+
+
+def test_create_schedule_invalid_trigger_args_returns_400():
+    with pytest.raises(HTTPException) as ei:
+        S.create_schedule(
+            S.ScheduleIn(
+                name="n",
+                job_id="j",
+                environment="DEV",
+                trigger_type="cron",
+                trigger_args={},
+            )
+        )  # type: ignore[arg-type]
+    assert ei.value.status_code == 400
+    assert ei.value.detail.get("code") == "SCHEDULE_INVALID_TRIGGER_ARGS"
+
+
+def test_update_schedule_invalid_patch_returns_400(monkeypatch):
+    monkeypatch.setattr(S, "GetScheduleCommand", lambda **kw: FakeCmd(**kw))
+    monkeypatch.setattr(S, "UpdateScheduleCommand", lambda **kw: FakeCmd(**kw))
+
+    with pytest.raises(HTTPException) as ei:
+        S.update_schedule("Z", S.SchedulePatch(trigger_args={"unknown": "value"}))
+    assert ei.value.status_code == 400
+    assert ei.value.detail.get("code") == "SCHEDULE_INVALID_PATCH"

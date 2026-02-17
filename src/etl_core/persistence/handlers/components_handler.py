@@ -269,3 +269,45 @@ class ComponentHandler:
             object.__setattr__(obj, "_id", ct.id)
             comps.append(obj)
         return comps
+
+    def dump_configs_for_all(self, job_record: JobTable) -> List[Dict[str, Any]]:
+        """
+        Serialize persisted components back to config-like dicts without
+        instantiating runtime component classes.
+        """
+        result: List[Dict[str, Any]] = []
+        id_to_name: Dict[str, str] = {ct.id: ct.name for ct in job_record.components}
+
+        for ct in job_record.components:
+            data: Dict[str, Any] = {
+                "id": ct.id,
+                "name": ct.name,
+                "description": ct.description,
+                "comp_type": ct.comp_type,
+                "layout": self.dc.dump_layout(ct.layout) if ct.layout else {},
+                "metadata_": (
+                    self.dc.dump_metadata(ct.metadata_) if ct.metadata_ else {}
+                ),
+            }
+            if isinstance(ct.payload, dict):
+                data.update(ct.payload)
+
+            routes: Dict[str, List[Dict[str, Any]]] = {}
+            for link in sorted(
+                ct.outgoing_links or [],
+                key=lambda lin: (lin.src_out_port, lin.position),
+            ):
+                to_name = id_to_name.get(link.dst_component_id)
+                if not to_name:
+                    continue
+                edge: Dict[str, Any] = {"to": to_name}
+                if link.dst_in_port:
+                    edge["in_port"] = link.dst_in_port
+                routes.setdefault(link.src_out_port, []).append(edge)
+
+            if routes:
+                data["routes"] = routes
+
+            result.append(data)
+
+        return result

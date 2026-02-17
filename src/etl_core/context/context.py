@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from etl_core.context.context_provider import IContextProvider
 from etl_core.context.context_parameter import ContextParameter
-from etl_core.context.environment import Environment
+from etl_core.context.environment import normalize_environment
 from etl_core.context.credentials import Credentials
 from etl_core.persistence.handlers.credentials_handler import CredentialsHandler
 
@@ -17,6 +17,10 @@ class Context(BaseModel, IContextProvider):
       - `parameters` can be passed as a list or as a dict keyed by `key`
       - `get_parameter(key)` returns the parameter's value
       - `set_parameter(key, value)` updates an existing parameter
+
+    The ``environment`` field accepts an ``Environment`` enum member **or**
+    any non-empty string (e.g. ``"STAGING"``, ``"UAT"``).  It is always
+    stored as an uppercase string.
     """
 
     model_config = ConfigDict(
@@ -25,7 +29,7 @@ class Context(BaseModel, IContextProvider):
     )
 
     name: str
-    environment: Environment
+    environment: str
     parameters: Dict[str, ContextParameter] = Field(default_factory=dict)
 
     _credentials: Dict[str, Credentials] = {}
@@ -35,9 +39,17 @@ class Context(BaseModel, IContextProvider):
     @classmethod
     def _normalize_params(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Allow `parameters` to be provided as a list[ContextParameter] and turn it
-        into a dict keyed by `key` (matching the old constructor semantics).
+        - Normalise ``environment`` to an uppercase string (accepts
+          ``Environment`` enum or plain str).
+        - Allow ``parameters`` to be provided as a list[ContextParameter]
+          and turn it into a dict keyed by ``key``.
         """
+        # --- environment ---
+        env = values.get("environment")
+        if env is not None:
+            values["environment"] = normalize_environment(env)
+
+        # --- parameters ---
         params = values.get("parameters")
         if params is None:
             return values

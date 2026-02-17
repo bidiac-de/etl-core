@@ -193,7 +193,7 @@ def test_get_by_id_found_and_none(handler: ch.ContextHandler) -> None:
     assert returned_id == existing_id
     assert isinstance(ctx, CredentialsMappingContext)
     assert ctx.name == "ctx-x"
-    assert ctx.environment.value == "PROD"
+    assert str(ctx.environment) == "PROD"
     assert ctx.credentials_ids == {"PROD": "cred-prod"}
 
     assert handler.get_by_id(str(uuid4())) is None

@@ -12,7 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from etl_core.context.environment import Environment
+from etl_core.context.environment import normalize_environment
 from etl_core.persistence.table_definitions import TriggerType
 
 
@@ -65,14 +65,7 @@ class ScheduleConfig(BaseModel):
     def _validate_context(cls, v: Any) -> str:
         if not _is_non_empty_string(v):
             raise ValueError("context must be a non-empty string")
-        val = str(v).strip().upper()
-        try:
-            Environment(val)
-        except Exception as e:
-            raise ValueError(
-                f"context must be one of DEV/TEST/PROD; got {val!r}"
-            ) from e
-        return val
+        return normalize_environment(v)
 
     @staticmethod
     def _validate_interval(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -210,14 +203,7 @@ class SchedulePatchConfig(BaseModel):
             return v
         if not _is_non_empty_string(v):
             raise ValueError("context must be a non-empty string")
-        val = str(v).strip().upper()
-        try:
-            Environment(val)
-        except Exception as e:
-            raise ValueError(
-                f"context must be one of DEV/TEST/PROD; got {val!r}"
-            ) from e
-        return val
+        return normalize_environment(v)
 
     @model_validator(mode="after")
     def _maybe_validate_trigger(self) -> "SchedulePatchConfig":
@@ -226,7 +212,7 @@ class SchedulePatchConfig(BaseModel):
                 ScheduleConfig(
                     name=self.name or "_placeholder_",
                     job_id=self.job_id or "_placeholder_",
-                    context=self.context or Environment.DEV.value,
+                    context=self.context or "DEV",
                     trigger_type=self.trigger_type,
                     trigger_args=self.trigger_args,
                     paused=self.paused or False,

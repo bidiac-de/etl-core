@@ -242,6 +242,56 @@ def _coerce_select_for_enum(obj: Dict[str, Any]) -> None:
         obj["type"] = "select"
 
 
+def _nullable_union_branch(
+    obj: Dict[str, Any], union_key: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Return the non-null branch for a simple nullable union if and only if:
+      - union_key exists as list with exactly 2 items
+      - one branch has type='null'
+      - the other branch is an object schema dict
+    Otherwise return None.
+    """
+    union = obj.get(union_key)
+    if not isinstance(union, list) or len(union) != 2:
+        return None
+
+    non_null_branch: Optional[Dict[str, Any]] = None
+    has_null = False
+    for branch in union:
+        if isinstance(branch, dict) and branch.get("type") == "null":
+            has_null = True
+            continue
+        if isinstance(branch, dict) and non_null_branch is None:
+            non_null_branch = branch
+            continue
+        return None
+
+    if has_null and non_null_branch is not None:
+        return non_null_branch
+    return None
+
+
+def _normalize_simple_nullable_union(obj: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize simple nullable anyOf/oneOf unions into a concrete schema type
+    plus nullable=True, preserving parent siblings as higher priority.
+    """
+    for union_key in ("anyOf", "oneOf"):
+        branch = _nullable_union_branch(obj, union_key)
+        if branch is None:
+            continue
+
+        normalized = dict(branch)
+        for key, value in obj.items():
+            if key == union_key:
+                continue
+            normalized[key] = value
+        normalized["nullable"] = True
+        return normalized
+    return obj
+
+
 def _properties_to_array(obj: Dict[str, Any]) -> None:
     """
     Replace object's 'properties' dict with an ordered array of entries:
@@ -264,6 +314,7 @@ def _walk_and_transform(node: Any) -> Any:
     """
     Depth-first transform applying:
       - allOf/$ref collapse
+      - simple nullable anyOf/oneOf collapse
       - enum->select coercion
       - properties dict -> ordered array
     """
@@ -275,6 +326,7 @@ def _walk_and_transform(node: Any) -> Any:
     # Recurse first so children get transformed before parent logic runs.
     walked: Dict[str, Any] = {k: _walk_and_transform(v) for k, v in node.items()}
     walked = _collapse_allof_ref(walked)
+    walked = _normalize_simple_nullable_union(walked)
     _coerce_select_for_enum(walked)
     _properties_to_array(walked)
     return walked
@@ -286,6 +338,9 @@ def schema_post_processing(
     """
     UI-only transform:
       - Collapse: {"allOf": [{"$ref": ...}], <siblings>} -> {"$ref": ..., <siblings>}
+      - Collapse simple nullable unions:
+          {"anyOf":[<typed_schema>,{"type":"null"}], <siblings>}
+        or oneOf variant -> <typed_schema + siblings + nullable=True>
       - Replace each object's "properties" dict with an ordered array:
           "properties": [{"name": str, "schema": dict, "required": bool}, ...]
       - If a node has an 'enum' and type is 'string', change type to 'select'.

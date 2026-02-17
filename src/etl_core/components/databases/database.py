@@ -10,6 +10,8 @@ from pydantic import Field, model_validator
 from etl_core.components.base_component import Component
 from etl_core.context.credentials import Credentials
 from etl_core.context.credentials_mapping_context import CredentialsMappingContext
+from etl_core.context.environment import normalize_environment
+from etl_core.errors import ContextResolutionError, CredentialResolutionError
 
 
 class DatabaseComponent(Component, ABC):
@@ -54,23 +56,55 @@ class DatabaseComponent(Component, ABC):
     _cred_id = None
     _receiver: Any = None
 
-    @model_validator(mode="after")
-    def _build_objects(self) -> "DatabaseComponent":
+    def _resolve_credentials_for_environment(
+        self, environment: Optional[str] = None
+    ) -> None:
         ctx = self.get_resolved_context()
         if ctx is None:
-            raise ValueError(
+            raise ContextResolutionError(
                 f"{self.name}: Database components require a context_id referencing "
-                "a CredentialsMappingContext."
+                "a CredentialsMappingContext.",
+                code="DB_CONTEXT_REQUIRED",
+                context={"component": self.name, "context_id": self.context_id},
             )
         if not isinstance(ctx, CredentialsMappingContext):
-            raise TypeError(
+            raise ContextResolutionError(
                 f"{self.name}: context must be a CredentialsMappingContext; got "
-                f"{type(ctx).__name__}."
+                f"{type(ctx).__name__}.",
+                code="DB_CONTEXT_INVALID_TYPE",
+                context={
+                    "component": self.name,
+                    "context_id": self.context_id,
+                    "context_type": type(ctx).__name__,
+                },
             )
 
+        env_str: Optional[str] = None
+        if environment is not None:
+            env_str = normalize_environment(environment)
+        try:
+            self._credentials, self._cred_id = ctx.resolve_active_credentials(
+                override_env=env_str
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise CredentialResolutionError(
+                f"{self.name}: failed to resolve active credentials.",
+                code="DB_CREDENTIALS_RESOLVE_FAILED",
+                context={
+                    "component": self.name,
+                    "context_id": self.context_id,
+                    "environment": env_str,
+                },
+            ) from exc
+
+    @model_validator(mode="after")
+    def _build_objects(self) -> "DatabaseComponent":
         # Resolve once at model build so config errors fail early
-        self._credentials, self._cred_id = ctx.resolve_active_credentials()
+        self._resolve_credentials_for_environment()
         return self
+
+    def prepare_for_execution(self, environment: Optional[str] = None) -> None:
+        self._resolve_credentials_for_environment(environment)
 
     def _get_credentials(self) -> Dict[str, Any]:
         """

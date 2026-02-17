@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Protocol
 
-from etl_core.context.environment import Environment
-
 
 class JobsPort(Protocol):
     def create(self, cfg: Dict[str, Any]) -> str: ...
@@ -19,7 +17,7 @@ class JobsPort(Protocol):
 
 class ExecutionPort(Protocol):
     def start(
-        self, job_id: str, environment: Optional[Environment] = None
+        self, job_id: str, environment: Optional[str] = None
     ) -> Dict[str, Any]: ...
 
     def list_executions(

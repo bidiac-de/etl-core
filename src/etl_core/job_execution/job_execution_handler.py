@@ -1,7 +1,8 @@
 import asyncio
+import inspect
 import logging
 import threading
-import inspect
+import traceback
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
@@ -14,11 +15,14 @@ from etl_core.metrics.system_metrics import SystemMetricsHandler
 from etl_core.metrics.metrics_registry import get_metrics_class
 from etl_core.metrics.execution_metrics import ExecutionMetrics
 from etl_core.components.envelopes import InTagged, Out
-from etl_core.context.environment import Environment
+from etl_core.context.environment import normalize_environment
+from etl_core.context.template_resolver import apply_context_templates_to_component
+from etl_core.errors import ExecutionConflictError
+from etl_core.job_execution.execution_telemetry import execution_telemetry_store
 from etl_core.components.databases.pool_registry import ConnectionPoolRegistry
 
 
-class ExecutionAlreadyRunning(Exception):
+class ExecutionAlreadyRunning(ExecutionConflictError):
     """
     Raised when attempting to start an execution for a job that is already running.
     """
@@ -34,8 +38,8 @@ class JobExecutionHandler:
     - Retries up to job.num_of_retries
     """
 
-    # process-wide storage for job-ids of currently running jobs
-    _running_jobs: Set[str] = set()
+    # process-wide storage for (job_id, environment) of currently running jobs
+    _running_jobs: Set[Tuple[str, Optional[str]]] = set()
     # guard locks to ensure thread-safety
     _guard_lock = threading.Lock()
 
@@ -49,11 +53,12 @@ class JobExecutionHandler:
         self.job_info = JobInformationHandler(job_name="no_job_assigned")
         self.system_metrics_handler = SystemMetricsHandler()
         self._exec_records_handler = execution_records_handler()
+        self._telemetry = execution_telemetry_store()
 
     def execute_job(
         self,
         job: RuntimeJob,
-        environment: Optional[Environment | str] = None,
+        environment: Optional[str] = None,
     ) -> JobExecution:
         """
         Top-level synchronous entrypoint. Runs the async pipeline inside a
@@ -63,14 +68,32 @@ class JobExecutionHandler:
         try:
             result = asyncio.run(self._main_loop(execution))
             return result
+        except BaseException as exc:
+            self._telemetry.set_status(
+                execution.id,
+                status="FAILED",
+                error=str(exc),
+                finished=True,
+            )
+            try:
+                self._exec_records_handler.finalize_execution(
+                    execution_id=execution.id,
+                    status="FAILED",
+                    error=str(exc),
+                )
+            except Exception:  # pragma: no cover
+                self.logger.exception(
+                    "Failed to persist execution finalize (FAILED/unexpected)"
+                )
+            raise
         finally:
             self._cleanup_after_execution(execution)
-            self._release_execution(job.id)
+            self._release_execution(job.id, execution.environment)
 
     async def execute_job_async(
         self,
         job: RuntimeJob,
-        environment: Optional[Environment | str] = None,
+        environment: Optional[str] = None,
     ) -> JobExecution:
         """
         Async variant that reuses the caller's event loop. Required for
@@ -80,40 +103,137 @@ class JobExecutionHandler:
         try:
             result = await self._main_loop(execution)
             return result
+        except BaseException as exc:
+            self._telemetry.set_status(
+                execution.id,
+                status="FAILED",
+                error=str(exc),
+                finished=True,
+            )
+            try:
+                self._exec_records_handler.finalize_execution(
+                    execution_id=execution.id,
+                    status="FAILED",
+                    error=str(exc),
+                )
+            except Exception:  # pragma: no cover
+                self.logger.exception(
+                    "Failed to persist execution finalize (FAILED/unexpected async)"
+                )
+            raise
         finally:
             self._cleanup_after_execution(execution)
-            self._release_execution(job.id)
+            self._release_execution(job.id, execution.environment)
+
+    def start_job_background(
+        self,
+        job: RuntimeJob,
+        environment: Optional[str] = None,
+    ) -> JobExecution:
+        """
+        Start job execution in a background daemon thread and return immediately.
+        """
+
+        execution = self._begin_execution(job, environment)
+
+        def _runner() -> None:
+            try:
+                self.logger.info(
+                    "Background thread started for job '%s' (execution=%s)",
+                    job.name,
+                    execution.id,
+                )
+                asyncio.run(self._main_loop(execution))
+            except BaseException as exc:  # noqa: BLE001
+                tb_str = traceback.format_exc()
+                self.logger.error(
+                    "Background execution failed for job '%s' "
+                    "(execution=%s): %s\n%s",
+                    job.name,
+                    execution.id,
+                    exc,
+                    tb_str,
+                )
+                self._telemetry.set_status(
+                    execution.id,
+                    status="FAILED",
+                    error=str(exc),
+                    finished=True,
+                )
+                try:
+                    self._exec_records_handler.finalize_execution(
+                        execution_id=execution.id,
+                        status="FAILED",
+                        error=str(exc),
+                    )
+                except Exception:  # pragma: no cover
+                    self.logger.exception(
+                        "Failed to persist execution finalize (FAILED/background)"
+                    )
+            finally:
+                self._cleanup_after_execution(execution)
+                self._release_execution(job.id, execution.environment)
+
+        thread = threading.Thread(
+            target=_runner,
+            name=f"etl-exec-{execution.id}",
+            daemon=True,
+        )
+        thread.start()
+        return execution
 
     def _begin_execution(
         self,
         job: RuntimeJob,
-        environment: Optional[Environment | str],
+        environment: Optional[str],
     ) -> JobExecution:
         env_obj = self._normalize_environment(environment)
 
+        run_key = (job.id, env_obj)
         with self._guard_lock:
-            if job.id in self._running_jobs:
-                self.logger.warning("Job '%s' is already running", job.name)
-                raise ExecutionAlreadyRunning(
-                    f"Job '{job.name}' ({job.id}) is already running."
+            if run_key in self._running_jobs:
+                self.logger.warning(
+                    "Job '%s' is already running in environment '%s'",
+                    job.name,
+                    env_obj,
                 )
-            self._running_jobs.add(job.id)
+                raise ExecutionAlreadyRunning(
+                    f"Job '{job.name}' ({job.id}) is already running"
+                    f" in environment '{env_obj}'.",
+                    code="EXECUTION_ALREADY_RUNNING",
+                    context={
+                        "job_id": job.id,
+                        "job_name": job.name,
+                        "environment": env_obj,
+                    },
+                )
+            self._running_jobs.add(run_key)
             execution = JobExecution(job, environment=env_obj)
 
         try:
             self._exec_records_handler.create_execution(
                 execution_id=execution.id,
                 job_id=job.id,
-                environment=env_obj.value if env_obj else None,
+                environment=env_obj,
             )
         except Exception:
             self.logger.exception("Failed to persist execution start")
 
+        self._telemetry.start_execution(
+            execution_id=execution.id,
+            job_id=job.id,
+            job_name=job.name,
+            environment=env_obj,
+            components=[(comp.id, comp.name) for comp in job.components],
+        )
+
         return execution
 
-    def _release_execution(self, job_id: str) -> None:
+    def _release_execution(
+        self, job_id: str, environment: Optional[str] = None
+    ) -> None:
         with self._guard_lock:
-            self._running_jobs.discard(job_id)
+            self._running_jobs.discard((job_id, environment))
 
     def _cleanup_after_execution(self, execution: JobExecution) -> None:
         job = execution.job
@@ -139,28 +259,50 @@ class JobExecutionHandler:
 
     @staticmethod
     def _normalize_environment(
-        environment: Optional[Environment | str],
-    ) -> Optional[Environment]:
-        if isinstance(environment, Environment):
-            return environment
-        if isinstance(environment, str):
-            try:
-                return Environment(environment)
-            except ValueError:
-                return None
-        return environment
+        environment: Optional[str],
+    ) -> Optional[str]:
+        if environment is None:
+            return None
+        return normalize_environment(environment)
 
     def _prepare_comps_for_execution(
-        self, job: RuntimeJob, environment: Optional[Environment] = None
+        self, job: RuntimeJob, environment: Optional[str] = None
     ) -> None:
         if environment is not None:
-            self.logger.info("environment set to '%s'", environment.value)
-            for comp in job.components:
-                (
-                    comp.prepare_for_execution(environment)
-                    if hasattr(comp, "prepare_for_execution")
-                    else None
+            self.logger.info("environment set to '%s'", environment)
+
+        from etl_core.singletons import (
+            credentials_handler as _credentials_handler_singleton,
+        )
+
+        creds_repo = _credentials_handler_singleton()
+        for comp in job.components:
+            self.logger.debug(
+                "Preparing component '%s' (%s) for execution",
+                comp.name,
+                comp.__class__.__name__,
+            )
+            try:
+                apply_context_templates_to_component(
+                    comp,
+                    environment=environment,
+                    creds_handler=creds_repo,
                 )
+            except Exception:
+                self.logger.exception(
+                    "Failed to apply context templates for component '%s'",
+                    comp.name,
+                )
+                raise
+            if environment is not None and hasattr(comp, "prepare_for_execution"):
+                try:
+                    comp.prepare_for_execution(environment)
+                except Exception:
+                    self.logger.exception(
+                        "Failed to prepare component '%s' for execution",
+                        comp.name,
+                    )
+                    raise
 
     def _persist_attempt_start(self, execution: JobExecution) -> None:
         attempt = execution.latest_attempt()
@@ -211,6 +353,12 @@ class JobExecutionHandler:
         """
         job = execution.job
         self.job_info.logging_handler.update_job_name(job.name)
+        log_path = self.job_info.logging_handler.current_log_path
+        self._telemetry.set_log_path(
+            execution.id,
+            str(log_path) if log_path is not None else None,
+        )
+        self._telemetry.set_status(execution.id, status="RUNNING")
         self.logger.info("Starting execution of '%s'", job.name)
 
         self._prepare_comps_for_execution(
@@ -225,6 +373,8 @@ class JobExecutionHandler:
             execution.start_attempt()
             self.logger.info("started attempt %d", attempt_index + 1)
             attempt = execution.latest_attempt()
+            self._telemetry.set_active_attempt(execution.id, attempt.index)
+            self._telemetry.set_status(execution.id, status="RUNNING", error=None)
 
             # record attempt start
             self._persist_attempt_start(execution)
@@ -252,6 +402,11 @@ class JobExecutionHandler:
                     self._finalize_failure(inner, execution, job_metrics)
                     break
 
+                self._telemetry.set_status(
+                    execution.id,
+                    status="RETRYING",
+                    error=str(inner),
+                )
                 await self._maybe_wait_before_retry(execution, attempt_index)
                 continue
 
@@ -360,10 +515,21 @@ class JobExecutionHandler:
 
         try:
             if not in_queues:
-                await self._run_component(component, None, metrics, out_edges_by_port)
+                await self._run_component(
+                    execution_id=execution.id,
+                    component=component,
+                    payload=None,
+                    metrics=metrics,
+                    out_edges_by_port=out_edges_by_port,
+                )
             else:
                 await self._consume_and_run(
-                    component, metrics, in_queues, out_edges_by_port, pred_to_in_ports
+                    execution_id=execution.id,
+                    component=component,
+                    metrics=metrics,
+                    in_queues=in_queues,
+                    out_edges_by_port=out_edges_by_port,
+                    pred_to_in_ports=pred_to_in_ports,
                 )
         except asyncio.CancelledError:
             # mark cancelled in metrics, then re-raise
@@ -378,6 +544,12 @@ class JobExecutionHandler:
                 metrics.status = RuntimeState.SUCCESS
         finally:
             metrics.update_processing_time()
+            self._update_component_telemetry(
+                execution_id=execution.id,
+                component=component,
+                metrics=metrics,
+                last_event="worker-finalize",
+            )
             await self._broadcast_to_next_inputs(sentinel, out_edges_by_port)
 
     async def _broadcast_to_next_inputs(
@@ -390,8 +562,63 @@ class JobExecutionHandler:
             for q, _in_port, _needs_tag in pairs:
                 await q.put(item)
 
+    @staticmethod
+    def _runtime_state_to_str(state: Any) -> str:
+        if isinstance(state, RuntimeState):
+            return state.value
+        return str(state)
+
+    @staticmethod
+    def _payload_row_count(payload: Any) -> int:
+        if payload is None:
+            return 0
+        if isinstance(payload, (str, bytes)):
+            return 1
+        if isinstance(payload, dict):
+            return 1
+        if isinstance(payload, (list, tuple, set)):
+            return len(payload)
+        if hasattr(payload, "shape"):
+            try:
+                shape = payload.shape
+                if isinstance(shape, tuple) and len(shape) > 0:
+                    return int(shape[0])
+            except Exception:
+                pass
+        if hasattr(payload, "__len__"):
+            try:
+                return int(len(payload))
+            except Exception:
+                return 1
+        return 1
+
+    def _update_component_telemetry(
+        self,
+        *,
+        execution_id: str,
+        component: Component,
+        metrics: ComponentMetrics,
+        last_event: Optional[str] = None,
+    ) -> None:
+        rows_received = getattr(metrics, "lines_received", 0)
+        rows_forwarded = getattr(metrics, "lines_forwarded", 0)
+        error_count = getattr(metrics, "error_count", 0)
+        comp_status = self._runtime_state_to_str(
+            getattr(metrics, "status", RuntimeState.PENDING)
+        )
+        self._telemetry.update_component(
+            execution_id,
+            component_id=component.id,
+            status=comp_status,
+            rows_received=int(rows_received or 0),
+            rows_forwarded=int(rows_forwarded or 0),
+            error_count=int(error_count or 0),
+            last_event=last_event,
+        )
+
     async def _run_component(
         self,
+        execution_id: str,
         component: Component,
         payload: Any,
         metrics: ComponentMetrics,
@@ -409,6 +636,13 @@ class JobExecutionHandler:
             current_state = RuntimeState.PENDING
         if current_state == RuntimeState.PENDING:
             metrics.set_started()
+
+        self._update_component_telemetry(
+            execution_id=execution_id,
+            component=component,
+            metrics=metrics,
+            last_event="component-start",
+        )
 
         # >>> added diagnostics
         try:
@@ -453,6 +687,19 @@ class JobExecutionHandler:
                 await q.put(
                     batch.payload if not needs_tag else InTagged(dest_in, batch.payload)
                 )
+            self._update_component_telemetry(
+                execution_id=execution_id,
+                component=component,
+                metrics=metrics,
+                last_event=f"emit:{batch.port}",
+            )
+
+        self._update_component_telemetry(
+            execution_id=execution_id,
+            component=component,
+            metrics=metrics,
+            last_event="component-step-complete",
+        )
 
     def _resolve_single_in_port(self, component: Component) -> Optional[str]:
         names = component.expected_in_port_names()
@@ -471,6 +718,7 @@ class JobExecutionHandler:
 
     async def _handle_sentinel_item(
         self,
+        execution_id: str,
         item: Sentinel,
         component: Component,
         metrics: ComponentMetrics,
@@ -502,11 +750,16 @@ class JobExecutionHandler:
 
         if in_port:
             await self._run_component(
-                component, InTagged(in_port, Ellipsis), metrics, out_edges_by_port
+                execution_id=execution_id,
+                component=component,
+                payload=InTagged(in_port, Ellipsis),
+                metrics=metrics,
+                out_edges_by_port=out_edges_by_port,
             )
 
     async def _handle_tagged_item(
         self,
+        execution_id: str,
         item: InTagged,
         component: Component,
         metrics: ComponentMetrics,
@@ -514,7 +767,13 @@ class JobExecutionHandler:
         requires_tagged: bool,
     ) -> None:
         if requires_tagged:
-            await self._run_component(component, item, metrics, out_edges_by_port)
+            await self._run_component(
+                execution_id=execution_id,
+                component=component,
+                payload=item,
+                metrics=metrics,
+                out_edges_by_port=out_edges_by_port,
+            )
             return
         dest_port = item.in_port
         payload = item.payload
@@ -530,10 +789,17 @@ class JobExecutionHandler:
                 exc,
             )
             raise
-        await self._run_component(component, payload, metrics, out_edges_by_port)
+        await self._run_component(
+            execution_id=execution_id,
+            component=component,
+            payload=payload,
+            metrics=metrics,
+            out_edges_by_port=out_edges_by_port,
+        )
 
     async def _handle_untagged_item(
         self,
+        execution_id: str,
         item: Any,
         component: Component,
         metrics: ComponentMetrics,
@@ -548,7 +814,13 @@ class JobExecutionHandler:
                 "fan-in must use tagged envelopes."
             )
         component.validate_in_payload(single_in_port, item)
-        await self._run_component(component, item, metrics, out_edges_by_port)
+        await self._run_component(
+            execution_id=execution_id,
+            component=component,
+            payload=item,
+            metrics=metrics,
+            out_edges_by_port=out_edges_by_port,
+        )
 
     def _initial_remaining_counts(
         self,
@@ -570,6 +842,7 @@ class JobExecutionHandler:
 
     async def _consume_and_run(
         self,
+        execution_id: str,
         component: Component,
         metrics: ComponentMetrics,
         in_queues: List[asyncio.Queue],
@@ -603,6 +876,7 @@ class JobExecutionHandler:
 
             if isinstance(item, Sentinel):
                 await self._handle_sentinel_item(
+                    execution_id=execution_id,
                     item=item,
                     component=component,
                     metrics=metrics,
@@ -615,6 +889,7 @@ class JobExecutionHandler:
 
             if isinstance(item, InTagged):
                 await self._handle_tagged_item(
+                    execution_id=execution_id,
                     item=item,
                     component=component,
                     metrics=metrics,
@@ -624,6 +899,7 @@ class JobExecutionHandler:
                 continue
 
             await self._handle_untagged_item(
+                execution_id=execution_id,
                 item=item,
                 component=component,
                 metrics=metrics,
@@ -645,6 +921,12 @@ class JobExecutionHandler:
         """
         metrics.status = RuntimeState.FAILED
         metrics.error_count += 1
+        self._update_component_telemetry(
+            execution_id=execution.id,
+            component=component,
+            metrics=metrics,
+            last_event="worker-exception",
+        )
         self._file_logger.error(
             "Component '%s' FAILED: %s", component.name, exc, exc_info=True
         )
@@ -663,6 +945,12 @@ class JobExecutionHandler:
             )
             if dm.status not in (RuntimeState.SUCCESS, RuntimeState.FAILED):
                 dm.status = RuntimeState.CANCELLED
+            self._update_component_telemetry(
+                execution_id=execution.id,
+                component=nxt,
+                metrics=dm,
+                last_event="cancelled-by-upstream-failure",
+            )
             dq.extend(nxt.next_components)
 
     def _cancel_successors(
@@ -689,6 +977,12 @@ class JobExecutionHandler:
             )
             if dm.status not in (RuntimeState.SUCCESS, RuntimeState.FAILED):
                 dm.status = RuntimeState.CANCELLED
+            self._update_component_telemetry(
+                execution_id=execution.id,
+                component=nxt,
+                metrics=dm,
+                last_event="cancelled",
+            )
 
             # cancel tasks cleanly
             task = execution.latest_attempt().current_tasks.get(nxt.id)
@@ -731,11 +1025,18 @@ class JobExecutionHandler:
         except Exception:  # pragma: no cover
             self.logger.exception("Failed to persist execution finalize (SUCCESS)")
 
+        self._telemetry.set_status(
+            execution.id, status="SUCCESS", error=None, finished=True
+        )
+
         # cleanup
         self.logger.info("Job '%s' completed successfully", execution.job.name)
 
     def _finalize_failure(
-        self, exc: Exception, execution: JobExecution, job_metrics: "ExecutionMetrics"
+        self,
+        exc: BaseException,
+        execution: JobExecution,
+        job_metrics: "ExecutionMetrics",
     ) -> None:
         """
         Final actions when streaming execution fails.
@@ -751,6 +1052,12 @@ class JobExecutionHandler:
             )
         except Exception:  # pragma: no cover
             self.logger.exception("Failed to persist execution finalize (FAILED)")
+        self._telemetry.set_status(
+            execution.id,
+            status="FAILED",
+            error=str(exc),
+            finished=True,
+        )
         # cleanup
         self.logger.error(
             "Job '%s' failed after %d attempts: %s",

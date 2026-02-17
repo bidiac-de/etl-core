@@ -23,13 +23,14 @@ from etl_core.api.helpers.execution_serializers import (
     serialize_attempt_row,
     serialize_execution_row,
 )
-from etl_core.context.environment import Environment
+from etl_core.context.environment import normalize_environment
+from etl_core.job_execution.execution_telemetry import execution_telemetry_store
 
 router = APIRouter(prefix="/execution", tags=["execution"])
 
 
 class StartExecutionBody(BaseModel):
-    environment: Environment
+    environment: str
 
 
 @router.post(
@@ -50,23 +51,15 @@ def start_execution(
     except SQLAlchemyError as exc:
         raise http_500_exc("DB_ERROR", "Failed to load job.", exc) from exc
 
-    try:
-        env = body.environment if body else None
-        execution = execution_handler.execute_job(runtime_job, environment=env)
-        return {
-            "job_id": job_id,
-            "status": "started",
-            "execution_id": execution.id,
-            "max_attempts": execution.max_attempts,
-            "environment": env.value if isinstance(env, Environment) else None,
-        }
-    except Exception as exc:  # pragma: no cover
-        raise http_500_exc(
-            "EXECUTION_START_FAILED",
-            "Failed to start job execution.",
-            exc,
-            job_id=job_id,
-        ) from exc
+    env = normalize_environment(body.environment) if body else None
+    execution = execution_handler.start_job_background(runtime_job, environment=env)
+    return {
+        "job_id": job_id,
+        "status": "started",
+        "execution_id": execution.id,
+        "max_attempts": execution.max_attempts,
+        "environment": env,
+    }
 
 
 class ExecutionOut(BaseModel):
@@ -91,11 +84,48 @@ class ExecutionAttemptOut(BaseModel):
 
 class ExecutionListOut(BaseModel):
     data: list[ExecutionOut]
+    total: int = 0
 
 
 class ExecutionDetailOut(BaseModel):
     execution: ExecutionOut
     attempts: list[ExecutionAttemptOut]
+
+
+class ComponentProgressOut(BaseModel):
+    component_id: str
+    component_name: str
+    status: str
+    rows_received: int
+    rows_forwarded: int
+    error_count: int
+    last_event: Optional[str] = None
+    updated_at: datetime
+
+
+class ExecutionProgressOut(BaseModel):
+    execution_id: str
+    job_id: str
+    job_name: str
+    environment: Optional[str] = None
+    status: str
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    active_attempt: int
+    last_error: Optional[str] = None
+    rows_received_total: int
+    rows_forwarded_total: int
+    log_path: Optional[str] = None
+    updated_at: datetime
+    components: list[ComponentProgressOut]
+
+
+class ExecutionLogsOut(BaseModel):
+    execution_id: str
+    tail: int
+    log_path: Optional[str] = None
+    redacted: bool
+    lines: list[str]
 
 
 @router.get(
@@ -119,7 +149,7 @@ def list_executions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> ExecutionListOut:
-    rows, _ = _records.list_executions(
+    rows, total_count = _records.list_executions(
         job_id=job_id,
         status=status,
         environment=environment,
@@ -132,6 +162,7 @@ def list_executions(
     )
     return ExecutionListOut(
         data=[ExecutionOut(**serialize_execution_row(r)) for r in rows],
+        total=total_count,
     )
 
 
@@ -179,3 +210,45 @@ def list_attempts(
         )
     rows = _records.list_attempts(execution_id)
     return [ExecutionAttemptOut(**serialize_attempt_row(r)) for r in rows]
+
+
+@router.get(
+    "/executions/{execution_id}/progress",
+    response_model=ExecutionProgressOut,
+    summary="Get live execution progress snapshot",
+)
+def get_execution_progress(execution_id: str) -> ExecutionProgressOut:
+    telemetry = execution_telemetry_store().snapshot(execution_id)
+    if telemetry is None:
+        raise http_404(
+            "EXECUTION_PROGRESS_NOT_FOUND",
+            "No live progress is available for this execution.",
+            execution_id=execution_id,
+        )
+    return ExecutionProgressOut(**telemetry)
+
+
+@router.get(
+    "/executions/{execution_id}/logs",
+    response_model=ExecutionLogsOut,
+    summary="Get redacted execution log tail",
+)
+def get_execution_logs(
+    execution_id: str,
+    tail: int = Query(default=200, ge=1, le=2000),
+) -> ExecutionLogsOut:
+    telemetry = execution_telemetry_store().snapshot(execution_id)
+    if telemetry is None:
+        raise http_404(
+            "EXECUTION_PROGRESS_NOT_FOUND",
+            "No live logs are available for this execution.",
+            execution_id=execution_id,
+        )
+    logs = execution_telemetry_store().tail_logs(execution_id, tail=tail)
+    return ExecutionLogsOut(
+        execution_id=execution_id,
+        tail=tail,
+        log_path=logs.get("log_path"),
+        redacted=bool(logs.get("redacted", True)),
+        lines=logs.get("lines", []),
+    )

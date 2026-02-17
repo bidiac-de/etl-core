@@ -36,6 +36,7 @@ class PostgreSQLReceiver(SQLReceiver):
                 return [dict(row._mapping) for row in result]
 
         rows = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += len(rows)
         for row in rows:
             yield row
 
@@ -57,7 +58,9 @@ class PostgreSQLReceiver(SQLReceiver):
                 result = conn.execute(text(query), params)
                 return pd.DataFrame([dict(row._mapping) for row in result])
 
-        return await asyncio.to_thread(_execute_query)
+        df = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += len(df)
+        return df
 
     async def read_bigdata(
         self,
@@ -78,7 +81,12 @@ class PostgreSQLReceiver(SQLReceiver):
                 df = pd.DataFrame([dict(row._mapping) for row in result])
                 return dd.from_pandas(df, npartitions=1)
 
-        return await asyncio.to_thread(_execute_query)
+        ddf = await asyncio.to_thread(_execute_query)
+        try:
+            metrics.lines_received += len(ddf)
+        except Exception:
+            pass
+        return ddf
 
     async def write_row(
         self,
@@ -99,7 +107,10 @@ class PostgreSQLReceiver(SQLReceiver):
                 conn.commit()
                 return {"affected_rows": result.rowcount, "row": row}
 
-        return await asyncio.to_thread(_execute_query)
+        result = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += 1
+        metrics.lines_forwarded += result["affected_rows"]
+        return result
 
     async def write_bulk(
         self,
@@ -124,7 +135,10 @@ class PostgreSQLReceiver(SQLReceiver):
                 conn.commit()
                 return frame
 
-        return await asyncio.to_thread(_execute_query)
+        result = await asyncio.to_thread(_execute_query)
+        metrics.lines_received += len(frame)
+        metrics.lines_forwarded += len(frame)
+        return result
 
     async def write_bigdata(
         self,
@@ -149,4 +163,11 @@ class PostgreSQLReceiver(SQLReceiver):
                 conn.commit()
                 return frame
 
-        return await asyncio.to_thread(_execute_query)
+        result = await asyncio.to_thread(_execute_query)
+        try:
+            count = len(result)
+            metrics.lines_received += count
+            metrics.lines_forwarded += count
+        except Exception:
+            pass
+        return result

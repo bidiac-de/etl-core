@@ -96,3 +96,67 @@ def test_schema_post_processing_keep_order_when_requested():
     keep = H.schema_post_processing(deepcopy(schema), strip_order=False)
     props = keep["properties"]
     assert props[0]["schema"]["order"] == 5
+
+
+def test_schema_post_processing_collapses_simple_nullable_anyof():
+    schema = {
+        "type": "object",
+        "properties": {
+            "sheet_name": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "title": "Sheet Name",
+                "description": "Optional sheet name",
+                "default": None,
+            }
+        },
+    }
+
+    out = H.schema_post_processing(schema, strip_order=True)
+    prop = out["properties"][0]["schema"]
+    assert prop["type"] == "string"
+    assert prop["nullable"] is True
+    assert prop["default"] is None
+    assert prop["title"] == "Sheet Name"
+    assert prop["description"] == "Optional sheet name"
+    assert "anyOf" not in prop
+
+
+def test_schema_post_processing_collapses_simple_nullable_oneof_and_keeps_siblings():
+    schema = {
+        "type": "object",
+        "properties": {
+            "where_conditions": {
+                "oneOf": [
+                    {"type": "array", "items": {"type": "string"}, "title": "inner"},
+                    {"type": "null"},
+                ],
+                "title": "Where Conditions",
+                "description": "Optional predicates",
+            }
+        },
+    }
+
+    out = H.schema_post_processing(schema, strip_order=True)
+    prop = out["properties"][0]["schema"]
+    assert prop["type"] == "array"
+    assert prop["nullable"] is True
+    assert prop["title"] == "Where Conditions"
+    assert prop["description"] == "Optional predicates"
+    assert "oneOf" not in prop
+
+
+def test_schema_post_processing_keeps_complex_union_unchanged():
+    schema = {
+        "type": "object",
+        "properties": {
+            "value": {
+                "anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}],
+                "title": "Value",
+            }
+        },
+    }
+
+    out = H.schema_post_processing(schema, strip_order=True)
+    prop = out["properties"][0]["schema"]
+    assert "anyOf" in prop
+    assert "type" not in prop

@@ -128,7 +128,7 @@ def test_get_provider_credentials_and_not_found() -> None:
         database="db",
         pool_max_size=None,
         pool_timeout_s=None,
-        password=None,
+        password="secret",
     )
     creds_handler = Mock()
     creds_handler.get_by_id.return_value = (creds, "idc")
@@ -136,6 +136,8 @@ def test_get_provider_credentials_and_not_found() -> None:
     out = C.get_provider("idc", ctx_handler=ctx_handler, creds_handler=creds_handler)
     assert out.kind == "credentials"
     assert out.name == "c"
+    assert out.has_password is True
+    assert out.password is None
 
     creds_handler.get_by_id.return_value = None
     with pytest.raises(HTTPException) as e:
@@ -206,3 +208,97 @@ def test_delete_provider_500_on_unexpected_error(
     with pytest.raises(HTTPException) as e:
         C.delete_provider("y", ctx_handler=ctx_handler, creds_handler=creds_handler)
     assert e.value.status_code == 500
+
+
+def test_create_credentials_mapping_context_rejects_invalid_env_key() -> None:
+    ctx_handler = Mock()
+    creds_handler = Mock()
+    creds_handler.get_by_id.return_value = SimpleNamespace()
+
+    req = C.CredentialsMappingContextCreateRequest(
+        context=C.CredentialsMappingContext(
+            name="m",
+            environment="DEV",
+            credentials_ids={"staging": "cred-1"},
+        )
+    )
+    with pytest.raises(HTTPException) as e:
+        C.create_credentials_mapping_context(
+            req, ctx_handler=ctx_handler, creds_handler=creds_handler
+        )
+    assert e.value.status_code == 400
+
+
+def test_create_credentials_mapping_context_requires_default_env_entry() -> None:
+    ctx_handler = Mock()
+    creds_handler = Mock()
+    creds_handler.get_by_id.return_value = SimpleNamespace()
+
+    req = C.CredentialsMappingContextCreateRequest(
+        context=C.CredentialsMappingContext(
+            name="m",
+            environment="PROD",
+            credentials_ids={"DEV": "cred-1"},
+        )
+    )
+    with pytest.raises(HTTPException) as e:
+        C.create_credentials_mapping_context(
+            req, ctx_handler=ctx_handler, creds_handler=creds_handler
+        )
+    assert e.value.status_code == 400
+
+
+def test_delete_provider_blocks_context_in_use() -> None:
+    ctx_handler = Mock(
+        get_by_id=Mock(return_value=(SimpleNamespace(), "ctx-1")),
+        find_component_context_references=Mock(
+            return_value=[
+                {
+                    "job_id": "job-1",
+                    "component_id": "component-1",
+                    "component_name": "db_reader",
+                }
+            ]
+        ),
+        delete_by_id=Mock(return_value=False),
+    )
+    creds_handler = Mock(delete_by_id=Mock(return_value=False))
+
+    with pytest.raises(HTTPException) as e:
+        C.delete_provider("ctx-1", ctx_handler=ctx_handler, creds_handler=creds_handler)
+    assert e.value.status_code == 409
+    assert e.value.detail.get("code") == "CONTEXT_IN_USE"
+
+
+def test_get_context_keys_mapping_response() -> None:
+    ctx_handler = Mock()
+    creds_handler = Mock()
+    creds_handler.get_by_id.return_value = (
+        C.Credentials(
+            name="cred",
+            user="u",
+            host="h",
+            port=5432,
+            database="db",
+            password="pw",
+        ),
+        "cred-1",
+    )
+    ctx_handler.get_by_id.return_value = (
+        C.CredentialsMappingContext(
+            name="mapping",
+            environment="DEV",
+            credentials_ids={"DEV": "cred-1"},
+        ),
+        "ctx-1",
+    )
+
+    out = C.get_context_keys(
+        "ctx-1",
+        environment="DEV",
+        ctx_handler=ctx_handler,
+        creds_handler=creds_handler,
+    )
+    assert out.context_id == "ctx-1"
+    assert out.environment == "DEV"
+    assert any(item.key == "password" and item.secret for item in out.keys)
